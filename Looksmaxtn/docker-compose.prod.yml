@@ -7,6 +7,7 @@ services:
     container_name: looksmax-mongodb
     restart: unless-stopped
     ports:
+      # Exposing MongoDB is optional, usually better to keep it internal in production
       - "27017:27017"
     volumes:
       - mongodb_data:/data/db
@@ -15,65 +16,73 @@ services:
     networks:
       - looksmax-network
 
-  # Backend API
+  # Python Generator API (FastAPI)
+  generator_api:
+    build:
+      context: ./generator_api
+      dockerfile: Dockerfile
+    container_name: looksmax-generator-api
+    restart: unless-stopped
+    ports:
+      - "12003:8000"
+    env_file:
+      - ./generator_api/.env
+    networks:
+      - looksmax-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # Backend API (Next.js)
   back:
-    image: yourusername/looksmax-back:latest
+    build:
+      context: ./back
+      dockerfile: Dockerfile
     container_name: looksmax-back
     restart: unless-stopped
     ports:
-      - "3004:3004"
+      - "12001:3004"
     env_file:
-      - ./env/back/.env
+      - ./back/.env
     depends_on:
       - mongodb
     networks:
       - looksmax-network
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3004/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
-  # Admin Panel
+  # Admin Panel (Next.js)
   admin:
-    image: yourusername/looksmax-admin:latest
+    build:
+      context: ./admin
+      dockerfile: Dockerfile
     container_name: looksmax-admin
     restart: unless-stopped
     ports:
-      - "3003:3003"
+      - "12002:3003"
     env_file:
-      - ./env/admin/.env
+      - ./admin/.env
     depends_on:
       - back
     networks:
       - looksmax-network
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3003"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
-  # Frontend Storefront
+  # Frontend Storefront (Next.js)
   front:
-    image: yourusername/looksmax-front:latest
+    build:
+      context: ./front
+      dockerfile: Dockerfile
     container_name: looksmax-front
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "12000:3000"
     env_file:
-      - ./env/front/.env
+      - ./front/.env
     depends_on:
       - back
     networks:
       - looksmax-network
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
 networks:
   looksmax-network:
