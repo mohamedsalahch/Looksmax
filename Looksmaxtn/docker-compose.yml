@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # Frontend storefront
+  front:
+    build:
+      context: ./front
+      dockerfile: Dockerfile
+    container_name: looksmax-front
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    networks:
+      - looksmax-network
+
+  # Admin panel
+  admin:
+    build:
+      context: ./admin
+      dockerfile: Dockerfile
+    container_name: looksmax-admin
+    ports:
+      - "3003:3003"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    networks:
+      - looksmax-network
+
+  # Backend API
+  back:
+    build:
+      context: ./back
+      dockerfile: Dockerfile
+    container_name: looksmax-back
+    ports:
+      - "3004:3004"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    networks:
+      - looksmax-network
+
+networks:
+  looksmax-network:
+    driver: bridge

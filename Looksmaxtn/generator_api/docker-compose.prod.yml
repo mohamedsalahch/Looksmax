@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  generator-api:
+    build: .
+    container_name: looksmax-generator-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - generator-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  generator-network:
+    driver: bridge

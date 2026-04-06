@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7
+    container_name: looksmax-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=looksmax-production
+    networks:
+      - looksmax-network
+
+  # Backend API
+  back:
+    image: yourusername/looksmax-back:latest
+    container_name: looksmax-back
+    restart: unless-stopped
+    ports:
+      - "3004:3004"
+    env_file:
+      - ./env/back/.env
+    depends_on:
+      - mongodb
+    networks:
+      - looksmax-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3004/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Admin Panel
+  admin:
+    image: yourusername/looksmax-admin:latest
+    container_name: looksmax-admin
+    restart: unless-stopped
+    ports:
+      - "3003:3003"
+    env_file:
+      - ./env/admin/.env
+    depends_on:
+      - back
+    networks:
+      - looksmax-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3003"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend Storefront
+  front:
+    image: yourusername/looksmax-front:latest
+    container_name: looksmax-front
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./env/front/.env
+    depends_on:
+      - back
+    networks:
+      - looksmax-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  looksmax-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
