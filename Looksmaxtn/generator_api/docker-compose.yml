@@ -1,6 +1,6 @@
 services:
   api:
-    build: .
+    image: gor3i/looksmax:latest
     ports:
       - "8000:8000"
     env_file:
