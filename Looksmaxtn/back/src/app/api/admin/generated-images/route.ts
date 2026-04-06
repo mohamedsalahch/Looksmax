@@ -72,6 +72,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "ADMIN_IMAGE_GENERATION_URL_BASE is not configured." }, { status: 500 });
     }
 
+    const webhookBaseUrl = process.env.OUTFIT_WEBHOOK_BASE_URL || "http://localhost:3004";
+    const webhookUrl = `${webhookBaseUrl}/api/admin/generated-images/webhook`;
+
     await dbConnect();
     const auditActor = await getAuditActorFromSession(session);
     const formData = await req.formData();
@@ -88,43 +91,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "At least one source image is required." }, { status: 400 });
     }
 
+    // 1. Save source images and create entry in "processing" state
     const sourceImages = await Promise.all(sourceFiles.map((file) => saveGeneratedSourceImage(file)));
+    
+    const generatedImage = await GeneratedImageAsset.create({
+      prompt,
+      sourceImages,
+      images: [],
+      status: "processing",
+      createdBy: auditActor,
+      updatedBy: auditActor,
+    });
+
+    // 2. Prepare payload for Python
     const payload = {
+      job_id: generatedImage._id,
+      webhook_url: webhookUrl,
       prompt,
       images: await Promise.all(sourceFiles.map((file) => fileToBase64(file))),
     };
 
-    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/proxy`, {
+    // 3. Trigger Python (Asynchronous)
+    await fetch(`${baseUrl.replace(/\/$/, "")}/api/proxy`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
-    const data = await response.json().catch(() => null);
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: (data as { error?: string } | null)?.error || "Generation request failed." },
-        { status: 502 }
-      );
-    }
-
-    const imagesBase64 = extractImagesFromResponse(data);
-    if (imagesBase64.length === 0) {
-      return NextResponse.json({ error: "Generation service returned no images." }, { status: 502 });
-    }
-
-    const images = await Promise.all(
-      imagesBase64.map((image, index) => saveGeneratedResultBase64(image, index))
-    );
-
-    const generatedImage = await GeneratedImageAsset.create({
-      prompt,
-      sourceImages,
-      images,
-      createdBy: auditActor,
-      updatedBy: auditActor,
-    });
-
+    // 4. Return immediately to avoid 500 timeouts
     return NextResponse.json({ generatedImage }, { status: 201 });
   } catch (error) {
     console.error(error);

@@ -1,12 +1,10 @@
-"""API endpoints for clothes image generation."""
-
 import logging
-
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 
 from app.models.requests import ClothesRequest
-from app.models.responses import GenerationResponse, ImageResult
+from app.models.responses import GenerationResponse, ImageResult, OutfitResponse
 from app.services.generator import ImageGenerator
+from app.services.webhook import send_webhook
 
 router = APIRouter(prefix="/api", tags=["clothes"])
 logger = logging.getLogger(__name__)
@@ -22,21 +20,55 @@ def set_generator(generator: ImageGenerator) -> None:
     _generator = generator
 
 
-@router.post("/generate", response_model=GenerationResponse)
-async def generate_clothes_images(request: ClothesRequest):
+async def process_clothes_generation(job_id: str, webhook_url: str, request: ClothesRequest):
+    """Background task to generate clothes images and send webhooks."""
+    if _generator is None:
+        return
+
+    try:
+        # Front view
+        front_b64 = await _generator.generate_clothes_view(
+            "front",
+            request.model_pictures.front,
+            request.model_pictures.back,
+            request.product_pictures.front,
+            request.product_pictures.back
+        )
+        await send_webhook(webhook_url, job_id, "front", front_b64)
+
+        # Back view
+        back_b64 = await _generator.generate_clothes_view(
+            "back",
+            request.model_pictures.front,
+            request.model_pictures.back,
+            request.product_pictures.front,
+            request.product_pictures.back
+        )
+        await send_webhook(webhook_url, job_id, "back", back_b64)
+
+    except Exception as e:
+        logger.error(f"Job {job_id}: Clothes error: {str(e)}")
+
+
+@router.post("/generate")
+async def generate_clothes_images(request: ClothesRequest, background_tasks: BackgroundTasks):
     """
     Generate fashion images of a model wearing a clothing item.
-
-    **Request:**
-    - model_pictures: { front, back } - base64 encoded model images
-    - product_pictures: { front, back } - base64 encoded garment images
-
-    **Returns:**
-    - 2 images: front view, back view
     """
     if _generator is None:
         raise HTTPException(status_code=500, detail="Generator not initialized")
 
+    # ASYNC MODE
+    if request.job_id and request.webhook_url:
+        background_tasks.add_task(
+            process_clothes_generation,
+            job_id=request.job_id,
+            webhook_url=request.webhook_url,
+            request=request
+        )
+        return OutfitResponse(job_id=request.job_id, status="processing")
+
+    # SYNC MODE
     try:
         front_b64 = await _generator.generate_clothes_view(
             "front",

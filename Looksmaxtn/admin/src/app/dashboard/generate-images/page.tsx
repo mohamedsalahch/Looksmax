@@ -7,6 +7,7 @@ interface GeneratedImageAsset {
   prompt: string;
   sourceImages: string[];
   images: string[];
+  status: "processing" | "completed" | "failed";
   createdAt: string;
 }
 
@@ -29,6 +30,17 @@ export default function GenerateImagesPage() {
   useEffect(() => {
     loadGeneratedImages();
   }, []);
+
+  useEffect(() => {
+    const hasProcessing = generatedImages.some((img) => img.status === "processing");
+    if (!hasProcessing && !saving) return;
+
+    const timeoutId = setTimeout(() => {
+      loadGeneratedImages();
+    }, 5000);
+
+    return () => clearTimeout(timeoutId);
+  }, [generatedImages, saving]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,12 +153,19 @@ export default function GenerateImagesPage() {
       ) : (
         <div className="space-y-5">
           {generatedImages.map((item) => (
-            <div key={item._id} className="bg-bg-card border border-border rounded p-4 space-y-4">
+            <div key={item._id} className={`bg-bg-card border border-border rounded p-4 space-y-4 ${item.status === "processing" ? "opacity-75" : ""}`}>
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium">{item.prompt}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium">{item.prompt}</p>
+                    {item.status === "processing" && (
+                      <span className="w-2 h-2 rounded-full bg-accent animate-pulse" title="Generating..." />
+                    )}
+                  </div>
                   <p className="text-[10px] uppercase tracking-wider text-text-secondary">
                     {item.sourceImages.length} source image{item.sourceImages.length !== 1 ? "s" : ""} · {item.images.length} result{item.images.length !== 1 ? "s" : ""}
+                    {item.status === "processing" && " · PROCESSING..."}
+                    {item.status === "failed" && " · FAILED"}
                   </p>
                 </div>
                 <button
@@ -160,13 +179,20 @@ export default function GenerateImagesPage() {
 
               <div className="space-y-2">
                 <p className="text-[10px] uppercase tracking-wider text-text-secondary">Results</p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {item.images.map((image, index) => (
-                    <div key={`${item._id}-${index}`} className="aspect-[4/5] overflow-hidden rounded border border-border bg-bg-secondary">
-                      <img src={image} alt={`Generated ${index + 1}`} className="w-full h-full object-cover" />
-                    </div>
-                  ))}
-                </div>
+                {item.status === "processing" && item.images.length === 0 ? (
+                  <div className="h-64 flex flex-col items-center justify-center rounded border border-dashed border-border bg-bg-secondary text-text-secondary w-full">
+                    <div className="w-8 h-8 rounded-full border-t-2 border-accent animate-spin mb-2" />
+                    <span className="text-[10px] uppercase tracking-wider">AI is generating images...</span>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {item.images.map((image, index) => (
+                      <div key={`${item._id}-${index}`} className="aspect-[4/5] overflow-hidden rounded border border-border bg-bg-secondary">
+                        <img src={image} alt={`Generated ${index + 1}`} className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           ))}

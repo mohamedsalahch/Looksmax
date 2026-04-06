@@ -25,17 +25,23 @@ class ShoesProductPictures(BaseModel):
 
 class ClothesRequest(BaseModel):
     """Request for clothes image generation."""
+    job_id: str | None = None
+    webhook_url: str | None = None
     model_pictures: ModelPictures
     product_pictures: ProductPictures
 
 
 class ShoesRequest(BaseModel):
     """Request for shoes image generation."""
+    job_id: str | None = None
+    webhook_url: str | None = None
     product_pictures: ShoesProductPictures
 
 
 class ProxyRequest(BaseModel):
     """Request for proxy endpoint."""
+    job_id: str | None = None
+    webhook_url: str | None = None
     prompt: str
     images: list[str]  # List of base64 encoded images
 

@@ -10,3 +10,7 @@ coverage/
 .env.development.local
 .env.test.local
 .env.production.local
+
+# media
+/public/upload
+/public/uploads

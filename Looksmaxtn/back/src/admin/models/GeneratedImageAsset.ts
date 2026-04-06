@@ -5,6 +5,7 @@ export interface IGeneratedImageAsset extends Document {
   prompt: string;
   sourceImages: string[];
   images: string[];
+  status: "processing" | "completed" | "failed";
   createdBy?: IAuditActor | null;
   updatedBy?: IAuditActor | null;
   createdAt: Date;
@@ -16,6 +17,11 @@ const generatedImageAssetSchema = new Schema<IGeneratedImageAsset>(
     prompt: { type: String, required: true, trim: true },
     sourceImages: [{ type: String, required: true, trim: true }],
     images: [{ type: String, required: true, trim: true }],
+    status: {
+      type: String,
+      enum: ["processing", "completed", "failed"],
+      default: "completed",
+    },
     createdBy: { type: auditActorSchema, default: null },
     updatedBy: { type: auditActorSchema, default: null },
   },
