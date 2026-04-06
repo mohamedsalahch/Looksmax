@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
       images: await Promise.all(sourceFiles.map((file) => fileToBase64(file))),
     };
 
-    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/proxy`, {
+    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/proxy`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

@@ -6,9 +6,10 @@ services:
     image: mongo:7
     container_name: looksmax-mongodb
     restart: unless-stopped
-    ports:
-      # Exposing MongoDB is optional, usually better to keep it internal in production
-      - "27017:27017"
+    # We should avoid exposing MongoDB directly to the internet in production. 
+    # It will remain accessible internally on 'mongodb:27017' for other services.
+    # ports:
+    #   - "27017:27017" # Disabled for security unless you need external DB tools.
     volumes:
       - mongodb_data:/data/db
     environment:
@@ -24,7 +25,7 @@ services:
     container_name: looksmax-generator-api
     restart: unless-stopped
     ports:
-      - "12003:8000"
+      - "12003:8000" # Python: 12003
     env_file:
       - ./generator_api/.env
     networks:
@@ -44,7 +45,7 @@ services:
     container_name: looksmax-back
     restart: unless-stopped
     ports:
-      - "12001:3004"
+      - "12002:3004" # Back: 12002
     env_file:
       - ./back/.env
     depends_on:
@@ -60,7 +61,7 @@ services:
     container_name: looksmax-admin
     restart: unless-stopped
     ports:
-      - "12002:3003"
+      - "12001:3003" # Admin: 12001
     env_file:
       - ./admin/.env
     depends_on:
@@ -76,11 +77,29 @@ services:
     container_name: looksmax-front
     restart: unless-stopped
     ports:
-      - "12000:3000"
+      - "12000:3000" # Front: 12000
     env_file:
       - ./front/.env
     depends_on:
       - back
+    networks:
+      - looksmax-network
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: looksmax-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - front
+      - admin
+      - back
+      - generator_api
     networks:
       - looksmax-network
 
