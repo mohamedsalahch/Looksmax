@@ -19,9 +19,7 @@ services:
 
   # Python Generator API (FastAPI)
   generator_api:
-    build:
-      context: ./generator_api
-      dockerfile: Dockerfile
+    image: gor3i/looksmax-generator-api
     container_name: looksmax-generator-api
     restart: unless-stopped
     ports:
@@ -39,9 +37,7 @@ services:
 
   # Backend API (Next.js)
   back:
-    build:
-      context: ./back
-      dockerfile: Dockerfile
+    image: gor3i/looksmax-back
     container_name: looksmax-back
     restart: unless-stopped
     ports:
@@ -55,9 +51,7 @@ services:
 
   # Admin Panel (Next.js)
   admin:
-    build:
-      context: ./admin
-      dockerfile: Dockerfile
+    image: gor3i/looksmax-admin
     container_name: looksmax-admin
     restart: unless-stopped
     ports:
@@ -71,9 +65,7 @@ services:
 
   # Frontend Storefront (Next.js)
   front:
-    build:
-      context: ./front
-      dockerfile: Dockerfile
+    image: gor3i/looksmax-front
     container_name: looksmax-front
     restart: unless-stopped
     ports:
@@ -91,7 +83,7 @@ services:
     container_name: looksmax-nginx
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "12005:80"
       - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
