@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode, useMemo, useRef } from "react";
 import { getReservationKey } from "@/lib/reservations";
 
 export interface CartItem {
@@ -72,6 +72,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const itemsRef = useRef<CartItem[]>([]);
+
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
 
   // Load cart from localStorage on mount (client-side only)
   useEffect(() => {
@@ -86,17 +91,25 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [items, hydrated]);
 
+  const itemIdsKey = useMemo(
+    () => items.map((item) => item.id.split("-")[0]).sort().join("|"),
+    [items]
+  );
+
   useEffect(() => {
-    if (!hydrated || items.length === 0) return;
+    if (!hydrated || itemIdsKey.length === 0) return;
 
     let cancelled = false;
 
     const syncCartAvailability = () => {
+      const currentItems = itemsRef.current;
+      if (currentItems.length === 0) return;
+
       fetch("/api/cart/availability", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          productIds: items.map((item) => item.id.split("-")[0]),
+          productIds: currentItems.map((item) => item.id.split("-")[0]),
           reservationKey: getReservationKey(),
         }),
       })
@@ -127,8 +140,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
             ])
           ) as Map<string, AvailabilityItem>;
 
-          setItems((currentItems) =>
-            currentItems
+          setItems((currentItems) => {
+            const nextItems = currentItems
               .filter((item) => availabilityMap.get(item.id.split("-")[0])?.available)
               .map((item) => {
                 const availability = availabilityMap.get(item.id.split("-")[0]);
@@ -142,20 +155,26 @@ export function CartProvider({ children }: { children: ReactNode }) {
                   productType: availability?.productType ?? item.productType,
                   fashionSubtype: availability?.fashionSubtype ?? item.fashionSubtype,
                 };
-              })
-          );
+              });
+
+            if (JSON.stringify(nextItems) === JSON.stringify(currentItems)) {
+              return currentItems;
+            }
+
+            return nextItems;
+          });
         })
         .catch(() => {});
     };
 
     syncCartAvailability();
-    const interval = window.setInterval(syncCartAvailability, 5000);
+    const interval = window.setInterval(syncCartAvailability, 15000);
 
     return () => {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [hydrated, items]);
+  }, [hydrated, itemIdsKey]);
 
   const openCart = useCallback(() => setIsOpen(true), []);
   const closeCart = useCallback(() => setIsOpen(false), []);

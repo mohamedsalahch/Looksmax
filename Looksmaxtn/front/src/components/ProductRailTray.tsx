@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
 import { formatTndPrice } from "@/lib/formatPrice";
@@ -26,11 +26,16 @@ export default function ProductRailTray() {
   const [railItems, setRailItems] = useState<StudioRailItem[]>([]);
   const [collapsed, setCollapsed] = useState(false);
   const [nowMs, setNowMs] = useState<number | null>(null);
+  const railItemsRef = useRef<StudioRailItem[]>([]);
 
   useEffect(() => {
     setRailItems(getStudioRailItems());
     return subscribeToStudioRail(setRailItems);
   }, []);
+
+  useEffect(() => {
+    railItemsRef.current = railItems;
+  }, [railItems]);
 
   useEffect(() => {
     const handleOpen = () => setCollapsed(false);
@@ -43,6 +48,11 @@ export default function ProductRailTray() {
   useEffect(() => {
     setNowMs(Date.now());
   }, []);
+
+  const railItemIdsKey = useMemo(
+    () => railItems.map((item) => item.id.split("-")[0]).sort().join("|"),
+    [railItems]
+  );
 
   useEffect(() => {
     if (collapsed || railItems.length === 0) return;
@@ -58,16 +68,19 @@ export default function ProductRailTray() {
   }, [collapsed, railItems]);
 
   useEffect(() => {
-    if (railItems.length === 0) return;
+    if (railItemIdsKey.length === 0) return;
 
     let cancelled = false;
 
     const syncRailAvailability = () => {
+      const currentRailItems = railItemsRef.current;
+      if (currentRailItems.length === 0) return;
+
       fetch("/api/cart/availability", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          productIds: railItems.map((item) => item.id.split("-")[0]),
+          productIds: currentRailItems.map((item) => item.id.split("-")[0]),
           reservationKey: getReservationKey(),
           mode: "rail",
         }),
@@ -86,7 +99,7 @@ export default function ProductRailTray() {
             data.items.map((item: AvailabilityItem) => [item.productId, item])
           );
 
-          const nextItems = railItems
+          const nextItems = currentRailItems
             .filter((item) => availabilityMap.get(item.id.split("-")[0])?.available)
             .map((item) => {
               const availability = availabilityMap.get(item.id.split("-")[0]);
@@ -96,19 +109,21 @@ export default function ProductRailTray() {
               };
             });
 
-          replaceStudioRailItems(nextItems);
+          if (JSON.stringify(nextItems) !== JSON.stringify(currentRailItems)) {
+            replaceStudioRailItems(nextItems);
+          }
         })
         .catch(() => {});
     };
 
     syncRailAvailability();
-    const interval = window.setInterval(syncRailAvailability, 5000);
+    const interval = window.setInterval(syncRailAvailability, 15000);
 
     return () => {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [railItems]);
+  }, [railItemIdsKey]);
 
   useEffect(() => {
     return subscribeToReservationChanges(({ productId, reservationExpiresAt }) => {
