@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  output: "standalone",
   async rewrites() {
     const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3004";
 

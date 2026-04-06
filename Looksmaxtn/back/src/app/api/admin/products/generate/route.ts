@@ -41,6 +41,8 @@ function extractImagesFromResponse(data: unknown) {
   return [];
 }
 
+import ProductGenerationJob from "@/admin/models/ProductGenerationJob";
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
@@ -52,6 +54,9 @@ export async function POST(req: NextRequest) {
     if (!baseUrl) {
       return NextResponse.json({ error: "PRODUCT_GENERATION_URL_BASE is not configured." }, { status: 500 });
     }
+
+    const webhookBaseUrl = process.env.OUTFIT_WEBHOOK_BASE_URL || "http://localhost:3004";
+    const webhookUrl = `${webhookBaseUrl}/api/admin/products/generate/webhook`;
 
     await dbConnect();
     const formData = await req.formData();
@@ -81,9 +86,18 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // 1. Create the async job
+    const job = await ProductGenerationJob.create({
+      status: "processing",
+      productType: type,
+      fashionSubtype,
+    });
+
     const payload =
       normalizedType === "shoes"
         ? {
+            job_id: job._id,
+            webhook_url: webhookUrl,
             product_pictures: {
               front: await fileToBase64(front as File),
               back: await fileToBase64(back as File),
@@ -92,6 +106,8 @@ export async function POST(req: NextRequest) {
             },
           }
         : {
+            job_id: job._id,
+            webhook_url: webhookUrl,
             model_pictures: {
               front: await readModelImageAsBase64(model?.frontImage || model?.images?.[0] || ""),
               back: await readModelImageAsBase64(
@@ -105,28 +121,43 @@ export async function POST(req: NextRequest) {
           };
 
     const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
-    const endpoint = normalizedType === "shoes" ? `${normalizedBaseUrl}/generate-shoes` : `${normalizedBaseUrl}/generate`;
+    const endpoint = normalizedType === "shoes" ? `${normalizedBaseUrl}/api/generate-shoes` : `${normalizedBaseUrl}/api/generate`;
 
-    const response = await fetch(endpoint, {
+    // 2. Trigger Python (Async)
+    await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
-    const data = await response.json().catch(() => null);
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: (data as { error?: string } | null)?.error || "Generation request failed." },
-        { status: 502 }
-      );
+    // 3. Return the job immediately
+    return NextResponse.json({ job_id: job._id, status: "processing" });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    const jobId = req.nextUrl.searchParams.get("job_id");
+    if (!jobId) {
+      return NextResponse.json({ error: "Missing job_id" }, { status: 400 });
     }
 
-    const images = extractImagesFromResponse(data);
-    if (images.length === 0) {
-      return NextResponse.json({ error: "Generation service returned no images." }, { status: 502 });
+    await dbConnect();
+    const job = await ProductGenerationJob.findById(jobId);
+
+    if (!job) {
+      return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ imagesBase64: images });
+    return NextResponse.json({
+      job_id: job._id,
+      status: job.status,
+      images: job.images,
+      error: job.error,
+    });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

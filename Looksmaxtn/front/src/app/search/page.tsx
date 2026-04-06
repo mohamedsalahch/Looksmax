@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import ProductCard from "@/components/ProductCard";
 
@@ -48,7 +48,7 @@ function getMainImage(images?: ProductImage[]) {
   return images.find((image) => image.isMain)?.url || images[0]?.url;
 }
 
-export default function SearchPage() {
+function SearchContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -337,5 +337,13 @@ export default function SearchPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense fallback={<div className="pt-32 text-center text-xs animate-pulse">Loading search...</div>}>
+      <SearchContent />
+    </Suspense>
   );
 }

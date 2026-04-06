@@ -7,6 +7,13 @@ import {
 
 export async function POST(req: NextRequest) {
   try {
+    const configuredSecret = process.env.OUTFIT_WEBHOOK_SECRET || "";
+    const requestSecret = req.headers.get("x-webhook-secret") || "";
+
+    if (configuredSecret && requestSecret !== configuredSecret) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = (await req.json()) as Record<string, any>;
     const jobId = body.job_id || body.jobId;
 

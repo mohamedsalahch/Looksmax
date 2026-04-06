@@ -410,17 +410,51 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       if (generationInputs.left.file) body.append("left", generationInputs.left.file);
       if (generationInputs.right.file) body.append("right", generationInputs.right.file);
 
-      const response = await fetch("/api/products/generate", { method: "POST", body });
-      const data = await response.json();
+      // 1. Trigger the job
+      const triggerRes = await fetch("/api/products/generate", {
+        method: "POST",
+        body,
+      });
+      const triggerData = await triggerRes.json();
 
-      if (!response.ok) {
-        setError(data.error || "Unable to generate images.");
+      if (!triggerRes.ok) {
+        setError(triggerData.error || "Unable to start generation.");
         setGenerating(false);
         return;
       }
 
+      const jobId = triggerData.job_id;
+
+      // 2. Poll for status
+      let isCompleted = false;
+      let finalImages: any = null;
+
+      while (!isCompleted) {
+        // Wait 5 seconds
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+
+        const statusRes = await fetch(`/api/products/generate?job_id=${jobId}`);
+        const statusData = await statusRes.json();
+
+        if (statusData.status === "completed") {
+          isCompleted = true;
+          finalImages = statusData.images;
+        } else if (statusData.status === "failed") {
+          setError(statusData.error || "Generation failed.");
+          setGenerating(false);
+          return;
+        }
+      }
+
+      // 3. Process completed images
+      const viewList = form.fashionSubtype === "shoes" 
+        ? ["front", "back", "left", "right"] 
+        : ["front", "back"];
+
       const generatedImages = await Promise.all(
-        (data.imagesBase64 || []).map(async (base64: string, index: number) => {
+        viewList.map(async (view, index) => {
+          const base64 = finalImages[view];
+          if (!base64) return null;
           const file = await base64ToFile(base64, index);
           return {
             id: crypto.randomUUID(),
@@ -431,7 +465,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         })
       );
 
-      setImages((current) => [...current, ...generatedImages]);
+      setImages((current) => [...current, ...generatedImages.filter((img): img is any => !!img)]);
     } catch {
       setError("Generation request failed.");
     }
