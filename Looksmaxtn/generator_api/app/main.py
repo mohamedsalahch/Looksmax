@@ -2,6 +2,10 @@
 
 import logging
 import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
