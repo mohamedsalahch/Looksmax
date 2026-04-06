@@ -1,4 +1,7 @@
 export function buildOpenApiSpec(baseUrl: string) {
+  const adminSecurity = [{ bearerAuth: [] }];
+  const userSecurity = [{ bearerAuth: [] }];
+
   return {
     openapi: "3.1.0",
     info: {
@@ -13,6 +16,15 @@ export function buildOpenApiSpec(baseUrl: string) {
         description: "Current backend server",
       },
     ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT",
+        },
+      },
+    },
     tags: [
       { name: "Admin Auth" },
       { name: "Admin Catalog" },
@@ -40,6 +52,7 @@ export function buildOpenApiSpec(baseUrl: string) {
         post: {
           tags: ["Admin Auth"],
           summary: "Sign out the current admin session",
+          security: adminSecurity,
           responses: {
             "200": { description: "Admin logged out" },
           },
@@ -49,6 +62,7 @@ export function buildOpenApiSpec(baseUrl: string) {
         get: {
           tags: ["Admin Auth"],
           summary: "Get the current admin session",
+          security: adminSecurity,
           responses: {
             "200": { description: "Current admin session" },
             "403": { description: "Unauthorized" },
@@ -59,6 +73,7 @@ export function buildOpenApiSpec(baseUrl: string) {
         get: {
           tags: ["Admin Catalog"],
           summary: "List products for the admin dashboard",
+          security: adminSecurity,
           responses: {
             "200": { description: "Products list" },
           },
@@ -66,6 +81,7 @@ export function buildOpenApiSpec(baseUrl: string) {
         post: {
           tags: ["Admin Catalog"],
           summary: "Create a product",
+          security: adminSecurity,
           responses: {
             "200": { description: "Product created" },
           },
@@ -75,6 +91,7 @@ export function buildOpenApiSpec(baseUrl: string) {
         get: {
           tags: ["Admin Catalog"],
           summary: "Get one product",
+          security: adminSecurity,
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           responses: {
             "200": { description: "Product detail" },
@@ -84,6 +101,7 @@ export function buildOpenApiSpec(baseUrl: string) {
         put: {
           tags: ["Admin Catalog"],
           summary: "Update a product",
+          security: adminSecurity,
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           responses: {
             "200": { description: "Product updated" },
@@ -92,6 +110,7 @@ export function buildOpenApiSpec(baseUrl: string) {
         delete: {
           tags: ["Admin Catalog"],
           summary: "Delete a product",
+          security: adminSecurity,
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           responses: {
             "200": { description: "Product deleted" },
@@ -102,6 +121,7 @@ export function buildOpenApiSpec(baseUrl: string) {
         post: {
           tags: ["Admin Catalog"],
           summary: "Generate product images from model/product inputs",
+          security: adminSecurity,
           responses: {
             "200": { description: "Generated images returned" },
           },
@@ -111,6 +131,7 @@ export function buildOpenApiSpec(baseUrl: string) {
         get: {
           tags: ["Admin Catalog"],
           summary: "List categories",
+          security: adminSecurity,
           responses: {
             "200": { description: "Categories list" },
           },
@@ -118,6 +139,7 @@ export function buildOpenApiSpec(baseUrl: string) {
         post: {
           tags: ["Admin Catalog"],
           summary: "Create a category",
+          security: adminSecurity,
           responses: {
             "200": { description: "Category created" },
           },
@@ -127,6 +149,7 @@ export function buildOpenApiSpec(baseUrl: string) {
         put: {
           tags: ["Admin Catalog"],
           summary: "Update a category",
+          security: adminSecurity,
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           responses: {
             "200": { description: "Category updated" },
@@ -135,6 +158,7 @@ export function buildOpenApiSpec(baseUrl: string) {
         delete: {
           tags: ["Admin Catalog"],
           summary: "Delete a category",
+          security: adminSecurity,
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           responses: {
             "200": { description: "Category deleted" },
@@ -145,6 +169,7 @@ export function buildOpenApiSpec(baseUrl: string) {
         get: {
           tags: ["Admin Content"],
           summary: "Get homepage content for the admin editor",
+          security: adminSecurity,
           responses: {
             "200": { description: "Homepage content" },
           },
@@ -152,6 +177,7 @@ export function buildOpenApiSpec(baseUrl: string) {
         put: {
           tags: ["Admin Content"],
           summary: "Update homepage content",
+          security: adminSecurity,
           responses: {
             "200": { description: "Homepage updated" },
           },
@@ -161,6 +187,7 @@ export function buildOpenApiSpec(baseUrl: string) {
         get: {
           tags: ["Admin Catalog"],
           summary: "List uploaded models",
+          security: adminSecurity,
           responses: {
             "200": { description: "Models list" },
           },
@@ -168,6 +195,7 @@ export function buildOpenApiSpec(baseUrl: string) {
         post: {
           tags: ["Admin Catalog"],
           summary: "Create a model asset",
+          security: adminSecurity,
           responses: {
             "200": { description: "Model created" },
           },
@@ -177,6 +205,7 @@ export function buildOpenApiSpec(baseUrl: string) {
         get: {
           tags: ["Admin Content"],
           summary: "List generated images",
+          security: adminSecurity,
           responses: {
             "200": { description: "Generated images list" },
           },
@@ -184,6 +213,7 @@ export function buildOpenApiSpec(baseUrl: string) {
         post: {
           tags: ["Admin Content"],
           summary: "Generate images from prompt and source images",
+          security: adminSecurity,
           responses: {
             "200": { description: "Generated image asset created" },
           },
@@ -193,6 +223,7 @@ export function buildOpenApiSpec(baseUrl: string) {
         get: {
           tags: ["Admin Operations"],
           summary: "List orders",
+          security: adminSecurity,
           responses: {
             "200": { description: "Orders list" },
           },
@@ -202,6 +233,7 @@ export function buildOpenApiSpec(baseUrl: string) {
         get: {
           tags: ["Admin Operations"],
           summary: "Get one order",
+          security: adminSecurity,
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           responses: {
             "200": { description: "Order detail" },
@@ -210,6 +242,7 @@ export function buildOpenApiSpec(baseUrl: string) {
         put: {
           tags: ["Admin Operations"],
           summary: "Update order status",
+          security: adminSecurity,
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           responses: {
             "200": { description: "Order updated" },
@@ -220,6 +253,7 @@ export function buildOpenApiSpec(baseUrl: string) {
         get: {
           tags: ["Admin Operations"],
           summary: "List users",
+          security: adminSecurity,
           responses: {
             "200": { description: "Users list" },
           },
@@ -229,6 +263,7 @@ export function buildOpenApiSpec(baseUrl: string) {
         get: {
           tags: ["Admin Operations"],
           summary: "Get admin dashboard stats",
+          security: adminSecurity,
           responses: {
             "200": { description: "Dashboard stats" },
           },
@@ -265,6 +300,7 @@ export function buildOpenApiSpec(baseUrl: string) {
         get: {
           tags: ["Store Auth"],
           summary: "Get current storefront session",
+          security: userSecurity,
           responses: {
             "200": { description: "Current storefront user" },
           },
@@ -302,6 +338,7 @@ export function buildOpenApiSpec(baseUrl: string) {
         post: {
           tags: ["Store Catalog"],
           summary: "Reserve a unique product",
+          security: userSecurity,
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           responses: {
             "200": { description: "Reservation created" },
@@ -310,6 +347,7 @@ export function buildOpenApiSpec(baseUrl: string) {
         delete: {
           tags: ["Store Catalog"],
           summary: "Release a reservation",
+          security: userSecurity,
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           responses: {
             "200": { description: "Reservation released" },

@@ -1,9 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
+import Order from "@/admin/models/Order";
 import Product from "@/admin/models/Product";
 import { getSession } from "@/admin/lib/auth";
 import { deleteProductImage, saveProductImages } from "@/admin/lib/productUploads";
 import { getConditionStatusFromScore } from "@/admin/lib/productCondition";
+import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
+
+const BLOCKING_ORDER_STATUSES = ["processing", "confirmed", "shipping"];
+const ACTIVE_STOCK_ORDER_STATUSES = ["processing", "confirmed", "shipping", "delivered"];
+
+function getAvailabilityStatus(params: {
+  productType?: string;
+  stock: number;
+  isReserved?: boolean;
+  isSold?: boolean;
+}) {
+  const { productType, stock, isReserved = false, isSold = false } = params;
+
+  if (productType === "perfume") {
+    if (stock <= 0) return "out-of-stock";
+    if (stock <= 3) return "low-stock";
+    return "in-stock";
+  }
+
+  if (isSold) return "sold";
+  if (isReserved) return "reserved";
+  return "available";
+}
 
 function parseStringArray(value: FormDataEntryValue | null) {
   return JSON.parse(String(value || "[]")) as string[];
@@ -36,9 +60,48 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!session || session.role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     await dbConnect();
     const { id } = await params;
-    const product = await Product.findById(id).lean();
+    const [product, activeOrders] = await Promise.all([
+      Product.findById(id).lean(),
+      Order.find({ orderStatus: { $in: ACTIVE_STOCK_ORDER_STATUSES }, "items.product": id })
+        .select("orderStatus items.product items.quantity")
+        .lean(),
+    ]);
     if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    return NextResponse.json({ product });
+
+    let perfumeQuantity = 0;
+    let isReserved = false;
+    let isSold = false;
+
+    activeOrders.forEach((order) => {
+      order.items.forEach((item) => {
+        const productId = item.product?.toString();
+        if (productId !== id) return;
+        perfumeQuantity += item.quantity || 0;
+        if (BLOCKING_ORDER_STATUSES.includes(order.orderStatus)) isReserved = true;
+        if (order.orderStatus === "delivered") isSold = true;
+      });
+    });
+
+    const computedStock =
+      product.productType === "perfume"
+        ? Math.max((product.stock ?? 0) - perfumeQuantity, 0)
+        : isReserved || isSold
+          ? 0
+          : Math.min(product.stock ?? 1, 1);
+
+    return NextResponse.json({
+      product: {
+        ...product,
+        stock: computedStock,
+        visibilityStatus: product.isActive === false ? "inactive" : "active",
+        availabilityStatus: getAvailabilityStatus({
+          productType: product.productType,
+          stock: computedStock,
+          isReserved,
+          isSold,
+        }),
+      },
+    });
   } catch (error) { console.error(error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }
 
@@ -48,8 +111,24 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!session || session.role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     await dbConnect();
     const { id } = await params;
+    const auditActor = await getAuditActorFromSession(session);
     const existingProduct = await Product.findById(id).lean();
     if (!existingProduct) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    const contentType = req.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      const body = await req.json();
+      const update: Record<string, unknown> = {};
+
+      if (typeof body.isActive === "boolean") {
+        update.isActive = body.isActive;
+      }
+      update.updatedBy = auditActor;
+
+      const product = await Product.findByIdAndUpdate(id, update, { new: true }).lean();
+      if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return NextResponse.json({ product });
+    }
 
     const formData = await req.formData();
     const existingImages = JSON.parse(String(formData.get("existingImages") || "[]")) as { url: string }[];
@@ -128,6 +207,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const body = {
       name: String(formData.get("name") || ""),
       price: Number(formData.get("price") || 0),
+      isActive: formData.has("isActive")
+        ? String(formData.get("isActive") || "true") === "true"
+        : existingProduct.isActive !== false,
       categories: parseStringArray(formData.get("categories")),
       description: String(formData.get("description") || ""),
       brand: String(formData.get("brand") || "LOOKSMAX"),
@@ -140,12 +222,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       conditionScore,
       originPictures: normalizeOriginPictures(productType, fashionSubtype, newOriginPictures),
       sizes: productType === "perfume" ? [] : parseStringArray(formData.get("sizes")),
+      colors: productType === "perfume" ? [] : parseStringArray(formData.get("colors")),
       cloneSourceName: productType === "perfume" ? String(formData.get("cloneSourceName") || "") : "",
       cloneSourceImage:
         productType === "perfume"
           ? newCloneSourceImagePath || String(formData.get("cloneSourceImage") || "")
           : "",
       images,
+      updatedBy: auditActor,
     };
 
     const product = await Product.findByIdAndUpdate(id, body, { new: true }).lean();

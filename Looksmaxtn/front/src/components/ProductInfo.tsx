@@ -19,6 +19,7 @@ export default function ProductInfo({
   product: {
     id?: string;
     name: string;
+    categories?: string[];
     price: string;
     brand: string;
     image?: string;
@@ -120,6 +121,7 @@ export default function ProductInfo({
           brand: product.brand,
           maxStock: currentStock,
           image: product.image,
+          categories: product.categories,
           productType: "perfume",
           fashionSubtype: product.fashionSubtype,
           originPictures: product.originPictures,
@@ -137,6 +139,7 @@ export default function ProductInfo({
           price: product.price,
           brand: product.brand,
           image: product.image,
+          categories: product.categories,
           size: product.size,
           maxStock: 1,
           productType: product.productType,
@@ -158,6 +161,7 @@ export default function ProductInfo({
       id: product.id || "unknown",
       name: product.name,
       image: product.image,
+      categories: product.categories,
       price: product.price,
       brand: product.brand,
       quantity: 1,

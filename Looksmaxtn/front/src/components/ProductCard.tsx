@@ -17,6 +17,7 @@ type ProductType = "fashion" | "perfume" | "clothing" | "shoes";
 interface ProductCardProps {
   id: string;
   name: string;
+  categories?: string[];
   price: string;
   tag?: string;
   image?: string;
@@ -44,6 +45,7 @@ const CLONE_PREVIEW_OFFSET = 24;
 export default function ProductCard({
   id,
   name,
+  categories = [],
   price,
   tag,
   image,
@@ -118,6 +120,7 @@ export default function ProductCard({
           brand: "LOOKSMAX",
           maxStock: stock,
           image,
+          categories,
           productType,
           fashionSubtype,
           originPictures,
@@ -153,6 +156,7 @@ export default function ProductCard({
     addStudioRailItem({
       id,
       name,
+      categories,
       image,
       price,
       brand: "LOOKSMAX",

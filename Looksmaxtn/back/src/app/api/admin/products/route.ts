@@ -5,9 +5,29 @@ import Product from "@/admin/models/Product";
 import { getSession } from "@/admin/lib/auth";
 import { saveProductImages } from "@/admin/lib/productUploads";
 import { getConditionStatusFromScore } from "@/admin/lib/productCondition";
+import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 
 const BLOCKING_ORDER_STATUSES = ["processing", "confirmed", "shipping"];
 const ACTIVE_STOCK_ORDER_STATUSES = ["processing", "confirmed", "shipping", "delivered"];
+
+function getAvailabilityStatus(params: {
+  productType?: string;
+  stock: number;
+  isReserved?: boolean;
+  isSold?: boolean;
+}) {
+  const { productType, stock, isReserved = false, isSold = false } = params;
+
+  if (productType === "perfume") {
+    if (stock <= 0) return "out-of-stock";
+    if (stock <= 3) return "low-stock";
+    return "in-stock";
+  }
+
+  if (isSold) return "sold";
+  if (isReserved) return "reserved";
+  return "available";
+}
 
 function parseStringArray(value: FormDataEntryValue | null) {
   return JSON.parse(String(value || "[]")) as string[];
@@ -48,10 +68,12 @@ function getProductPayload(
   const conditionScore =
     productType === "perfume" ? null : Number(formData.get("conditionScore") || 7);
   const sizes = productType === "perfume" ? [] : parseStringArray(formData.get("sizes"));
+  const colors = productType === "perfume" ? [] : parseStringArray(formData.get("colors"));
 
   return {
     name: String(formData.get("name") || ""),
     price: Number(formData.get("price") || 0),
+    isActive: String(formData.get("isActive") || "true") === "true",
     categories: parseStringArray(formData.get("categories")),
     description: String(formData.get("description") || ""),
     brand: String(formData.get("brand") || "LOOKSMAX"),
@@ -64,6 +86,7 @@ function getProductPayload(
     conditionScore,
     originPictures: normalizeOriginPictures(productType, fashionSubtype, originPictures),
     sizes,
+    colors,
     cloneSourceName: productType === "perfume" ? String(formData.get("cloneSourceName") || "") : "",
     cloneSourceImage:
       productType === "perfume" ? cloneSourceImagePath || String(formData.get("cloneSourceImage") || "") : "",
@@ -96,6 +119,7 @@ export async function GET(req: NextRequest) {
     ]);
 
     const reservedSet = new Set<string>();
+    const soldSet = new Set<string>();
     const perfumeQuantityMap = new Map<string, number>();
 
     activeOrders.forEach((order) => {
@@ -104,6 +128,9 @@ export async function GET(req: NextRequest) {
         if (!productId) return;
         if (BLOCKING_ORDER_STATUSES.includes(order.orderStatus)) {
           reservedSet.add(productId);
+        }
+        if (order.orderStatus === "delivered") {
+          soldSet.add(productId);
         }
         perfumeQuantityMap.set(productId, (perfumeQuantityMap.get(productId) || 0) + (item.quantity || 0));
       });
@@ -115,9 +142,21 @@ export async function GET(req: NextRequest) {
         stock:
           product.productType === "perfume"
             ? Math.max((product.stock ?? 0) - (perfumeQuantityMap.get(product._id.toString()) || 0), 0)
-            : reservedSet.has(product._id.toString())
+            : reservedSet.has(product._id.toString()) || soldSet.has(product._id.toString())
               ? 0
               : Math.min(product.stock ?? 1, 1),
+        availabilityStatus: getAvailabilityStatus({
+          productType: product.productType,
+          stock:
+            product.productType === "perfume"
+              ? Math.max((product.stock ?? 0) - (perfumeQuantityMap.get(product._id.toString()) || 0), 0)
+              : reservedSet.has(product._id.toString()) || soldSet.has(product._id.toString())
+                ? 0
+                : Math.min(product.stock ?? 1, 1),
+          isReserved: reservedSet.has(product._id.toString()),
+          isSold: soldSet.has(product._id.toString()),
+        }),
+        visibilityStatus: product.isActive === false ? "inactive" : "active",
       })),
     });
   } catch (error) { console.error(error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
@@ -129,6 +168,7 @@ export async function POST(req: NextRequest) {
     if (!session || session.role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
 
     await dbConnect();
+    const auditActor = await getAuditActorFromSession(session);
     const formData = await req.formData();
     const imageFiles = formData
       .getAll("images")
@@ -177,7 +217,11 @@ export async function POST(req: NextRequest) {
       originPictures
     );
 
-    const product = await Product.create(body);
+    const product = await Product.create({
+      ...body,
+      createdBy: auditActor,
+      updatedBy: auditActor,
+    });
     return NextResponse.json({ product }, { status: 201 });
   } catch (error) { console.error(error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }

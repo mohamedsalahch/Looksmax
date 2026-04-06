@@ -11,6 +11,7 @@ interface ProductImage {
 interface Product {
   _id: string;
   name: string;
+  categories?: string[];
   price: number;
   stock: number;
   reservationExpiresAt?: string | null;
@@ -78,6 +79,7 @@ export default function ProductCardRow({ title = "Featured selection" }: { title
               key={product._id}
               id={product._id}
               name={product.name}
+            categories={product.categories}
             price={product.price.toFixed(2)}
             stock={product.stock}
             reservationExpiresAt={product.reservationExpiresAt}

@@ -28,7 +28,7 @@ export async function GET(
         .select("reservedUntil")
         .lean(),
     ]);
-    if (!product) {
+    if (!product || product.isActive === false) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
 

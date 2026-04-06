@@ -3,6 +3,7 @@ import dbConnect from "@/store/lib/mongodb";
 import Order from "@/store/models/Order";
 import Product from "@/store/models/Product";
 import { getSession } from "@/store/lib/auth";
+import { getAuditActorFromSession } from "@/store/lib/auditRoute";
 
 const VALID_ORDER_STATUSES = ["processing", "confirmed", "canceled", "shipping", "delivered", "returned"] as const;
 const BLOCKING_ORDER_STATUSES = ["processing", "confirmed", "shipping"] as const;
@@ -53,20 +54,52 @@ export async function PUT(
 ) {
   try {
     const session = await getSession();
-    if (!session || session.role !== "admin") {
+    if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
     await dbConnect();
     const { id } = await params;
-    const { orderStatus } = await req.json();
+    const auditActor = await getAuditActorFromSession(session);
+    const { orderStatus, archive } = await req.json();
+
+    if (archive === true) {
+      const order = await Order.findById(id).populate("user", "name email").lean();
+      if (!order) {
+        return NextResponse.json({ error: "Order not found" }, { status: 404 });
+      }
+
+      const orderUserId =
+        typeof order.user === "object" && order.user !== null && "_id" in order.user
+          ? String((order.user as { _id?: { toString(): string } })._id?.toString() || "")
+          : String(order.user || "");
+
+      if (session.role !== "admin" && orderUserId !== session.userId) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+      }
+
+      const archivedOrder = await Order.findByIdAndUpdate(
+        id,
+        { isArchived: true, archivedAt: new Date(), updatedBy: auditActor },
+        { new: true }
+      )
+        .populate("user", "name email")
+        .lean();
+
+      return NextResponse.json({ order: archivedOrder });
+    }
+
+    if (session.role !== "admin") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
 
     if (orderStatus && !VALID_ORDER_STATUSES.includes(orderStatus)) {
       return NextResponse.json({ error: "Invalid order status" }, { status: 400 });
     }
 
-    const update: Record<string, string> = {};
+    const update: Record<string, unknown> = {};
     if (orderStatus) update.orderStatus = orderStatus;
+    update.updatedBy = auditActor;
 
     const existingOrder = await Order.findById(id).lean();
     if (!existingOrder) {

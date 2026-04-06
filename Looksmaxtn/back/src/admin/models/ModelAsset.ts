@@ -1,10 +1,13 @@
 import mongoose, { Document, Model, Schema } from "mongoose";
+import { type IAuditActor, auditActorSchema } from "@/admin/lib/audit";
 
 export interface IModelAsset extends Document {
   name: string;
   images: string[];
   frontImage: string;
   backImage: string;
+  createdBy?: IAuditActor | null;
+  updatedBy?: IAuditActor | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -15,6 +18,8 @@ const modelAssetSchema = new Schema<IModelAsset>(
     images: [{ type: String, required: true, trim: true }],
     frontImage: { type: String, required: true, trim: true },
     backImage: { type: String, required: true, trim: true },
+    createdBy: { type: auditActorSchema, default: null },
+    updatedBy: { type: auditActorSchema, default: null },
   },
   { timestamps: true }
 );

@@ -3,6 +3,7 @@ import dbConnect from "@/admin/lib/mongodb";
 import Order from "@/admin/models/Order";
 import Product from "@/admin/models/Product";
 import { getSession } from "@/admin/lib/auth";
+import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 
 const VALID_ORDER_STATUSES = ["processing", "confirmed", "canceled", "shipping", "delivered", "returned"] as const;
 const BLOCKING_ORDER_STATUSES = ["processing", "confirmed", "shipping"] as const;
@@ -46,6 +47,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!session || session.role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     await dbConnect();
     const { id } = await params;
+    const auditActor = await getAuditActorFromSession(session);
     const { orderStatus } = await req.json();
     if (orderStatus && !VALID_ORDER_STATUSES.includes(orderStatus)) {
       return NextResponse.json({ error: "Invalid order status" }, { status: 400 });
@@ -83,10 +85,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
-    const update: Record<string, string> = {};
+    const update: Record<string, unknown> = {};
     if (orderStatus) update.orderStatus = orderStatus;
+    update.updatedBy = auditActor;
 
-    const order = await Order.findByIdAndUpdate(id, update, { new: true }).populate("user", "name email").lean();
+    const order = await Order.findByIdAndUpdate(
+      id,
+      update,
+      { new: true }
+    )
+      .populate("user", "name email")
+      .lean();
     if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json({ order: serializeOrder(order) });
   } catch (error) { console.error(error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }

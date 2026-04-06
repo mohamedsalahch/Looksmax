@@ -3,6 +3,7 @@
 export interface StudioRailItem {
   id: string;
   name: string;
+  categories?: string[];
   image?: string;
   price: string;
   brand: string;
@@ -60,6 +61,7 @@ export function addStudioRailItem(item: StudioRailItem) {
               ...entry,
               image: item.image || entry.image,
               name: item.name || entry.name,
+              categories: item.categories ?? entry.categories,
               brand: item.brand || entry.brand,
               price: item.price || entry.price,
               quantity: item.quantity || entry.quantity,

@@ -31,7 +31,7 @@ export async function POST(
       Order.exists({ orderStatus: { $in: BLOCKING_ORDER_STATUSES }, "items.product": id }),
     ]);
 
-    if (!product) {
+    if (!product || product.isActive === false) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
 

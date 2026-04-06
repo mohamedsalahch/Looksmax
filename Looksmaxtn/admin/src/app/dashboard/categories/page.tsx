@@ -19,6 +19,7 @@ export default function CategoriesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", slug: "", order: "0", isActive: true, parentSlug: "" });
   const [saving, setSaving] = useState(false);
+  const [togglingVisibilityId, setTogglingVisibilityId] = useState("");
   const [error, setError] = useState("");
 
   const fetchCategories = () => {
@@ -100,15 +101,20 @@ export default function CategoriesPage() {
   };
 
   const toggleActive = async (cat: Category) => {
-    const res = await fetch(`/api/categories/${cat._id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isActive: !cat.isActive }),
-    });
-    if (res.ok) {
-      setCategories((prev) =>
-        prev.map((c) => (c._id === cat._id ? { ...c, isActive: !c.isActive } : c))
-      );
+    setTogglingVisibilityId(cat._id);
+    try {
+      const res = await fetch(`/api/categories/${cat._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: !cat.isActive }),
+      });
+      if (res.ok) {
+        setCategories((prev) =>
+          prev.map((c) => (c._id === cat._id ? { ...c, isActive: !c.isActive } : c))
+        );
+      }
+    } finally {
+      setTogglingVisibilityId("");
     }
   };
 
@@ -264,7 +270,7 @@ export default function CategoriesPage() {
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Parent</th>
                 <th className="px-4 py-3">Slug</th>
-                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Visibility</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
@@ -277,14 +283,24 @@ export default function CategoriesPage() {
                   <td className="px-4 py-3 text-xs text-text-secondary font-mono">{cat.slug}</td>
                   <td className="px-4 py-3">
                     <button
-                      onClick={() => toggleActive(cat)}
-                      className={`text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider cursor-pointer ${
-                        cat.isActive
-                          ? "text-success bg-success/10"
-                          : "text-text-secondary bg-bg-secondary"
+                      type="button"
+                      onClick={() => void toggleActive(cat)}
+                      disabled={togglingVisibilityId === cat._id}
+                      className={`group relative inline-flex h-6 w-12 items-center transition-opacity ${
+                        togglingVisibilityId === cat._id ? "opacity-60" : ""
                       }`}
+                      aria-label={`Toggle visibility for ${cat.name}`}
                     >
-                      {cat.isActive ? "Active" : "Hidden"}
+                      <span
+                        className={`absolute inset-0 transition-colors ${
+                          cat.isActive ? "bg-[#d7c08c]" : "bg-[#d9d3c9]"
+                        }`}
+                      />
+                      <span
+                        className={`absolute top-[2px] h-5 w-5 bg-[#1a1a1a] transition-all duration-200 ease-out ${
+                          cat.isActive ? "left-[25px]" : "left-[2px]"
+                        }`}
+                      />
                     </button>
                   </td>
                   <td className="px-4 py-3 text-right">

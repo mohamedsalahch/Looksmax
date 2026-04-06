@@ -1,6 +1,7 @@
 import dbConnect from "@/lib/mongodb";
 import SavedOutfit from "@/models/SavedOutfit";
 import { notFound } from "next/navigation";
+import SharedOutfitViewer from "./SharedOutfitViewer";
 
 export const dynamic = "force-dynamic";
 
@@ -28,17 +29,7 @@ export default async function SharedOutfitPage({
           <h1 className="text-2xl font-semibold tracking-wide uppercase">{outfit.name}</h1>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {images.map((image, index) => (
-            <div key={index} className="border border-border-color bg-hover p-4">
-              <img
-                src={image}
-                alt={`${outfit.name} ${index === 0 ? "front" : "back"}`}
-                className="w-full max-h-[70vh] object-contain"
-              />
-            </div>
-          ))}
-        </div>
+        <SharedOutfitViewer name={outfit.name} images={images} />
       </div>
     </div>
   );

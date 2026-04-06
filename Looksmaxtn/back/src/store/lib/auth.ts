@@ -1,6 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "looksmax-secret-key-change-in-production"
@@ -11,6 +11,13 @@ const COOKIE_NAME = "looksmax-token";
 export interface JWTPayload {
   userId: string;
   role: string;
+}
+
+function getBearerTokenFromHeader(authorizationHeader?: string | null) {
+  if (!authorizationHeader) return null;
+  const [scheme, token] = authorizationHeader.split(" ");
+  if (scheme?.toLowerCase() !== "bearer" || !token) return null;
+  return token;
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -42,6 +49,12 @@ export async function verifyToken(token: string): Promise<JWTPayload | null> {
 }
 
 export async function getSession(): Promise<JWTPayload | null> {
+  const headersStore = await headers();
+  const bearerToken = getBearerTokenFromHeader(headersStore.get("authorization"));
+  if (bearerToken) {
+    return verifyToken(bearerToken);
+  }
+
   const cookieStore = await cookies();
   const token = cookieStore.get(COOKIE_NAME)?.value;
   if (!token) return null;

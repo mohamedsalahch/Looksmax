@@ -17,9 +17,11 @@ export type ProductType = "fashion" | "perfume" | "clothing" | "shoes";
 export interface IProduct extends Document {
   name: string;
   price: number;
+  isActive: boolean;
   categories: string[];
   description: string;
   sizes: string[];
+  colors: string[];
   stock: number;
   images: IProductImage[];
   tag?: string;
@@ -57,9 +59,11 @@ const productSchema = new Schema<IProduct>(
   {
     name: { type: String, required: true, trim: true },
     price: { type: Number, required: true },
+    isActive: { type: Boolean, default: true },
     categories: [{ type: String, lowercase: true, trim: true }],
     description: { type: String, default: "" },
     sizes: [{ type: String }],
+    colors: [{ type: String }],
     stock: { type: Number, default: 1, min: 0 },
     images: [productImageSchema],
     tag: { type: String, default: "" },

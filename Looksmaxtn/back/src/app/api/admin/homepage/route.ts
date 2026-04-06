@@ -4,11 +4,18 @@ import { getSession } from "@/admin/lib/auth";
 import HomePageContent from "@/admin/models/HomePageContent";
 import { DEFAULT_HOME_PAGE } from "@/admin/lib/homePageDefaults";
 import { deleteHomePageFile, saveHomePageFiles } from "@/admin/lib/homePageUploads";
+import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
+import { getSystemAuditActor } from "@/admin/lib/audit";
 
 async function getOrCreateHomePage() {
   const existing = await HomePageContent.findOne({ key: "home" }).lean();
   if (existing) return existing;
-  const created = await HomePageContent.create(DEFAULT_HOME_PAGE);
+  const systemActor = getSystemAuditActor();
+  const created = await HomePageContent.create({
+    ...DEFAULT_HOME_PAGE,
+    createdBy: systemActor,
+    updatedBy: systemActor,
+  });
   return created.toObject();
 }
 
@@ -36,6 +43,7 @@ export async function PUT(req: Request) {
     }
 
     await dbConnect();
+    const auditActor = await getAuditActorFromSession(session);
     const existing = await getOrCreateHomePage();
     const formData = await req.formData();
 
@@ -102,11 +110,15 @@ export async function PUT(req: Request) {
       featured: {
         title: String(formData.get("featuredTitle") || ""),
       },
+      updatedBy: auditActor,
     };
 
     const content = await HomePageContent.findOneAndUpdate(
       { key: "home" },
-      nextContent,
+      {
+        $set: nextContent,
+        $setOnInsert: { createdBy: auditActor },
+      },
       { new: true, upsert: true }
     ).lean();
 

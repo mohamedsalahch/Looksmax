@@ -9,6 +9,7 @@ interface OrderDetail {
   _id: string;
   totalPrice: number;
   orderStatus: string;
+  isArchived?: boolean;
   paymentMethod: string;
   createdAt: string;
   shippingAddress: {
@@ -32,6 +33,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const { id } = use(params);
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [archiving, setArchiving] = useState(false);
 
   useEffect(() => {
     fetch(`/api/orders/${id}`)
@@ -49,6 +51,24 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       case "shipping": return "text-blue-700 bg-blue-100";
       case "confirmed": return "text-emerald-700 bg-emerald-100";
       default: return "text-yellow-700 bg-yellow-100";
+    }
+  };
+
+  const handleArchive = async () => {
+    setArchiving(true);
+    try {
+      const response = await fetch(`/api/orders/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archive: true }),
+      });
+      if (response.ok) {
+        window.location.href = "/account/orders";
+      }
+    } catch {
+      // Keep current screen on failure.
+    } finally {
+      setArchiving(false);
     }
   };
 
@@ -75,10 +95,30 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             })}
           </p>
         </div>
-        <span className={`text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider ${statusColor(order.orderStatus)}`}>
-          {order.orderStatus}
-        </span>
+        <div className="flex items-center gap-2">
+          {order.isArchived ? (
+            <span className="text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider text-neutral-700 bg-neutral-200">
+              archived
+            </span>
+          ) : null}
+          <span className={`text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider ${statusColor(order.orderStatus)}`}>
+            {order.orderStatus}
+          </span>
+        </div>
       </div>
+
+      {!order.isArchived ? (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => void handleArchive()}
+            disabled={archiving}
+            className="border border-border-color px-4 py-2 text-[10px] uppercase tracking-[0.18em] text-text-secondary transition-colors hover:text-foreground disabled:opacity-50"
+          >
+            {archiving ? "Archiving..." : "Archive Order"}
+          </button>
+        </div>
+      ) : null}
 
       {/* Progress */}
       {!["canceled", "returned"].includes(order.orderStatus) && (

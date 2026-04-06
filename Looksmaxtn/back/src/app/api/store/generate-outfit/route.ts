@@ -73,6 +73,10 @@ function getPreferredIpv4Host() {
     return process.env.OUTFIT_WEBHOOK_BASE_URL.replace(/\/$/, "");
   }
 
+  if (process.env.BACKEND_BASE_URL) {
+    return process.env.BACKEND_BASE_URL.replace(/\/$/, "");
+  }
+
   const interfaces = os.networkInterfaces();
   for (const addresses of Object.values(interfaces)) {
     for (const address of addresses || []) {
@@ -179,7 +183,10 @@ export async function POST(req: NextRequest) {
     });
     await job.save();
 
-    const baseUrl = process.env.PRODUCT_GENERATION_URL_BASE || "http://192.168.1.101:8000/";
+    const baseUrl = (process.env.PRODUCT_GENERATION_URL_BASE || "").replace(/\/?$/, "/");
+    if (!baseUrl) {
+      return NextResponse.json({ error: "PRODUCT_GENERATION_URL_BASE is not configured." }, { status: 500 });
+    }
     const preferredWebhookBase = getPreferredIpv4Host();
     const webhookBase = preferredWebhookBase || req.nextUrl.origin;
     const webhookUrl = `${webhookBase}/api/store/generate-outfit/webhook`;

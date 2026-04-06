@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
+import { type IAuditActor, auditActorSchema } from "@/admin/lib/audit";
 
 export interface IProductImage {
   url: string;
@@ -17,9 +18,11 @@ export type ProductType = "fashion" | "perfume" | "clothing" | "shoes";
 export interface IProduct extends Document {
   name: string;
   price: number;
+  isActive: boolean;
   categories: string[];
   description: string;
   sizes: string[];
+  colors: string[];
   stock: number;
   images: IProductImage[];
   tag?: string;
@@ -31,6 +34,8 @@ export interface IProduct extends Document {
   originPictures?: IOriginPictures;
   cloneSourceName?: string;
   cloneSourceImage?: string;
+  createdBy?: IAuditActor | null;
+  updatedBy?: IAuditActor | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -57,9 +62,11 @@ const productSchema = new Schema<IProduct>(
   {
     name: { type: String, required: true, trim: true },
     price: { type: Number, required: true },
+    isActive: { type: Boolean, default: true },
     categories: [{ type: String, lowercase: true, trim: true }],
     description: { type: String, default: "" },
     sizes: [{ type: String }],
+    colors: [{ type: String }],
     stock: { type: Number, default: 1, min: 0 },
     images: [productImageSchema],
     tag: { type: String, default: "" },
@@ -83,6 +90,8 @@ const productSchema = new Schema<IProduct>(
     originPictures: { type: originPicturesSchema, default: () => ({}) },
     cloneSourceName: { type: String, default: "" },
     cloneSourceImage: { type: String, default: "" },
+    createdBy: { type: auditActorSchema, default: null },
+    updatedBy: { type: auditActorSchema, default: null },
   },
   { timestamps: true }
 );

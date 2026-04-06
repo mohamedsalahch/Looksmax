@@ -2,14 +2,17 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 interface Order {
   _id: string; totalPrice: number; orderStatus: string;
+  isArchived?: boolean;
   createdAt: string; user?: { name: string; email: string };
   items: { product?: string; name: string; quantity: number }[];
 }
 
 export default function OrdersPage() {
+  const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
@@ -88,14 +91,23 @@ export default function OrdersPage() {
                 <th className="px-4 py-3">Items</th>
                 <th className="px-4 py-3">Total</th>
                 <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Archive</th>
                 <th className="px-4 py-3">Date</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {filtered.map((o) => (
-                <tr key={o._id} className="hover:bg-bg-hover transition-colors">
+                <tr
+                  key={o._id}
+                  onClick={() => router.push(`/dashboard/orders/${o._id}`)}
+                  className="cursor-pointer hover:bg-bg-hover transition-colors"
+                >
                   <td className="px-4 py-3">
-                    <Link href={`/dashboard/orders/${o._id}`} className="text-xs font-mono text-accent hover:text-accent-hover transition-colors">
+                    <Link
+                      href={`/dashboard/orders/${o._id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-xs font-mono text-accent hover:text-accent-hover transition-colors"
+                    >
                       #{o._id.slice(-8).toUpperCase()}
                     </Link>
                   </td>
@@ -108,6 +120,15 @@ export default function OrdersPage() {
                   <td className="px-4 py-3">
                     <span className={`text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider ${statusColor(o.orderStatus)}`}>
                       {o.orderStatus}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider ${
+                        o.isArchived ? "text-neutral-700 bg-neutral-200" : "text-emerald-300 bg-emerald-500/10"
+                      }`}
+                    >
+                      {o.isArchived ? "Archived" : "Active"}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-xs text-text-secondary">{new Date(o.createdAt).toLocaleDateString()}</td>

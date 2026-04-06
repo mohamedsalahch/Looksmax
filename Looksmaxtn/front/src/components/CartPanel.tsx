@@ -190,6 +190,7 @@ export default function CartPanel() {
                           addStudioRailItem({
                             id: item.id,
                             name: item.name,
+                            categories: item.categories,
                             image: item.image,
                             price: item.price,
                             brand: item.brand,

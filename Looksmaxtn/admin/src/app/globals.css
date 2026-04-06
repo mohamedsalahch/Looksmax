@@ -2,19 +2,19 @@
 @import "tailwindcss";
 
 :root {
-  --bg-primary: #0a0a0a;
-  --bg-secondary: #141414;
-  --bg-card: #1a1a1a;
-  --bg-hover: #222222;
-  --text-primary: #f5f5f5;
-  --text-secondary: #888888;
-  --border: #2a2a2a;
-  --accent: #e5c07b;
-  --accent-hover: #d4a959;
-  --success: #4ade80;
-  --warning: #fb923c;
-  --danger: #f87171;
-  --info: #60a5fa;
+  --bg-primary: #f6eddc;
+  --bg-secondary: #efe3cf;
+  --bg-card: #f8f1e4;
+  --bg-hover: #eadcc5;
+  --text-primary: #1a1a1a;
+  --text-secondary: #776e61;
+  --border: #decfb7;
+  --accent: #c9a96e;
+  --accent-hover: #b89558;
+  --success: #5d7f4f;
+  --warning: #b7791f;
+  --danger: #b65454;
+  --info: #4f7a9a;
 }
 
 @theme inline {
@@ -44,8 +44,8 @@ html { scroll-behavior: smooth; }
 
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg-primary); }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
+::-webkit-scrollbar-thumb { background: #d7c7ad; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #b9a889; }
 
 input:focus, select:focus, textarea:focus { outline: none; }
 

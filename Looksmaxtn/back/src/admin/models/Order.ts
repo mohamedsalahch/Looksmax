@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
+import { type IAuditActor, auditActorSchema } from "@/admin/lib/audit";
 
 export interface IOrderItem {
   product: mongoose.Types.ObjectId;
@@ -12,6 +13,8 @@ export interface IOrderItem {
 export interface IOrder extends Document {
   user: mongoose.Types.ObjectId;
   items: IOrderItem[];
+  isArchived: boolean;
+  archivedAt?: Date | null;
   shippingAddress: {
     street: string;
     city: string;
@@ -23,6 +26,8 @@ export interface IOrder extends Document {
   paymentMethod: string;
   orderStatus: "processing" | "confirmed" | "canceled" | "shipping" | "delivered" | "returned";
   totalPrice: number;
+  createdBy?: IAuditActor | null;
+  updatedBy?: IAuditActor | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -43,6 +48,8 @@ const orderSchema = new Schema<IOrder>(
   {
     user: { type: Schema.Types.ObjectId, ref: "User", required: true },
     items: [orderItemSchema],
+    isArchived: { type: Boolean, default: false },
+    archivedAt: { type: Date, default: null },
     shippingAddress: {
       fullName: { type: String, required: true },
       street: { type: String, required: true },
@@ -58,6 +65,8 @@ const orderSchema = new Schema<IOrder>(
       default: "processing",
     },
     totalPrice: { type: Number, required: true },
+    createdBy: { type: auditActorSchema, default: null },
+    updatedBy: { type: auditActorSchema, default: null },
   },
   { timestamps: true }
 );

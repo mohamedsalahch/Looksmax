@@ -18,7 +18,7 @@ export default async function CategoryPage({
     categoryName = "New Arrivals";
   } else {
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3002";
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
       const res = await fetch(`${baseUrl}/api/categories`, { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();

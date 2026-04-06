@@ -4,6 +4,7 @@ import Order from "@/store/models/Order";
 import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
 import { getSession } from "@/store/lib/auth";
+import { getAuditActorFromSession } from "@/store/lib/auditRoute";
 import mongoose from "mongoose";
 
 const BLOCKING_ORDER_STATUSES = ["processing", "confirmed", "shipping"];
@@ -24,7 +25,7 @@ export async function GET() {
         .sort({ createdAt: -1 })
         .lean();
     } else {
-      orders = await Order.find({ user: session.userId })
+      orders = await Order.find({ user: session.userId, isArchived: { $ne: true } })
         .sort({ createdAt: -1 })
         .lean();
     }
@@ -44,6 +45,7 @@ export async function POST(req: NextRequest) {
     }
 
     await dbConnect();
+    const auditActor = await getAuditActorFromSession(session);
     const { items, shippingAddress, reservationKey } = await req.json();
 
     if (!items || items.length === 0) {
@@ -166,10 +168,13 @@ export async function POST(req: NextRequest) {
     const order = await Order.create({
       user: session.userId,
       items: orderItems,
+      isArchived: false,
       shippingAddress,
       paymentMethod: "cod",
       orderStatus: "processing",
       totalPrice,
+      createdBy: auditActor,
+      updatedBy: auditActor,
     });
 
     if (reservationKey) {

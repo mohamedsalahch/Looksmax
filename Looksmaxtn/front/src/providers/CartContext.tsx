@@ -6,6 +6,7 @@ import { getReservationKey } from "@/lib/reservations";
 export interface CartItem {
   id: string;
   name: string;
+  categories?: string[];
   price: string;
   brand: string;
   size?: string;
@@ -193,6 +194,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
                   name: newItem.name || item.name,
                   brand: newItem.brand || item.brand,
                   image: newItem.image || item.image,
+                  categories: newItem.categories ?? item.categories,
                   size: newItem.size ?? item.size,
                   color: newItem.color ?? item.color,
                   productType: newItem.productType ?? item.productType,

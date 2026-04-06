@@ -10,6 +10,7 @@ interface Order {
   _id: string;
   totalPrice: number;
   orderStatus: string;
+  isArchived?: boolean;
   createdAt: string;
   items: { name: string; quantity: number }[];
 }

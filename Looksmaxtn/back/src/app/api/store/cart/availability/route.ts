@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
 
     const [products, activeOrders, reservations] = await Promise.all([
       Product.find({ _id: { $in: ids } })
-        .select("_id stock productType fashionSubtype images originPictures")
+        .select("_id stock productType fashionSubtype images originPictures isActive")
         .lean(),
       Order.find({
         orderStatus: { $in: ACTIVE_STOCK_ORDER_STATUSES },
@@ -87,7 +87,9 @@ export async function POST(req: NextRequest) {
         return {
           productId,
           available:
-            product?.productType === "perfume"
+            product?.isActive === false
+              ? false
+              : product?.productType === "perfume"
               ? remainingStock > 0
               : isRailMode
                 ? !blockedByOrder

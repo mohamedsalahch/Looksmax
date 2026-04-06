@@ -9,6 +9,7 @@ interface Order {
   _id: string;
   totalPrice: number;
   orderStatus: string;
+  isArchived?: boolean;
   paymentMethod: string;
   createdAt: string;
   items: { name: string; quantity: number; price: number }[];
@@ -17,6 +18,7 @@ interface Order {
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [archivingOrderId, setArchivingOrderId] = useState("");
 
   useEffect(() => {
     fetch("/api/orders")
@@ -34,6 +36,24 @@ export default function OrdersPage() {
       case "shipping": return "text-blue-700 bg-blue-100";
       case "confirmed": return "text-emerald-700 bg-emerald-100";
       default: return "text-yellow-700 bg-yellow-100";
+    }
+  };
+
+  const handleArchive = async (orderId: string) => {
+    setArchivingOrderId(orderId);
+    try {
+      const response = await fetch(`/api/orders/${orderId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archive: true }),
+      });
+      if (response.ok) {
+        setOrders((current) => current.filter((order) => order._id !== orderId));
+      }
+    } catch {
+      // Keep current UI state on network failure.
+    } finally {
+      setArchivingOrderId("");
     }
   };
 
@@ -60,16 +80,18 @@ export default function OrdersPage() {
       ) : (
         <div className="space-y-4">
           {orders.map((order) => (
-            <Link
+            <div
               key={order._id}
-              href={`/account/orders/${order._id}`}
-              className="block border border-border-color p-5 hover:bg-hover transition-colors"
+              className="border border-border-color p-5 transition-colors hover:bg-hover"
             >
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <span className="text-[10px] text-text-secondary font-mono">
+                  <Link
+                    href={`/account/orders/${order._id}`}
+                    className="text-[10px] text-text-secondary font-mono hover:text-foreground transition-colors"
+                  >
                     Order #{order._id.slice(-8).toUpperCase()}
-                  </span>
+                  </Link>
                   <p className="text-[10px] text-text-secondary mt-0.5">
                     {formatStoreDate(order.createdAt, {
                       year: "numeric",
@@ -102,9 +124,19 @@ export default function OrdersPage() {
                     {order.paymentMethod === "cod" ? "Cash on Delivery" : order.paymentMethod}
                   </span>
                 </div>
-                <span className="text-sm font-semibold">{formatTndPrice(order.totalPrice)}</span>
+                <div className="flex items-center gap-4">
+                  <span className="text-sm font-semibold">{formatTndPrice(order.totalPrice)}</span>
+                  <button
+                    type="button"
+                    onClick={() => void handleArchive(order._id)}
+                    disabled={archivingOrderId === order._id}
+                    className="text-[10px] uppercase tracking-[0.15em] text-text-secondary transition-colors hover:text-foreground disabled:opacity-50"
+                  >
+                    {archivingOrderId === order._id ? "Archiving..." : "Archive"}
+                  </button>
+                </div>
               </div>
-            </Link>
+            </div>
           ))}
         </div>
       )}

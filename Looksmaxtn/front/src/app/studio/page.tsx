@@ -80,10 +80,10 @@ const BODY_ZONES = [
 ] as const;
 
 const ZONE_BUTTON_LABELS: Record<(typeof BODY_ZONES)[number]["id"], string> = {
-  headwear: "Hat",
-  outerwear: "Jacket",
+  headwear: "Headwear",
+  outerwear: "Outerwear",
   top: "Top",
-  bottom: "Pants",
+  bottom: "Bottom",
   footwear: "Shoes",
 };
 
@@ -154,6 +154,64 @@ const ZONE_DETAILS: Record<
   },
 };
 
+const ZONE_CATEGORY_KEYWORDS: Record<
+  (typeof BODY_ZONES)[number]["id"],
+  string[]
+> = {
+  headwear: ["headwear", "hat", "hats", "cap", "caps", "beanie", "beanies"],
+  outerwear: ["outerwear", "jacket", "jackets", "coat", "coats", "veste", "vestes", "blazer", "blazers"],
+  top: [
+    "top",
+    "tops",
+    "shirt",
+    "shirts",
+    "pull",
+    "pulls",
+    "hoodie",
+    "hoodies",
+    "sweatshirt",
+    "sweatshirts",
+    "sweater",
+    "sweaters",
+    "knitwear",
+    "polo",
+    "polos",
+    "tee",
+    "t-shirt",
+    "tshirts",
+  ],
+  bottom: ["bottom", "bottoms", "pant", "pants", "jean", "jeans", "trouser", "trousers", "short", "shorts"],
+  footwear: ["shoe", "shoes", "sneaker", "sneakers", "footwear", "loafer", "loafers", "boot", "boots"],
+};
+
+function normalizeSearchableText(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function getStudioItemSearchText(item: Pick<StudioProduct, "categories" | "name"> | Pick<StudioRailItem, "name"> & { categories?: string[] }) {
+  return normalizeSearchableText(
+    [item.name, ...(item.categories || [])].filter(Boolean).join(" ")
+  );
+}
+
+function doesItemMatchZone(
+  zoneId: (typeof BODY_ZONES)[number]["id"],
+  item: Pick<StudioProduct, "categories" | "name" | "fashionSubtype"> | Pick<StudioRailItem, "name" | "fashionSubtype"> & { categories?: string[] }
+) {
+  if (zoneId === "footwear") {
+    return item.fashionSubtype === "shoes" || ZONE_CATEGORY_KEYWORDS.footwear.some((keyword) =>
+      getStudioItemSearchText(item).includes(keyword)
+    );
+  }
+
+  if (item.fashionSubtype === "shoes") {
+    return false;
+  }
+
+  const haystack = getStudioItemSearchText(item);
+  return ZONE_CATEGORY_KEYWORDS[zoneId].some((keyword) => haystack.includes(keyword));
+}
+
 function getMainImage(images?: ProductImage[]) {
   return images?.find((image) => image.isMain)?.url || images?.[0]?.url;
 }
@@ -207,9 +265,7 @@ export default function OutfitStudioPage() {
   const [savedOutfits, setSavedOutfits] = useState<SavedOutfitItem[]>([]);
   const [savingOutfit, setSavingOutfit] = useState(false);
   const [sharingOutfitId, setSharingOutfitId] = useState("");
-  const [updatingOutfitId, setUpdatingOutfitId] = useState("");
   const [deletingOutfitId, setDeletingOutfitId] = useState("");
-  const [outfitNameDrafts, setOutfitNameDrafts] = useState<Record<string, string>>({});
   const [savedOutfitIndexes, setSavedOutfitIndexes] = useState<Record<string, number>>({});
   const [generationError, setGenerationError] = useState("");
 
@@ -218,11 +274,6 @@ export default function OutfitStudioPage() {
       .then((response) => response.json())
       .then((data) => {
         setSavedOutfits(data.outfits || []);
-        setOutfitNameDrafts(
-          Object.fromEntries(
-            (data.outfits || []).map((outfit: SavedOutfitItem) => [outfit.id, outfit.name])
-          )
-        );
         setSavedOutfitIndexes((current) =>
           Object.fromEntries(
             (data.outfits || []).map((outfit: SavedOutfitItem) => [
@@ -326,6 +377,10 @@ export default function OutfitStudioPage() {
   const filteredProducts = useMemo(() => {
     return products.filter((product) => product.productType !== "perfume");
   }, [products]);
+  const filteredRailItems = useMemo(
+    () => railItems.filter((item) => doesItemMatchZone(selectedZoneId, item)),
+    [railItems, selectedZoneId]
+  );
   const selectedZoneMeta = ZONE_DETAILS[selectedZoneId];
   const selectedZoneItem = outfit[selectedZoneId];
 
@@ -333,6 +388,7 @@ export default function OutfitStudioPage() {
     addStudioRailItem({
       id: product._id,
       name: product.name,
+      categories: product.categories,
       image: getMainImage(product.images),
       price: product.price.toFixed(2),
       brand: product.brand || "LOOKSMAX",
@@ -345,6 +401,10 @@ export default function OutfitStudioPage() {
   };
 
   const handleAssignRailItemToSelectedZone = (item: StudioRailItem) => {
+    if (!doesItemMatchZone(selectedZoneId, item)) {
+      return;
+    }
+
     if (selectedZoneItem?.id === item.id) {
       setOutfit((current) => ({
         ...current,
@@ -466,44 +526,6 @@ export default function OutfitStudioPage() {
       setGenerationError("Unable to save outfit.");
     }
     setSavingOutfit(false);
-  };
-
-  const handleUpdateOutfit = async (id: string) => {
-    setUpdatingOutfitId(id);
-    try {
-      const payload: {
-        name: string;
-        images?: { front?: string; back?: string };
-        outfitSnapshot?: Record<string, OutfitSlotItem | null>;
-      } = {
-        name: outfitNameDrafts[id] || "First Outfit",
-      };
-
-      if (generatedOutfitImages.length > 0) {
-        payload.images = {
-          front: generatedOutfitImages[0] || "",
-          back: generatedOutfitImages[1] || "",
-        };
-        payload.outfitSnapshot = outfit;
-      }
-
-      const response = await fetch(`/api/outfits/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        setGenerationError(data.error || "Unable to update outfit.");
-        setUpdatingOutfitId("");
-        return;
-      }
-
-      loadSavedOutfits();
-    } catch {
-      setGenerationError("Unable to update outfit.");
-    }
-    setUpdatingOutfitId("");
   };
 
   const handleDeleteOutfit = async (id: string) => {
@@ -696,10 +718,10 @@ export default function OutfitStudioPage() {
                     key={zone.id}
                     type="button"
                     onClick={() => handleSelectZone(zone.id)}
-                    className={`rounded-none px-3 py-1.5 text-[11px] uppercase tracking-[0.15em] transition-all ${
+                    className={`px-0 py-1 text-[11px] uppercase tracking-[0.15em] transition-all ${
                       selectedZoneId === zone.id
-                        ? "bg-[#c9a96e] text-white"
-                        : "border border-[#00000012] bg-transparent text-[#666] hover:bg-[#f1ede8]"
+                        ? "font-bold text-[#1a1a1a] underline underline-offset-[6px] decoration-[1px]"
+                        : "text-[#666] hover:text-[#1a1a1a]"
                     }`}
                   >
                     {ZONE_BUTTON_LABELS[zone.id]}
@@ -710,7 +732,7 @@ export default function OutfitStudioPage() {
               <div>
                 <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-[#666]">Product rail</p>
                 <div className="space-y-1.5 2xl:max-h-[300px] 2xl:overflow-y-auto 2xl:pr-1">
-                  {railItems.map((item) => (
+                  {filteredRailItems.map((item) => (
                     <button
                       key={item.id}
                       type="button"
@@ -742,6 +764,11 @@ export default function OutfitStudioPage() {
                   {railItems.length === 0 && (
                     <div className="bg-[#ede1ce] px-3 py-4 text-xs text-[#666]">
                       Add products to your rail first, then assign them here.
+                    </div>
+                  )}
+                  {railItems.length > 0 && filteredRailItems.length === 0 && (
+                    <div className="bg-[#ede1ce] px-3 py-4 text-xs text-[#666]">
+                      No matching products in your rail for {selectedZoneMeta.title.toLowerCase()}.
                     </div>
                   )}
                 </div>
@@ -1067,31 +1094,13 @@ export default function OutfitStudioPage() {
                         ) : null}
                       </div>
                       <div className="mt-3 space-y-2">
-                        <input
-                          type="text"
-                          value={outfitNameDrafts[outfitItem.id] || ""}
-                          onChange={(e) =>
-                            setOutfitNameDrafts((current) => ({
-                              ...current,
-                              [outfitItem.id]: e.target.value,
-                            }))
-                          }
-                          className="w-full bg-transparent text-sm text-[#1a1a1a] outline-none"
-                        />
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateOutfit(outfitItem.id)}
-                            disabled={updatingOutfitId === outfitItem.id}
-                            className="rounded-none border border-[#00000012] px-3 py-1.5 text-[10px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:border-[#c9a96e] hover:text-[#c9a96e] disabled:opacity-50"
-                          >
-                            {updatingOutfitId === outfitItem.id ? "Updating..." : "Update"}
-                          </button>
+                        <p className="text-sm text-[#1a1a1a]">{outfitItem.name}</p>
+                        <div className="flex flex-wrap gap-4">
                           <button
                             type="button"
                             onClick={() => handleDeleteOutfit(outfitItem.id)}
                             disabled={deletingOutfitId === outfitItem.id}
-                            className="rounded-none border border-[#00000012] px-3 py-1.5 text-[10px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:border-[#c9a96e] hover:text-[#c9a96e] disabled:opacity-50"
+                            className="text-[10px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:text-[#c9a96e] disabled:opacity-50"
                           >
                             {deletingOutfitId === outfitItem.id ? "Deleting..." : "Delete"}
                           </button>
@@ -1099,7 +1108,7 @@ export default function OutfitStudioPage() {
                             type="button"
                             onClick={() => handleShareOutfit(outfitItem.id)}
                             disabled={sharingOutfitId === outfitItem.id}
-                            className="rounded-none border border-[#00000012] px-3 py-1.5 text-[10px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:border-[#c9a96e] hover:text-[#c9a96e] disabled:opacity-50"
+                            className="text-[10px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:text-[#c9a96e] disabled:opacity-50"
                           >
                             {sharingOutfitId === outfitItem.id ? "Sharing..." : "Share"}
                           </button>
@@ -1139,6 +1148,7 @@ export default function OutfitStudioPage() {
                 <ProductCard
                   id={product._id}
                   name={product.name}
+                  categories={product.categories}
                   price={product.price.toFixed(2)}
                   stock={product.stock}
                   reservationExpiresAt={product.reservationExpiresAt}

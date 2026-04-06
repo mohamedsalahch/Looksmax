@@ -5,6 +5,7 @@ import Link from "next/link";
 
 interface OrderDetail {
   _id: string; totalPrice: number; orderStatus: string;
+  isArchived?: boolean;
   paymentMethod: string; createdAt: string;
   user?: { name: string; email: string; };
   shippingAddress: { fullName: string; street: string; city: string; state: string; zip: string; phone: string; };
@@ -72,7 +73,18 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           <h1 className="text-lg font-semibold">Order #{order._id.slice(-8).toUpperCase()}</h1>
           <p className="text-xs text-text-secondary">{new Date(order.createdAt).toLocaleString()}</p>
         </div>
-        <span className={`text-[10px] px-3 py-1 font-medium uppercase tracking-wider ${statusColor(order.orderStatus)}`}>{order.orderStatus}</span>
+        <div className="flex items-center gap-2">
+          {order.isArchived ? (
+            <span className="text-[10px] px-3 py-1 font-medium uppercase tracking-wider text-neutral-700 bg-neutral-200">
+              Archived
+            </span>
+          ) : (
+            <span className="text-[10px] px-3 py-1 font-medium uppercase tracking-wider text-emerald-300 bg-emerald-500/10">
+              Active
+            </span>
+          )}
+          <span className={`text-[10px] px-3 py-1 font-medium uppercase tracking-wider ${statusColor(order.orderStatus)}`}>{order.orderStatus}</span>
+        </div>
       </div>
 
       {/* Status Update */}

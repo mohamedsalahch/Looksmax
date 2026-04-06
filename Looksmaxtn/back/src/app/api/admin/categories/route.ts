@@ -3,11 +3,20 @@ import dbConnect from "@/admin/lib/mongodb";
 import Category from "@/admin/models/Category";
 import { getSession } from "@/admin/lib/auth";
 import { DEFAULT_CATEGORY_TREE } from "@/admin/lib/categoryDefaults";
+import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
+import { getSystemAuditActor } from "@/admin/lib/audit";
 
 async function ensureDefaultCategories() {
   const count = await Category.countDocuments();
   if (count > 0) return;
-  await Category.insertMany(DEFAULT_CATEGORY_TREE);
+  const systemActor = getSystemAuditActor();
+  await Category.insertMany(
+    DEFAULT_CATEGORY_TREE.map((category) => ({
+      ...category,
+      createdBy: systemActor,
+      updatedBy: systemActor,
+    }))
+  );
 }
 
 // Admin — get all categories (including inactive)
@@ -36,6 +45,7 @@ export async function POST(req: NextRequest) {
 
     await dbConnect();
     const { name, slug, order, isActive, parentSlug } = await req.json();
+    const auditActor = await getAuditActorFromSession(session);
 
     if (!name || !slug)
       return NextResponse.json({ error: "Name and slug are required" }, { status: 400 });
@@ -55,6 +65,8 @@ export async function POST(req: NextRequest) {
       order: order ?? 0,
       isActive: isActive ?? true,
       parentSlug: parentSlug || null,
+      createdBy: auditActor,
+      updatedBy: auditActor,
     });
 
     return NextResponse.json({ category }, { status: 201 });

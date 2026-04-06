@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
+import { type IAuditActor, auditActorSchema } from "@/admin/lib/audit";
 
 interface HomeStat {
   label: string;
@@ -18,6 +19,8 @@ export interface IHomePageContent extends Document {
   lookbook: { caption: string; images: string[]; categorySlugs: string[] };
   editorial: { image: string; eyebrow: string; label: string };
   featured: { title: string };
+  createdBy?: IAuditActor | null;
+  updatedBy?: IAuditActor | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -59,6 +62,8 @@ const homePageContentSchema = new Schema<IHomePageContent>(
     featured: {
       title: { type: String, default: "" },
     },
+    createdBy: { type: auditActorSchema, default: null },
+    updatedBy: { type: auditActorSchema, default: null },
   },
   { timestamps: true }
 );

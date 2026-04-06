@@ -142,11 +142,12 @@ export default function ProductRailTray() {
     const isPerfume = item.productType === "perfume";
 
     if (isPerfume) {
-      addItem({
-        id: item.id,
-        name: item.name,
-        price: item.price,
-        brand: item.brand || "LOOKSMAX",
+        addItem({
+          id: item.id,
+          name: item.name,
+          categories: item.categories,
+          price: item.price,
+          brand: item.brand || "LOOKSMAX",
         maxStock: Math.max(1, item.maxStock ?? item.quantity ?? 1),
         image: item.image,
         productType: item.productType,
@@ -161,6 +162,7 @@ export default function ProductRailTray() {
       addItem({
         id: item.id,
         name: item.name,
+        categories: item.categories,
         price: item.price,
         brand: item.brand || "LOOKSMAX",
         maxStock: 1,
@@ -204,9 +206,6 @@ export default function ProductRailTray() {
           <h2 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
             Product Rail
           </h2>
-          <p className="mt-1 text-[11px] text-text-secondary">
-            Always available while you browse and style.
-          </p>
         </div>
         <div className="flex items-center gap-3">
           {railItems.length > 0 && (

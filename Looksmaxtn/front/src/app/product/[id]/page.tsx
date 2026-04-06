@@ -14,6 +14,7 @@ const HIDDEN_ORDER_STATUSES = ["delivered"];
 
 const defaultProduct: {
   name: string;
+  categories?: string[];
   price: string;
   brand: string;
   image?: string;
@@ -36,6 +37,7 @@ const defaultProduct: {
   cloneSourceImage?: string;
 } = {
   name: "Vintage Thrift Find",
+  categories: [],
   price: "29.99",
   brand: "Unknown",
   image: "",
@@ -96,12 +98,16 @@ export default async function ProductDetailPage({
         .reduce((itemSum, item) => itemSum + (item.quantity || 0), 0);
       return sum + quantity;
     }, 0);
+    if (dbProduct && dbProduct.isActive === false) {
+      notFound();
+    }
     if (hasHiddenOrder) {
       notFound();
     }
     if (dbProduct) {
       product = {
         name: dbProduct.name,
+        categories: dbProduct.categories || [],
         price: dbProduct.price.toFixed(2),
         brand: dbProduct.brand || "LOOKSMAX",
         image: dbProduct.images?.find((image) => image.isMain)?.url || dbProduct.images?.[0]?.url || "",

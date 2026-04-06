@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
 import GeneratedImageAsset from "@/admin/models/GeneratedImageAsset";
 import { getSession } from "@/admin/lib/auth";
+import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 import {
   saveGeneratedResultBase64,
   saveGeneratedSourceImage,
@@ -66,9 +67,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    const baseUrl = process.env.ADMIN_IMAGE_GENERATION_URL_BASE || "http://192.168.1.101:8000";
+    const baseUrl = process.env.ADMIN_IMAGE_GENERATION_URL_BASE;
+    if (!baseUrl) {
+      return NextResponse.json({ error: "ADMIN_IMAGE_GENERATION_URL_BASE is not configured." }, { status: 500 });
+    }
 
     await dbConnect();
+    const auditActor = await getAuditActorFromSession(session);
     const formData = await req.formData();
     const prompt = String(formData.get("prompt") || "").trim();
     const sourceFiles = formData
@@ -89,7 +94,7 @@ export async function POST(req: NextRequest) {
       images: await Promise.all(sourceFiles.map((file) => fileToBase64(file))),
     };
 
-    const response = await fetch(`${baseUrl}/proxy`, {
+    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/proxy`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -116,6 +121,8 @@ export async function POST(req: NextRequest) {
       prompt,
       sourceImages,
       images,
+      createdBy: auditActor,
+      updatedBy: auditActor,
     });
 
     return NextResponse.json({ generatedImage }, { status: 201 });

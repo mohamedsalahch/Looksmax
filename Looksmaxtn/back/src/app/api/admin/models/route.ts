@@ -3,6 +3,7 @@ import dbConnect from "@/admin/lib/mongodb";
 import ModelAsset from "@/admin/models/ModelAsset";
 import { getSession } from "@/admin/lib/auth";
 import { saveModelImage } from "@/admin/lib/modelUploads";
+import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 
 export async function GET() {
   try {
@@ -28,6 +29,7 @@ export async function POST(req: NextRequest) {
     }
 
     await dbConnect();
+    const auditActor = await getAuditActorFromSession(session);
     const formData = await req.formData();
     const name = String(formData.get("name") || "").trim();
     const frontImageIndex = Number(formData.get("frontImageIndex") ?? -1);
@@ -58,6 +60,8 @@ export async function POST(req: NextRequest) {
       images: imagePaths,
       frontImage: imagePaths[frontImageIndex],
       backImage: imagePaths[backImageIndex],
+      createdBy: auditActor,
+      updatedBy: auditActor,
     });
     return NextResponse.json({ model }, { status: 201 });
   } catch (error) {

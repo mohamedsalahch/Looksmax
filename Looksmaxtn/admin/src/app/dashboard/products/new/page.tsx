@@ -56,6 +56,7 @@ const initialForm = {
   stock: "1",
   tag: "",
   sizes: "S,M,L,XL",
+  colors: "",
   conditionScore: "7",
   productType: "fashion" as ProductType,
   fashionSubtype: "clothes" as FashionSubtype,
@@ -410,6 +411,17 @@ export default function NewProductPage() {
                 .filter(Boolean)
         )
       );
+      body.append(
+        "colors",
+        JSON.stringify(
+          form.productType === "perfume"
+            ? []
+            : form.colors
+                .split(",")
+                .map((color) => color.trim())
+                .filter(Boolean)
+        )
+      );
       body.append("mainImageIndex", "0");
       validImages.forEach((image) => {
         if (image.file) body.append("images", image.file);
@@ -651,13 +663,22 @@ export default function NewProductPage() {
               <option value="clothes">Clothes</option>
               <option value="shoes">Shoes</option>
             </select>
-            <input
-              type="text"
-              value={form.sizes}
-              onChange={(e) => setForm({ ...form, sizes: e.target.value })}
-              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-              placeholder="S,M,L,XL or 40,41,42"
-            />
+            <div className="grid grid-cols-2 gap-4">
+              <input
+                type="text"
+                value={form.sizes}
+                onChange={(e) => setForm({ ...form, sizes: e.target.value })}
+                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                placeholder="Sizes: S,M,L,XL or 40,41,42"
+              />
+              <input
+                type="text"
+                value={form.colors}
+                onChange={(e) => setForm({ ...form, colors: e.target.value })}
+                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                placeholder="Colors: Black, White, Olive"
+              />
+            </div>
             <div>
               <div className="flex items-center justify-between gap-4 mb-2">
                 <label className="block text-xs text-text-secondary uppercase tracking-wider">

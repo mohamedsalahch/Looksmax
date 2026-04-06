@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
+import { type IAuditActor, auditActorSchema } from "@/admin/lib/audit";
 
 export interface ICategory extends Document {
   name: string;
@@ -6,6 +7,8 @@ export interface ICategory extends Document {
   order: number;
   isActive: boolean;
   parentSlug?: string | null;
+  createdBy?: IAuditActor | null;
+  updatedBy?: IAuditActor | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -17,6 +20,8 @@ const categorySchema = new Schema<ICategory>(
     order: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
     parentSlug: { type: String, default: null },
+    createdBy: { type: auditActorSchema, default: null },
+    updatedBy: { type: auditActorSchema, default: null },
   },
   { timestamps: true }
 );

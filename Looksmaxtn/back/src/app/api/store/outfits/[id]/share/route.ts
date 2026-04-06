@@ -4,6 +4,10 @@ import { getSession } from "@/store/lib/auth";
 import dbConnect from "@/store/lib/mongodb";
 import SavedOutfit from "@/store/models/SavedOutfit";
 
+function getFrontendBaseUrl(req: NextRequest) {
+  return (process.env.FRONTEND_BASE_URL || req.headers.get("origin") || req.nextUrl.origin).replace(/\/$/, "");
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -24,8 +28,10 @@ export async function POST(
     if (!outfit.shareToken) outfit.shareToken = randomUUID();
     await outfit.save();
 
+    const frontendBaseUrl = getFrontendBaseUrl(req);
+
     return NextResponse.json({
-      shareUrl: `${req.nextUrl.origin}/outfits/shared/${outfit.shareToken}`,
+      shareUrl: `${frontendBaseUrl}/outfits/shared/${outfit.shareToken}`,
       shareToken: outfit.shareToken,
     });
   } catch (error) {

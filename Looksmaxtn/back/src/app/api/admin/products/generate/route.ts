@@ -48,7 +48,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    const baseUrl = process.env.PRODUCT_GENERATION_URL_BASE || "http://192.168.1.101:8000";
+    const baseUrl = process.env.PRODUCT_GENERATION_URL_BASE;
+    if (!baseUrl) {
+      return NextResponse.json({ error: "PRODUCT_GENERATION_URL_BASE is not configured." }, { status: 500 });
+    }
 
     await dbConnect();
     const formData = await req.formData();
@@ -101,7 +104,8 @@ export async function POST(req: NextRequest) {
             },
           };
 
-    const endpoint = normalizedType === "shoes" ? `${baseUrl}/generate-shoes` : `${baseUrl}/generate`;
+    const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
+    const endpoint = normalizedType === "shoes" ? `${normalizedBaseUrl}/generate-shoes` : `${normalizedBaseUrl}/generate`;
 
     const response = await fetch(endpoint, {
       method: "POST",

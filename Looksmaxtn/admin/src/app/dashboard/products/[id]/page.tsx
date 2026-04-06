@@ -22,9 +22,44 @@ interface ProductDetail {
   tag?: string;
   brand: string;
   productType?: "fashion" | "perfume" | "clothing" | "shoes";
+  availabilityStatus?: string;
+  isActive?: boolean;
+  visibilityStatus?: string;
   cloneSourceName?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+function getProductStatus(product: ProductDetail) {
+  if (product.availabilityStatus === "sold") {
+    return { label: "Sold", className: "bg-neutral-200 text-neutral-700" };
+  }
+  if (product.availabilityStatus === "reserved") {
+    return { label: "Reserved", className: "bg-warning/10 text-warning" };
+  }
+  if (product.availabilityStatus === "out-of-stock") {
+    return { label: "Out of Stock", className: "bg-danger/10 text-danger" };
+  }
+  if (product.availabilityStatus === "low-stock") {
+    return { label: "Low Stock", className: "bg-warning/10 text-warning" };
+  }
+  if (product.availabilityStatus === "in-stock") {
+    return { label: "In Stock", className: "bg-success/10 text-success" };
+  }
+
+  if (product.productType === "perfume") {
+    if (product.stock <= 0) {
+      return { label: "Out of Stock", className: "bg-danger/10 text-danger" };
+    }
+    if (product.stock <= 3) {
+      return { label: "Low Stock", className: "bg-warning/10 text-warning" };
+    }
+    return { label: "In Stock", className: "bg-success/10 text-success" };
+  }
+
+  return product.stock > 0
+    ? { label: "Available", className: "bg-success/10 text-success" }
+    : { label: "Reserved", className: "bg-warning/10 text-warning" };
 }
 
 export default function ProductViewPage({ params }: { params: Promise<{ id: string }> }) {
@@ -32,6 +67,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [isZoomOpen, setIsZoomOpen] = useState(false);
 
   useEffect(() => {
     fetch(`/api/products/${id}`)
@@ -56,6 +92,8 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
 
   if (loading) return <p className="text-xs text-text-secondary animate-pulse">Loading product...</p>;
   if (!product) return <p className="text-sm text-text-secondary">Product not found.</p>;
+
+  const status = getProductStatus(product);
 
   return (
     <div className="space-y-6">
@@ -82,13 +120,23 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,420px)] gap-6">
         <div className="space-y-4">
-          <div className="bg-bg-card border border-border rounded overflow-hidden">
+          <div className="relative bg-bg-card border border-border rounded overflow-hidden">
             {mainImage?.url ? (
-              <img
-                src={mainImage.url}
-                alt={product.name}
-                className="w-full aspect-[16/11] object-contain bg-bg-secondary"
-              />
+              <>
+                <img
+                  src={mainImage.url}
+                  alt={product.name}
+                  className="w-full aspect-[16/11] object-contain bg-bg-secondary"
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsZoomOpen(true)}
+                  className="absolute right-3 top-3 h-9 w-9 border border-border bg-bg-primary/95 text-lg leading-none text-text-primary transition-colors hover:bg-bg-secondary"
+                  aria-label="Enlarge product image"
+                >
+                  +
+                </button>
+              </>
             ) : (
               <div className="w-full aspect-[16/11] bg-bg-secondary flex items-center justify-center text-xs text-text-secondary uppercase tracking-wider">
                 No image
@@ -134,6 +182,18 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
               )}
               <span className="text-[10px] bg-bg-secondary text-text-secondary px-2 py-1 font-medium uppercase tracking-wider">
                 Stock {product.stock}
+              </span>
+              <span className={`text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${status.className}`}>
+                {status.label}
+              </span>
+              <span
+                className={`text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${
+                  product.isActive === false || product.visibilityStatus === "inactive"
+                    ? "bg-neutral-200 text-neutral-700"
+                    : "bg-success/10 text-success"
+                }`}
+              >
+                {product.isActive === false || product.visibilityStatus === "inactive" ? "Inactive" : "Active"}
               </span>
             </div>
             {product.productType === "perfume" && product.cloneSourceName && (
@@ -189,6 +249,32 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
           <p className="text-sm text-text-secondary">No extra product details.</p>
         )}
       </div>
+
+      {isZoomOpen && mainImage?.url && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-6 py-10"
+          onClick={() => setIsZoomOpen(false)}
+        >
+          <div
+            className="relative max-h-full max-w-5xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setIsZoomOpen(false)}
+              className="absolute right-3 top-3 z-10 h-9 w-9 border border-white/30 bg-black/35 text-sm text-white transition-colors hover:bg-black/55"
+              aria-label="Close zoomed image"
+            >
+              ×
+            </button>
+            <img
+              src={mainImage.url}
+              alt={`${product.name} enlarged`}
+              className="max-h-[85vh] w-auto max-w-full object-contain bg-bg-secondary"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

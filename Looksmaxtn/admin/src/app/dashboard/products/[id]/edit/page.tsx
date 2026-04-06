@@ -57,6 +57,7 @@ const initialForm = {
   stock: "1",
   tag: "",
   sizes: "",
+  colors: "",
   conditionScore: "7",
   productType: "fashion" as ProductType,
   fashionSubtype: "clothes" as FashionSubtype,
@@ -129,6 +130,20 @@ function getDepth(categories: Category[], category: Category) {
   return depth;
 }
 
+function getCategoryPathLabel(categories: Category[], category: Category) {
+  const segments = [category.name];
+  let currentParentSlug = category.parentSlug;
+
+  while (currentParentSlug) {
+    const parent = categories.find((entry) => entry.slug === currentParentSlug);
+    if (!parent) break;
+    segments.unshift(parent.name);
+    currentParentSlug = parent.parentSlug || null;
+  }
+
+  return segments.join(" / ");
+}
+
 async function base64ToFile(base64: string, index: number) {
   const dataUrl = base64.startsWith("data:") ? base64 : `data:image/png;base64,${base64}`;
   const blob = await fetch(dataUrl).then((response) => response.blob());
@@ -199,6 +214,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           stock: String(p.stock ?? 1),
           tag: p.tag || "",
           sizes: (p.sizes || []).join(","),
+          colors: (p.colors || []).join(","),
           conditionScore: String(p.conditionScore ?? 7),
           productType: p.productType === "perfume" ? "perfume" : "fashion",
           fashionSubtype: p.fashionSubtype || "clothes",
@@ -233,17 +249,14 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     setSelectedGrandchildSlug(path.grandchild);
   }, [categories, initialCategorySlugs]);
 
-  const parentCategories = useMemo(
-    () => categories.filter((category) => !category.parentSlug),
+  const selectedCategorySlug = selectedGrandchildSlug || selectedChildSlug || selectedParentSlug;
+  const categoryOptions = useMemo(
+    () =>
+      categories.map((category) => ({
+        slug: category.slug,
+        label: getCategoryPathLabel(categories, category),
+      })),
     [categories]
-  );
-  const childCategories = useMemo(
-    () => getChildren(categories, selectedParentSlug),
-    [categories, selectedParentSlug]
-  );
-  const grandchildCategories = useMemo(
-    () => getChildren(categories, selectedChildSlug),
-    [categories, selectedChildSlug]
   );
   const selectedModel = models.find((model) => model._id === selectedModelId);
   const originPictureKeys =
@@ -431,7 +444,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     setError("");
     setLoading(true);
 
-    if (!selectedParentSlug) {
+    if (!selectedCategorySlug) {
       setError("Please select a product category.");
       setLoading(false);
       return;
@@ -451,11 +464,9 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     }
 
     try {
-      const productCategories = [
-        selectedParentSlug,
-        selectedChildSlug,
-        selectedGrandchildSlug,
-      ].filter(Boolean);
+      const productCategories = [selectedParentSlug, selectedChildSlug, selectedGrandchildSlug].filter(
+        Boolean
+      );
 
       const body = new FormData();
       body.append("name", form.name);
@@ -487,6 +498,17 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
             : form.sizes
                 .split(",")
                 .map((size) => size.trim())
+                .filter(Boolean)
+        )
+      );
+      body.append(
+        "colors",
+        JSON.stringify(
+          form.productType === "perfume"
+            ? []
+            : form.colors
+                .split(",")
+                .map((color) => color.trim())
                 .filter(Boolean)
         )
       );
@@ -604,47 +626,27 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <select
-            value={selectedParentSlug}
+            value={selectedCategorySlug}
             onChange={(e) => {
-              setSelectedParentSlug(e.target.value);
-              setSelectedChildSlug("");
-              setSelectedGrandchildSlug("");
+              const value = e.target.value;
+              if (!value) {
+                setSelectedParentSlug("");
+                setSelectedChildSlug("");
+                setSelectedGrandchildSlug("");
+                return;
+              }
+
+              const path = getCategoryPath(categories, [value]);
+              setSelectedParentSlug(path.parent);
+              setSelectedChildSlug(path.child);
+              setSelectedGrandchildSlug(path.grandchild);
             }}
-            className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+            className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm md:col-span-3"
           >
             <option value="">Select category</option>
-            {parentCategories.map((category) => (
-              <option key={category._id} value={category.slug}>
-                {category.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={selectedChildSlug}
-            onChange={(e) => {
-              setSelectedChildSlug(e.target.value);
-              setSelectedGrandchildSlug("");
-            }}
-            className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-            disabled={childCategories.length === 0}
-          >
-            <option value="">No subcategory</option>
-            {childCategories.map((category) => (
-              <option key={category._id} value={category.slug}>
-                {category.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={selectedGrandchildSlug}
-            onChange={(e) => setSelectedGrandchildSlug(e.target.value)}
-            className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-            disabled={grandchildCategories.length === 0}
-          >
-            <option value="">No sub-subcategory</option>
-            {grandchildCategories.map((category) => (
-              <option key={category._id} value={category.slug}>
-                {category.name}
+            {categoryOptions.map((category) => (
+              <option key={category.slug} value={category.slug}>
+                {category.label}
               </option>
             ))}
           </select>
@@ -719,13 +721,22 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               <option value="clothes">Clothes</option>
               <option value="shoes">Shoes</option>
             </select>
-            <input
-              type="text"
-              value={form.sizes}
-              onChange={(e) => setForm({ ...form, sizes: e.target.value })}
-              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-              placeholder="S,M,L,XL or 40,41,42"
-            />
+            <div className="grid grid-cols-2 gap-4">
+              <input
+                type="text"
+                value={form.sizes}
+                onChange={(e) => setForm({ ...form, sizes: e.target.value })}
+                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                placeholder="Sizes: S,M,L,XL or 40,41,42"
+              />
+              <input
+                type="text"
+                value={form.colors}
+                onChange={(e) => setForm({ ...form, colors: e.target.value })}
+                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                placeholder="Colors: Black, White, Olive"
+              />
+            </div>
             <div>
               <div className="flex items-center justify-between gap-4 mb-2">
                 <label className="block text-xs text-text-secondary uppercase tracking-wider">Condition</label>
