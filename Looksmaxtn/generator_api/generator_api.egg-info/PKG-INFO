@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: generator-api
+Version: 1.0.0
+Summary: Fashion Image Generator API using Google Gemini
+Requires-Python: >=3.11
+Requires-Dist: fastapi>=0.104.0
+Requires-Dist: uvicorn[standard]>=0.24.0
+Requires-Dist: google-generativeai>=0.3.0
+Requires-Dist: python-dotenv>=1.0.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.4.0; extra == "dev"
+Requires-Dist: httpx>=0.25.0; extra == "dev"

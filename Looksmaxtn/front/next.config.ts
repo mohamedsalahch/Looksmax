@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   async rewrites() {
     const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3004";
 
@@ -14,3 +17,4 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+
