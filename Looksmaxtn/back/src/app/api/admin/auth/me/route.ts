@@ -1,0 +1,17 @@
+import { NextResponse } from "next/server";
+import dbConnect from "@/admin/lib/mongodb";
+import User from "@/admin/models/User";
+import { getSession } from "@/admin/lib/auth";
+
+export async function GET() {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== "admin") return NextResponse.json({ user: null }, { status: 401 });
+
+    await dbConnect();
+    const user = await User.findById(session.userId).select("-password");
+    if (!user || user.role !== "admin") return NextResponse.json({ user: null }, { status: 401 });
+
+    return NextResponse.json({ user: { id: user._id, name: user.name, email: user.email, role: user.role } });
+  } catch { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
+}

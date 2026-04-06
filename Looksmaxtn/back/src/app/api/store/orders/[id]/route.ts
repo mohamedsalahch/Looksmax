@@ -1,0 +1,116 @@
+import { NextRequest, NextResponse } from "next/server";
+import dbConnect from "@/store/lib/mongodb";
+import Order from "@/store/models/Order";
+import Product from "@/store/models/Product";
+import { getSession } from "@/store/lib/auth";
+
+const VALID_ORDER_STATUSES = ["processing", "confirmed", "canceled", "shipping", "delivered", "returned"] as const;
+const BLOCKING_ORDER_STATUSES = ["processing", "confirmed", "shipping"] as const;
+const FINAL_ORDER_STATUSES = ["delivered", "canceled", "returned"] as const;
+
+const ALLOWED_TRANSITIONS: Record<string, string[]> = {
+  processing: ["confirmed", "canceled"],
+  confirmed: ["shipping"],
+  shipping: ["delivered", "returned"],
+  delivered: [],
+  canceled: [],
+  returned: [],
+};
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    await dbConnect();
+    const { id } = await params;
+    const order = await Order.findById(id).populate("user", "name email").lean();
+
+    if (!order) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
+
+    // Only allow access to own orders (or admin)
+    if (session.role !== "admin" && order.user._id?.toString() !== session.userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
+    return NextResponse.json({ order });
+  } catch (error: unknown) {
+    console.error("Get order error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== "admin") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
+    await dbConnect();
+    const { id } = await params;
+    const { orderStatus } = await req.json();
+
+    if (orderStatus && !VALID_ORDER_STATUSES.includes(orderStatus)) {
+      return NextResponse.json({ error: "Invalid order status" }, { status: 400 });
+    }
+
+    const update: Record<string, string> = {};
+    if (orderStatus) update.orderStatus = orderStatus;
+
+    const existingOrder = await Order.findById(id).lean();
+    if (!existingOrder) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
+
+    if (FINAL_ORDER_STATUSES.includes(existingOrder.orderStatus as (typeof FINAL_ORDER_STATUSES)[number])) {
+      return NextResponse.json({ error: "This order can no longer be updated." }, { status: 409 });
+    }
+
+    if (orderStatus && !ALLOWED_TRANSITIONS[existingOrder.orderStatus]?.includes(orderStatus)) {
+      return NextResponse.json(
+        { error: `You cannot move an order from ${existingOrder.orderStatus} to ${orderStatus}.` },
+        { status: 409 }
+      );
+    }
+
+    if (orderStatus === "confirmed" && existingOrder.orderStatus !== "confirmed") {
+      const productIds = existingOrder.items.map((item) => item.product);
+      const conflictingOrders = await Order.find({
+        _id: { $ne: id },
+        orderStatus: { $in: BLOCKING_ORDER_STATUSES },
+        "items.product": { $in: productIds },
+      }).lean();
+
+      if (conflictingOrders.length > 0) {
+        const products = await Product.find({ _id: { $in: productIds } })
+          .select("name")
+          .lean();
+        const productNames = products.map((product) => product.name).join(", ");
+        return NextResponse.json(
+          { error: `These unique products are already confirmed in another order: ${productNames}` },
+          { status: 409 }
+        );
+      }
+    }
+
+    const order = await Order.findByIdAndUpdate(id, update, { new: true })
+      .populate("user", "name email")
+      .lean();
+
+    return NextResponse.json({ order });
+  } catch (error: unknown) {
+    console.error("Update order error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
