@@ -2,12 +2,21 @@
 
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
+import AuditMetaCard from "@/components/AuditMetaCard";
+
+interface AuditActor {
+  id: string;
+  name: string;
+  email: string;
+}
 
 interface OrderDetail {
   _id: string; totalPrice: number; orderStatus: string;
   isArchived?: boolean;
-  paymentMethod: string; createdAt: string;
+  paymentMethod: string; createdAt: string; updatedAt?: string;
   user?: { name: string; email: string; };
+  createdBy?: AuditActor | null;
+  updatedBy?: AuditActor | null;
   shippingAddress: { fullName: string; street: string; city: string; state: string; zip: string; phone: string; };
   items: { productId: string; name: string; price: number; size: string; color: string; quantity: number; }[];
 }
@@ -179,6 +188,13 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           <p className="text-sm font-medium">Cash on Delivery</p>
         </div>
       </div>
+
+      <AuditMetaCard
+        createdAt={order.createdAt}
+        updatedAt={order.updatedAt}
+        createdBy={order.createdBy}
+        updatedBy={order.updatedBy}
+      />
     </div>
   );
 }

@@ -9,6 +9,18 @@ interface Category {
   order: number;
   isActive: boolean;
   parentSlug?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy?: { id: string; name: string; email: string } | null;
+  updatedBy?: { id: string; name: string; email: string } | null;
+}
+
+function formatAuditLine(date?: string, actor?: { name: string; email: string } | null) {
+  const actorLabel = actor?.name || actor?.email || "—";
+  if (!date) return actorLabel;
+  const parsed = new Date(date);
+  const dateLabel = Number.isNaN(parsed.getTime()) ? "—" : parsed.toLocaleDateString();
+  return `${actorLabel} · ${dateLabel}`;
 }
 
 export default function CategoriesPage() {
@@ -271,6 +283,8 @@ export default function CategoriesPage() {
                 <th className="px-4 py-3">Parent</th>
                 <th className="px-4 py-3">Slug</th>
                 <th className="px-4 py-3">Visibility</th>
+                <th className="px-4 py-3">Created</th>
+                <th className="px-4 py-3">Updated</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
@@ -303,6 +317,8 @@ export default function CategoriesPage() {
                       />
                     </button>
                   </td>
+                  <td className="px-4 py-3 text-xs text-text-secondary">{formatAuditLine(cat.createdAt, cat.createdBy)}</td>
+                  <td className="px-4 py-3 text-xs text-text-secondary">{formatAuditLine(cat.updatedAt, cat.updatedBy)}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button onClick={() => startEdit(cat)}

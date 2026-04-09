@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import AuditMetaCard from "@/components/AuditMetaCard";
 
 interface HomeStat {
   label: string;
@@ -15,6 +16,10 @@ interface CategoryOption {
 }
 
 interface HomePageContent {
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy?: { id: string; name: string; email: string } | null;
+  updatedBy?: { id: string; name: string; email: string } | null;
   hero: { image: string; eyebrow: string; title: string; subtitle: string };
   brandStory: {
     eyebrow: string;
@@ -250,6 +255,14 @@ export default function HomePageEditor() {
           Manage the hero image, editorial blocks, story text, and homepage visuals.
         </p>
       </div>
+
+      <AuditMetaCard
+        createdAt={content.createdAt}
+        updatedAt={content.updatedAt}
+        createdBy={content.createdBy}
+        updatedBy={content.updatedBy}
+        title="Content Traceability"
+      />
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {message && (

@@ -2,10 +2,17 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
+import AuditMetaCard from "@/components/AuditMetaCard";
 
 interface ProductImage {
   url: string;
   isMain: boolean;
+}
+
+interface AuditActor {
+  id: string;
+  name: string;
+  email: string;
 }
 
 interface ProductDetail {
@@ -26,6 +33,8 @@ interface ProductDetail {
   isActive?: boolean;
   visibilityStatus?: string;
   cloneSourceName?: string;
+  createdBy?: AuditActor | null;
+  updatedBy?: AuditActor | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -249,6 +258,13 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
           <p className="text-sm text-text-secondary">No extra product details.</p>
         )}
       </div>
+
+      <AuditMetaCard
+        createdAt={product.createdAt}
+        updatedAt={product.updatedAt}
+        createdBy={product.createdBy}
+        updatedBy={product.updatedBy}
+      />
 
       {isZoomOpen && mainImage?.url && (
         <div
