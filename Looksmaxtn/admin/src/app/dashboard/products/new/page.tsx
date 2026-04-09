@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getConditionStatusFromScore } from "@/lib/productCondition";
+import { generateId } from "@/lib/uuid";
 
 interface Category {
   _id: string;
@@ -167,7 +168,7 @@ export default function NewProductPage() {
     if (!files || files.length === 0) return;
 
     const newImages = Array.from(files).map((file) => ({
-      id: crypto.randomUUID(),
+      id: generateId(),
       file,
       url: URL.createObjectURL(file),
     }));
@@ -229,7 +230,7 @@ export default function NewProductPage() {
       setImages((current) => [
         ...current,
         {
-          id: crypto.randomUUID(),
+          id: generateId(),
           file,
           url: URL.createObjectURL(file),
         },
@@ -363,7 +364,7 @@ export default function NewProductPage() {
           if (!base64) return null;
           const file = await base64ToFile(base64, index);
           return {
-            id: crypto.randomUUID(),
+            id: generateId(),
             file,
             url: URL.createObjectURL(file),
           };

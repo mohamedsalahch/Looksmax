@@ -62,7 +62,12 @@ export async function middleware(request: NextRequest) {
   }
 
   // Admin auth check
-  if (pathname.startsWith("/api/admin") && pathname !== "/api/admin/auth/login" && pathname !== "/api/admin/generated-images/webhook") {
+  if (
+    pathname.startsWith("/api/admin") &&
+    pathname !== "/api/admin/auth/login" &&
+    pathname !== "/api/admin/generated-images/webhook" &&
+    pathname !== "/api/admin/products/generate/webhook"
+  ) {
     const token =
       getBearerToken(request.headers.get("authorization")) ||
       request.cookies.get(COOKIE_NAME)?.value;
@@ -83,5 +88,4 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
-
 

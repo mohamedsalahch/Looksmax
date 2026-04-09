@@ -55,6 +55,15 @@ class ImageGenerator:
         """
         prompt = CLOTHES_PROMPT_TEMPLATE.replace("{VIEW}", view_name.upper())
 
+        logger.info(
+            f"generate_clothes_view({view_name}): input sizes - "
+            f"model_front={len(model_front or '')}, model_back={len(model_back or '')}, "
+            f"product_front={len(product_front or '')}, product_back={len(product_back or '')}"
+        )
+
+        if not all([model_front, model_back, product_front, product_back]):
+            raise HTTPException(status_code=400, detail=f"Missing input images for {view_name} view")
+
         parts = [
             types.Part(text=prompt),
             b64_to_part(model_front),
@@ -63,11 +72,19 @@ class ImageGenerator:
             b64_to_part(product_back),
         ]
 
-        response = await self.client.aio.models.generate_content(
-            model=self.model,
-            contents=[types.Content(parts=parts)],
-            config=self.default_config
-        )
+        try:
+            response = await self.client.aio.models.generate_content(
+                model=self.model,
+                contents=[types.Content(parts=parts)],
+                config=self.default_config
+            )
+        except Exception as e:
+            logger.error(f"generate_clothes_view({view_name}): Gemini API error: {e}")
+            raise
+
+        if not response.candidates:
+            logger.error(f"generate_clothes_view({view_name}): No candidates returned")
+            raise HTTPException(status_code=500, detail=f"No response from Gemini for {view_name} view")
 
         for part in response.candidates[0].content.parts:
             if part.inline_data is not None:
@@ -88,16 +105,29 @@ class ImageGenerator:
         """
         prompt = SHOES_PROMPT_TEMPLATE
 
+        logger.info(
+            f"generate_shoes_view({view_name}): input count={len(product_images)}, "
+            f"sizes={[(k, len(v or '')) for k, v in product_images.items()]}"
+        )
+
         parts = [
             types.Part(text=prompt),
             *[b64_to_part(img) for img in product_images.values()],
         ]
 
-        response = await self.client.aio.models.generate_content(
-            model=self.model,
-            contents=[types.Content(parts=parts)],
-            config=self.default_config
-        )
+        try:
+            response = await self.client.aio.models.generate_content(
+                model=self.model,
+                contents=[types.Content(parts=parts)],
+                config=self.default_config
+            )
+        except Exception as e:
+            logger.error(f"generate_shoes_view({view_name}): Gemini API error: {e}")
+            raise
+
+        if not response.candidates:
+            logger.error(f"generate_shoes_view({view_name}): No candidates returned")
+            raise HTTPException(status_code=500, detail=f"No response from Gemini for {view_name} view")
 
         for part in response.candidates[0].content.parts:
             if part.inline_data is not None:

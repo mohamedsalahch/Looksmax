@@ -1,0 +1,5 @@
+{
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix front\" \"npm run dev --prefix admin\" \"npm run dev --prefix back\""
+  }
+}

@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   output: "standalone",
+  experimental: {
+    proxyClientMaxBodySize: "50mb",
+  },
 };
 
 export default nextConfig;

@@ -7,6 +7,9 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  experimental: {
+    proxyClientMaxBodySize: '50mb',
+  },
 }
 
 export default nextConfig
