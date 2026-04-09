@@ -31,7 +31,7 @@ class ImageGenerator:
         """
         self.client = genai.Client(api_key=api_key)
         self.model = "gemini-3.1-flash-image-preview"
-        self.default_config = {'service_tier': 'flex'}
+        self.default_config: dict[str, Any] = {}
 
     async def generate_clothes_view(
         self,
