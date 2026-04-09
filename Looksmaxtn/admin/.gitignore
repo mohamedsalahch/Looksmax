@@ -13,5 +13,3 @@ coverage/
 .env.production.local
 
 /public/upload
-/public/uploads/*
-!/public/uploads/.gitkeep

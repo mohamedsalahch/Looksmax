@@ -44,10 +44,4 @@ yarn-error.log*
 # Docker and local deployment artifacts
 .docker/
 
-# Uploaded and generated media
-admin/public/uploads/**
-front/public/uploads/**
-back/public/uploads/**
-!admin/public/uploads/.gitkeep
-!front/public/uploads/.gitkeep
-!back/public/uploads/.gitkeep
+# Uploaded media is tracked intentionally for this project.
