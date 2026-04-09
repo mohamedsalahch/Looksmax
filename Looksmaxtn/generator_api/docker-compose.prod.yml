@@ -1,0 +1,9 @@
+services:
+  generator_api:
+    build:
+      context: .
+    env_file:
+      - ./.env.production
+    ports:
+      - "12003:3003"
+    restart: unless-stopped

@@ -1,0 +1,76 @@
+services:
+  mongodb:
+    image: mongo:7
+    container_name: looksmax-mongodb-dev
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+
+  generator_api:
+    build:
+      context: ./generator_api
+    container_name: looksmax-generator-dev
+    env_file:
+      - ./generator_api/.env
+    ports:
+      - "3003:3003"
+    depends_on:
+      - mongodb
+    restart: unless-stopped
+
+  back:
+    build:
+      context: ./back
+      args:
+        APP_PORT: 3002
+    container_name: looksmax-back-dev
+    env_file:
+      - ./back/.env
+    volumes:
+      - shared_uploads:/shared-uploads
+    ports:
+      - "3002:3002"
+    depends_on:
+      - mongodb
+      - generator_api
+    restart: unless-stopped
+
+  admin:
+    build:
+      context: ./admin
+      args:
+        APP_PORT: 3001
+        NEXT_PUBLIC_BACKEND_URL: http://back:3002
+    container_name: looksmax-admin-dev
+    env_file:
+      - ./admin/.env
+    volumes:
+      - shared_uploads:/shared-uploads
+    ports:
+      - "3001:3001"
+    depends_on:
+      - back
+    restart: unless-stopped
+
+  front:
+    build:
+      context: ./front
+      args:
+        APP_PORT: 3000
+        NEXT_PUBLIC_BACKEND_URL: http://back:3002
+    container_name: looksmax-front-dev
+    env_file:
+      - ./front/.env
+    volumes:
+      - shared_uploads:/shared-uploads
+    ports:
+      - "3000:3000"
+    depends_on:
+      - back
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:
+  shared_uploads:

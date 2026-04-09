@@ -1,1 +1,15 @@
-/store/
+.DS_Store
+.idea/
+.npm-cache/
+node_modules/
+.next/
+out/
+build/
+coverage/
+*.log
+*.tsbuildinfo
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

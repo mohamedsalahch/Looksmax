@@ -1,0 +1,15 @@
+"""Prompt templates module."""
+
+from app.prompts.templates import (
+    CLOTHES_PROMPT_TEMPLATE,
+    SHOES_PROMPT_TEMPLATE,
+    FRONT_VIEW_PROMPT_TEMPLATE,
+    BACK_VIEW_PROMPT_TEMPLATE,
+)
+
+__all__ = [
+    "CLOTHES_PROMPT_TEMPLATE",
+    "SHOES_PROMPT_TEMPLATE",
+    "FRONT_VIEW_PROMPT_TEMPLATE",
+    "BACK_VIEW_PROMPT_TEMPLATE",
+]
