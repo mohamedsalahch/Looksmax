@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { getConditionStatusFromScore } from "@/lib/productCondition";
+import { generateId } from "@/lib/uuid";
 
 interface Category {
   _id: string;
@@ -231,7 +232,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         setImages(
           (p.images || []).map((image: ProductImage) => ({
             ...image,
-            id: crypto.randomUUID(),
+            id: generateId(),
             existing: true,
             file: null,
           }))
@@ -267,7 +268,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const handleImageSelect = (files: FileList | null) => {
     if (!files || files.length === 0) return;
     const newImages = Array.from(files).map((file) => ({
-      id: crypto.randomUUID(),
+      id: generateId(),
       url: URL.createObjectURL(file),
       file,
       existing: false,
@@ -326,7 +327,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       setImages((current) => [
         ...current,
         {
-          id: crypto.randomUUID(),
+          id: generateId(),
           url: URL.createObjectURL(file),
           file,
           existing: false,
@@ -457,7 +458,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           if (!base64) return null;
           const file = await base64ToFile(base64, index);
           return {
-            id: crypto.randomUUID(),
+            id: generateId(),
             url: URL.createObjectURL(file),
             file,
             existing: false,
