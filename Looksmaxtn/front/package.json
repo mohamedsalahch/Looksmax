@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --port 3000",
     "build": "next build",
-    "start": "sh -c 'set -a && [ -f ./.env ] && . ./.env && set +a && mkdir -p .next/standalone/.next && rm -rf .next/standalone/.next/static && cp -R .next/static .next/standalone/.next/static && PORT=3000 HOSTNAME=0.0.0.0 node .next/standalone/server.js'",
+    "start": "sh -c 'set -a && [ -f ./.env ] && . ./.env && set +a && node ../scripts/start-standalone.mjs front 3000'",
     "lint": "eslint"
   },
   "dependencies": {

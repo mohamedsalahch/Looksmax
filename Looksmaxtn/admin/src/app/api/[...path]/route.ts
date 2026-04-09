@@ -31,15 +31,19 @@ function buildHeaders(req: NextRequest) {
 async function proxy(req: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   const { path } = await context.params;
   const method = req.method;
-  const hasBody = !["GET", "HEAD"].includes(method);
-
-  const response = await fetch(buildTargetUrl(req, path), {
+  const body = !["GET", "HEAD"].includes(method) ? req.body ?? undefined : undefined;
+  const requestInit: RequestInit & { duplex?: "half" } = {
     method,
     headers: buildHeaders(req),
-    body: hasBody ? req.body : undefined,
-    duplex: hasBody ? "half" : undefined,
+    body,
     redirect: "manual",
-  });
+  };
+
+  if (body) {
+    requestInit.duplex = "half";
+  }
+
+  const response = await fetch(buildTargetUrl(req, path), requestInit);
 
   return new Response(response.body, {
     status: response.status,

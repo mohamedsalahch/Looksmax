@@ -8,6 +8,13 @@ function getProjectRoot() {
     return path.dirname(path.dirname(cwd));
   }
 
+  if (
+    path.basename(path.dirname(cwd)) === "standalone" &&
+    path.basename(path.dirname(path.dirname(cwd))) === ".next"
+  ) {
+    return path.dirname(path.dirname(path.dirname(cwd)));
+  }
+
   return cwd;
 }
 
