@@ -1,6 +1,28 @@
 export function buildOpenApiSpec(baseUrl: string) {
   const adminSecurity = [{ bearerAuth: [] }];
   const userSecurity = [{ bearerAuth: [] }];
+  const loginRequestBody = {
+    required: true,
+    content: {
+      "application/json": {
+        schema: {
+          type: "object",
+          required: ["email", "password"],
+          properties: {
+            email: {
+              type: "string",
+              format: "email",
+              example: "admin@looksmax.com",
+            },
+            password: {
+              type: "string",
+              example: "TempAdmin2026",
+            },
+          },
+        },
+      },
+    },
+  };
 
   return {
     openapi: "3.1.0",
@@ -42,9 +64,12 @@ export function buildOpenApiSpec(baseUrl: string) {
         post: {
           tags: ["Admin Auth"],
           summary: "Sign in as an admin user",
+          requestBody: loginRequestBody,
           responses: {
             "200": { description: "Admin authenticated" },
+            "400": { description: "Email/password missing or invalid JSON" },
             "401": { description: "Invalid credentials" },
+            "403": { description: "Access denied. Admin only." },
           },
         },
       },
@@ -282,8 +307,11 @@ export function buildOpenApiSpec(baseUrl: string) {
         post: {
           tags: ["Store Auth"],
           summary: "Sign in to the storefront",
+          requestBody: loginRequestBody,
           responses: {
             "200": { description: "User authenticated" },
+            "400": { description: "Email/password missing or invalid JSON" },
+            "401": { description: "Invalid credentials" },
           },
         },
       },

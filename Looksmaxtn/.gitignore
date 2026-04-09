@@ -1,49 +1,53 @@
-# Dependencies
-node_modules/
+# Dependencies and builds
+**/node_modules/
+**/.next/
+**/out/
+**/build/
+**/coverage/
+**/.turbo/
 .pnp
 .pnp.js
 
-# Testing
-coverage/
+# Environment files
+**/.env
+**/.env.local
+**/.env.development.local
+**/.env.test.local
+**/.env.production
+**/.env.production.local
+!**/.env.example
+!**/.env.production.example
 
-# Next.js
-.next/
-out/
-
-# Production
-build/
-
-# Environment variables
-*.env
-*.env.local
-*.env.production
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# Debug
+# Logs and caches
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
-# Local runtime files
 .pnpm-debug.log*
 .eslintcache
 
-# MacOS
+# Editor and OS files
 .DS_Store
+.idea/
+.vscode/
 
 # Python
-__pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
-venv/
-.env/
-.venv/
-env/
+**/.pytest_cache/
+**/*.egg-info/
+**/.venv/
+**/venv/
+**/env/
 
-# Docker
+# Docker and local deployment artifacts
 .docker/
-*.log
+
+# Uploaded and generated media
+admin/public/uploads/**
+front/public/uploads/**
+back/public/uploads/**
+!admin/public/uploads/.gitkeep
+!front/public/uploads/.gitkeep
+!back/public/uploads/.gitkeep

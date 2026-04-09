@@ -6,6 +6,7 @@ import { getSession } from "@/admin/lib/auth";
 import { deleteProductImage, saveProductImages } from "@/admin/lib/productUploads";
 import { getConditionStatusFromScore } from "@/admin/lib/productCondition";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
+import { logRequestError, logRequestStart } from "@/lib/requestLogging";
 
 const BLOCKING_ORDER_STATUSES = ["processing", "confirmed", "shipping"];
 const ACTIVE_STOCK_ORDER_STATUSES = ["processing", "confirmed", "shipping", "delivered"];
@@ -107,6 +108,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    await logRequestStart("admin.products.id.put", req);
     const session = await getSession();
     if (!session || session.role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     await dbConnect();
@@ -266,7 +268,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     );
 
     return NextResponse.json({ product });
-  } catch (error) { console.error(error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
+  } catch (error) { logRequestError("admin.products.id.put", req, error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

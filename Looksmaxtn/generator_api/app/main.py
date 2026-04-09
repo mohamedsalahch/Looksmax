@@ -18,10 +18,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # API Key
-API_KEY = os.getenv("GOOGLE_API_KEY", "AIzaSyAZncXialAKd7lUfitMmJ7Y1Aodon8VIJ0")
+API_KEY = os.getenv("GOOGLE_API_KEY", "").strip()
 
-# Initialize image generator
-generator = ImageGenerator(api_key=API_KEY)
+# Initialize image generator only when credentials are configured.
+generator = ImageGenerator(api_key=API_KEY) if API_KEY else None
+if generator is None:
+    logger.warning("GOOGLE_API_KEY is not configured. Generation endpoints will return an initialization error.")
 
 # Create FastAPI app
 app = FastAPI(
@@ -69,4 +71,4 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "3003")))

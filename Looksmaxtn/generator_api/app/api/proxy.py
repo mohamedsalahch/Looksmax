@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks , logger
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from app.models.requests import ProxyRequest
 from app.models.responses import ProxyResponse, OutfitResponse
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 _generator: ImageGenerator | None = None
 
 
-def set_generator(generator: ImageGenerator) -> None:
+def set_generator(generator: ImageGenerator | None) -> None:
     """Set the global image generator instance."""
     global _generator
     _generator = generator

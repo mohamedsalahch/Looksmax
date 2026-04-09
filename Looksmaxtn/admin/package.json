@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --webpack --port 3003",
+    "dev": "next dev --webpack --port 3001",
     "build": "next build",
-    "start": "next start",
+    "start": "sh -c 'set -a && [ -f ./.env ] && . ./.env && set +a && mkdir -p .next/standalone/.next && rm -rf .next/standalone/.next/static && cp -R .next/static .next/standalone/.next/static && PORT=3001 HOSTNAME=0.0.0.0 node .next/standalone/server.js'",
     "lint": "eslint"
   },
   "dependencies": {

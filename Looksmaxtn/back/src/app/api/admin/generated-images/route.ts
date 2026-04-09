@@ -7,6 +7,7 @@ import {
   saveGeneratedResultBase64,
   saveGeneratedSourceImage,
 } from "@/admin/lib/generatedImageUploads";
+import { logRequestError, logRequestStart } from "@/lib/requestLogging";
 
 function extractImagesFromResponse(data: unknown) {
   if (typeof data === "string") return [data];
@@ -62,6 +63,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    await logRequestStart("admin.generated-images.post", req);
     const session = await getSession();
     if (!session || session.role !== "admin") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
@@ -121,7 +123,7 @@ export async function POST(req: NextRequest) {
     // 4. Return immediately to avoid 500 timeouts
     return NextResponse.json({ generatedImage }, { status: 201 });
   } catch (error) {
-    console.error(error);
+    logRequestError("admin.generated-images.post", req, error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

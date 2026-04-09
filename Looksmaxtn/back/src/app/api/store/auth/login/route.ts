@@ -6,7 +6,18 @@ import { comparePassword, createToken, getTokenCookieOptions } from "@/store/lib
 export async function POST(req: NextRequest) {
   try {
     await dbConnect();
-    const { email, password } = await req.json();
+    let body: { email?: string; password?: string };
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid JSON body" },
+        { status: 400 }
+      );
+    }
+
+    const email = String(body.email || "").trim().toLowerCase();
+    const password = String(body.password || "");
 
     if (!email || !password) {
       return NextResponse.json(

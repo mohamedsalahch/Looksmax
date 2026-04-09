@@ -1,8 +1,9 @@
 import { promises as fs } from "fs";
 import path from "path";
 import crypto from "crypto";
+import { getUploadCategoryDir } from "@/lib/uploadStorage";
 
-const uploadDir = path.join(process.cwd(), "public", "uploads", "body-profiles");
+const uploadDir = getUploadCategoryDir("body-profiles");
 
 export async function saveBodyProfileImage(file: File) {
   await fs.mkdir(uploadDir, { recursive: true });
@@ -16,7 +17,7 @@ export async function saveBodyProfileImage(file: File) {
 
 export async function deleteBodyProfileImage(imagePath: string) {
   if (!imagePath.startsWith("/uploads/body-profiles/")) return;
-  const filepath = path.join(process.cwd(), "public", imagePath.replace(/^\//, ""));
+  const filepath = path.join(getUploadCategoryDir("body-profiles"), path.basename(imagePath));
 
   try {
     await fs.unlink(filepath);

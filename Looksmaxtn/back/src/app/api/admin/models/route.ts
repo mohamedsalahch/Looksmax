@@ -4,6 +4,7 @@ import ModelAsset from "@/admin/models/ModelAsset";
 import { getSession } from "@/admin/lib/auth";
 import { saveModelImage } from "@/admin/lib/modelUploads";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
+import { logRequestError, logRequestStart } from "@/lib/requestLogging";
 
 export async function GET() {
   try {
@@ -23,6 +24,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    await logRequestStart("admin.models.post", req);
     const session = await getSession();
     if (!session || session.role !== "admin") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
@@ -65,7 +67,7 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ model }, { status: 201 });
   } catch (error) {
-    console.error(error);
+    logRequestError("admin.models.post", req, error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

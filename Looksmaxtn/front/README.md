@@ -1,25 +1,30 @@
 # Looksmax Storefront
 
-Customer-facing storefront for the Looksmax project.
+Customer-facing storefront for browsing products, checkout, account pages, and outfit generation.
 
-## Development
-
-Run the app from this directory:
+## Local
 
 ```bash
+npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Runs on [http://localhost:3000](http://localhost:3000).
 
-## Source Layers
+## Required Env
 
-- `src/app`: routes, layouts, and route handlers
-- `src/components`: storefront UI building blocks
-- `src/providers`: React providers and client state
-- `src/lib`: helpers for auth, database access, and seeds
-- `src/models`: Mongoose models
+- `NEXT_PUBLIC_BACKEND_URL=http://localhost:3002`
+- `NEXT_PUBLIC_BASE_URL=http://localhost:3000`
+- `MONGODB_URI=mongodb://localhost:27017/looksmax`
+- `JWT_SECRET=...`
 
-## Repository Location
+## Production
 
-This app lives under `apps/storefront` in the repository-level app layer.
+- Public URL: `http://51.75.126.19:12000`
+- Backend URL: `http://51.75.126.19:12002`
+
+## Docker
+
+```bash
+docker compose up --build front
+```

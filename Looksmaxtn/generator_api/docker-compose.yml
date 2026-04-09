@@ -1,8 +1,9 @@
 services:
-  api:
-    image: gor3i/looksmax:latest
-    ports:
-      - "8000:8000"
+  generator_api:
+    build:
+      context: .
     env_file:
-      - .env
+      - ./.env
+    ports:
+      - "3003:3003"
     restart: unless-stopped

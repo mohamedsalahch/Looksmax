@@ -1,34 +1,35 @@
-# Looksmaxtn Backend
+# Looksmax Backend
 
-This project is the shared backend API for Looksmaxtn.
+Shared Next.js API for the storefront and admin applications.
 
 ## Route Namespaces
 
-- `src/app/api/store`
-  Storefront-facing API routes
+- `src/app/api/store`: storefront API routes
+- `src/app/api/admin`: admin API routes
 
-- `src/app/api/admin`
-  Admin-facing API routes
+## Local
 
-## Notes
+```bash
+npm install
+npm run dev
+```
 
-- `front` rewrites `/api/*` to `back/api/store/*`
-- `admin` rewrites `/api/*` to `back/api/admin/*`
-- uploads are still written into the `front/public/uploads` and `admin/public/uploads` folders so existing asset paths keep working
+Runs on [http://localhost:3002](http://localhost:3002).
 
-## Admin JWT Protection
+## Required Env
 
-Admin-changing routes are protected with the `looksmax-admin-token` JWT cookie.
+- `MONGODB_URI=mongodb://localhost:27017/looksmax`
+- `BACKEND_BASE_URL=http://localhost:3002`
+- `FRONTEND_BASE_URL=http://localhost:3000`
+- `ADMIN_BASE_URL=http://localhost:3001`
+- `PRODUCT_GENERATION_URL_BASE=http://localhost:3003/`
+- `ADMIN_IMAGE_GENERATION_URL_BASE=http://localhost:3003`
+- `OUTFIT_WEBHOOK_BASE_URL=http://localhost:3002`
+- `OUTFIT_WEBHOOK_SECRET=...`
+- `JWT_SECRET=...`
 
-Admin and storefront login responses also return a JWT `token` in JSON.
-Protected routes can be accessed with:
+## Production
 
-- cookie auth
-- `Authorization: Bearer <token>`
-
-Make sure `JWT_SECRET` is set in:
-
-- `Looksmaxtn/back/.env`
-- `Looksmaxtn/admin/.env`
-
-and that both values are identical.
+- Public URL: `http://51.75.126.19:12002`
+- Internal generator URL: `http://generator_api:3003`
+- MongoDB URL: `mongodb://mongodb:27017/looksmax-production`

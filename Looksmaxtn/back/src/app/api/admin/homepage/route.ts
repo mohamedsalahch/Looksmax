@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
 import { getSession } from "@/admin/lib/auth";
 import HomePageContent from "@/admin/models/HomePageContent";
@@ -6,6 +6,7 @@ import { DEFAULT_HOME_PAGE } from "@/admin/lib/homePageDefaults";
 import { deleteHomePageFile, saveHomePageFiles } from "@/admin/lib/homePageUploads";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 import { getSystemAuditActor } from "@/admin/lib/audit";
+import { logRequestError, logRequestStart } from "@/lib/requestLogging";
 
 async function getOrCreateHomePage() {
   const existing = await HomePageContent.findOne({ key: "home" }).lean();
@@ -35,8 +36,9 @@ export async function GET() {
   }
 }
 
-export async function PUT(req: Request) {
+export async function PUT(req: NextRequest) {
   try {
+    await logRequestStart("admin.homepage.put", req);
     const session = await getSession();
     if (!session || session.role !== "admin") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
@@ -140,7 +142,7 @@ export async function PUT(req: Request) {
 
     return NextResponse.json({ content });
   } catch (error) {
-    console.error(error);
+    logRequestError("admin.homepage.put", req, error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

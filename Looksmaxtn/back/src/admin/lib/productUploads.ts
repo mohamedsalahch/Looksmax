@@ -1,8 +1,9 @@
 import { mkdir, writeFile, unlink } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
+import { getUploadCategoryDir } from "@/admin/lib/uploadStorage";
 
-const UPLOAD_DIR = path.join(process.cwd(), "..", "admin", "public", "uploads", "products");
+const UPLOAD_DIR = getUploadCategoryDir("products");
 const PUBLIC_PREFIX = "/uploads/products";
 
 function sanitizeBaseName(filename: string) {

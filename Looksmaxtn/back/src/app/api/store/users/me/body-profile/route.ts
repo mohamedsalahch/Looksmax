@@ -7,6 +7,7 @@ import {
   deleteBodyProfileImage,
   saveBodyProfileImage,
 } from "@/store/lib/bodyProfileUploads";
+import { logRequestError, logRequestStart } from "@/lib/requestLogging";
 
 function normalizeGender(value: FormDataEntryValue | null) {
   const normalized = String(value || "").trim().toLowerCase();
@@ -21,6 +22,7 @@ function normalizeGender(value: FormDataEntryValue | null) {
 
 export async function PUT(req: NextRequest) {
   try {
+    await logRequestStart("store.users.me.body-profile.put", req);
     const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -90,7 +92,7 @@ export async function PUT(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Update body profile error:", error);
+    logRequestError("store.users.me.body-profile.put", req, error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

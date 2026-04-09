@@ -6,6 +6,7 @@ import { getSession } from "@/admin/lib/auth";
 import { saveProductImages } from "@/admin/lib/productUploads";
 import { getConditionStatusFromScore } from "@/admin/lib/productCondition";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
+import { logRequestError, logRequestStart } from "@/lib/requestLogging";
 
 const BLOCKING_ORDER_STATUSES = ["processing", "confirmed", "shipping"];
 const ACTIVE_STOCK_ORDER_STATUSES = ["processing", "confirmed", "shipping", "delivered"];
@@ -164,6 +165,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    await logRequestStart("admin.products.post", req);
     const session = await getSession();
     if (!session || session.role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
 
@@ -223,5 +225,5 @@ export async function POST(req: NextRequest) {
       updatedBy: auditActor,
     });
     return NextResponse.json({ product }, { status: 201 });
-  } catch (error) { console.error(error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
+  } catch (error) { logRequestError("admin.products.post", req, error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }

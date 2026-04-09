@@ -9,8 +9,9 @@ coverage/
 .env.local
 .env.development.local
 .env.test.local
+.env.production
 .env.production.local
 
-# media
 /public/upload
-/public/uploads
+/public/uploads/*
+!/public/uploads/.gitkeep

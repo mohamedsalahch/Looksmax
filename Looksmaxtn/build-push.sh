@@ -38,23 +38,25 @@ echo ""
 
 # Function to build and push image
 build_and_push() {
-    local service=$1
-    local image_name="${USERNAME}/looksmax-${service}:${VERSION}"
+    local service_dir=$1
+    local image_suffix=$2
+    local image_name="${USERNAME}/looksmax-${image_suffix}:${VERSION}"
 
-    echo -e "${BLUE}Building ${service}...${NC}"
-    docker build -t "${image_name}" "./${service}"
+    echo -e "${BLUE}Building ${service_dir}...${NC}"
+    docker build -t "${image_name}" "./${service_dir}"
 
-    echo -e "${BLUE}Pushing ${service}...${NC}"
+    echo -e "${BLUE}Pushing ${service_dir}...${NC}"
     docker push "${image_name}"
 
-    echo -e "${GREEN}✓ ${service} built and pushed successfully${NC}"
+    echo -e "${GREEN}✓ ${service_dir} built and pushed successfully${NC}"
     echo ""
 }
 
 # Build and push all services
-build_and_push "back"
-build_and_push "admin"
-build_and_push "front"
+build_and_push "back" "back"
+build_and_push "admin" "admin"
+build_and_push "front" "front"
+build_and_push "generator_api" "generator-api"
 
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}All images built and pushed successfully!${NC}"
@@ -64,6 +66,7 @@ echo "Images pushed as:"
 echo "  - ${USERNAME}/looksmax-back:${VERSION}"
 echo "  - ${USERNAME}/looksmax-admin:${VERSION}"
 echo "  - ${USERNAME}/looksmax-front:${VERSION}"
+echo "  - ${USERNAME}/looksmax-generator-api:${VERSION}"
 echo ""
 echo "Next steps:"
 echo "1. SSH to your server: ssh user@your-server-ip"
