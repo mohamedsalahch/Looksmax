@@ -43,6 +43,10 @@ function placeholderSvg(category: string, filename: string) {
 </svg>`;
 }
 
+function getRemoteUploadsBaseUrl() {
+  return process.env.REMOTE_UPLOADS_BASE_URL?.trim().replace(/\/$/, "") || "";
+}
+
 export async function GET(
   _: Request,
   { params }: { params: Promise<{ category: string; filename: string }> }
@@ -69,6 +73,29 @@ export async function GET(
       },
     });
   } catch {
+    const remoteUploadsBaseUrl = getRemoteUploadsBaseUrl();
+
+    if (remoteUploadsBaseUrl) {
+      try {
+        const remoteResponse = await fetch(
+          `${remoteUploadsBaseUrl}/uploads/${encodeURIComponent(category)}/${encodeURIComponent(filename)}`,
+          { cache: "no-store" }
+        );
+
+        if (remoteResponse.ok) {
+          return new NextResponse(remoteResponse.body, {
+            status: remoteResponse.status,
+            headers: {
+              "Content-Type": remoteResponse.headers.get("content-type") || getContentType(filename),
+              "Cache-Control": remoteResponse.headers.get("cache-control") || "public, max-age=60",
+            },
+          });
+        }
+      } catch {
+        // Fall through to local placeholder if remote fallback is unavailable.
+      }
+    }
+
     return new NextResponse(placeholderSvg(category, filename), {
       headers: {
         "Content-Type": "image/svg+xml",
