@@ -190,7 +190,7 @@ export async function POST(req: NextRequest) {
     const preferredWebhookBase = getPreferredIpv4Host();
     const webhookBase = preferredWebhookBase || req.nextUrl.origin;
     const webhookUrl = `${webhookBase}/api/store/generate-outfit/webhook`;
-    const generatorUrl = `${baseUrl}generate_outfit`;
+    const generatorUrl = `${baseUrl}api/generate_outfit`;
 
     console.log("[generate_outfit] sending request", {
       generatorUrl,
