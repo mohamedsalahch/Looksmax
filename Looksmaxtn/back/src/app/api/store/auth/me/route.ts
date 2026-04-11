@@ -43,7 +43,9 @@ export async function GET() {
             ? {
                 heightCm: user.bodyProfile.heightCm || "",
                 weightKg: user.bodyProfile.weightKg || "",
-                usualSize: user.bodyProfile.usualSize || "",
+                topSize: user.bodyProfile.topSize || "",
+                bottomSize: user.bodyProfile.bottomSize || "",
+                shoeSize: user.bodyProfile.shoeSize || "",
                 profileImage: user.bodyProfile.profileImage || "",
                 gender: normalizeGender(user.bodyProfile.gender),
               }

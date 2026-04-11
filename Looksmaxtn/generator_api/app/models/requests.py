@@ -49,6 +49,7 @@ class ProxyRequest(BaseModel):
 class BodyZone(BaseModel):
     """Represents a clothing zone with its images."""
     status: bool
+    size: str = ""
     front: str = ""
     back: str = ""
     left: str = ""
@@ -71,5 +72,7 @@ class OutfitRequest(BaseModel):
     profile_picture: str  # base64 encoded image of the person
     height: str
     weight: str
-    size: str
+    top_size: str
+    bottom_size: str
+    shoe_size: str
     body_zones: BodyZones

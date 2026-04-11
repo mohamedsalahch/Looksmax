@@ -17,7 +17,9 @@ interface User {
   bodyProfile?: {
     heightCm: string;
     weightKg: string;
-    usualSize: string;
+    topSize: string;
+    bottomSize: string;
+    shoeSize: string;
     profileImage: string;
     gender: string;
   };

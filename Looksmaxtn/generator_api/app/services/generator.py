@@ -142,7 +142,9 @@ class ImageGenerator:
         body_zones: BodyZones,
         height: str,
         weight: str,
-        size: str
+        top_size: str,
+        bottom_size: str,
+        shoe_size: str
     ) -> str:
         """Generate front view of person wearing outfit.
 
@@ -151,7 +153,9 @@ class ImageGenerator:
             body_zones: Body zones configuration
             height: Person's height in cm
             weight: Person's weight in kg
-            size: Clothing size
+            top_size: Top clothing size
+            bottom_size: Bottom clothing size
+            shoe_size: Shoe size
 
         Returns:
             Base64 encoded generated image
@@ -159,12 +163,19 @@ class ImageGenerator:
         prompt = FRONT_VIEW_PROMPT_TEMPLATE.format(
             height=height,
             weight=weight,
-            size=size,
+            top_size=top_size,
+            bottom_size=bottom_size,
+            shoe_size=shoe_size,
             headwear_status="true" if body_zones.headwear.status else "false",
             outerwear_status="true" if body_zones.outerwear.status else "false",
             top_status="true" if body_zones.top.status else "false",
             bottom_status="true" if body_zones.bottom.status else "false",
             footwear_status="true" if body_zones.footwear.status else "false",
+            headwear_piece_size=body_zones.headwear.size or "N/A",
+            outerwear_piece_size=body_zones.outerwear.size or "N/A",
+            top_piece_size=body_zones.top.size or "N/A",
+            bottom_piece_size=body_zones.bottom.size or "N/A",
+            footwear_piece_size=body_zones.footwear.size or "N/A",
         )
 
         front_images = _get_active_images(body_zones, "front")

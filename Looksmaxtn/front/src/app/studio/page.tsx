@@ -336,7 +336,9 @@ export default function OutfitStudioPage() {
   const profileReady = Boolean(
     user?.bodyProfile?.heightCm &&
       user?.bodyProfile?.weightKg &&
-      user?.bodyProfile?.usualSize &&
+      user?.bodyProfile?.topSize &&
+      user?.bodyProfile?.bottomSize &&
+      user?.bodyProfile?.shoeSize &&
       user?.bodyProfile?.profileImage &&
       user?.bodyProfile?.gender
   );
@@ -458,13 +460,16 @@ export default function OutfitStudioPage() {
           profileImage: user?.bodyProfile?.profileImage || "",
           heightCm: user?.bodyProfile?.heightCm || "",
           weightKg: user?.bodyProfile?.weightKg || "",
-          usualSize: user?.bodyProfile?.usualSize || "",
+          topSize: user?.bodyProfile?.topSize || "",
+          bottomSize: user?.bodyProfile?.bottomSize || "",
+          shoeSize: user?.bodyProfile?.shoeSize || "",
           bodyZones: Object.fromEntries(
             BODY_ZONES.map((zone) => [
               zone.id,
               {
                 status: Boolean(outfit[zone.id]),
                 fashionSubtype: outfit[zone.id]?.fashionSubtype || "",
+                size: zone.id === "headwear" ? "" : zone.id === "outerwear" || zone.id === "top" ? user?.bodyProfile?.topSize || "" : zone.id === "bottom" ? user?.bodyProfile?.bottomSize || "" : zone.id === "footwear" ? user?.bodyProfile?.shoeSize || "" : "",
                 originPictures: outfit[zone.id]?.originPictures || {
                   front: "",
                   back: "",

@@ -31,14 +31,16 @@ async def process_outfit_generation(
     body_zones,
     height: str,
     weight: str,
-    size: str
+    top_size: str,
+    bottom_size: str,
+    shoe_size: str
 ):
     """Background task to generate outfit and send webhooks."""
     logger.info(f"=== OUTFIT GENERATION START ===")
     logger.info(f"Job ID: {job_id}")
     logger.info(f"Webhook URL: {webhook_url}")
     logger.info(f"Profile picture: {len(profile_picture)} chars")
-    logger.info(f"Height: {height}, Weight: {weight}, Size: {size}")
+    logger.info(f"Height: {height}, Weight: {weight}, Top size: {top_size}, Bottom size: {bottom_size}, Shoe size: {shoe_size}")
 
     # Log each zone's status and image sizes
     for zone_name, zone in [
@@ -74,7 +76,9 @@ async def process_outfit_generation(
             body_zones=body_zones,
             height=height,
             weight=weight,
-            size=size
+            top_size=top_size,
+            bottom_size=bottom_size,
+            shoe_size=shoe_size
         )
         logger.info(f"Job {job_id}: Front view generated successfully ({len(front_b64)} chars)")
 
@@ -136,6 +140,15 @@ async def generate_outfit_image(request: OutfitRequest, background_tasks: Backgr
     logger.info(f"Job ID: {request.job_id}")
     logger.info(f"Webhook: {request.webhook_url}")
     logger.info(f"Profile picture size: {len(request.profile_picture)} chars")
+    logger.info(f"Height: {request.height}, Weight: {request.weight}, Top size: {request.top_size}, Bottom size: {request.bottom_size}, Shoe size: {request.shoe_size}")
+    for zone_name, zone in [
+        ("headwear", request.body_zones.headwear),
+        ("outerwear", request.body_zones.outerwear),
+        ("top", request.body_zones.top),
+        ("bottom", request.body_zones.bottom),
+        ("footwear", request.body_zones.footwear),
+    ]:
+        logger.info(f"  Zone '{zone_name}': status={zone.status}, size={zone.size}, front={len(zone.front) if zone.front else 0} chars, back={len(zone.back) if zone.back else 0} chars")
 
     # Validate required images
     if not request.profile_picture or not request.profile_picture.strip():
@@ -167,7 +180,9 @@ async def generate_outfit_image(request: OutfitRequest, background_tasks: Backgr
         body_zones=request.body_zones,
         height=request.height,
         weight=request.weight,
-        size=request.size
+        top_size=request.top_size,
+        bottom_size=request.bottom_size,
+        shoe_size=request.shoe_size
     )
 
     logger.info(f"Job {request.job_id}: Background task started, returning processing status")

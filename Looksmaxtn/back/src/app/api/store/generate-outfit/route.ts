@@ -10,6 +10,7 @@ import OutfitGenerationJob from "@/store/models/OutfitGenerationJob";
 type ZonePayload = {
   status?: boolean;
   fashionSubtype?: string;
+  size?: string;
   originPictures?: {
     front?: string;
     back?: string;
@@ -100,7 +101,9 @@ export async function POST(req: NextRequest) {
       profileImage?: string;
       heightCm?: string;
       weightKg?: string;
-      usualSize?: string;
+      topSize?: string;
+      bottomSize?: string;
+      shoeSize?: string;
       bodyZones?: Record<string, ZonePayload | null>;
     };
 
@@ -120,6 +123,7 @@ export async function POST(req: NextRequest) {
           zone,
           {
             status,
+            size: value?.size || "",
             front:
               status && originPictures.front ? await publicPathToBase64(originPictures.front) : "",
             back:
@@ -141,7 +145,9 @@ export async function POST(req: NextRequest) {
       profile_picture: await publicPathToBase64(body.profileImage || ""),
       height: body.heightCm || "",
       weight: body.weightKg || "",
-      size: body.usualSize || "",
+      top_size: body.topSize || "",
+      bottom_size: body.bottomSize || "",
+      shoe_size: body.shoeSize || "",
       body_zones: Object.fromEntries(zoneEntries),
     };
 
@@ -194,7 +200,9 @@ export async function POST(req: NextRequest) {
     const requestPayloadSummary = {
       height: payload.height,
       weight: payload.weight,
-      size: payload.size,
+      top_size: payload.top_size,
+      bottom_size: payload.bottom_size,
+      shoe_size: payload.shoe_size,
       hasProfilePicture: payload.profile_picture.length > 0,
       body_zones: summarizedBodyZones,
     };

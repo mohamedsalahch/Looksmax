@@ -20,7 +20,9 @@ export default function SettingsPage() {
   const [bodyProfile, setBodyProfile] = useState({
     heightCm: "",
     weightKg: "",
-    usualSize: "",
+    topSize: "",
+    bottomSize: "",
+    shoeSize: "",
     profileImage: "",
     gender: "",
   });
@@ -33,7 +35,9 @@ export default function SettingsPage() {
     setBodyProfile({
       heightCm: user?.bodyProfile?.heightCm || "",
       weightKg: user?.bodyProfile?.weightKg || "",
-      usualSize: user?.bodyProfile?.usualSize || "",
+      topSize: user?.bodyProfile?.topSize || "",
+      bottomSize: user?.bodyProfile?.bottomSize || "",
+      shoeSize: user?.bodyProfile?.shoeSize || "",
       profileImage: user?.bodyProfile?.profileImage || "",
       gender: normalizeGender(user?.bodyProfile?.gender),
     });
@@ -54,7 +58,9 @@ export default function SettingsPage() {
       const body = new FormData();
       body.append("heightCm", bodyProfile.heightCm);
       body.append("weightKg", bodyProfile.weightKg);
-      body.append("usualSize", bodyProfile.usualSize);
+      body.append("topSize", bodyProfile.topSize);
+      body.append("bottomSize", bodyProfile.bottomSize);
+      body.append("shoeSize", bodyProfile.shoeSize);
       body.append("gender", bodyProfile.gender);
       body.append("existingProfileImage", bodyProfile.profileImage);
       if (bodyProfileFile) body.append("profileImage", bodyProfileFile);
@@ -72,7 +78,9 @@ export default function SettingsPage() {
         setBodyProfile({
           heightCm: data.user?.bodyProfile?.heightCm || "",
           weightKg: data.user?.bodyProfile?.weightKg || "",
-          usualSize: data.user?.bodyProfile?.usualSize || "",
+          topSize: data.user?.bodyProfile?.topSize || "",
+          bottomSize: data.user?.bodyProfile?.bottomSize || "",
+          shoeSize: data.user?.bodyProfile?.shoeSize || "",
           profileImage: data.user?.bodyProfile?.profileImage || "",
           gender: normalizeGender(data.user?.bodyProfile?.gender),
         });
@@ -145,7 +153,7 @@ export default function SettingsPage() {
               />
             </div>
             <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
                     Height (cm)
@@ -170,18 +178,6 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
-                    Usual Size
-                  </label>
-                  <input
-                    type="text"
-                    value={bodyProfile.usualSize}
-                    onChange={(e) => setBodyProfile({ ...bodyProfile, usualSize: e.target.value })}
-                    className="w-full border border-border-color bg-transparent px-4 py-3 text-sm"
-                    placeholder="M / 42 / 100ml"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
                     Gender
                   </label>
                   <select
@@ -192,6 +188,56 @@ export default function SettingsPage() {
                     <option value="">Select</option>
                     <option value="men">Men</option>
                     <option value="women">Women</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
+                    Top Size
+                  </label>
+                  <select
+                    value={bodyProfile.topSize}
+                    onChange={(e) => setBodyProfile({ ...bodyProfile, topSize: e.target.value })}
+                    className="w-full border border-border-color bg-transparent px-4 py-3 text-sm"
+                  >
+                    <option value="">Select</option>
+                    <option value="XS">XS</option>
+                    <option value="S">S</option>
+                    <option value="M">M</option>
+                    <option value="L">L</option>
+                    <option value="XL">XL</option>
+                    <option value="XXL">XXL</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
+                    Bottom Size
+                  </label>
+                  <select
+                    value={bodyProfile.bottomSize}
+                    onChange={(e) => setBodyProfile({ ...bodyProfile, bottomSize: e.target.value })}
+                    className="w-full border border-border-color bg-transparent px-4 py-3 text-sm"
+                  >
+                    <option value="">Select</option>
+                    {[36, 38, 40, 42, 44, 46, 48].map((size) => (
+                      <option key={size} value={String(size)}>{size}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
+                    Shoe Size
+                  </label>
+                  <select
+                    value={bodyProfile.shoeSize}
+                    onChange={(e) => setBodyProfile({ ...bodyProfile, shoeSize: e.target.value })}
+                    className="w-full border border-border-color bg-transparent px-4 py-3 text-sm"
+                  >
+                    <option value="">Select</option>
+                    {[38, 39, 40, 41, 42, 43, 44, 45, 46, 47].map((size) => (
+                      <option key={size} value={String(size)}>{size}</option>
+                    ))}
                   </select>
                 </div>
               </div>
