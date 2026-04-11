@@ -47,7 +47,9 @@ export async function GET() {
                 bottomSize: user.bodyProfile.bottomSize || "",
                 shoeSize: user.bodyProfile.shoeSize || "",
                 profileImage: user.bodyProfile.profileImage || "",
+                profileImageEnhanced: user.bodyProfile.profileImageEnhanced || "",
                 gender: normalizeGender(user.bodyProfile.gender),
+                imageEnhancing: Boolean(user.bodyProfile.imageEnhancing),
               }
             : user.bodyProfile,
         },

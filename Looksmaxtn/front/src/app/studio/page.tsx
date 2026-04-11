@@ -242,7 +242,7 @@ function getAvailableOutfitImages(images?: { front?: string; back?: string }) {
 }
 
 export default function OutfitStudioPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, refreshUser } = useAuth();
   const [categories, setCategories] = useState<CategoryNode[]>([]);
   const [products, setProducts] = useState<StudioProduct[]>([]);
   const [suggestedProducts, setSuggestedProducts] = useState<StudioProduct[]>([]);
@@ -323,6 +323,17 @@ export default function OutfitStudioPage() {
     };
   });
 
+  const imageEnhancing = Boolean(user?.bodyProfile?.imageEnhancing);
+
+  // Poll for imageEnhancing status
+  useEffect(() => {
+    if (!imageEnhancing) return;
+    const interval = window.setInterval(() => {
+      refreshUser();
+    }, 3000);
+    return () => window.clearInterval(interval);
+  }, [imageEnhancing, refreshUser]);
+
   const childCategories = useMemo(
     () => categories.find((category) => category.slug === selectedParent)?.children || [],
     [categories, selectedParent]
@@ -340,7 +351,8 @@ export default function OutfitStudioPage() {
       user?.bodyProfile?.bottomSize &&
       user?.bodyProfile?.shoeSize &&
       user?.bodyProfile?.profileImage &&
-      user?.bodyProfile?.gender
+      user?.bodyProfile?.gender &&
+      !imageEnhancing
   );
   const genderCollectionSlug = user?.bodyProfile?.gender === "women" ? "women" : "men";
 
@@ -457,7 +469,7 @@ export default function OutfitStudioPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          profileImage: user?.bodyProfile?.profileImage || "",
+          profileImage: user?.bodyProfile?.profileImageEnhanced || user?.bodyProfile?.profileImage || "",
           heightCm: user?.bodyProfile?.heightCm || "",
           weightKg: user?.bodyProfile?.weightKg || "",
           topSize: user?.bodyProfile?.topSize || "",
@@ -637,6 +649,29 @@ export default function OutfitStudioPage() {
   }
 
   if (!profileReady) {
+    if (imageEnhancing) {
+      return (
+        <div className="pt-[72px] min-h-screen">
+          <div className="max-w-3xl mx-auto px-4 md:px-8 py-12">
+            <div className="bg-background p-8 text-center space-y-4">
+              <p className="text-[10px] uppercase tracking-[0.28em] text-text-secondary">
+                Outfit Studio
+              </p>
+              <h1 className="text-2xl font-semibold tracking-wide uppercase">
+                Enhancing Your Photo
+              </h1>
+              <div className="flex justify-center py-8">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-border-color border-t-foreground" />
+              </div>
+              <p className="text-sm text-text-secondary max-w-xl mx-auto">
+                Your profile photo is being processed into a studio-quality portrait. This usually takes a few seconds.
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="pt-[72px] min-h-screen">
         <div className="max-w-3xl mx-auto px-4 md:px-8 py-12">

@@ -5,6 +5,7 @@ import path from "path";
 import mongoose from "mongoose";
 import dbConnect from "@/store/lib/mongodb";
 import { getSession } from "@/store/lib/auth";
+import User from "@/store/models/User";
 import OutfitGenerationJob from "@/store/models/OutfitGenerationJob";
 
 type ZonePayload = {
@@ -107,6 +108,17 @@ export async function POST(req: NextRequest) {
       bodyZones?: Record<string, ZonePayload | null>;
     };
 
+    // Fetch the enhanced profile image if available
+    await dbConnect();
+    const requestingUser = await User.collection.findOne(
+      { _id: new mongoose.Types.ObjectId(session.userId) },
+      { projection: { bodyProfile: 1 } }
+    );
+    const bestProfileImage = requestingUser?.bodyProfile?.profileImageEnhanced
+      || requestingUser?.bodyProfile?.profileImage
+      || body.profileImage
+      || "";
+
     const bodyZones = body.bodyZones || {};
     const zoneEntries = await Promise.all(
       Object.entries(bodyZones).map(async ([zone, value]) => {
@@ -142,7 +154,7 @@ export async function POST(req: NextRequest) {
     );
 
     const payload = {
-      profile_picture: await publicPathToBase64(body.profileImage || ""),
+      profile_picture: await publicPathToBase64(bestProfileImage),
       height: body.heightCm || "",
       weight: body.weightKg || "",
       top_size: body.topSize || "",

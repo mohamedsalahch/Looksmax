@@ -15,7 +15,9 @@ export interface IBodyProfile {
   bottomSize: string;
   shoeSize: string;
   profileImage: string;
+  profileImageEnhanced: string;
   gender: string;
+  imageEnhancing: boolean;
 }
 
 export interface IUser extends Document {
@@ -48,7 +50,9 @@ const bodyProfileSchema = new Schema<IBodyProfile>(
     bottomSize: { type: String, default: "" },
     shoeSize: { type: String, default: "" },
     profileImage: { type: String, default: "" },
+    profileImageEnhanced: { type: String, default: "" },
     gender: { type: String, default: "" },
+    imageEnhancing: { type: Boolean, default: false },
   },
   { _id: false }
 );

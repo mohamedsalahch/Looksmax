@@ -21,7 +21,9 @@ interface User {
     bottomSize: string;
     shoeSize: string;
     profileImage: string;
+    profileImageEnhanced: string;
     gender: string;
+    imageEnhancing: boolean;
   };
 }
 
