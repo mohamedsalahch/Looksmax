@@ -57,13 +57,15 @@ async function publicPathToBase64(imagePath: string) {
   } else if (imagePath.startsWith("/uploads/products/")) {
     fullPath = path.join(process.cwd(), "..", "admin", "public", imagePath.replace(/^\//, ""));
   } else {
+     console.warn("[publicPathToBase64] unrecognized path format:", imagePath);
     return "";
   }
 
   try {
     const buffer = await readFile(fullPath);
     return buffer.toString("base64");
-  } catch {
+  } catch (err) {
+    console.error("[publicPathToBase64] failed to read file:", fullPath, err);
     return "";
   }
 }
@@ -142,6 +144,29 @@ export async function POST(req: NextRequest) {
       size: body.usualSize || "",
       body_zones: Object.fromEntries(zoneEntries),
     };
+
+    if (!payload.profile_picture) {
+      console.error("[generate_outfit] profile picture is empty — profileImage path was:", body.profileImage || "(empty)");
+      return NextResponse.json(
+        { error: "Profile picture could not be loaded. Please re-upload your body profile image." },
+        { status: 400 }
+      );
+    }
+
+    const activeZonesWithNoImages = Object.entries(payload.body_zones)
+      .filter(([, value]) => {
+        const z = value as { status: boolean; front: string; back: string };
+        return z.status && !z.front && !z.back;
+      })
+      .map(([zone]) => zone);
+
+    if (activeZonesWithNoImages.length > 0) {
+      console.error("[generate_outfit] active zones with no images:", activeZonesWithNoImages);
+      return NextResponse.json(
+        { error: `Selected items have no images: ${activeZonesWithNoImages.join(", ")}` },
+        { status: 400 }
+      );
+    }
 
     const summarizedBodyZones = Object.fromEntries(
       Object.entries(payload.body_zones).map(([zone, value]) => {
