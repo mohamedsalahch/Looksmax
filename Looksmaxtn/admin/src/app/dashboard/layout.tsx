@@ -48,9 +48,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen flex bg-bg-primary">
-      {/* Sidebar */}
-      <aside className={`${sidebarOpen ? "w-56" : "w-16"} transition-all duration-300 bg-bg-secondary border-r border-border flex flex-col shrink-0`}>
-        <div className="p-4 border-b border-border flex items-center justify-between">
+      <aside className={`${sidebarOpen ? "w-56" : "w-16"} transition-all duration-300 bg-bg-secondary/65 flex flex-col shrink-0`}>
+        <div className="p-4 flex items-center justify-between">
           {sidebarOpen && (
             <div>
               <h1 className="text-xs font-bold tracking-[0.2em] uppercase text-accent">LOOKSMAX</h1>
@@ -79,25 +78,28 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
-
-        <div className="p-4 border-t border-border">
-          {sidebarOpen && (
-            <div className="mb-3">
-              <p className="text-xs font-medium text-text-primary truncate">{user.name}</p>
-              <p className="text-[10px] text-text-secondary truncate">{user.email}</p>
-            </div>
-          )}
-          <button
-            onClick={handleLogout}
-            className="w-full text-left text-xs text-danger hover:text-danger/80 transition-colors cursor-pointer"
-          >
-            {sidebarOpen ? "Sign Out" : "🚪"}
-          </button>
-        </div>
       </aside>
 
-      {/* Main */}
       <main className="flex-1 overflow-y-auto">
+        <div className="bg-bg-primary/70 px-6 py-4 backdrop-blur md:px-8">
+          <div className="flex items-center justify-end">
+            <div className="flex items-center gap-3 rounded-full bg-bg-card/80 px-3 py-2 shadow-sm shadow-black/5">
+              <div className="min-w-0 text-right">
+                <p className="text-xs font-medium text-text-primary truncate">{user.name}</p>
+                <p className="text-[10px] uppercase tracking-[0.16em] text-text-secondary truncate">
+                  {user.email}
+                </p>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="rounded-full bg-danger/8 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-danger transition-colors hover:bg-danger/14 cursor-pointer"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div className="p-6 md:p-8">{children}</div>
       </main>
     </div>

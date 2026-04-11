@@ -51,6 +51,50 @@ const emptyContent: HomePageContent = {
   featured: { title: "" },
 };
 
+function getCategoryPathLabel(categories: CategoryOption[], category: CategoryOption) {
+  const segments = [category.name];
+  let currentParentSlug = category.parentSlug;
+
+  while (currentParentSlug) {
+    const parent = categories.find((entry) => entry.slug === currentParentSlug);
+    if (!parent) break;
+    segments.unshift(parent.name);
+    currentParentSlug = parent.parentSlug || null;
+  }
+
+  return segments.join(" / ");
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-text-secondary">
+      {children}
+    </label>
+  );
+}
+
+function SectionHeader({
+  eyebrow,
+  title,
+  description,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="space-y-1">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-text-secondary">
+        {eyebrow}
+      </p>
+      <div>
+        <h2 className="text-base font-semibold text-text-primary">{title}</h2>
+        <p className="mt-1 text-sm leading-6 text-text-secondary">{description}</p>
+      </div>
+    </div>
+  );
+}
+
 export default function HomePageEditor() {
   const [content, setContent] = useState<HomePageContent>(emptyContent);
   const [loading, setLoading] = useState(true);
@@ -119,6 +163,10 @@ export default function HomePageEditor() {
         : content.lookbook.images,
     [content.lookbook.images, lookbookFiles]
   );
+  const lookbookCount = lookbookPreview.length;
+  const messageTone = message.toLowerCase().includes("success")
+    ? "border-success/30 bg-success/10 text-success"
+    : "border-border bg-bg-card text-text-secondary";
 
   const updateStat = (index: number, field: keyof HomeStat, value: string) => {
     setContent((current) => ({
@@ -248,12 +296,41 @@ export default function HomePageEditor() {
   if (loading) return <p className="text-xs text-text-secondary animate-pulse">Loading homepage editor...</p>;
 
   return (
-    <div className="max-w-5xl space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold tracking-wide">Home Page</h1>
-        <p className="text-sm text-text-secondary mt-1">
-          Manage the hero image, editorial blocks, story text, and homepage visuals.
-        </p>
+    <div className="max-w-6xl space-y-6">
+      <div className="rounded-[28px] border border-border bg-gradient-to-br from-bg-card via-bg-card to-bg-secondary/60 p-6 md:p-8">
+        <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+          <div className="max-w-2xl space-y-2">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-text-secondary">
+              Homepage Editor
+            </p>
+            <h1 className="text-2xl font-semibold tracking-tight text-text-primary md:text-3xl">
+              Shape the storefront without the clutter
+            </h1>
+            <p className="text-sm leading-6 text-text-secondary">
+              Keep the homepage polished from one place: hero, brand story, lookbook, editorial,
+              and featured section.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-border bg-bg-primary/65 px-4 py-3">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-text-secondary">Lookbook</p>
+              <p className="mt-2 text-xl font-semibold text-text-primary">{lookbookCount}</p>
+            </div>
+            <div className="rounded-2xl border border-border bg-bg-primary/65 px-4 py-3">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-text-secondary">Hero</p>
+              <p className="mt-2 text-xl font-semibold text-text-primary">
+                {heroPreview ? "Ready" : "Empty"}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border bg-bg-primary/65 px-4 py-3 sm:col-span-1 col-span-2">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-text-secondary">Editorial</p>
+              <p className="mt-2 text-xl font-semibold text-text-primary">
+                {editorialPreview ? "Ready" : "Empty"}
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
       <AuditMetaCard
@@ -266,44 +343,67 @@ export default function HomePageEditor() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {message && (
-          <div className="border border-border rounded px-4 py-3 text-xs text-text-secondary">
+          <div className={`rounded-2xl border px-4 py-3 text-sm ${messageTone}`}>
             {message}
           </div>
         )}
 
-        <section className="bg-bg-card border border-border rounded p-5 space-y-4">
-          <h2 className="text-sm font-semibold">Hero</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-3">
+        <section className="rounded-[28px] border border-border bg-bg-card p-6 shadow-sm shadow-black/5 space-y-5">
+          <SectionHeader
+            eyebrow="01"
+            title="Hero"
+            description="The first impression. Keep the copy short and let the image carry the mood."
+          />
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <FieldLabel>Eyebrow</FieldLabel>
               <input
                 type="text"
                 value={content.hero.eyebrow}
                 onChange={(e) => setContent({ ...content, hero: { ...content.hero, eyebrow: e.target.value } })}
                 placeholder="Eyebrow"
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                className="w-full rounded-2xl bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
               />
+              </div>
+              <div className="space-y-2">
+                <FieldLabel>Title</FieldLabel>
               <input
                 type="text"
                 value={content.hero.title}
                 onChange={(e) => setContent({ ...content, hero: { ...content.hero, title: e.target.value } })}
                 placeholder="Title"
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                className="w-full rounded-2xl bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
               />
+              </div>
+              <div className="space-y-2">
+                <FieldLabel>Subtitle</FieldLabel>
               <textarea
                 value={content.hero.subtitle}
                 onChange={(e) => setContent({ ...content, hero: { ...content.hero, subtitle: e.target.value } })}
                 placeholder="Subtitle"
                 rows={4}
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm resize-none"
+                className="w-full rounded-2xl bg-bg-secondary border border-border px-4 py-3 text-sm resize-none transition-colors focus:border-accent"
               />
+              </div>
+              <div className="space-y-2">
+                <FieldLabel>Hero image</FieldLabel>
               <input
                 type="file"
                 accept="image/*"
                 onChange={(e) => setHeroFile(e.target.files?.[0] || null)}
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm file:mr-3 file:border-0 file:bg-accent/10 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-accent"
+                className="w-full rounded-2xl border border-dashed border-border bg-bg-secondary px-4 py-3 text-sm file:mr-3 file:rounded-xl file:border-0 file:bg-accent/10 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-accent"
               />
+              </div>
             </div>
-            <div className="aspect-[4/5] border border-border bg-bg-secondary overflow-hidden rounded">
+            <div className="overflow-hidden rounded-[28px] border border-border bg-bg-secondary">
+              <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                <div>
+                  <p className="text-xs font-medium text-text-primary">Live preview</p>
+                  <p className="text-[11px] text-text-secondary">Hero crop reference</p>
+                </div>
+              </div>
+              <div className="aspect-[4/5] overflow-hidden">
               {heroPreview ? (
                 <img src={heroPreview} alt="Hero preview" className="w-full h-full object-cover" />
               ) : (
@@ -312,150 +412,213 @@ export default function HomePageEditor() {
                 </div>
               )}
             </div>
+            </div>
           </div>
         </section>
 
-        <section className="bg-bg-card border border-border rounded p-5 space-y-4">
-          <h2 className="text-sm font-semibold">Brand Story</h2>
-          <div className="space-y-3">
+        <section className="rounded-[28px] border border-border bg-bg-card p-6 shadow-sm shadow-black/5 space-y-5">
+          <SectionHeader
+            eyebrow="02"
+            title="Brand Story"
+            description="Refine the narrative and supporting metrics without making the page feel crowded."
+          />
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <FieldLabel>Section eyebrow</FieldLabel>
             <input
               type="text"
               value={content.brandStory.eyebrow}
               onChange={(e) => setContent({ ...content, brandStory: { ...content.brandStory, eyebrow: e.target.value } })}
               placeholder="Section eyebrow"
-              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+              className="w-full rounded-2xl bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
             />
+            </div>
+            <div className="space-y-2">
+              <FieldLabel>Section title</FieldLabel>
             <input
               type="text"
               value={content.brandStory.title}
               onChange={(e) => setContent({ ...content, brandStory: { ...content.brandStory, title: e.target.value } })}
               placeholder="Section title"
-              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+              className="w-full rounded-2xl bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
             />
+            </div>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="space-y-2">
+                <FieldLabel>Paragraph one</FieldLabel>
             <textarea
               value={content.brandStory.paragraphOne}
               onChange={(e) => setContent({ ...content, brandStory: { ...content.brandStory, paragraphOne: e.target.value } })}
               placeholder="First paragraph"
               rows={4}
-              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm resize-none"
+              className="w-full rounded-2xl bg-bg-secondary border border-border px-4 py-3 text-sm resize-none transition-colors focus:border-accent"
             />
+              </div>
+              <div className="space-y-2">
+                <FieldLabel>Paragraph two</FieldLabel>
             <textarea
               value={content.brandStory.paragraphTwo}
               onChange={(e) => setContent({ ...content, brandStory: { ...content.brandStory, paragraphTwo: e.target.value } })}
               placeholder="Second paragraph"
               rows={4}
-              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm resize-none"
+              className="w-full rounded-2xl bg-bg-secondary border border-border px-4 py-3 text-sm resize-none transition-colors focus:border-accent"
             />
+              </div>
+            </div>
+            <div className="rounded-2xl border border-border bg-bg-secondary/40 p-4">
+              <div className="mb-3">
+                <p className="text-sm font-medium text-text-primary">Brand stats</p>
+                <p className="text-xs text-text-secondary">Three short proof points shown on the homepage.</p>
+              </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {content.brandStory.stats.map((stat, index) => (
-                <div key={index} className="space-y-2">
+                <div key={index} className="space-y-2 rounded-2xl border border-border bg-bg-card p-3">
+                  <FieldLabel>Value</FieldLabel>
                   <input
                     type="text"
                     value={stat.value}
                     onChange={(e) => updateStat(index, "value", e.target.value)}
                     placeholder="Value"
-                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                    className="w-full rounded-2xl bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
                   />
+                  <FieldLabel>Label</FieldLabel>
                   <input
                     type="text"
                     value={stat.label}
                     onChange={(e) => updateStat(index, "label", e.target.value)}
                     placeholder="Label"
-                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                    className="w-full rounded-2xl bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
                   />
                 </div>
               ))}
             </div>
+            </div>
           </div>
         </section>
 
-        <section className="bg-bg-card border border-border rounded p-5 space-y-4">
-          <h2 className="text-sm font-semibold">Lookbook</h2>
+        <section className="rounded-[28px] border border-border bg-bg-card p-6 shadow-sm shadow-black/5 space-y-5">
+          <SectionHeader
+            eyebrow="03"
+            title="Lookbook"
+            description="Pair each visual with the right category so the homepage story stays organized."
+          />
+          <div className="space-y-2">
+            <FieldLabel>Lookbook caption</FieldLabel>
           <input
             type="text"
             value={content.lookbook.caption}
             onChange={(e) => setContent({ ...content, lookbook: { ...content.lookbook, caption: e.target.value } })}
             placeholder="Lookbook caption"
-            className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+            className="w-full rounded-2xl bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
           />
+          </div>
+          <div className="space-y-2">
+            <FieldLabel>Lookbook images</FieldLabel>
           <input
             type="file"
             accept="image/*"
             multiple
             onChange={(e) => handleLookbookFilesSelect(e.target.files)}
-            className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm file:mr-3 file:border-0 file:bg-accent/10 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-accent"
+            className="w-full rounded-2xl border border-dashed border-border bg-bg-secondary px-4 py-3 text-sm file:mr-3 file:rounded-xl file:border-0 file:bg-accent/10 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-accent"
           />
-          <div className="grid grid-cols-3 gap-3">
+          </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {lookbookPreview.length > 0 ? (
               lookbookPreview.map((image, index) => (
-                <div key={`${image}-${index}`} className="space-y-2">
-                  <div className="relative aspect-[3/4] border border-border overflow-hidden rounded">
+                <div key={`${image}-${index}`} className="overflow-hidden rounded-[24px] border border-border bg-bg-secondary/35">
+                  <div className="relative aspect-[3/4] overflow-hidden">
                     <img src={image} alt={`Lookbook ${index + 1}`} className="w-full h-full object-cover" />
                     {index < content.lookbook.images.length && (
                       <button
                         type="button"
                         onClick={() => removeLookbookImage(index)}
-                        className="absolute top-2 right-2 bg-background/90 px-2 py-1 text-[10px] uppercase tracking-wider cursor-pointer"
+                        className="absolute top-3 right-3 rounded-full border border-border bg-bg-card/90 px-3 py-1 text-[10px] uppercase tracking-wider cursor-pointer backdrop-blur"
                       >
                         Remove
                       </button>
                     )}
                   </div>
+                  <div className="space-y-2 p-3">
+                    <FieldLabel>Linked category</FieldLabel>
                   <select
                     value={content.lookbook.categorySlugs[index] || ""}
                     onChange={(e) => updateLookbookCategory(index, e.target.value)}
-                    className="w-full bg-bg-secondary border border-border px-3 py-2 text-xs"
+                    className="w-full rounded-2xl bg-bg-card border border-border px-3 py-2.5 text-xs transition-colors focus:border-accent"
                   >
                     <option value="">Select category</option>
                     {categories.map((category) => (
                       <option key={category._id} value={category.slug}>
-                        {category.name}
+                        {getCategoryPathLabel(categories, category)}
                       </option>
                     ))}
                   </select>
+                  </div>
                 </div>
               ))
             ) : (
-              <div className="col-span-3 border border-dashed border-border rounded p-6 text-center text-xs text-text-secondary">
+              <div className="md:col-span-2 xl:col-span-3 rounded-[24px] border border-dashed border-border p-8 text-center text-sm text-text-secondary">
                 No lookbook images yet.
               </div>
             )}
           </div>
         </section>
 
-        <section className="bg-bg-card border border-border rounded p-5 space-y-4">
-          <h2 className="text-sm font-semibold">Editorial + Featured</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-3">
+        <section className="rounded-[28px] border border-border bg-bg-card p-6 shadow-sm shadow-black/5 space-y-5">
+          <SectionHeader
+            eyebrow="04"
+            title="Editorial + Featured"
+            description="Finish the page with one strong editorial image and a simple featured heading."
+          />
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.05fr_0.95fr]">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <FieldLabel>Editorial eyebrow</FieldLabel>
               <input
                 type="text"
                 value={content.editorial.eyebrow}
                 onChange={(e) => setContent({ ...content, editorial: { ...content.editorial, eyebrow: e.target.value } })}
                 placeholder="Editorial eyebrow"
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                className="w-full rounded-2xl bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
               />
+              </div>
+              <div className="space-y-2">
+                <FieldLabel>Editorial label</FieldLabel>
               <input
                 type="text"
                 value={content.editorial.label}
                 onChange={(e) => setContent({ ...content, editorial: { ...content.editorial, label: e.target.value } })}
                 placeholder="Editorial label"
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                className="w-full rounded-2xl bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
               />
+              </div>
+              <div className="space-y-2">
+                <FieldLabel>Featured title</FieldLabel>
               <input
                 type="text"
                 value={content.featured.title}
                 onChange={(e) => setContent({ ...content, featured: { ...content.featured, title: e.target.value } })}
                 placeholder="Featured products title"
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                className="w-full rounded-2xl bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
               />
+              </div>
+              <div className="space-y-2">
+                <FieldLabel>Editorial image</FieldLabel>
               <input
                 type="file"
                 accept="image/*"
                 onChange={(e) => setEditorialFile(e.target.files?.[0] || null)}
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm file:mr-3 file:border-0 file:bg-accent/10 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-accent"
+                className="w-full rounded-2xl border border-dashed border-border bg-bg-secondary px-4 py-3 text-sm file:mr-3 file:rounded-xl file:border-0 file:bg-accent/10 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-accent"
               />
+              </div>
             </div>
-            <div className="aspect-[16/10] border border-border bg-bg-secondary overflow-hidden rounded">
+            <div className="overflow-hidden rounded-[28px] border border-border bg-bg-secondary">
+              <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                <div>
+                  <p className="text-xs font-medium text-text-primary">Editorial preview</p>
+                  <p className="text-[11px] text-text-secondary">Wide crop reference</p>
+                </div>
+              </div>
+              <div className="aspect-[16/10] overflow-hidden">
               {editorialPreview ? (
                 <img src={editorialPreview} alt="Editorial preview" className="w-full h-full object-cover" />
               ) : (
@@ -464,14 +627,15 @@ export default function HomePageEditor() {
                 </div>
               )}
             </div>
+            </div>
           </div>
         </section>
 
-        <div className="flex justify-end">
+        <div className="sticky bottom-4 z-10 flex justify-end">
           <button
             type="submit"
             disabled={saving}
-            className="bg-accent text-bg-primary px-8 py-3 text-xs font-semibold tracking-wide uppercase hover:bg-accent-hover transition-colors disabled:opacity-50 cursor-pointer"
+            className="rounded-full bg-accent text-bg-primary px-8 py-3 text-xs font-semibold tracking-[0.18em] uppercase shadow-lg shadow-accent/20 hover:bg-accent-hover transition-colors disabled:opacity-50 cursor-pointer"
           >
             {saving ? "Saving..." : "Save Home Page"}
           </button>

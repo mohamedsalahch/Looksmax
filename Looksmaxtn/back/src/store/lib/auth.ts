@@ -1,6 +1,8 @@
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 import { cookies, headers } from "next/headers";
+import dbConnect from "@/store/lib/mongodb";
+import User from "@/store/models/User";
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "looksmax-secret-key-change-in-production"
@@ -52,13 +54,23 @@ export async function getSession(): Promise<JWTPayload | null> {
   const headersStore = await headers();
   const bearerToken = getBearerTokenFromHeader(headersStore.get("authorization"));
   if (bearerToken) {
-    return verifyToken(bearerToken);
+    const payload = await verifyToken(bearerToken);
+    if (!payload) return null;
+    await dbConnect();
+    const user = await User.findById(payload.userId).select("_id isBlocked").lean();
+    if (!user || user.isBlocked) return null;
+    return payload;
   }
 
   const cookieStore = await cookies();
   const token = cookieStore.get(COOKIE_NAME)?.value;
   if (!token) return null;
-  return verifyToken(token);
+  const payload = await verifyToken(token);
+  if (!payload) return null;
+  await dbConnect();
+  const user = await User.findById(payload.userId).select("_id isBlocked").lean();
+  if (!user || user.isBlocked) return null;
+  return payload;
 }
 
 function shouldUseSecureCookies() {

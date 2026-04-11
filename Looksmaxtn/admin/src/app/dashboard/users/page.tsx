@@ -5,6 +5,7 @@ import Link from "next/link";
 
 interface User {
   _id: string; name: string; email: string; role: string; createdAt: string;
+  isBlocked?: boolean;
   address?: { street: string; city: string; state: string; zip: string; phone: string; };
 }
 
@@ -16,6 +17,31 @@ export default function UsersPage() {
   useEffect(() => {
     fetch("/api/users").then((r) => r.json()).then((d) => setUsers(d.users || [])).catch(() => {}).finally(() => setLoading(false));
   }, []);
+
+  const handleToggleBlock = async (user: User) => {
+    const nextBlocked = !user.isBlocked;
+    const confirmed = confirm(
+      nextBlocked
+        ? `Block access for "${user.name}"?`
+        : `Unblock access for "${user.name}"?`
+    );
+    if (!confirmed) return;
+
+    const response = await fetch("/api/users", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: user._id, isBlocked: nextBlocked }),
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data.user) return;
+
+    setUsers((current) =>
+      current.map((entry) =>
+        entry._id === user._id ? { ...entry, isBlocked: data.user.isBlocked } : entry
+      )
+    );
+  };
 
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Delete user "${name}"? This cannot be undone.`)) return;
@@ -68,6 +94,7 @@ export default function UsersPage() {
               <tr className="text-[10px] text-text-secondary uppercase tracking-wider">
                 <th className="px-4 py-3">User</th>
                 <th className="px-4 py-3">Role</th>
+                <th className="px-4 py-3">Access</th>
                 <th className="px-4 py-3">Address</th>
                 <th className="px-4 py-3">Joined</th>
                 <th className="px-4 py-3 text-right">Actions</th>
@@ -90,6 +117,15 @@ export default function UsersPage() {
                       u.role === "admin" ? "text-accent bg-accent/10" : "text-info bg-info/10"
                     }`}>{u.role}</span>
                   </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider ${
+                        u.isBlocked ? "text-danger bg-danger/10" : "text-success bg-success/10"
+                      }`}
+                    >
+                      {u.isBlocked ? "Blocked" : "Active"}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-xs text-text-secondary">
                     {u.address?.city ? `${u.address.city}, ${u.address.state}` : "—"}
                   </td>
@@ -104,6 +140,16 @@ export default function UsersPage() {
                       >
                         Details
                       </Link>
+                      {u.role !== "admin" && (
+                        <button
+                          onClick={() => handleToggleBlock(u)}
+                          className={`text-[10px] uppercase font-medium cursor-pointer ${
+                            u.isBlocked ? "text-success hover:text-success/80" : "text-warning hover:text-warning/80"
+                          }`}
+                        >
+                          {u.isBlocked ? "Unblock" : "Block"}
+                        </button>
+                      )}
                       {u.role !== "admin" && (
                         <button onClick={() => handleDelete(u._id, u.name)}
                           className="text-[10px] text-danger hover:text-danger/80 transition-colors uppercase font-medium cursor-pointer">

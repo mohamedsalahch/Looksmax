@@ -33,6 +33,7 @@ interface ModelAsset {
 
 interface GeneratedImageAsset {
   _id: string;
+  name?: string;
   prompt: string;
   images: string[];
 }
@@ -87,8 +88,85 @@ const emptyOriginPictureFiles: OriginPictureFiles = {
   right: null,
 };
 
-function getChildren(categories: Category[], parentSlug: string) {
-  return categories.filter((category) => category.parentSlug === parentSlug);
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-text-secondary mb-1.5">
+      {children}
+    </label>
+  );
+}
+
+function SectionCard({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-[28px] border border-border bg-bg-card p-6 space-y-5">
+      <div>
+        <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-text-primary">{title}</h2>
+        {description && <p className="mt-1 text-[11px] text-text-secondary">{description}</p>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function getCategoryPath(categories: Category[], slugs: string[]) {
+  const selected = categories.filter((category) => slugs.includes(category.slug));
+  const deepest = selected.reduce<Category | null>((current, category) => {
+    const depth = getDepth(categories, category);
+    const currentDepth = current ? getDepth(categories, current) : -1;
+    return depth > currentDepth ? category : current;
+  }, null);
+
+  if (!deepest) return { parent: "", child: "", grandchild: "" };
+
+  const chain: string[] = [];
+  let cursor: Category | undefined = deepest;
+
+  while (cursor) {
+    chain.unshift(cursor.slug);
+    cursor = categories.find((category) => category.slug === cursor?.parentSlug);
+  }
+
+  return {
+    parent: chain[0] || "",
+    child: chain[1] || "",
+    grandchild: chain[2] || "",
+  };
+}
+
+function getDepth(categories: Category[], category: Category) {
+  let depth = 0;
+  let cursor = category;
+
+  while (cursor.parentSlug) {
+    const parent = categories.find((entry) => entry.slug === cursor.parentSlug);
+    if (!parent) break;
+    depth += 1;
+    cursor = parent;
+  }
+
+  return depth;
+}
+
+function getCategoryPathLabel(categories: Category[], category: Category) {
+  const segments = [category.name];
+  let currentParentSlug = category.parentSlug;
+
+  while (currentParentSlug) {
+    const parent = categories.find((entry) => entry.slug === currentParentSlug);
+    if (!parent) break;
+    segments.unshift(parent.name);
+    currentParentSlug = parent.parentSlug || null;
+  }
+
+  return segments.join(" / ");
 }
 
 async function base64ToFile(base64: string, index: number) {
@@ -150,17 +228,14 @@ export default function NewProductPage() {
       .then((d) => setGeneratedImages(d.generatedImages || []));
   }, []);
 
-  const parentCategories = useMemo(
-    () => categories.filter((category) => !category.parentSlug),
+  const selectedCategorySlug = selectedGrandchildSlug || selectedChildSlug || selectedParentSlug;
+  const categoryOptions = useMemo(
+    () =>
+      categories.map((category) => ({
+        slug: category.slug,
+        label: getCategoryPathLabel(categories, category),
+      })),
     [categories]
-  );
-  const childCategories = useMemo(
-    () => getChildren(categories, selectedParentSlug),
-    [categories, selectedParentSlug]
-  );
-  const grandchildCategories = useMemo(
-    () => getChildren(categories, selectedChildSlug),
-    [categories, selectedChildSlug]
   );
   const selectedModel = models.find((model) => model._id === selectedModelId);
 
@@ -479,21 +554,25 @@ export default function NewProductPage() {
   };
 
   return (
-    <div>
-      <h1 className="text-xl font-semibold tracking-wide mb-6">Add New Product</h1>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-xl font-semibold tracking-wide">Add New Product</h1>
+        <p className="mt-1 text-sm text-text-secondary">
+          Create the product, align the basics horizontally, then move into media and generation.
+        </p>
+      </div>
 
-      <form onSubmit={handleSubmit} className="max-w-3xl space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-6">
         {error && (
           <div className="bg-danger/10 border border-danger/30 text-danger text-xs px-4 py-3 rounded">
             {error}
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
-              Product Name
-            </label>
+        <SectionCard title="Product Basics" description="Set the key product details in one compact block.">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <div className="xl:col-span-2">
+              <FieldLabel>Product Name</FieldLabel>
             <input
               type="text"
               required
@@ -501,11 +580,9 @@ export default function NewProductPage() {
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
             />
-          </div>
-          <div>
-            <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
-              Product Type
-            </label>
+            </div>
+            <div>
+              <FieldLabel>Product Type</FieldLabel>
             <select
               value={form.productType}
               onChange={(e) =>
@@ -521,121 +598,106 @@ export default function NewProductPage() {
               <option value="perfume">Perfume</option>
             </select>
           </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
-              Brand
-            </label>
-            <input
-              type="text"
-              value={form.brand}
-              onChange={(e) => setForm({ ...form, brand: e.target.value })}
-              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
-              Price (TND)
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              required
-              value={form.price}
-              onChange={(e) => setForm({ ...form, price: e.target.value })}
-              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
-            Stock
-          </label>
-          <input
-            type="number"
-            min="0"
-            value={form.productType === "perfume" ? form.stock : "1"}
-            readOnly={form.productType !== "perfume"}
-            onChange={(e) => setForm({ ...form, stock: e.target.value })}
-            className={`w-full border px-4 py-3 text-sm ${
-              form.productType === "perfume"
-                ? "bg-bg-secondary border-border focus:border-accent transition-colors"
-                : "bg-bg-hover border-border text-text-secondary cursor-not-allowed"
-            }`}
-          />
-          <p className="mt-1 text-[10px] text-text-secondary">
-            {form.productType === "perfume"
-              ? "Perfumes use normal stock quantity."
-              : "Fashion products stay unique with stock = 1."}
-          </p>
-        </div>
-
-        <div>
-          <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
-            Categories
-          </label>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <FieldLabel>Brand</FieldLabel>
+              <input
+                type="text"
+                value={form.brand}
+                onChange={(e) => setForm({ ...form, brand: e.target.value })}
+                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
+              />
+            </div>
+            <div>
+              <FieldLabel>Price (TND)</FieldLabel>
+              <input
+                type="number"
+                step="0.01"
+                required
+                value={form.price}
+                onChange={(e) => setForm({ ...form, price: e.target.value })}
+                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
+              />
+            </div>
+            <div>
+              <FieldLabel>Stock</FieldLabel>
+              <input
+                type="number"
+                min="0"
+                value={form.productType === "perfume" ? form.stock : "1"}
+                readOnly={form.productType !== "perfume"}
+                onChange={(e) => setForm({ ...form, stock: e.target.value })}
+                className={`w-full border px-4 py-3 text-sm ${
+                  form.productType === "perfume"
+                    ? "bg-bg-secondary border-border focus:border-accent transition-colors"
+                    : "bg-bg-hover border-border text-text-secondary cursor-not-allowed"
+                }`}
+              />
+              <p className="mt-1 text-[10px] text-text-secondary">
+                {form.productType === "perfume"
+                  ? "Perfumes use normal stock quantity."
+                  : "Fashion products stay unique with stock = 1."}
+              </p>
+            </div>
+            <div className="xl:col-span-3">
+              <FieldLabel>Category</FieldLabel>
             <select
-              value={selectedParentSlug}
+              value={selectedCategorySlug}
               onChange={(e) => {
-                setSelectedParentSlug(e.target.value);
-                setSelectedChildSlug("");
-                setSelectedGrandchildSlug("");
+                const value = e.target.value;
+                if (!value) {
+                  setSelectedParentSlug("");
+                  setSelectedChildSlug("");
+                  setSelectedGrandchildSlug("");
+                  return;
+                }
+
+                const path = getCategoryPath(categories, [value]);
+                setSelectedParentSlug(path.parent);
+                setSelectedChildSlug(path.child);
+                setSelectedGrandchildSlug(path.grandchild);
               }}
-              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm md:col-span-3"
             >
               <option value="">Select category</option>
-              {parentCategories.map((category) => (
-                <option key={category._id} value={category.slug}>
-                  {category.name}
+              {categoryOptions.map((category) => (
+                <option key={category.slug} value={category.slug}>
+                  {category.label}
                 </option>
               ))}
             </select>
-            <select
-              value={selectedChildSlug}
-              onChange={(e) => {
-                setSelectedChildSlug(e.target.value);
-                setSelectedGrandchildSlug("");
-              }}
-              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-              disabled={childCategories.length === 0}
-            >
-              <option value="">No subcategory</option>
-              {childCategories.map((category) => (
-                <option key={category._id} value={category.slug}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
-            <select
-              value={selectedGrandchildSlug}
-              onChange={(e) => setSelectedGrandchildSlug(e.target.value)}
-              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-              disabled={grandchildCategories.length === 0}
-            >
-              <option value="">No sub-subcategory</option>
-              {grandchildCategories.map((category) => (
-                <option key={category._id} value={category.slug}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
+            </div>
+            <div className="xl:col-span-3">
+              <FieldLabel>Description</FieldLabel>
+              <textarea
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                rows={4}
+                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm resize-none"
+                placeholder="Description"
+              />
+            </div>
           </div>
-        </div>
+        </SectionCard>
 
         {form.productType === "perfume" ? (
-          <section className="space-y-4">
-            <input
-              type="text"
-              value={form.cloneSourceName}
-              onChange={(e) => setForm({ ...form, cloneSourceName: e.target.value })}
-              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-              placeholder="Original fragrance name"
-            />
-            <div className="space-y-3">
+          <SectionCard
+            title="Perfume Details"
+            description="Set the original fragrance reference and its visual source."
+          >
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="space-y-4">
+                <div>
+                  <FieldLabel>Original Fragrance Name</FieldLabel>
+                  <input
+                    type="text"
+                    value={form.cloneSourceName}
+                    onChange={(e) => setForm({ ...form, cloneSourceName: e.target.value })}
+                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                    placeholder="Original fragrance name"
+                  />
+                </div>
+              </div>
+              <div className="space-y-3">
               <div>
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
                   Import Original Fragrance Image
@@ -684,38 +746,45 @@ export default function NewProductPage() {
                 </div>
               )}
             </div>
-          </section>
-        ) : (
-          <>
-            <select
-              value={form.fashionSubtype}
-              onChange={(e) => setForm({ ...form, fashionSubtype: e.target.value as FashionSubtype })}
-              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-            >
-              <option value="clothes">Clothes</option>
-              <option value="shoes">Shoes</option>
-            </select>
-            <div className="grid grid-cols-2 gap-4">
-              <input
-                type="text"
-                value={form.sizes}
-                onChange={(e) => setForm({ ...form, sizes: e.target.value })}
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-                placeholder="Sizes: S,M,L,XL or 40,41,42"
-              />
-              <input
-                type="text"
-                value={form.colors}
-                onChange={(e) => setForm({ ...form, colors: e.target.value })}
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-                placeholder="Colors: Black, White, Olive"
-              />
             </div>
-            <div>
+          </SectionCard>
+        ) : (
+          <SectionCard title="Fashion Details" description="Keep the clothing or shoes data aligned in a compact horizontal layout.">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+              <div>
+                <FieldLabel>Subtype</FieldLabel>
+                <select
+                  value={form.fashionSubtype}
+                  onChange={(e) => setForm({ ...form, fashionSubtype: e.target.value as FashionSubtype })}
+                  className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                >
+                  <option value="clothes">Clothes</option>
+                  <option value="shoes">Shoes</option>
+                </select>
+              </div>
+              <div>
+                <FieldLabel>Sizes</FieldLabel>
+                <input
+                  type="text"
+                  value={form.sizes}
+                  onChange={(e) => setForm({ ...form, sizes: e.target.value })}
+                  className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                  placeholder="Sizes: S,M,L,XL or 40,41,42"
+                />
+              </div>
+              <div>
+                <FieldLabel>Colors</FieldLabel>
+                <input
+                  type="text"
+                  value={form.colors}
+                  onChange={(e) => setForm({ ...form, colors: e.target.value })}
+                  className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                  placeholder="Colors: Black, White, Olive"
+                />
+              </div>
+              <div className="xl:col-span-3">
               <div className="flex items-center justify-between gap-4 mb-2">
-                <label className="block text-xs text-text-secondary uppercase tracking-wider">
-                  Condition
-                </label>
+                <FieldLabel>Condition</FieldLabel>
                 <span className="text-xs text-text-primary uppercase tracking-wider font-medium">
                   {form.conditionScore}/10 · {getConditionStatusFromScore(Number(form.conditionScore || 0))}
                 </span>
@@ -729,95 +798,92 @@ export default function NewProductPage() {
                 onChange={(e) => setForm({ ...form, conditionScore: e.target.value })}
                 className="w-full accent-accent cursor-pointer"
               />
+              </div>
             </div>
-          </>
+          </SectionCard>
         )}
 
-        <textarea
-          value={form.description}
-          onChange={(e) => setForm({ ...form, description: e.target.value })}
-          rows={4}
-          className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm resize-none"
-          placeholder="Description"
-        />
-
-        <div className="space-y-3">
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
-              Origin Pictures
-            </h3>
-            <p className="mt-1 text-[11px] text-text-secondary">
-              Clothes use front and back. Shoes use front, back, left, and right.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {originPictureKeys.map((key) => {
-              const preview = form.originPictures[key];
-              const inputId = `origin-picture-${key}-upload`;
-              return (
-                <div key={key} className="space-y-2">
-                  <p className="text-[10px] uppercase tracking-[0.22em] text-text-secondary">
-                    {key}
-                  </p>
-                  <input
-                    id={inputId}
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleOriginPictureSelect(key, e.target.files?.[0] || null)}
-                    className="hidden"
-                  />
-                  <div
-                    onClick={() => document.getElementById(inputId)?.click()}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      handleOriginPictureSelect(key, e.dataTransfer.files?.[0] || null);
-                    }}
-                    className="flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded border border-dashed border-border bg-bg-secondary px-4 py-6 text-center transition-colors hover:border-accent hover:bg-bg-hover"
-                  >
-                    <span className="text-sm font-medium text-text-primary">
-                      Drag or click to import {key} origin image
-                    </span>
-                    <span className="text-[10px] uppercase tracking-wider text-text-secondary">
-                      {key} reference
-                    </span>
-                  </div>
-                  {preview && (
-                    <div className="space-y-2">
-                      <div className="aspect-[4/5] overflow-hidden rounded border border-border bg-bg-hover p-3">
-                        <img
-                          src={preview}
-                          alt={`${key} origin`}
-                          className="h-full w-full object-contain"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleOriginPictureSelect(key, null)}
-                        className="text-[10px] text-danger uppercase tracking-wider"
-                      >
-                        Remove image
-                      </button>
+        {form.productType === "perfume" && (
+          <SectionCard
+            title="Origin Pictures"
+            description="Upload the body or product origin views used for presentation and generation."
+          >
+            <div>
+              <p className="mt-1 text-[11px] text-text-secondary">
+                Clothes use front and back. Shoes use front, back, left, and right.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {originPictureKeys.map((key) => {
+                const preview = form.originPictures[key];
+                const inputId = `origin-picture-${key}-upload`;
+                return (
+                  <div key={key} className="space-y-2">
+                    <p className="text-[10px] uppercase tracking-[0.22em] text-text-secondary">
+                      {key}
+                    </p>
+                    <input
+                      id={inputId}
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleOriginPictureSelect(key, e.target.files?.[0] || null)}
+                      className="hidden"
+                    />
+                    <div
+                      onClick={() => document.getElementById(inputId)?.click()}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        handleOriginPictureSelect(key, e.dataTransfer.files?.[0] || null);
+                      }}
+                      className="flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded border border-dashed border-border bg-bg-secondary px-4 py-6 text-center transition-colors hover:border-accent hover:bg-bg-hover"
+                    >
+                      <span className="text-sm font-medium text-text-primary">
+                        Drag or click to import {key} origin image
+                      </span>
+                      <span className="text-[10px] uppercase tracking-wider text-text-secondary">
+                        {key} reference
+                      </span>
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
+                    {preview && (
+                      <div className="space-y-2">
+                        <div className="aspect-[4/5] overflow-hidden rounded border border-border bg-bg-hover p-3">
+                          <img
+                            src={preview}
+                            alt={`${key} origin`}
+                            className="h-full w-full object-contain"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleOriginPictureSelect(key, null)}
+                          className="text-[10px] text-danger uppercase tracking-wider"
+                        >
+                          Remove image
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </SectionCard>
+        )}
 
-        <input
-          type="text"
-          value={form.tag}
-          onChange={(e) => setForm({ ...form, tag: e.target.value })}
-          className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-          placeholder="Tag"
-        />
-
-        <div>
-          <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
-            Product Images
-          </label>
+        <SectionCard title="Product Media" description="Tag the product and manage the gallery in the same working area.">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+            <div>
+              <FieldLabel>Tag</FieldLabel>
+              <input
+                type="text"
+                value={form.tag}
+                onChange={(e) => setForm({ ...form, tag: e.target.value })}
+                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                placeholder="Tag"
+              />
+            </div>
+            <div>
+              <FieldLabel>Product Images</FieldLabel>
           <input
             id="product-images-upload"
             type="file"
@@ -839,6 +905,8 @@ export default function NewProductPage() {
             <span className="text-[10px] uppercase tracking-wider text-text-secondary">
               Select files or drop one or more images
             </span>
+          </div>
+            </div>
           </div>
           <p className="mt-2 text-[10px] text-text-secondary uppercase tracking-wider">
             Drag images to reorder them. The first image is the main image.
@@ -880,7 +948,7 @@ export default function NewProductPage() {
               ))}
             </div>
           )}
-        </div>
+        </SectionCard>
 
         {generatedImages.length > 0 && (
           <section className="overflow-hidden rounded border border-border bg-bg-card">
@@ -917,6 +985,9 @@ export default function NewProductPage() {
                           <img src={image} alt={`Generated ${index + 1}`} className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]" />
                         </div>
                         <div className="p-2 space-y-1">
+                          <p className="line-clamp-1 text-[10px] font-medium uppercase tracking-wider text-text-primary">
+                            {asset.name || "Generated image"}
+                          </p>
                           <p className="line-clamp-2 text-[10px] text-text-secondary">{asset.prompt}</p>
                           <p className="text-[10px] uppercase tracking-wider text-accent">
                             {importingGeneratedImage === image ? "Importing..." : "Import"}
@@ -946,7 +1017,7 @@ export default function NewProductPage() {
             <div
               className={`grid gap-5 items-start ${
                 form.fashionSubtype === "clothes"
-                  ? "grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)]"
+                  ? "grid-cols-1 lg:grid-cols-[180px_minmax(0,1fr)]"
                   : "grid-cols-1"
               }`}
             >
@@ -969,10 +1040,10 @@ export default function NewProductPage() {
                       ))}
                     </select>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-2">
                       <p className="text-[10px] text-text-secondary uppercase tracking-wider">Front</p>
-                      <div className="aspect-[4/5] bg-bg-secondary overflow-hidden rounded border border-border">
+                      <div className="aspect-[3/4] max-h-[180px] bg-bg-secondary overflow-hidden rounded border border-border">
                         {selectedModel ? (
                           <img src={selectedModel.frontImage || selectedModel.images?.[0] || ""} alt={`${selectedModel.name} front`} className="w-full h-full object-cover" />
                         ) : (
@@ -984,7 +1055,7 @@ export default function NewProductPage() {
                     </div>
                     <div className="space-y-2">
                       <p className="text-[10px] text-text-secondary uppercase tracking-wider">Back</p>
-                      <div className="aspect-[4/5] bg-bg-secondary overflow-hidden rounded border border-border">
+                      <div className="aspect-[3/4] max-h-[180px] bg-bg-secondary overflow-hidden rounded border border-border">
                         {selectedModel ? (
                           <img src={selectedModel.backImage || selectedModel.images?.[1] || selectedModel.frontImage || ""} alt={`${selectedModel.name} back`} className="w-full h-full object-cover" />
                         ) : (
@@ -1056,6 +1127,73 @@ export default function NewProductPage() {
               </div>
             </div>
           </section>
+        )}
+
+        {form.productType === "fashion" && (
+          <SectionCard
+            title="Origin Pictures"
+            description="Upload the body or product origin views used for presentation and generation."
+          >
+            <div>
+              <p className="mt-1 text-[11px] text-text-secondary">
+                Clothes use front and back. Shoes use front, back, left, and right.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {originPictureKeys.map((key) => {
+                const preview = form.originPictures[key];
+                const inputId = `origin-picture-${key}-upload`;
+                return (
+                  <div key={key} className="space-y-2">
+                    <p className="text-[10px] uppercase tracking-[0.22em] text-text-secondary">
+                      {key}
+                    </p>
+                    <input
+                      id={inputId}
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleOriginPictureSelect(key, e.target.files?.[0] || null)}
+                      className="hidden"
+                    />
+                    <div
+                      onClick={() => document.getElementById(inputId)?.click()}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        handleOriginPictureSelect(key, e.dataTransfer.files?.[0] || null);
+                      }}
+                      className="flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded border border-dashed border-border bg-bg-secondary px-4 py-6 text-center transition-colors hover:border-accent hover:bg-bg-hover"
+                    >
+                      <span className="text-sm font-medium text-text-primary">
+                        Drag or click to import {key} origin image
+                      </span>
+                      <span className="text-[10px] uppercase tracking-wider text-text-secondary">
+                        {key} reference
+                      </span>
+                    </div>
+                    {preview && (
+                      <div className="space-y-2">
+                        <div className="aspect-[4/5] overflow-hidden rounded border border-border bg-bg-hover p-3">
+                          <img
+                            src={preview}
+                            alt={`${key} origin`}
+                            className="h-full w-full object-contain"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleOriginPictureSelect(key, null)}
+                          className="text-[10px] text-danger uppercase tracking-wider"
+                        >
+                          Remove image
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </SectionCard>
         )}
 
         {form.productType === "fashion" && (

@@ -25,9 +25,9 @@ export async function GET() {
     await dbConnect();
     const user = await User.collection.findOne(
       { _id: new mongoose.Types.ObjectId(session.userId) },
-      { projection: { name: 1, email: 1, role: 1, address: 1, bodyProfile: 1 } }
+      { projection: { name: 1, email: 1, role: 1, address: 1, bodyProfile: 1, isBlocked: 1 } }
     );
-    if (!user) {
+    if (!user || user.isBlocked) {
       return NextResponse.json({ user: null }, { status: 401 });
     }
 

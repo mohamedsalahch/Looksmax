@@ -2,6 +2,7 @@ import mongoose, { Document, Model, Schema } from "mongoose";
 import { type IAuditActor, auditActorSchema } from "@/admin/lib/audit";
 
 export interface IGeneratedImageAsset extends Document {
+  name: string;
   prompt: string;
   sourceImages: string[];
   images: string[];
@@ -14,6 +15,7 @@ export interface IGeneratedImageAsset extends Document {
 
 const generatedImageAssetSchema = new Schema<IGeneratedImageAsset>(
   {
+    name: { type: String, required: true, trim: true },
     prompt: { type: String, required: true, trim: true },
     sourceImages: [{ type: String, required: true, trim: true }],
     images: [{ type: String, required: true, trim: true }],

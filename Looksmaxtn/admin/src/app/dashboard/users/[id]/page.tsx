@@ -25,12 +25,20 @@ interface UserDetail {
   email: string;
   role: string;
   createdAt: string;
+  isBlocked?: boolean;
   address?: {
     street: string;
     city: string;
     state: string;
     zip: string;
-    phone: string;
+      phone: string;
+  };
+  bodyProfile?: {
+    heightCm?: string;
+    weightKg?: string;
+    usualSize?: string;
+    profileImage?: string;
+    gender?: string;
   };
 }
 
@@ -39,6 +47,24 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
   const [user, setUser] = useState<UserDetail | null>(null);
   const [orders, setOrders] = useState<UserOrder[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const handleToggleBlock = async () => {
+    if (!user || user.role === "admin") return;
+    const nextBlocked = !user.isBlocked;
+    const confirmed = confirm(
+      nextBlocked ? `Block access for "${user.name}"?` : `Unblock access for "${user.name}"?`
+    );
+    if (!confirmed) return;
+
+    const response = await fetch(`/api/users/${user._id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isBlocked: nextBlocked }),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.user) return;
+    setUser((current) => (current ? { ...current, isBlocked: data.user.isBlocked } : current));
+  };
 
   useEffect(() => {
     fetch(`/api/users/${id}`)
@@ -80,8 +106,25 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
         >
           ← Back
         </Link>
-        <h1 className="text-lg font-semibold">{user.name}</h1>
-        <p className="text-xs text-text-secondary">{user.email}</p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-lg font-semibold">{user.name}</h1>
+            <p className="text-xs text-text-secondary">{user.email}</p>
+          </div>
+          {user.role !== "admin" && (
+            <button
+              type="button"
+              onClick={handleToggleBlock}
+              className={`px-4 py-2 text-[10px] font-semibold uppercase tracking-wider cursor-pointer ${
+                user.isBlocked
+                  ? "bg-success/10 text-success"
+                  : "bg-danger/10 text-danger"
+              }`}
+            >
+              {user.isBlocked ? "Unblock User" : "Block User"}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -89,6 +132,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
           <p className="text-xs text-text-secondary uppercase tracking-wider mb-3">User Details</p>
           <div className="space-y-2 text-xs">
             <p><span className="text-text-secondary">Role:</span> {user.role}</p>
+            <p><span className="text-text-secondary">Access:</span> {user.isBlocked ? "Blocked" : "Active"}</p>
             <p><span className="text-text-secondary">User ID:</span> <span className="font-mono">{user._id}</span></p>
             <p><span className="text-text-secondary">Joined:</span> {new Date(user.createdAt).toLocaleString()}</p>
           </div>
@@ -109,6 +153,44 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
             <p className="text-xs text-text-secondary">No saved address on the user profile.</p>
           )}
         </div>
+      </div>
+
+      <div className="bg-bg-card border border-border rounded p-4">
+        <p className="text-xs text-text-secondary uppercase tracking-wider mb-3">Outfit Studio Profile</p>
+        {user.bodyProfile?.heightCm ||
+        user.bodyProfile?.weightKg ||
+        user.bodyProfile?.usualSize ||
+        user.bodyProfile?.gender ||
+        user.bodyProfile?.profileImage ? (
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-[220px_minmax(0,1fr)]">
+            <div>
+              {user.bodyProfile?.profileImage ? (
+                <div className="aspect-[4/5] overflow-hidden rounded border border-border bg-bg-secondary">
+                  <img
+                    src={user.bodyProfile.profileImage}
+                    alt={`${user.name} profile`}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              ) : (
+                <div className="aspect-[4/5] flex items-center justify-center rounded border border-dashed border-border bg-bg-secondary text-[10px] uppercase tracking-wider text-text-secondary">
+                  No profile image
+                </div>
+              )}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <p><span className="text-text-secondary">Height:</span> {user.bodyProfile?.heightCm || "—"}</p>
+              <p><span className="text-text-secondary">Weight:</span> {user.bodyProfile?.weightKg || "—"}</p>
+              <p><span className="text-text-secondary">Usual Size:</span> {user.bodyProfile?.usualSize || "—"}</p>
+              <p><span className="text-text-secondary">Gender:</span> {user.bodyProfile?.gender || "—"}</p>
+              <p className="md:col-span-2 break-all">
+                <span className="text-text-secondary">Profile Image URL:</span> {user.bodyProfile?.profileImage || "—"}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-text-secondary">No Outfit Studio profile saved for this user.</p>
+        )}
       </div>
 
       <div className="bg-bg-card border border-border rounded overflow-hidden">
