@@ -57,11 +57,12 @@ textarea {
 }
 
 .stat-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  transition: border-color 0.2s, transform 0.2s;
+  background: color-mix(in srgb, var(--bg-card) 84%, white 16%);
+  box-shadow: 0 10px 30px rgba(120, 98, 63, 0.06);
+  transition: background-color 0.2s, transform 0.2s, box-shadow 0.2s;
 }
 .stat-card:hover {
-  border-color: var(--accent);
+  background: color-mix(in srgb, var(--bg-card) 76%, white 24%);
+  box-shadow: 0 14px 34px rgba(120, 98, 63, 0.1);
   transform: translateY(-2px);
 }

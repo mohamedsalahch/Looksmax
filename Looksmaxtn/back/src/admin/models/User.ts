@@ -21,6 +21,7 @@ export interface IUser extends Document {
   email: string;
   password: string;
   role: "user" | "admin";
+  isBlocked?: boolean;
   address?: IAddress;
   bodyProfile?: IBodyProfile;
   createdAt: Date;
@@ -55,6 +56,7 @@ const userSchema = new Schema<IUser>(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: true },
     role: { type: String, enum: ["user", "admin"], default: "user" },
+    isBlocked: { type: Boolean, default: false },
     address: { type: addressSchema, default: () => ({}) },
     bodyProfile: { type: bodyProfileSchema, default: () => ({}) },
   },

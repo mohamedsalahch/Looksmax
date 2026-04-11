@@ -80,10 +80,15 @@ export async function POST(req: NextRequest) {
     await dbConnect();
     const auditActor = await getAuditActorFromSession(session);
     const formData = await req.formData();
+    const name = String(formData.get("name") || "").trim();
     const prompt = String(formData.get("prompt") || "").trim();
     const sourceFiles = formData
       .getAll("images")
       .filter((value): value is File => value instanceof File && value.size > 0);
+
+    if (!name) {
+      return NextResponse.json({ error: "Name is required." }, { status: 400 });
+    }
 
     if (!prompt) {
       return NextResponse.json({ error: "Prompt is required." }, { status: 400 });
@@ -97,6 +102,7 @@ export async function POST(req: NextRequest) {
     const sourceImages = await Promise.all(sourceFiles.map((file) => saveGeneratedSourceImage(file)));
     
     const generatedImage = await GeneratedImageAsset.create({
+      name,
       prompt,
       sourceImages,
       images: [],
