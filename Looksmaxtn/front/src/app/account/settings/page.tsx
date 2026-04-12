@@ -64,10 +64,10 @@ export default function SettingsPage() {
 
   const hasOriginal = Boolean(bodyProfile.profileImage);
   const hasEnhanced = Boolean(enhancedImage);
-  const uploadLimit = 3;
+  const uploadLimit = 100;
   const uploadsUsed = Math.min(Number(bodyProfile.profileImageUploadCount || 0), uploadLimit);
   const remainingUploads = Math.max(uploadLimit - uploadsUsed, 0);
-  const generationLimit = 3;
+  const generationLimit = 100;
   const generationsUsed = Math.min(Number(bodyProfile.outfitGenerationCount || 0), generationLimit);
   const remainingGenerations = Math.max(generationLimit - generationsUsed, 0);
   // Show enhanced column only if there's an enhanced image OR one is being generated

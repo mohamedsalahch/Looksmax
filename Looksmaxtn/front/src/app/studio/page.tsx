@@ -791,7 +791,7 @@ export default function OutfitStudioPage() {
     const selectedZoneMeta = getZoneDetails(selectedZoneId, isWomen);
     const selectedZoneItem = outfit[selectedZoneId];
     const hasSelectedOutfitItems = BODY_ZONES.some((zone) => Boolean(outfit[zone.id]));
-    const generationLimit = 3;
+    const generationLimit = 100;
     const generationRequestsUsed = Math.min(Number(user?.bodyProfile?.outfitGenerationCount || 0), generationLimit);
     const remainingGenerationRequests = Math.max(generationLimit - generationRequestsUsed, 0);
     const generationLimitReached = remainingGenerationRequests <= 0;

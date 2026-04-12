@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
       { _id: new mongoose.Types.ObjectId(session.userId) },
       { projection: { bodyProfile: 1 } }
     );
-    const generationLimit = 3;
+    const generationLimit = 100;
     const generationCount = Number(requestingUser?.bodyProfile?.outfitGenerationCount || 0);
     if (generationCount >= generationLimit) {
       return NextResponse.json(
@@ -126,6 +126,9 @@ export async function POST(req: NextRequest) {
     }
     const bestProfileImage = requestingUser?.bodyProfile?.profileImageEnhanced
       || requestingUser?.bodyProfile?.profileImage
+      || body.profileImage
+      || "";
+    const fallbackProfileImage = requestingUser?.bodyProfile?.profileImage
       || body.profileImage
       || "";
 
@@ -179,8 +182,14 @@ export async function POST(req: NextRequest) {
       })
     );
 
+    let profilePictureBase64 = await publicPathToBase64(bestProfileImage);
+    if (!profilePictureBase64 && fallbackProfileImage && fallbackProfileImage !== bestProfileImage) {
+      console.warn("[generate_outfit] enhanced image missing, falling back to original:", fallbackProfileImage);
+      profilePictureBase64 = await publicPathToBase64(fallbackProfileImage);
+    }
+
     const payload = {
-      profile_picture: await publicPathToBase64(bestProfileImage),
+      profile_picture: profilePictureBase64,
       height: body.heightCm || "",
       weight: body.weightKg || "",
       top_size: body.topSize || "",
@@ -190,7 +199,7 @@ export async function POST(req: NextRequest) {
     };
 
     if (!payload.profile_picture) {
-      console.error("[generate_outfit] profile picture is empty — profileImage path was:", body.profileImage || "(empty)");
+      console.error("[generate_outfit] profile picture is empty — bestProfileImage:", bestProfileImage || "(empty)", "fallback:", fallbackProfileImage || "(empty)", "clientSent:", body.profileImage || "(empty)");
       return NextResponse.json(
         { error: "Profile picture could not be loaded. Please re-upload your body profile image." },
         { status: 400 }

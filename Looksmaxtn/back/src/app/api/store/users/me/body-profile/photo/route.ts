@@ -78,9 +78,10 @@ export async function POST(req: NextRequest) {
       { projection: { bodyProfile: 1 } }
     );
     const previousImage = existingUser?.bodyProfile?.profileImage || "";
+    const previousEnhanced = existingUser?.bodyProfile?.profileImageEnhanced || "";
     const uploadCount = Number(existingUser?.bodyProfile?.profileImageUploadCount || 0);
     const outfitGenerationCount = Number(existingUser?.bodyProfile?.outfitGenerationCount || 0);
-    const uploadLimit = 3;
+    const uploadLimit = 100;
 
     if (uploadCount >= uploadLimit) {
       return NextResponse.json(
@@ -92,12 +93,13 @@ export async function POST(req: NextRequest) {
     // Save raw upload
     const nextImage = await saveBodyProfileImage(imageFile);
 
-    // Set imageEnhancing flag
+    // Set imageEnhancing flag and clear stale enhanced image
     await usersCollection.updateOne(
       { _id: userObjectId },
       {
         $set: {
           "bodyProfile.profileImage": nextImage,
+          "bodyProfile.profileImageEnhanced": "",
           "bodyProfile.imageEnhancing": true,
           "bodyProfile.profileImageUploadCount": uploadCount + 1,
           "bodyProfile.outfitGenerationCount": outfitGenerationCount,
@@ -105,9 +107,12 @@ export async function POST(req: NextRequest) {
       }
     );
 
-    // Delete old image
+    // Delete old images
     if (previousImage && previousImage !== nextImage) {
       await deleteBodyProfileImage(previousImage);
+    }
+    if (previousEnhanced) {
+      await deleteBodyProfileImage(previousEnhanced);
     }
 
     // Fire async enhancement
