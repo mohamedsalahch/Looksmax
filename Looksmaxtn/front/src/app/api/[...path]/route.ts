@@ -29,19 +29,20 @@ function buildHeaders(req: NextRequest) {
   return headers;
 }
 
-function applySetCookieHeader(source: Response, destination: NextResponse) {
-  const rawSetCookie = source.headers.get("set-cookie");
-  if (!rawSetCookie) return;
-
+function parseSetCookieHeader(rawSetCookie: string) {
   const [nameValue, ...attributes] = rawSetCookie.split(";").map((part) => part.trim());
   const [name, ...valueParts] = nameValue.split("=");
   const value = valueParts.join("=");
 
-  if (!name || !value) return;
+  if (!name || !value) return null;
 
-  const cookieOptions: Parameters<typeof destination.cookies.set>[1] extends never
-    ? never
-    : Parameters<typeof destination.cookies.set>[2] = {};
+  const cookieOptions: {
+    path?: string;
+    maxAge?: number;
+    sameSite?: "lax" | "strict" | "none";
+    secure?: boolean;
+    httpOnly?: boolean;
+  } = {};
 
   for (const attribute of attributes) {
     const [rawKey, ...rawValueParts] = attribute.split("=");
@@ -62,7 +63,29 @@ function applySetCookieHeader(source: Response, destination: NextResponse) {
     }
   }
 
-  destination.cookies.set(name, value, cookieOptions);
+  return { name, value, cookieOptions };
+}
+
+function applySetCookieHeader(source: Response, destination: NextResponse) {
+  const headers = source.headers as Headers & { getSetCookie?: () => string[] };
+  const rawSetCookies = headers.getSetCookie?.() ?? [];
+
+  if (rawSetCookies.length > 0) {
+    for (const rawSetCookie of rawSetCookies) {
+      const parsed = parseSetCookieHeader(rawSetCookie);
+      if (!parsed) continue;
+      destination.cookies.set(parsed.name, parsed.value, parsed.cookieOptions);
+    }
+    return;
+  }
+
+  const rawSetCookie = source.headers.get("set-cookie");
+  if (!rawSetCookie) return;
+
+  const parsed = parseSetCookieHeader(rawSetCookie);
+  if (!parsed) return;
+
+  destination.cookies.set(parsed.name, parsed.value, parsed.cookieOptions);
 }
 
 async function proxy(req: NextRequest, context: { params: Promise<{ path: string[] }> }) {
