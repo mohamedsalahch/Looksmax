@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import AuditMetaCard from "@/components/AuditMetaCard";
 
 interface AuditActor {
@@ -32,9 +33,11 @@ const ORDER_TRANSITIONS: Record<string, string[]> = {
 
 export default function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetch(`/api/orders/${id}`).then((r) => r.json()).then((d) => setOrder(d.order)).catch(() => {}).finally(() => setLoading(false));
@@ -55,6 +58,23 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       }
     } catch {}
     setUpdating(false);
+  };
+
+  const deleteOrder = async () => {
+    if (!confirm("Delete this order? This cannot be undone.")) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/orders/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Failed to delete order");
+      } else {
+        router.push("/dashboard/orders");
+      }
+    } catch {
+      alert("Failed to delete order");
+    }
+    setDeleting(false);
   };
 
   const statusColor = (s: string) => {
@@ -94,6 +114,17 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           )}
           <span className={`text-[10px] px-3 py-1 font-medium uppercase tracking-wider ${statusColor(order.orderStatus)}`}>{order.orderStatus}</span>
         </div>
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={deleteOrder}
+          disabled={deleting}
+          className="border border-rose-300 text-rose-300 px-4 py-2 text-[10px] uppercase tracking-wider hover:bg-rose-500/10 transition-colors disabled:opacity-50"
+        >
+          {deleting ? "Deleting..." : "Delete Order"}
+        </button>
       </div>
 
       {/* Status Update */}

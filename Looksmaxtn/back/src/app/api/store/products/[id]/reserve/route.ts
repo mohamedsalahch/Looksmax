@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import dbConnect from "@/store/lib/mongodb";
-import Order from "@/store/models/Order";
+import dbConnect, { cleanupProductReservationIndexes } from "@/store/lib/mongodb";
 import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
+import { getSession } from "@/store/lib/auth";
+import mongoose from "mongoose";
 
-const RESERVATION_DURATION_MS = 60 * 1000;
-const BLOCKING_ORDER_STATUSES = ["processing", "confirmed", "shipping"];
+const CART_PRESENCE_DURATION_MS = 30 * 60 * 1000;
 
 export async function POST(
   req: NextRequest,
@@ -15,65 +15,72 @@ export async function POST(
     await dbConnect();
 
     const { id } = await params;
-    const { reservationKey } = await req.json();
+    const { reservationKey, cartKey } = await req.json();
+    const session = await getSession();
+    const key = session?.userId ? `user:${session.userId}` : cartKey || reservationKey;
 
-    if (!reservationKey) {
-      return NextResponse.json({ error: "Missing reservation key" }, { status: 400 });
+    if (!key) {
+      return NextResponse.json({ error: "Missing cart key" }, { status: 400 });
     }
 
     const now = new Date();
-    const reservedUntil = new Date(now.getTime() + RESERVATION_DURATION_MS);
+    const reservedUntil = new Date(now.getTime() + CART_PRESENCE_DURATION_MS);
 
     await ProductReservation.deleteMany({ reservedUntil: { $lte: now } });
 
-    const [product, confirmedOrder] = await Promise.all([
-      Product.findById(id).lean(),
-      Order.exists({ orderStatus: { $in: BLOCKING_ORDER_STATUSES }, "items.product": id }),
-    ]);
+    const product = await Product.findById(id).lean();
 
     if (!product || product.isActive === false) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
 
-    if (product.productType === "perfume") {
-      return NextResponse.json({ error: "Perfumes do not require reservation." }, { status: 400 });
+    let cartPresence: { reservedUntil?: Date } | null = null;
+    try {
+      cartPresence = await ProductReservation.findOneAndUpdate(
+        { product: id, reservationKey: key },
+        {
+          product: id,
+          reservationKey: key,
+          reservedUntil,
+        },
+        { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
+      ).lean();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      const isDuplicateReservationIndexError =
+        error instanceof mongoose.mongo.MongoServerError &&
+        error.code === 11000 &&
+        message.includes("product_1");
+
+      if (!isDuplicateReservationIndexError) {
+        throw error;
+      }
+
+      await cleanupProductReservationIndexes(mongoose);
+
+      cartPresence = await ProductReservation.findOneAndUpdate(
+        { product: id, reservationKey: key },
+        {
+          product: id,
+          reservationKey: key,
+          reservedUntil,
+        },
+        { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
+      ).lean();
     }
 
-    if (confirmedOrder) {
-      return NextResponse.json({ error: "This product is no longer available." }, { status: 409 });
-    }
-
-    const activeReservation = await ProductReservation.findOne({
+    const cartCount = await ProductReservation.countDocuments({
       product: id,
       reservedUntil: { $gt: now },
     });
 
-    if (activeReservation && activeReservation.reservationKey !== reservationKey) {
-      return NextResponse.json(
-        {
-          error: "This product is temporarily reserved by another customer.",
-          reservationExpiresAt: activeReservation.reservedUntil.toISOString(),
-        },
-        { status: 409 }
-      );
-    }
-
-    const reservation = await ProductReservation.findOneAndUpdate(
-      { product: id },
-      {
-        product: id,
-        reservationKey,
-        reservedUntil,
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    ).lean();
-
     return NextResponse.json({
       success: true,
-      reservationExpiresAt: reservation?.reservedUntil.toISOString(),
+      cartCount,
+      reservationExpiresAt: cartPresence?.reservedUntil.toISOString(),
     });
   } catch (error: unknown) {
-    console.error("Reserve product error:", error);
+    console.error("Track cart presence error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -86,17 +93,24 @@ export async function DELETE(
     await dbConnect();
 
     const { id } = await params;
-    const { reservationKey } = await req.json();
+    const { reservationKey, cartKey } = await req.json();
+    const session = await getSession();
+    const key = session?.userId ? `user:${session.userId}` : cartKey || reservationKey;
 
-    if (!reservationKey) {
-      return NextResponse.json({ error: "Missing reservation key" }, { status: 400 });
+    if (!key) {
+      return NextResponse.json({ error: "Missing cart key" }, { status: 400 });
     }
 
-    await ProductReservation.deleteOne({ product: id, reservationKey });
+    await ProductReservation.deleteOne({ product: id, reservationKey: key });
 
-    return NextResponse.json({ success: true });
+    const cartCount = await ProductReservation.countDocuments({
+      product: id,
+      reservedUntil: { $gt: new Date() },
+    });
+
+    return NextResponse.json({ success: true, cartCount });
   } catch (error: unknown) {
-    console.error("Release reservation error:", error);
+    console.error("Release cart presence error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

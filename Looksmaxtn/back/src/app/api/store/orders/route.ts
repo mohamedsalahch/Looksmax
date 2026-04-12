@@ -2,12 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/store/lib/mongodb";
 import Order from "@/store/models/Order";
 import Product from "@/store/models/Product";
-import ProductReservation from "@/store/models/ProductReservation";
 import { getSession } from "@/store/lib/auth";
 import { getAuditActorFromSession } from "@/store/lib/auditRoute";
 import mongoose from "mongoose";
-
-const BLOCKING_ORDER_STATUSES = ["processing", "confirmed", "shipping"];
 
 export async function GET() {
   try {
@@ -38,6 +35,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const stockAdjustments: Array<{ productId: string; quantity: number }> = [];
+
   try {
     const session = await getSession();
     if (!session) {
@@ -46,7 +45,7 @@ export async function POST(req: NextRequest) {
 
     await dbConnect();
     const auditActor = await getAuditActorFromSession(session);
-    const { items, shippingAddress, reservationKey } = await req.json();
+    const { items, shippingAddress } = await req.json();
 
     if (!items || items.length === 0) {
       return NextResponse.json({ error: "No items in order" }, { status: 400 });
@@ -59,9 +58,6 @@ export async function POST(req: NextRequest) {
     let totalPrice = 0;
     const orderItems = [];
     const seenProductIds = new Set<string>();
-    const now = new Date();
-    let requiresReservationKey = false;
-
     for (const item of items) {
       if (!mongoose.Types.ObjectId.isValid(item.productId)) {
         return NextResponse.json(
@@ -79,70 +75,42 @@ export async function POST(req: NextRequest) {
       }
 
       const productId = product._id.toString();
-      if (product.productType !== "perfume" && seenProductIds.has(productId)) {
+      if (seenProductIds.has(productId)) {
         return NextResponse.json(
           { error: `${product.name} can only appear once in an order.` },
           { status: 400 }
         );
       }
 
-      if (product.productType === "perfume") {
-        const reservedQuantity = await Order.aggregate([
-          { $match: { orderStatus: { $in: ["processing", "confirmed", "shipping", "delivered"] } } },
-          { $unwind: "$items" },
-          { $match: { "items.product": product._id } },
-          { $group: { _id: null, total: { $sum: "$items.quantity" } } },
-        ]);
-
-        const remainingStock = Math.max(product.stock - (reservedQuantity[0]?.total || 0), 0);
-        if (item.quantity < 1 || item.quantity > remainingStock) {
-          return NextResponse.json(
-            { error: `${product.name} does not have enough stock available.` },
-            { status: 400 }
-          );
-        }
-      } else {
-        requiresReservationKey = true;
-
-        if (item.quantity !== 1) {
-          return NextResponse.json(
-            { error: `${product.name} is a unique item and can only be ordered once.` },
-            { status: 400 }
-          );
-        }
-
-        const existingConfirmedOrder = await Order.exists({
-          orderStatus: { $in: BLOCKING_ORDER_STATUSES },
-          "items.product": product._id,
-        });
-
-        if (existingConfirmedOrder) {
-          return NextResponse.json(
-            { error: `${product.name} is no longer available.` },
-            { status: 409 }
-          );
-        }
-
-        const activeReservation = await ProductReservation.findOne({
-          product: product._id,
-          reservedUntil: { $gt: now },
-        }).lean();
-
-        if (!reservationKey) {
-          return NextResponse.json(
-            { error: "Reservation expired. Please add the product to cart again." },
-            { status: 400 }
-          );
-        }
-
-        if (!activeReservation || activeReservation.reservationKey !== reservationKey) {
-          return NextResponse.json(
-            { error: `${product.name} is no longer reserved for you. Please add it to cart again.` },
-            { status: 409 }
-          );
-        }
+      const quantityToDeduct = item.quantity;
+      if (quantityToDeduct < 1) {
+        return NextResponse.json(
+          { error: `${product.name} does not have enough stock available.` },
+          { status: 400 }
+        );
       }
 
+      if ((product.stock ?? 0) < quantityToDeduct) {
+        return NextResponse.json(
+          { error: `${product.name} is already sold. Please remove it from your cart.` },
+          { status: 409 }
+        );
+      }
+
+      const updatedProduct = await Product.findOneAndUpdate(
+        { _id: product._id, stock: { $gte: quantityToDeduct } },
+        { $inc: { stock: -quantityToDeduct } },
+        { returnDocument: "after" }
+      ).lean();
+
+      if (!updatedProduct) {
+        return NextResponse.json(
+          { error: `${product.name} is already sold. Please remove it from your cart.` },
+          { status: 409 }
+        );
+      }
+
+      stockAdjustments.push({ productId: productId, quantity: quantityToDeduct });
       seenProductIds.add(productId);
 
       const itemTotal = product.price * item.quantity;
@@ -158,13 +126,6 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    if (requiresReservationKey && !reservationKey) {
-      return NextResponse.json(
-        { error: "Reservation expired. Please add the product to cart again." },
-        { status: 400 }
-      );
-    }
-
     const order = await Order.create({
       user: session.userId,
       items: orderItems,
@@ -177,15 +138,18 @@ export async function POST(req: NextRequest) {
       updatedBy: auditActor,
     });
 
-    if (reservationKey) {
-      await ProductReservation.deleteMany({
-        reservationKey,
-        product: { $in: orderItems.map((item) => item.product) },
-      });
-    }
-
     return NextResponse.json({ order }, { status: 201 });
   } catch (error: unknown) {
+    try {
+      for (const adjustment of stockAdjustments) {
+        await Product.updateOne(
+          { _id: adjustment.productId },
+          { $inc: { stock: adjustment.quantity } }
+        );
+      }
+    } catch {
+      // Ignore rollback failures and surface the original error.
+    }
     console.error("Create order error:", error);
     const message = error instanceof Error ? error.message : "Internal server error";
     return NextResponse.json({ error: message }, { status: 500 });

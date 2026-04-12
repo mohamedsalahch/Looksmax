@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/providers/AuthContext";
 
 export default function SignupPage() {
@@ -11,13 +10,14 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const { signup } = useAuth();
-  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setSuccess("");
 
     if (password !== confirmPassword) {
       setError("Passwords do not match");
@@ -35,7 +35,11 @@ export default function SignupPage() {
     if (result.error) {
       setError(result.error);
     } else {
-      router.push("/");
+      setSuccess(result.message || "Check your email to verify your account.");
+      setName("");
+      setEmail("");
+      setPassword("");
+      setConfirmPassword("");
     }
   };
 
@@ -57,6 +61,11 @@ export default function SignupPage() {
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 text-xs px-4 py-3 rounded">
             {error}
+          </div>
+        )}
+        {success && (
+          <div className="bg-green-50 border border-green-200 text-green-800 text-xs px-4 py-3 rounded">
+            {success}
           </div>
         )}
 

@@ -1,18 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 interface User {
   _id: string; name: string; email: string; role: string; createdAt: string;
   isBlocked?: boolean;
+  emailVerified?: boolean;
   address?: { street: string; city: string; state: string; zip: string; phone: string; };
 }
+
+type SortKey = "name" | "email" | "role" | "status" | "city" | "joined";
+type SortDirection = "asc" | "desc";
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [accessFilter, setAccessFilter] = useState("all");
+  const [sortKey, setSortKey] = useState<SortKey>("joined");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const deferredSearch = useDeferredValue(search);
 
   useEffect(() => {
     fetch("/api/users").then((r) => r.json()).then((d) => setUsers(d.users || [])).catch(() => {}).finally(() => setLoading(false));
@@ -49,9 +58,12 @@ export default function UsersPage() {
     setUsers((u) => u.filter((x) => x._id !== id));
   };
 
-  const normalizedSearch = search.trim().toLowerCase();
-  const filteredUsers = normalizedSearch
-    ? users.filter((u) =>
+  const filteredUsers = useMemo(() => {
+    const normalizedSearch = deferredSearch.trim().toLowerCase();
+
+    return users.filter((u) => {
+      const matchesSearch =
+        normalizedSearch.length === 0 ||
         [
           u.name,
           u.email,
@@ -61,30 +73,111 @@ export default function UsersPage() {
           u.address?.state || "",
           u.address?.zip || "",
           u.address?.phone || "",
-        ].some((value) => value.toLowerCase().includes(normalizedSearch))
-      )
-    : users;
+        ].some((value) => value.toLowerCase().includes(normalizedSearch));
+
+      const matchesRole = roleFilter === "all" || u.role === roleFilter;
+      const isBlocked = Boolean(u.isBlocked);
+      const isVerified = u.emailVerified !== false;
+      const accessState = isBlocked ? "blocked" : isVerified ? "verified" : "pending";
+      const matchesAccess = accessFilter === "all" || accessState === accessFilter;
+
+      return matchesSearch && matchesRole && matchesAccess;
+    });
+  }, [accessFilter, deferredSearch, roleFilter, users]);
+
+  const sortedUsers = useMemo(() => {
+    const items = [...filteredUsers];
+
+    const getSortableValue = (user: User) => {
+      switch (sortKey) {
+        case "name":
+          return user.name;
+        case "email":
+          return user.email;
+        case "role":
+          return user.role;
+        case "status":
+          return user.isBlocked ? "blocked" : user.emailVerified === false ? "pending verification" : "active";
+        case "city":
+          return user.address?.city || "";
+        default:
+          return user.createdAt;
+      }
+    };
+
+    items.sort((a, b) => {
+      const left = getSortableValue(a);
+      const right = getSortableValue(b);
+
+      const comparison =
+        typeof left === "number" && typeof right === "number"
+          ? left - right
+          : String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: "base" });
+
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+
+    return items;
+  }, [filteredUsers, sortDirection, sortKey]);
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortKey(key);
+    setSortDirection("asc");
+  };
+
+  const renderSortIndicator = (key: SortKey) => {
+    if (sortKey !== key) return <span className="text-[9px] text-text-secondary/60">↕</span>;
+    return <span className="text-[9px] text-accent">{sortDirection === "asc" ? "↑" : "↓"}</span>;
+  };
+
+  const normalizedSearch = deferredSearch.trim();
 
   return (
     <div>
       <h1 className="text-xl font-semibold tracking-wide mb-6">Users</h1>
 
-      <div className="mb-6">
+      <div className="mb-6 grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_180px]">
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search users by name, email, city, phone, or role..."
+          placeholder="Search by name, email, city, phone, role, or status..."
           className="w-full bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
         />
+        <select
+          value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value)}
+          className="w-full bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
+        >
+          <option value="all">All roles</option>
+          <option value="user">Users</option>
+          <option value="admin">Admins</option>
+        </select>
+        <select
+          value={accessFilter}
+          onChange={(e) => setAccessFilter(e.target.value)}
+          className="w-full bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
+        >
+          <option value="all">All access</option>
+          <option value="verified">Verified</option>
+          <option value="pending">Pending verification</option>
+          <option value="blocked">Blocked</option>
+        </select>
       </div>
 
       {loading ? (
         <p className="text-xs text-text-secondary animate-pulse">Loading...</p>
-      ) : filteredUsers.length === 0 ? (
+      ) : sortedUsers.length === 0 ? (
         <div className="border border-border border-dashed p-8 text-center rounded">
           <p className="text-sm text-text-secondary">
-            {search ? "No users match your search" : "No users found"}
+            {normalizedSearch || roleFilter !== "all" || accessFilter !== "all"
+              ? "No users match your search and filters"
+              : "No users found"}
           </p>
         </div>
       ) : (
@@ -92,16 +185,41 @@ export default function UsersPage() {
           <table className="w-full text-left">
             <thead className="bg-bg-secondary">
               <tr className="text-[10px] text-text-secondary uppercase tracking-wider">
-                <th className="px-4 py-3">User</th>
-                <th className="px-4 py-3">Role</th>
-                <th className="px-4 py-3">Access</th>
-                <th className="px-4 py-3">Address</th>
-                <th className="px-4 py-3">Joined</th>
+                <th className="px-4 py-3">
+                  <button type="button" onClick={() => toggleSort("name")} className="inline-flex items-center gap-1 cursor-pointer">
+                    User {renderSortIndicator("name")}
+                  </button>
+                </th>
+                <th className="px-4 py-3">
+                  <button type="button" onClick={() => toggleSort("email")} className="inline-flex items-center gap-1 cursor-pointer">
+                    Email {renderSortIndicator("email")}
+                  </button>
+                </th>
+                <th className="px-4 py-3">
+                  <button type="button" onClick={() => toggleSort("role")} className="inline-flex items-center gap-1 cursor-pointer">
+                    Role {renderSortIndicator("role")}
+                  </button>
+                </th>
+                <th className="px-4 py-3">
+                  <button type="button" onClick={() => toggleSort("status")} className="inline-flex items-center gap-1 cursor-pointer">
+                    Access {renderSortIndicator("status")}
+                  </button>
+                </th>
+                <th className="px-4 py-3">
+                  <button type="button" onClick={() => toggleSort("city")} className="inline-flex items-center gap-1 cursor-pointer">
+                    Address {renderSortIndicator("city")}
+                  </button>
+                </th>
+                <th className="px-4 py-3">
+                  <button type="button" onClick={() => toggleSort("joined")} className="inline-flex items-center gap-1 cursor-pointer">
+                    Joined {renderSortIndicator("joined")}
+                  </button>
+                </th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filteredUsers.map((u) => (
+              {sortedUsers.map((u) => (
                 <tr key={u._id} className="hover:bg-bg-hover transition-colors">
                   <td className="px-4 py-3">
                     <Link
@@ -110,7 +228,12 @@ export default function UsersPage() {
                     >
                       {u.name}
                     </Link>
-                    <p className="text-[10px] text-text-secondary">{u.email}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="text-xs text-text-primary break-all">{u.email}</p>
+                    <p className="text-[10px] text-text-secondary">
+                      {u.isBlocked ? "Blocked" : u.emailVerified === false ? "Pending verification" : "Verified"}
+                    </p>
                   </td>
                   <td className="px-4 py-3">
                     <span className={`text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider ${
@@ -120,10 +243,18 @@ export default function UsersPage() {
                   <td className="px-4 py-3">
                     <span
                       className={`text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider ${
-                        u.isBlocked ? "text-danger bg-danger/10" : "text-success bg-success/10"
+                        u.isBlocked
+                          ? "text-danger bg-danger/10"
+                          : u.emailVerified === false
+                            ? "text-warning bg-warning/10"
+                            : "text-success bg-success/10"
                       }`}
                     >
-                      {u.isBlocked ? "Blocked" : "Active"}
+                      {u.isBlocked
+                        ? "Blocked"
+                        : u.emailVerified === false
+                          ? "Pending Verification"
+                          : "Active"}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-xs text-text-secondary">

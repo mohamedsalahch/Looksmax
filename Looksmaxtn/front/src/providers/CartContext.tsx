@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode, useMemo, useRef } from "react";
-import { getReservationKey } from "@/lib/reservations";
+import { getReservationKey, releaseProductReservation } from "@/lib/reservations";
 
 export interface CartItem {
   id: string;
@@ -23,6 +23,9 @@ export interface CartItem {
   maxStock: number;
   image?: string;
   reservationExpiresAt?: string | null;
+  isUnavailable?: boolean;
+  unavailableReason?: string | null;
+  cartCount?: number;
 }
 
 interface CartContextType {
@@ -81,8 +84,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   // Load cart from localStorage on mount (client-side only)
   useEffect(() => {
-    setItems(loadCart());
-    setHydrated(true);
+    const nextItems = loadCart();
+    queueMicrotask(() => {
+      setItems(nextItems);
+      setHydrated(true);
+    });
   }, []);
 
   // Persist cart to localStorage whenever items change (after hydration)
@@ -111,7 +117,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           productIds: currentItems.map((item) => item.id.split("-")[0]),
-          reservationKey: getReservationKey(),
+          cartKey: getReservationKey(),
         }),
       })
         .then((response) => response.json())
@@ -121,6 +127,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
           type AvailabilityItem = {
             productId: string;
             available: boolean;
+            blockedByOrder?: boolean;
             maxStock?: number;
             productType?: "fashion" | "perfume" | "clothing" | "shoes";
             originPictures?: {
@@ -132,6 +139,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
             fashionSubtype?: "clothes" | "shoes" | null;
             image?: string;
             reservationExpiresAt?: string | null;
+            cartCount?: number;
           };
 
           const availabilityMap = new Map(
@@ -141,22 +149,38 @@ export function CartProvider({ children }: { children: ReactNode }) {
             ])
           ) as Map<string, AvailabilityItem>;
 
+          const removedProductIds = new Set<string>();
+
           setItems((currentItems) => {
-            const nextItems = currentItems
-              .filter((item) => availabilityMap.get(item.id.split("-")[0])?.available)
-              .map((item) => {
-                const availability = availabilityMap.get(item.id.split("-")[0]);
-                return {
-                  ...item,
-                  image: availability?.image || item.image,
-                  originPictures: availability?.originPictures || item.originPictures,
-                  reservationExpiresAt: availability?.reservationExpiresAt ?? null,
-                  maxStock: Math.max(1, availability?.maxStock ?? item.maxStock ?? 1),
-                  quantity: Math.min(item.quantity, Math.max(1, availability?.maxStock ?? item.maxStock ?? 1)),
-                  productType: availability?.productType ?? item.productType,
-                  fashionSubtype: availability?.fashionSubtype ?? item.fashionSubtype,
-                };
-              });
+            const nextItems = currentItems.flatMap((item) => {
+              const availability = availabilityMap.get(item.id.split("-")[0]);
+              const maxStock = Math.max(1, availability?.maxStock ?? item.maxStock ?? 1);
+              const isUnavailable = availability ? !availability.available : Boolean(item.isUnavailable);
+              const soldOut = Boolean(availability?.blockedByOrder || (availability && !availability.available));
+
+              if (soldOut) {
+                removedProductIds.add(item.id.split("-")[0]);
+                return [];
+              }
+
+              const unavailableReason = isUnavailable
+                ? "This product is currently unavailable."
+                : null;
+
+              return {
+                ...item,
+                image: availability?.image || item.image,
+                originPictures: availability?.originPictures || item.originPictures,
+                reservationExpiresAt: availability?.reservationExpiresAt ?? null,
+                maxStock,
+                quantity: Math.min(item.quantity, maxStock),
+                productType: availability?.productType ?? item.productType,
+                fashionSubtype: availability?.fashionSubtype ?? item.fashionSubtype,
+                cartCount: availability?.cartCount ?? item.cartCount ?? 0,
+                isUnavailable,
+                unavailableReason,
+              };
+            });
 
             if (JSON.stringify(nextItems) === JSON.stringify(currentItems)) {
               return currentItems;
@@ -164,12 +188,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
             return nextItems;
           });
+
+          removedProductIds.forEach((productId) => {
+            releaseProductReservation(productId).catch(() => {});
+          });
         })
         .catch(() => {});
     };
 
     syncCartAvailability();
-    const interval = window.setInterval(syncCartAvailability, 15000);
+    const interval = window.setInterval(syncCartAvailability, 5000);
 
     return () => {
       cancelled = true;

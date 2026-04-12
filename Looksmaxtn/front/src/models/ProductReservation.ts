@@ -10,7 +10,7 @@ export interface IProductReservation extends Document {
 
 const productReservationSchema = new Schema<IProductReservation>(
   {
-    product: { type: Schema.Types.ObjectId, ref: "Product", required: true, unique: true },
+    product: { type: Schema.Types.ObjectId, ref: "Product", required: true, index: true },
     reservationKey: { type: String, required: true, index: true },
     reservedUntil: { type: Date, required: true, index: true },
   },
@@ -18,6 +18,7 @@ const productReservationSchema = new Schema<IProductReservation>(
 );
 
 productReservationSchema.index({ reservedUntil: 1 }, { expireAfterSeconds: 0 });
+productReservationSchema.index({ product: 1, reservationKey: 1 }, { unique: true });
 
 const ProductReservation: Model<IProductReservation> =
   mongoose.models.ProductReservation ||

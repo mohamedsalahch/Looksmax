@@ -71,6 +71,11 @@ function getProductStatus(product: ProductDetail) {
     : { label: "Reserved", className: "bg-warning/10 text-warning" };
 }
 
+function formatStockLabel(product: ProductDetail) {
+  const unitLabel = product.productType === "perfume" ? "bottle" : "unit";
+  return `${product.stock} ${unitLabel}${product.stock === 1 ? "" : "s"}`;
+}
+
 export default function ProductViewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [product, setProduct] = useState<ProductDetail | null>(null);
@@ -190,7 +195,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
                 </span>
               )}
               <span className="text-[10px] bg-bg-secondary text-text-secondary px-2 py-1 font-medium uppercase tracking-wider">
-                Stock {product.stock}
+                Stock {formatStockLabel(product)}
               </span>
               <span className={`text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${status.className}`}>
                 {status.label}

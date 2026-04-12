@@ -117,6 +117,18 @@ export async function PUT(
       );
     }
 
+    if (["canceled", "returned"].includes(orderStatus || "") && existingOrder.orderStatus !== orderStatus) {
+      for (const item of existingOrder.items) {
+        const quantityToRestore = item.quantity || 0;
+        if (quantityToRestore > 0) {
+          await Product.updateOne(
+            { _id: item.product },
+            { $inc: { stock: quantityToRestore } }
+          );
+        }
+      }
+    }
+
     if (orderStatus === "confirmed" && existingOrder.orderStatus !== "confirmed") {
       const productIds = existingOrder.items.map((item) => item.product);
       const conflictingOrders = await Order.find({

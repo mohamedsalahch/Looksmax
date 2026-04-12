@@ -5,11 +5,12 @@ import Link from "next/link";
 import { useEffect } from "react";
 import { releaseProductReservation } from "@/lib/reservations";
 import { formatTndPrice } from "@/lib/formatPrice";
-import { addStudioRailItem } from "@/lib/studioRail";
+import { addStudioTryOnItem } from "@/lib/studioTryOn";
 
 export default function CartPanel() {
   const { items, isOpen, closeCart, removeItem, updateQuantity, totalItems, totalPrice } =
     useCart();
+  const hasUnavailableItems = items.some((item) => item.isUnavailable);
 
   // Close on Escape
   useEffect(() => {
@@ -98,11 +99,11 @@ export default function CartPanel() {
                   </div>
 
                   {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-[10px] text-text-secondary uppercase tracking-wider">
-                          {item.brand}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-[10px] text-text-secondary uppercase tracking-wider">
+                            {item.brand}
                         </p>
                         <Link
                           href={`/product/${item.id.split("-")[0]}`}
@@ -127,7 +128,13 @@ export default function CartPanel() {
                           <line x1="6" y1="6" x2="18" y2="18" />
                         </svg>
                       </button>
-                    </div>
+                      </div>
+
+                      {item.isUnavailable && (
+                        <p className="mt-1 text-[10px] text-danger">
+                          {item.unavailableReason || "This product is already taken. Remove it manually."}
+                        </p>
+                      )}
 
                     {(item.size || item.color || item.productType === "perfume") && (
                       <div className="flex items-center gap-2 mt-1">
@@ -187,7 +194,7 @@ export default function CartPanel() {
                       <button
                         type="button"
                         onClick={() =>
-                          addStudioRailItem({
+                          addStudioTryOnItem({
                             id: item.id,
                             name: item.name,
                             categories: item.categories,
@@ -204,7 +211,7 @@ export default function CartPanel() {
                         }
                         className="mt-3 text-[10px] uppercase tracking-[0.22em] text-text-secondary underline underline-offset-4 hover:text-foreground transition-colors cursor-pointer"
                       >
-                        Add To Product Rail
+                        Try
                       </button>
                     )}
                   </div>
@@ -230,8 +237,23 @@ export default function CartPanel() {
             </p>
 
             {/* Checkout button */}
-            <Link href="/checkout" onClick={closeCart} className="block w-full bg-foreground text-background py-3.5 text-sm font-medium tracking-wide uppercase hover:bg-accent transition-colors cursor-pointer text-center">
-              Proceed to Checkout
+            <Link
+              href="/checkout"
+              onClick={(e) => {
+                if (hasUnavailableItems) {
+                  e.preventDefault();
+                  return;
+                }
+                closeCart();
+              }}
+              aria-disabled={hasUnavailableItems}
+              className={`block w-full py-3.5 text-sm font-medium tracking-wide uppercase transition-colors text-center ${
+                hasUnavailableItems
+                  ? "bg-border-color text-text-secondary cursor-not-allowed"
+                  : "bg-foreground text-background hover:bg-accent cursor-pointer"
+              }`}
+            >
+              {hasUnavailableItems ? "Remove Taken Items" : "Proceed to Checkout"}
             </Link>
 
             {/* Continue shopping */}

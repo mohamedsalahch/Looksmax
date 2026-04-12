@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/store/lib/mongodb";
 import User from "@/store/models/User";
-import { hashPassword, createToken, getTokenCookieOptions } from "@/store/lib/auth";
+import { hashPassword } from "@/store/lib/auth";
+import { createEmailVerificationToken } from "@/store/lib/emailVerification";
+import { sendVerificationEmail } from "@/store/lib/mailer";
 
 export async function POST(req: NextRequest) {
   try {
     await dbConnect();
-    const { name, email, password } = await req.json();
+    const body = await req.json();
+    const name = String(body?.name || "").trim();
+    const email = String(body?.email || "").trim().toLowerCase();
+    const password = String(body?.password || "");
 
     if (!name || !email || !password) {
       return NextResponse.json(
@@ -31,18 +36,47 @@ export async function POST(req: NextRequest) {
     }
 
     const hashed = await hashPassword(password);
-    const user = await User.create({ name, email, password: hashed });
-
-    const token = await createToken({ userId: user._id.toString(), role: user.role });
-    const cookieOpts = getTokenCookieOptions();
-
-    const res = NextResponse.json({
-      token,
-      user: { id: user._id, name: user.name, email: user.email, role: user.role },
+    const user = await User.create({
+      name,
+      email,
+      password: hashed,
+      emailVerified: false,
     });
 
-    res.cookies.set(cookieOpts.name, token, cookieOpts);
-    return res;
+    const verification = createEmailVerificationToken();
+    const verificationUrl = new URL("/verify-email", process.env.FRONTEND_BASE_URL || "http://localhost:3000");
+    verificationUrl.searchParams.set("email", email);
+    verificationUrl.searchParams.set("token", verification.token);
+
+    user.emailVerified = false;
+    user.emailVerificationTokenHash = verification.tokenHash;
+    user.emailVerificationExpiresAt = verification.expiresAt;
+    user.emailVerificationSentAt = new Date();
+    await user.save();
+
+    try {
+      await sendVerificationEmail({
+        to: user.email,
+        name: user.name,
+        verificationUrl: verificationUrl.toString(),
+      });
+    } catch (error) {
+      await User.findByIdAndDelete(user._id);
+      console.error("Verification email error:", error);
+      return NextResponse.json(
+        { error: "We could not send the verification email. Please try again." },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        message: "Account created. Check your email to verify your account.",
+        verificationRequired: true,
+        email: user.email,
+      },
+      { status: 201 }
+    );
   } catch (error: unknown) {
     console.error("Signup error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

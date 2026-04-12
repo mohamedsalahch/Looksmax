@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, type MouseEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -11,31 +11,121 @@ interface Order {
   items: { product?: string; name: string; quantity: number }[];
 }
 
+type SortKey = "order" | "customer" | "items" | "total" | "status" | "archive" | "date";
+type SortDirection = "asc" | "desc";
+
 export default function OrdersPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingOrderId, setDeletingOrderId] = useState("");
   const [filter, setFilter] = useState("all");
+  const [archiveFilter, setArchiveFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("date");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const deferredSearch = useDeferredValue(search);
 
   useEffect(() => {
     fetch("/api/orders").then((r) => r.json()).then((d) => setOrders(d.orders || [])).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
-  const normalizedSearch = search.trim().toLowerCase();
-  const filtered = orders.filter((o) => {
-    const matchesStatus = filter === "all" ? true : o.orderStatus === filter;
-    const matchesSearch = normalizedSearch
-      ? [
+  const filtered = useMemo(() => {
+    const normalizedSearch = deferredSearch.trim().toLowerCase();
+
+    return orders.filter((o) => {
+      const matchesStatus = filter === "all" ? true : o.orderStatus === filter;
+      const isArchived = Boolean(o.isArchived);
+      const matchesArchive =
+        archiveFilter === "all" ||
+        (archiveFilter === "active" && !isArchived) ||
+        (archiveFilter === "archived" && isArchived);
+      const matchesSearch =
+        normalizedSearch.length === 0 ||
+        [
           o._id,
           o.user?.name || "",
           o.user?.email || "",
           ...o.items.map((item) => item.name),
           ...o.items.map((item) => item.product || ""),
-        ].some((value) => value.toLowerCase().includes(normalizedSearch))
-      : true;
-    return matchesStatus && matchesSearch;
-  });
+        ].some((value) => String(value || "").toLowerCase().includes(normalizedSearch));
+
+      return matchesStatus && matchesArchive && matchesSearch;
+    });
+  }, [archiveFilter, deferredSearch, filter, orders]);
+
+  const sorted = useMemo(() => {
+    const items = [...filtered];
+
+    const getSortableValue = (order: Order) => {
+      switch (sortKey) {
+        case "order":
+          return order._id;
+        case "customer":
+          return order.user?.name || order.user?.email || "";
+        case "items":
+          return order.items.length;
+        case "total":
+          return order.totalPrice;
+        case "status":
+          return order.orderStatus;
+        case "archive":
+          return order.isArchived ? "archived" : "active";
+        default:
+          return order.createdAt;
+      }
+    };
+
+    items.sort((a, b) => {
+      const left = getSortableValue(a);
+      const right = getSortableValue(b);
+
+      const comparison =
+        typeof left === "number" && typeof right === "number"
+          ? left - right
+          : String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: "base" });
+
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+
+    return items;
+  }, [filtered, sortDirection, sortKey]);
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortKey(key);
+    setSortDirection("asc");
+  };
+
+  const renderSortIndicator = (key: SortKey) => {
+    if (sortKey !== key) return <span className="text-[9px] text-text-secondary/60">↕</span>;
+    return <span className="text-[9px] text-accent">{sortDirection === "asc" ? "↑" : "↓"}</span>;
+  };
+
+  const handleDeleteOrder = async (orderId: string, event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    if (!confirm("Delete this order? This cannot be undone.")) return;
+
+    setDeletingOrderId(orderId);
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Failed to delete order");
+      } else {
+        setOrders((current) => current.filter((order) => order._id !== orderId));
+      }
+    } catch {
+      alert("Failed to delete order");
+    }
+    setDeletingOrderId("");
+  };
+
+  const normalizedSearch = deferredSearch.trim();
 
   const statusColor = (s: string) => {
     switch (s) {
@@ -65,38 +155,80 @@ export default function OrdersPage() {
         ))}
       </div>
 
-      <div className="mb-6">
+      <div className="mb-6 grid gap-3 md:grid-cols-[minmax(0,1fr)_180px]">
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search orders by order ID, product ID, customer, email, or product..."
+          placeholder="Search by order, customer, email, product, or product ID..."
           className="w-full bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
         />
+        <select
+          value={archiveFilter}
+          onChange={(e) => setArchiveFilter(e.target.value)}
+          className="w-full bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
+        >
+          <option value="all">All archive states</option>
+          <option value="active">Active</option>
+          <option value="archived">Archived</option>
+        </select>
       </div>
 
       {loading ? (
         <p className="text-xs text-text-secondary animate-pulse">Loading...</p>
-      ) : filtered.length === 0 ? (
+      ) : sorted.length === 0 ? (
         <div className="border border-border border-dashed p-8 text-center rounded">
-          <p className="text-sm text-text-secondary">No orders found</p>
+          <p className="text-sm text-text-secondary">
+            {normalizedSearch || filter !== "all" || archiveFilter !== "all"
+              ? "No orders match your search and filters"
+              : "No orders found"}
+          </p>
         </div>
       ) : (
         <div className="border border-border rounded overflow-hidden">
           <table className="w-full text-left">
             <thead className="bg-bg-secondary">
               <tr className="text-[10px] text-text-secondary uppercase tracking-wider">
-                <th className="px-4 py-3">Order</th>
-                <th className="px-4 py-3">Customer</th>
-                <th className="px-4 py-3">Items</th>
-                <th className="px-4 py-3">Total</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Archive</th>
-                <th className="px-4 py-3">Date</th>
+                <th className="px-4 py-3">
+                  <button type="button" onClick={() => toggleSort("order")} className="inline-flex items-center gap-1 cursor-pointer">
+                    Order {renderSortIndicator("order")}
+                  </button>
+                </th>
+                <th className="px-4 py-3">
+                  <button type="button" onClick={() => toggleSort("customer")} className="inline-flex items-center gap-1 cursor-pointer">
+                    Customer {renderSortIndicator("customer")}
+                  </button>
+                </th>
+                <th className="px-4 py-3">
+                  <button type="button" onClick={() => toggleSort("items")} className="inline-flex items-center gap-1 cursor-pointer">
+                    Items {renderSortIndicator("items")}
+                  </button>
+                </th>
+                <th className="px-4 py-3">
+                  <button type="button" onClick={() => toggleSort("total")} className="inline-flex items-center gap-1 cursor-pointer">
+                    Total {renderSortIndicator("total")}
+                  </button>
+                </th>
+                <th className="px-4 py-3">
+                  <button type="button" onClick={() => toggleSort("status")} className="inline-flex items-center gap-1 cursor-pointer">
+                    Status {renderSortIndicator("status")}
+                  </button>
+                </th>
+                <th className="px-4 py-3">
+                  <button type="button" onClick={() => toggleSort("archive")} className="inline-flex items-center gap-1 cursor-pointer">
+                    Archive {renderSortIndicator("archive")}
+                  </button>
+                </th>
+                <th className="px-4 py-3">
+                  <button type="button" onClick={() => toggleSort("date")} className="inline-flex items-center gap-1 cursor-pointer">
+                    Date {renderSortIndicator("date")}
+                  </button>
+                </th>
+                <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filtered.map((o) => (
+              {sorted.map((o) => (
                 <tr
                   key={o._id}
                   onClick={() => router.push(`/dashboard/orders/${o._id}`)}
@@ -132,6 +264,16 @@ export default function OrdersPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-xs text-text-secondary">{new Date(o.createdAt).toLocaleDateString()}</td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      type="button"
+                      onClick={(event) => handleDeleteOrder(o._id, event)}
+                      disabled={deletingOrderId === o._id}
+                      className="text-[10px] uppercase tracking-wider text-rose-300 hover:text-rose-200 transition-colors disabled:opacity-50"
+                    >
+                      {deletingOrderId === o._id ? "Deleting..." : "Delete"}
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>

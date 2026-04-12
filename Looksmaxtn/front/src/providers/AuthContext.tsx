@@ -27,7 +27,22 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<{ error?: string }>;
-  signup: (name: string, email: string, password: string) => Promise<{ error?: string }>;
+  signup: (
+    name: string,
+    email: string,
+    password: string
+  ) => Promise<{ error?: string; verificationRequired?: boolean; message?: string }>;
+  forgotPassword: (
+    email: string
+  ) => Promise<{ error?: string; message?: string; retryAfterSeconds?: number }>;
+  resendVerification: (
+    email: string
+  ) => Promise<{ error?: string; message?: string; retryAfterSeconds?: number }>;
+  resetPassword: (
+    email: string,
+    token: string,
+    password: string
+  ) => Promise<{ error?: string; message?: string }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -79,8 +94,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       const data = await res.json();
       if (!res.ok) return { error: data.error };
-      setUser(data.user);
-      return {};
+      return {
+        verificationRequired: Boolean(data.verificationRequired),
+        message: data.message,
+      };
+    } catch {
+      return { error: "Network error" };
+    }
+  };
+
+  const forgotPassword = async (email: string) => {
+    try {
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) return { error: data.error, retryAfterSeconds: data.retryAfterSeconds };
+      return { message: data.message };
+    } catch {
+      return { error: "Network error" };
+    }
+  };
+
+  const resendVerification = async (email: string) => {
+    try {
+      const res = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) return { error: data.error, retryAfterSeconds: data.retryAfterSeconds };
+      return { message: data.message };
+    } catch {
+      return { error: "Network error" };
+    }
+  };
+
+  const resetPassword = async (email: string, token: string, password: string) => {
+    try {
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, token, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) return { error: data.error };
+      return { message: data.message };
     } catch {
       return { error: "Network error" };
     }
@@ -92,7 +154,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, logout, refreshUser }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        login,
+        signup,
+        forgotPassword,
+        resendVerification,
+        resetPassword,
+        logout,
+        refreshUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

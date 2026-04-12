@@ -6,6 +6,7 @@ const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "looksmax-secret-key-change-in-production"
 );
 const COOKIE_NAME = "looksmax-admin-token";
+const TOKEN_TTL_SECONDS = 60 * 30;
 
 export interface JWTPayload { userId: string; role: string; }
 
@@ -23,7 +24,7 @@ export async function createToken(payload: JWTPayload) {
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("7d")
+    .setExpirationTime("30m")
     .sign(JWT_SECRET);
 }
 
@@ -58,6 +59,6 @@ export function getTokenCookieOptions() {
     secure: shouldUseSecureCookies(),
     sameSite: "lax" as const,
     path: "/",
-    maxAge: 60 * 60 * 24 * 7,
+    maxAge: TOKEN_TTL_SECONDS,
   };
 }

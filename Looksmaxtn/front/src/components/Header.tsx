@@ -54,14 +54,31 @@ export default function Header() {
         </Link>
 
         {/* Right — Search + User + Cart */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 md:gap-3">
           <Link
             href="/studio"
-            className="hidden md:inline-flex text-[10px] uppercase tracking-[0.24em] text-text-secondary hover:text-foreground transition-colors"
+            className="hidden md:inline-flex h-9 items-center px-2 text-[10px] uppercase tracking-[0.24em] text-text-secondary hover:text-foreground transition-colors"
           >
             Outfit Studio
           </Link>
           <HeaderSearch />
+          <button
+            onClick={openCart}
+            className="relative inline-flex h-9 w-9 items-center justify-center text-foreground hover:text-text-secondary transition-colors cursor-pointer"
+            aria-label="Open cart"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <path d="M16 10a4 4 0 0 1-8 0" />
+            </svg>
+            {/* Badge */}
+            {totalItems > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-foreground text-background text-[9px] font-bold rounded-full flex items-center justify-center">
+                {totalItems > 9 ? "9+" : totalItems}
+              </span>
+            )}
+          </button>
 
           {/* User Icon / Menu */}
           <div className="relative" ref={menuRef}>
@@ -69,7 +86,7 @@ export default function Header() {
               <>
                 <button
                   onClick={() => setShowUserMenu((p) => !p)}
-                  className="text-foreground hover:text-text-secondary transition-colors cursor-pointer"
+                  className="inline-flex h-9 w-9 items-center justify-center text-foreground hover:text-text-secondary transition-colors cursor-pointer"
                   aria-label="Account menu"
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -128,7 +145,7 @@ export default function Header() {
             ) : (
               <Link
                 href="/login"
-                className="text-foreground hover:text-text-secondary transition-colors"
+                className="inline-flex h-9 w-9 items-center justify-center text-foreground hover:text-text-secondary transition-colors"
                 aria-label="Sign in"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -138,24 +155,6 @@ export default function Header() {
               </Link>
             )}
           </div>
-
-          <button
-            onClick={openCart}
-            className="text-foreground hover:text-text-secondary transition-colors cursor-pointer relative"
-            aria-label="Open cart"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <path d="M16 10a4 4 0 0 1-8 0" />
-            </svg>
-            {/* Badge */}
-            {totalItems > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-foreground text-background text-[9px] font-bold rounded-full flex items-center justify-center">
-                {totalItems > 9 ? "9+" : totalItems}
-              </span>
-            )}
-          </button>
         </div>
       </div>
     </header>

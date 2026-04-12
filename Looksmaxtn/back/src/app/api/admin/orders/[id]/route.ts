@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
 import Order from "@/admin/models/Order";
-import Product from "@/admin/models/Product";
+import Product from "@/store/models/Product";
+import ProductReservation from "@/store/models/ProductReservation";
 import { getSession } from "@/admin/lib/auth";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 
 const VALID_ORDER_STATUSES = ["processing", "confirmed", "canceled", "shipping", "delivered", "returned"] as const;
-const BLOCKING_ORDER_STATUSES = ["processing", "confirmed", "shipping"] as const;
 const FINAL_ORDER_STATUSES = ["delivered", "canceled", "returned"] as const;
 
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
@@ -18,11 +18,23 @@ const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   returned: [],
 };
 
-function serializeOrder(order: any) {
+type LeanOrderItem = {
+  product: { toString(): string } | string;
+  quantity?: number;
+  [key: string]: unknown;
+};
+
+type LeanOrder = {
+  _id: { toString(): string };
+  items: LeanOrderItem[];
+  [key: string]: unknown;
+};
+
+function serializeOrder(order: LeanOrder) {
   return {
     ...order,
     _id: order._id.toString(),
-    items: order.items.map((item: any) => ({
+    items: order.items.map((item) => ({
       ...item,
       productId: item.product.toString(),
     })),
@@ -67,21 +79,37 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       );
     }
 
-    if (orderStatus === "confirmed" && existingOrder.orderStatus !== "confirmed") {
-      const productIds = existingOrder.items.map((item) => item.product);
-      const conflictingOrder = await Order.findOne({
-        _id: { $ne: id },
-        orderStatus: { $in: BLOCKING_ORDER_STATUSES },
-        "items.product": { $in: productIds },
-      }).lean();
+    if (["canceled", "returned"].includes(orderStatus || "") && existingOrder.orderStatus !== orderStatus) {
+      const productIds = existingOrder.items.map((item: LeanOrderItem) => item.product);
+      const products = await Product.find({ _id: { $in: productIds } })
+        .select("_id stock productType")
+        .lean();
+      const productMap = new Map(products.map((product) => [product._id.toString(), product]));
 
-      if (conflictingOrder) {
-        const products = await Product.find({ _id: { $in: productIds } }).select("name").lean();
-        const productNames = products.map((product) => product.name).join(", ");
-        return NextResponse.json(
-          { error: `These unique products are already confirmed in another order: ${productNames}` },
-          { status: 409 }
-        );
+      for (const item of existingOrder.items as LeanOrderItem[]) {
+        const product = productMap.get(item.product.toString());
+        if (!product) {
+          return NextResponse.json({ error: "Product not found" }, { status: 404 });
+        }
+
+        const quantityToRestore = item.quantity || 0;
+        if (quantityToRestore > 0) {
+          await Product.updateOne(
+            { _id: item.product },
+            { $inc: { stock: quantityToRestore } }
+          );
+        }
+      }
+
+      const orderUserId = typeof existingOrder.user === "object" && existingOrder.user !== null
+        ? String(existingOrder.user.toString?.() || existingOrder.user)
+        : String(existingOrder.user);
+
+      if (orderUserId) {
+        await ProductReservation.deleteMany({
+          product: { $in: productIds },
+          reservationKey: `user:${orderUserId}`,
+        });
       }
     }
 
@@ -92,11 +120,76 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const order = await Order.findByIdAndUpdate(
       id,
       update,
-      { new: true }
+      { returnDocument: "after" }
     )
       .populate("user", "name email")
       .lean();
     if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json({ order: serializeOrder(order) });
   } catch (error) { console.error(error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
+}
+
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== "admin") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
+    await dbConnect();
+    const { id } = await params;
+    const existingOrder = await Order.findById(id).lean();
+    if (!existingOrder) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    if (["delivered", "returned"].includes(existingOrder.orderStatus)) {
+      return NextResponse.json(
+        { error: "Delivered and returned orders cannot be deleted." },
+        { status: 409 }
+      );
+    }
+
+    if (existingOrder.orderStatus !== "canceled") {
+      const productIds = existingOrder.items.map((item: LeanOrderItem) => item.product);
+      const products = await Product.find({ _id: { $in: productIds } })
+        .select("_id stock productType")
+        .lean();
+      const productMap = new Map(products.map((product) => [product._id.toString(), product]));
+
+      for (const item of existingOrder.items as LeanOrderItem[]) {
+        const product = productMap.get(item.product.toString());
+        if (!product) {
+          return NextResponse.json({ error: "Product not found" }, { status: 404 });
+        }
+
+        const quantityToRestore = item.quantity || 0;
+        if (quantityToRestore > 0) {
+          await Product.updateOne(
+            { _id: item.product },
+            { $inc: { stock: quantityToRestore } }
+          );
+        }
+      }
+
+      const orderUserId =
+        typeof existingOrder.user === "object" && existingOrder.user !== null
+          ? String(existingOrder.user.toString?.() || existingOrder.user)
+          : String(existingOrder.user);
+
+      if (orderUserId) {
+        await ProductReservation.deleteMany({
+          product: { $in: productIds },
+          reservationKey: `user:${orderUserId}`,
+        });
+      }
+    }
+
+    await Order.deleteOne({ _id: id });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Delete order error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }

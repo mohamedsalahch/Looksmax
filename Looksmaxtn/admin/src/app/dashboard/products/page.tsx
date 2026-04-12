@@ -44,6 +44,11 @@ function getProductStatus(product: Product) {
     : { label: "Reserved", className: "bg-warning/10 text-warning" };
 }
 
+function formatStockLabel(product: Product) {
+  const unitLabel = product.productType === "perfume" ? "bottle" : "unit";
+  return `${product.stock} ${unitLabel}${product.stock === 1 ? "" : "s"}`;
+}
+
 export default function ProductsPage() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
@@ -144,7 +149,7 @@ export default function ProductsPage() {
         case "price":
           return product.price;
         case "stock":
-          return product.productType === "perfume" ? product.stock : product.stock > 0 ? 1 : 0;
+          return product.stock;
         case "status":
           return getProductStatus(product).label;
         case "visibility":
@@ -307,7 +312,7 @@ export default function ProductsPage() {
                   <td className="px-4 py-3 text-xs font-medium">{p.price.toFixed(2)} TND</td>
                   <td className="px-4 py-3">
                     <span className="text-xs font-medium text-text-primary">
-                      {p.productType === "perfume" ? p.stock : p.stock > 0 ? "1" : "0"}
+                      {formatStockLabel(p)}
                     </span>
                   </td>
                   <td className="px-4 py-3">

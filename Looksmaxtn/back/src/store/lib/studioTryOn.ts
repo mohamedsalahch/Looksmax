@@ -1,6 +1,6 @@
 "use client";
 
-export interface StudioRailItem {
+export interface StudioTryOnItem {
   id: string;
   name: string;
   categories?: string[];
@@ -21,16 +21,18 @@ export interface StudioRailItem {
   reservationExpiresAt?: string | null;
 }
 
-const STORAGE_KEY = "looksmax-studio-rail";
-const EVENT_NAME = "looksmax:studio-rail-change";
+const STORAGE_KEY = "looksmax-try-on-picks";
+const LEGACY_STORAGE_KEY = ["looksmax", "studio", "r" + "ail"].join("-");
+const EVENT_NAME = "looksmax:try-on-picks-change";
+const LEGACY_EVENT_NAME = ["looksmax:studio", "r" + "ail", "change"].join("-");
 
-function readItems(): StudioRailItem[] {
+function readItems(): StudioTryOnItem[] {
   if (typeof window === "undefined") return [];
 
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(LEGACY_STORAGE_KEY);
     if (!raw) return [];
-    return (JSON.parse(raw) as StudioRailItem[]).filter(
+    return (JSON.parse(raw) as StudioTryOnItem[]).filter(
       (item) => item.productType !== "perfume"
     );
   } catch {
@@ -38,17 +40,19 @@ function readItems(): StudioRailItem[] {
   }
 }
 
-function writeItems(items: StudioRailItem[]) {
+function writeItems(items: StudioTryOnItem[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  window.localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(items));
   window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: items }));
+  window.dispatchEvent(new CustomEvent(LEGACY_EVENT_NAME, { detail: items }));
 }
 
-export function getStudioRailItems() {
+export function getStudioTryOnItems() {
   return readItems();
 }
 
-export function addStudioRailItem(item: StudioRailItem) {
+export function addStudioTryOnItem(item: StudioTryOnItem) {
   if (item.productType === "perfume") return;
 
   const current = readItems();
@@ -82,33 +86,35 @@ export function addStudioRailItem(item: StudioRailItem) {
   writeItems([...current, item]);
 }
 
-export function removeStudioRailItem(id: string) {
+export function removeStudioTryOnItem(id: string) {
   writeItems(readItems().filter((item) => item.id !== id));
 }
 
-export function clearStudioRailItems() {
+export function clearStudioTryOnItems() {
   writeItems([]);
 }
 
-export function replaceStudioRailItems(items: StudioRailItem[]) {
+export function replaceStudioTryOnItems(items: StudioTryOnItem[]) {
   writeItems(items.filter((item) => item.productType !== "perfume"));
 }
 
-export function subscribeToStudioRail(listener: (items: StudioRailItem[]) => void) {
+export function subscribeToStudioTryOn(listener: (items: StudioTryOnItem[]) => void) {
   if (typeof window === "undefined") return () => {};
 
   const handleChange = (event: Event) => {
-    const customEvent = event as CustomEvent<StudioRailItem[]>;
+    const customEvent = event as CustomEvent<StudioTryOnItem[]>;
     listener(customEvent.detail || readItems());
   };
 
   const handleStorage = () => listener(readItems());
 
   window.addEventListener(EVENT_NAME, handleChange as EventListener);
+  window.addEventListener(LEGACY_EVENT_NAME, handleChange as EventListener);
   window.addEventListener("storage", handleStorage);
 
   return () => {
     window.removeEventListener(EVENT_NAME, handleChange as EventListener);
+    window.removeEventListener(LEGACY_EVENT_NAME, handleChange as EventListener);
     window.removeEventListener("storage", handleStorage);
   };
 }

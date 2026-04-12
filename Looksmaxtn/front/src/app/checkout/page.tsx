@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
 import { useAuth } from "@/providers/AuthContext";
-import { getReservationKey } from "@/lib/reservations";
+import { getReservationKey, releaseProductReservation } from "@/lib/reservations";
 import { formatTndPrice } from "@/lib/formatPrice";
 
 export default function CheckoutPage() {
-  const { items, totalPrice, clearCart } = useCart();
+  const router = useRouter();
+  const { items, totalPrice, clearCart, removeItem } = useCart();
   const { user } = useAuth();
 
   const [address, setAddress] = useState({
@@ -22,6 +24,24 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [orderPlaced, setOrderPlaced] = useState<string | null>(null);
+  const unavailableItems = items.filter((item) => item.isUnavailable);
+  const hasUnavailableItems = unavailableItems.length > 0;
+
+  const handleRemoveItem = async (itemId: string) => {
+    const productId = itemId.split("-")[0];
+    await releaseProductReservation(productId).catch(() => {});
+    removeItem(itemId);
+  };
+
+  useEffect(() => {
+    if (!orderPlaced) return;
+
+    const timeout = window.setTimeout(() => {
+      router.replace("/");
+    }, 5000);
+
+    return () => window.clearTimeout(timeout);
+  }, [orderPlaced, router]);
 
   if (!user) {
     return (
@@ -102,6 +122,10 @@ export default function CheckoutPage() {
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    if (hasUnavailableItems) {
+      setError("Some products in your cart are already taken. Remove them manually to continue.");
+      return;
+    }
     setLoading(true);
 
     try {
@@ -116,7 +140,7 @@ export default function CheckoutPage() {
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: orderItems, shippingAddress: address, reservationKey: getReservationKey() }),
+        body: JSON.stringify({ items: orderItems, shippingAddress: address, cartKey: getReservationKey() }),
       });
 
       const data = await res.json();
@@ -126,6 +150,9 @@ export default function CheckoutPage() {
         return;
       }
 
+      await Promise.all(
+        items.map((item) => releaseProductReservation(item.id.split("-")[0]).catch(() => {}))
+      );
       clearCart();
       setOrderPlaced(data.order._id);
     } catch {
@@ -258,8 +285,17 @@ export default function CheckoutPage() {
               </h2>
               <div className="border border-border-color divide-y divide-border-color">
                 {items.map((item) => (
-                  <div key={item.id} className="flex gap-3 p-4">
-                    <div className="w-14 h-20 shrink-0 overflow-hidden bg-surface rounded-sm">
+                  <div
+                    key={item.id}
+                    className={`flex gap-3 p-4 ${
+                      item.isUnavailable ? "bg-red-50/80" : ""
+                    }`}
+                  >
+                    <div
+                      className={`w-14 h-20 shrink-0 overflow-hidden rounded-sm ${
+                        item.isUnavailable ? "bg-red-100" : "bg-surface"
+                      }`}
+                    >
                       {item.image ? (
                         <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
                       ) : (
@@ -275,12 +311,34 @@ export default function CheckoutPage() {
                           ? `Fragrance · Qty: ${item.quantity}`
                           : `${item.size || ""}${item.size && item.color ? " · " : ""}${item.color || ""} · Qty: ${item.quantity}`}
                       </p>
+                      {item.isUnavailable && (
+                        <p className="text-[10px] text-danger mt-1">
+                          {item.unavailableReason || "This product is already taken."}
+                        </p>
+                      )}
                       <p className="text-xs font-medium mt-1">
                         {formatTndPrice(parseFloat(item.price) * item.quantity)}
                       </p>
+                      <div className="mt-2 flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveItem(item.id)}
+                          className="text-[10px] uppercase tracking-[0.2em] text-text-secondary hover:text-foreground transition-colors"
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
+
+                {hasUnavailableItems && (
+                  <div className="p-4 bg-danger/5">
+                    <p className="text-xs text-danger font-medium">
+                      Some items are already taken. Remove them from the cart to place your order.
+                    </p>
+                  </div>
+                )}
 
                 <div className="p-4 space-y-2">
                   <div className="flex justify-between text-xs text-text-secondary">
@@ -300,10 +358,14 @@ export default function CheckoutPage() {
 
               <button
                 type="submit"
-                disabled={loading}
-                className="w-full mt-6 bg-foreground text-background py-4 text-sm font-medium tracking-wide uppercase hover:bg-accent transition-colors cursor-pointer disabled:opacity-50"
+                disabled={loading || hasUnavailableItems}
+                className="w-full mt-6 bg-foreground text-background py-4 text-sm font-medium tracking-wide uppercase hover:bg-accent transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? "Placing Order..." : `Place Order — ${formatTndPrice(totalPrice)}`}
+                {loading
+                  ? "Placing Order..."
+                  : hasUnavailableItems
+                    ? "Remove Taken Items"
+                    : `Place Order — ${formatTndPrice(totalPrice)}`}
               </button>
 
               <p className="text-[10px] text-text-secondary text-center mt-3">

@@ -7,6 +7,7 @@ const JWT_SECRET = new TextEncoder().encode(
 );
 
 const COOKIE_NAME = "looksmax-token";
+const TOKEN_TTL_SECONDS = 60 * 30;
 
 export interface JWTPayload {
   userId: string;
@@ -28,7 +29,7 @@ export async function createToken(payload: JWTPayload): Promise<string> {
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("7d")
+    .setExpirationTime("30m")
     .sign(JWT_SECRET);
 }
 
@@ -55,6 +56,6 @@ export function getTokenCookieOptions() {
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax" as const,
     path: "/",
-    maxAge: 60 * 60 * 24 * 7, // 7 days
+    maxAge: TOKEN_TTL_SECONDS,
   };
 }

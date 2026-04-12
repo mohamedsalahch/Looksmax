@@ -14,6 +14,7 @@ type Product = {
   name: string;
   price: number;
   stock: number;
+  cartCount?: number;
   brand?: string;
   categories?: string[];
   sizes?: string[];
@@ -320,6 +321,7 @@ function SearchContent() {
                     price={product.price.toFixed(2)}
                     stock={product.stock}
                     reservationExpiresAt={product.reservationExpiresAt}
+                    cartCount={product.cartCount}
                     tag={product.tag}
                     image={getMainImage(product.images)}
                     conditionScore={product.conditionScore}

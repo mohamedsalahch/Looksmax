@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
-import Order from "@/admin/models/Order";
 import Product from "@/admin/models/Product";
 import { getSession } from "@/admin/lib/auth";
 import { saveProductImages } from "@/admin/lib/productUploads";
@@ -8,26 +7,15 @@ import { getConditionStatusFromScore } from "@/admin/lib/productCondition";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
 
-const BLOCKING_ORDER_STATUSES = ["processing", "confirmed", "shipping"];
-const ACTIVE_STOCK_ORDER_STATUSES = ["processing", "confirmed", "shipping", "delivered"];
-
 function getAvailabilityStatus(params: {
   productType?: string;
   stock: number;
-  isReserved?: boolean;
-  isSold?: boolean;
 }) {
-  const { productType, stock, isReserved = false, isSold = false } = params;
+  const { productType, stock } = params;
 
-  if (productType === "perfume") {
-    if (stock <= 0) return "out-of-stock";
-    if (stock <= 3) return "low-stock";
-    return "in-stock";
-  }
-
-  if (isSold) return "sold";
-  if (isReserved) return "reserved";
-  return "available";
+  if (stock <= 0) return "out-of-stock";
+  if (productType === "perfume" && stock <= 3) return "low-stock";
+  return productType === "perfume" ? "in-stock" : "available";
 }
 
 function parseStringArray(value: FormDataEntryValue | null) {
@@ -78,7 +66,7 @@ function getProductPayload(
     categories: parseStringArray(formData.get("categories")),
     description: String(formData.get("description") || ""),
     brand: String(formData.get("brand") || "LOOKSMAX"),
-    stock: productType === "perfume" ? Math.max(0, rawStock) : 1,
+    stock: productType === "perfume" || fashionSubtype === "clothes" ? Math.max(0, rawStock) : 1,
     tag: String(formData.get("tag") || ""),
     productType,
     fashionSubtype,
@@ -112,50 +100,15 @@ export async function GET(req: NextRequest) {
     if (category) filter.categories = category;
     if (search) filter.name = { $regex: search, $options: "i" };
 
-    const [products, activeOrders] = await Promise.all([
-      Product.find(filter).sort({ createdAt: -1 }).lean(),
-      Order.find({ orderStatus: { $in: ACTIVE_STOCK_ORDER_STATUSES } })
-        .select("orderStatus items.product items.quantity")
-        .lean(),
-    ]);
-
-    const reservedSet = new Set<string>();
-    const soldSet = new Set<string>();
-    const perfumeQuantityMap = new Map<string, number>();
-
-    activeOrders.forEach((order) => {
-      order.items.forEach((item) => {
-        const productId = item.product?.toString();
-        if (!productId) return;
-        if (BLOCKING_ORDER_STATUSES.includes(order.orderStatus)) {
-          reservedSet.add(productId);
-        }
-        if (order.orderStatus === "delivered") {
-          soldSet.add(productId);
-        }
-        perfumeQuantityMap.set(productId, (perfumeQuantityMap.get(productId) || 0) + (item.quantity || 0));
-      });
-    });
+    const products = await Product.find(filter).sort({ createdAt: -1 }).lean();
 
     return NextResponse.json({
       products: products.map((product) => ({
         ...product,
-        stock:
-          product.productType === "perfume"
-            ? Math.max((product.stock ?? 0) - (perfumeQuantityMap.get(product._id.toString()) || 0), 0)
-            : reservedSet.has(product._id.toString()) || soldSet.has(product._id.toString())
-              ? 0
-              : Math.min(product.stock ?? 1, 1),
+        stock: Math.max(product.stock ?? 0, 0),
         availabilityStatus: getAvailabilityStatus({
           productType: product.productType,
-          stock:
-            product.productType === "perfume"
-              ? Math.max((product.stock ?? 0) - (perfumeQuantityMap.get(product._id.toString()) || 0), 0)
-              : reservedSet.has(product._id.toString()) || soldSet.has(product._id.toString())
-                ? 0
-                : Math.min(product.stock ?? 1, 1),
-          isReserved: reservedSet.has(product._id.toString()),
-          isSold: soldSet.has(product._id.toString()),
+          stock: Math.max(product.stock ?? 0, 0),
         }),
         visibilityStatus: product.isActive === false ? "inactive" : "active",
       })),

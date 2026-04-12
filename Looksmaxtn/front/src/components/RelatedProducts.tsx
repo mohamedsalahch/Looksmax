@@ -15,6 +15,7 @@ interface Product {
   price: number;
   stock: number;
   reservationExpiresAt?: string | null;
+  cartCount?: number;
   tag?: string;
   images?: ProductImage[];
   conditionScore?: number | null;
@@ -83,6 +84,7 @@ export default function RelatedProducts() {
             price={product.price.toFixed(2)}
             stock={product.stock}
             reservationExpiresAt={product.reservationExpiresAt}
+            cartCount={product.cartCount}
             tag={product.tag}
             image={getMainImage(product.images)}
             conditionScore={product.conditionScore}
