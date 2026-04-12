@@ -1,6 +1,11 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import {
+  clearAuthToken,
+  storeAuthToken,
+  withAuthRequest,
+} from "@/lib/authClient";
 
 interface User {
   id: string;
@@ -54,35 +59,13 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-const AUTH_TOKEN_STORAGE_KEY = "looksmax-token";
-
-function getStoredAuthToken() {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
-}
-
-function storeAuthToken(token: string) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
-}
-
-function clearAuthToken() {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refreshUser = useCallback(async () => {
     try {
-      const token = getStoredAuthToken();
-      const res = await fetch(`/api/auth/me?ts=${Date.now()}`, {
-        cache: "no-store",
-        credentials: "include",
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      });
+      const res = await fetch(`/api/auth/me?ts=${Date.now()}`, withAuthRequest({ cache: "no-store" }));
       if (!res.ok) {
         setUser(null);
         return;

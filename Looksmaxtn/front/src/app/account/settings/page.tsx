@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/providers/AuthContext";
+import { withAuthRequest } from "@/lib/authClient";
 
 function normalizeGender(value: string | undefined) {
   const normalized = String(value || "").trim().toLowerCase();
@@ -86,8 +87,10 @@ export default function SettingsPage() {
       formData.append("profileImage", file);
 
       const res = await fetch("/api/users/me/body-profile/photo", {
-        method: "POST",
-        body: formData,
+        ...withAuthRequest({
+          method: "POST",
+          body: formData,
+        }),
       });
       const data = await res.json();
 
@@ -125,8 +128,10 @@ export default function SettingsPage() {
       body.append("existingProfileImage", bodyProfile.profileImage);
 
       const res = await fetch("/api/users/me/body-profile", {
-        method: "PUT",
-        body,
+        ...withAuthRequest({
+          method: "PUT",
+          body,
+        }),
       });
       const data = await res.json();
 
