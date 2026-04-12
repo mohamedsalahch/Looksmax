@@ -9,6 +9,7 @@ export default function AdminLoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const AUTH_TOKEN_STORAGE_KEY = "looksmax-admin-token";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,6 +24,9 @@ export default function AdminLoginPage() {
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error); setLoading(false); return; }
+      if (data.token && typeof window !== "undefined") {
+        window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, data.token);
+      }
       router.push("/dashboard");
     } catch {
       setError("Network error");
