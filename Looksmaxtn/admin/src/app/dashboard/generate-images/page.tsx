@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { withAuthRequest } from "@/lib/authClient";
 
 interface GeneratedImageAsset {
   _id: string;
@@ -39,7 +40,7 @@ export default function GenerateImagesPage() {
   const [showForm, setShowForm] = useState(false);
 
   const loadGeneratedImages = () => {
-    fetch("/api/generated-images")
+    fetch("/api/generated-images", withAuthRequest())
       .then((r) => r.json())
       .then((data) => setGeneratedImages(data.generatedImages || []))
       .catch(() => {})
@@ -85,7 +86,7 @@ export default function GenerateImagesPage() {
       body.append("prompt", prompt);
       images.forEach((image) => body.append("images", image));
 
-      const res = await fetch("/api/generated-images", { method: "POST", body });
+      const res = await fetch("/api/generated-images", withAuthRequest({ method: "POST", body }));
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "Unable to generate images.");
@@ -104,7 +105,7 @@ export default function GenerateImagesPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this generated image set?")) return;
-    await fetch(`/api/generated-images/${id}`, { method: "DELETE" });
+    await fetch(`/api/generated-images/${id}`, withAuthRequest({ method: "DELETE" }));
     setGeneratedImages((current) => current.filter((item) => item._id !== id));
   };
 

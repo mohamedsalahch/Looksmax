@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getConditionStatusFromScore } from "@/lib/productCondition";
 import { generateId } from "@/lib/uuid";
+import { withAuthRequest } from "@/lib/authClient";
 
 interface Category {
   _id: string;
@@ -212,7 +213,7 @@ export default function NewProductPage() {
   const allowStockEditing = true;
 
   useEffect(() => {
-    fetch("/api/categories")
+    fetch("/api/categories", withAuthRequest())
       .then((r) => r.json())
       .then((d) => {
         const cats = d.categories || [];
@@ -221,11 +222,11 @@ export default function NewProductPage() {
         if (firstParent) setSelectedParentSlug(firstParent.slug);
       });
 
-    fetch("/api/models")
+    fetch("/api/models", withAuthRequest())
       .then((r) => r.json())
       .then((d) => setModels(d.models || []));
 
-    fetch("/api/generated-images")
+    fetch("/api/generated-images", withAuthRequest())
       .then((r) => r.json())
       .then((d) => setGeneratedImages(d.generatedImages || []));
   }, []);
@@ -395,10 +396,10 @@ export default function NewProductPage() {
       if (generationInputs.right.file) body.append("right", generationInputs.right.file);
 
       // 1. Trigger the job
-      const triggerRes = await fetch("/api/products/generate", {
+      const triggerRes = await fetch("/api/products/generate", withAuthRequest({
         method: "POST",
         body,
-      });
+      }));
       const triggerData = await triggerRes.json();
 
       if (!triggerRes.ok) {
@@ -417,7 +418,7 @@ export default function NewProductPage() {
         // Wait 5 seconds
         await new Promise((resolve) => setTimeout(resolve, 5000));
 
-        const statusRes = await fetch(`/api/products/generate?job_id=${jobId}`);
+        const statusRes = await fetch(`/api/products/generate?job_id=${jobId}`, withAuthRequest());
         const statusData = await statusRes.json();
 
         if (statusData.status === "completed") {
@@ -536,10 +537,10 @@ export default function NewProductPage() {
         if (image.file) body.append("images", image.file);
       });
 
-      const res = await fetch("/api/products", {
+      const res = await fetch("/api/products", withAuthRequest({
         method: "POST",
         body,
-      });
+      }));
 
       if (!res.ok) {
         const d = await res.json();

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { withAuthRequest } from "@/lib/authClient";
 
 interface Subscriber {
   _id: string;
@@ -15,7 +16,7 @@ export default function NewsletterPage() {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    fetch("/api/newsletter")
+    fetch("/api/newsletter", withAuthRequest())
       .then((r) => r.json())
       .then((d) => setSubscribers(d.subscribers || []))
       .finally(() => setLoading(false));
@@ -23,11 +24,11 @@ export default function NewsletterPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Remove this subscriber?")) return;
-    const res = await fetch("/api/newsletter", {
+    const res = await fetch("/api/newsletter", withAuthRequest({
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
-    });
+    }));
     if (res.ok) setSubscribers((s) => s.filter((x) => x._id !== id));
   };
 

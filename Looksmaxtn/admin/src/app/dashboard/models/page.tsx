@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { withAuthRequest } from "@/lib/authClient";
 
 interface ModelAsset {
   _id: string;
@@ -24,7 +25,7 @@ export default function ModelsPage() {
   const [showForm, setShowForm] = useState(false);
 
   const loadModels = () => {
-    fetch("/api/models")
+    fetch("/api/models", withAuthRequest())
       .then((r) => r.json())
       .then((data) => setModels(data.models || []))
       .catch(() => {})
@@ -66,7 +67,7 @@ export default function ModelsPage() {
       body.append("backImageIndex", String(backImageIndex));
       images.forEach((image) => body.append("images", image));
 
-      const res = await fetch("/api/models", { method: "POST", body });
+      const res = await fetch("/api/models", withAuthRequest({ method: "POST", body }));
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "Unable to create model.");
@@ -85,7 +86,7 @@ export default function ModelsPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this model?")) return;
-    await fetch(`/api/models/${id}`, { method: "DELETE" });
+    await fetch(`/api/models/${id}`, withAuthRequest({ method: "DELETE" }));
     setModels((current) => current.filter((model) => model._id !== id));
   };
 

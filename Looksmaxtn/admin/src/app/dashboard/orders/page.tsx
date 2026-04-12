@@ -3,6 +3,7 @@
 import { useDeferredValue, useEffect, useMemo, useState, type MouseEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { withAuthRequest } from "@/lib/authClient";
 
 interface Order {
   _id: string; totalPrice: number; orderStatus: string;
@@ -27,7 +28,7 @@ export default function OrdersPage() {
   const deferredSearch = useDeferredValue(search);
 
   useEffect(() => {
-    fetch("/api/orders").then((r) => r.json()).then((d) => setOrders(d.orders || [])).catch(() => {}).finally(() => setLoading(false));
+    fetch("/api/orders", withAuthRequest()).then((r) => r.json()).then((d) => setOrders(d.orders || [])).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   const filtered = useMemo(() => {
@@ -112,7 +113,7 @@ export default function OrdersPage() {
 
     setDeletingOrderId(orderId);
     try {
-      const res = await fetch(`/api/orders/${orderId}`, { method: "DELETE" });
+      const res = await fetch(`/api/orders/${orderId}`, withAuthRequest({ method: "DELETE" }));
       const data = await res.json();
       if (!res.ok) {
         alert(data.error || "Failed to delete order");

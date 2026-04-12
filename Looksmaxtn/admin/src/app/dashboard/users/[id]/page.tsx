@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
+import { withAuthRequest } from "@/lib/authClient";
 
 interface UserOrder {
   _id: string;
@@ -57,18 +58,18 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
     );
     if (!confirmed) return;
 
-    const response = await fetch(`/api/users/${user._id}`, {
+    const response = await fetch(`/api/users/${user._id}`, withAuthRequest({
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ isBlocked: nextBlocked }),
-    });
+    }));
     const data = await response.json();
     if (!response.ok || !data.user) return;
     setUser((current) => (current ? { ...current, isBlocked: data.user.isBlocked } : current));
   };
 
   useEffect(() => {
-    fetch(`/api/users/${id}`)
+    fetch(`/api/users/${id}`, withAuthRequest())
       .then((r) => r.json())
       .then((data) => {
         setUser(data.user || null);

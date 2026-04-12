@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, ReactNode } from "react";
+import { clearAuthToken, withAuthRequest } from "@/lib/authClient";
 
 interface AdminUser { id: string; name: string; email: string; role: string; }
 
@@ -36,18 +37,6 @@ const navItems = [
   { name: "Newsletter", href: "/dashboard/newsletter", icon: "📧" },
   { name: "Messages", href: "/dashboard/messages", icon: "💬" },
 ];
-
-const AUTH_TOKEN_STORAGE_KEY = "looksmax-admin-token";
-
-function getStoredAuthToken() {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
-}
-
-function clearStoredAuthToken() {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
-}
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -83,11 +72,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    const token = getStoredAuthToken();
-    fetch("/api/auth/me", {
-      credentials: "include",
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    }).then((r) => r.json()).then((data) => {
+    fetch("/api/auth/me", withAuthRequest()).then((r) => r.json()).then((data) => {
       if (!data.user) { router.push("/"); return; }
       setUser(data.user);
     }).catch(() => router.push("/")).finally(() => setLoading(false));
@@ -117,11 +102,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
     const loadProcessingOrders = async () => {
       try {
-        const token = getStoredAuthToken();
-        const response = await fetch("/api/orders", {
-          credentials: "include",
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        });
+        const response = await fetch("/api/orders", withAuthRequest());
         const data = (await response.json()) as { orders?: DashboardOrder[] };
         if (!active || !data) return;
 
@@ -195,8 +176,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   };
 
   const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    clearStoredAuthToken();
+    await fetch("/api/auth/logout", withAuthRequest({ method: "POST" }));
+    clearAuthToken();
     router.push("/");
   };
 

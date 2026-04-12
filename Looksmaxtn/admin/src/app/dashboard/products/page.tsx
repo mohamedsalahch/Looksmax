@@ -3,6 +3,7 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { withAuthRequest } from "@/lib/authClient";
 
 interface Product {
   _id: string; name: string; price: number; categories: string[];
@@ -62,7 +63,7 @@ export default function ProductsPage() {
   const deferredSearch = useDeferredValue(search);
 
   const fetchProducts = () => {
-    fetch("/api/products")
+    fetch("/api/products", withAuthRequest())
       .then((r) => r.json())
       .then((d) => setProducts(d.products || []))
       .catch(() => {})
@@ -73,18 +74,18 @@ export default function ProductsPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this product?")) return;
-    await fetch(`/api/products/${id}`, { method: "DELETE" });
+    await fetch(`/api/products/${id}`, withAuthRequest({ method: "DELETE" }));
     setProducts((p) => p.filter((x) => x._id !== id));
   };
 
   const handleToggleVisibility = async (product: Product) => {
     setTogglingVisibilityId(product._id);
     try {
-      const response = await fetch(`/api/products/${product._id}`, {
+      const response = await fetch(`/api/products/${product._id}`, withAuthRequest({
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isActive: !(product.isActive !== false) }),
-      });
+      }));
       const data = await response.json();
       if (!response.ok || !data.product) return;
 
