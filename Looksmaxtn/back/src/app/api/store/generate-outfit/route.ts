@@ -5,11 +5,13 @@ import path from "path";
 import mongoose from "mongoose";
 import dbConnect from "@/store/lib/mongodb";
 import { getSession } from "@/store/lib/auth";
+import User from "@/store/models/User";
 import OutfitGenerationJob from "@/store/models/OutfitGenerationJob";
 
 type ZonePayload = {
   status?: boolean;
   fashionSubtype?: string;
+  size?: string;
   originPictures?: {
     front?: string;
     back?: string;
@@ -57,13 +59,15 @@ async function publicPathToBase64(imagePath: string) {
   } else if (imagePath.startsWith("/uploads/products/")) {
     fullPath = path.join(process.cwd(), "..", "admin", "public", imagePath.replace(/^\//, ""));
   } else {
+     console.warn("[publicPathToBase64] unrecognized path format:", imagePath);
     return "";
   }
 
   try {
     const buffer = await readFile(fullPath);
     return buffer.toString("base64");
-  } catch {
+  } catch (err) {
+    console.error("[publicPathToBase64] failed to read file:", fullPath, err);
     return "";
   }
 }
@@ -98,9 +102,22 @@ export async function POST(req: NextRequest) {
       profileImage?: string;
       heightCm?: string;
       weightKg?: string;
-      usualSize?: string;
+      topSize?: string;
+      bottomSize?: string;
+      shoeSize?: string;
       bodyZones?: Record<string, ZonePayload | null>;
     };
+
+    // Fetch the enhanced profile image if available
+    await dbConnect();
+    const requestingUser = await User.collection.findOne(
+      { _id: new mongoose.Types.ObjectId(session.userId) },
+      { projection: { bodyProfile: 1 } }
+    );
+    const bestProfileImage = requestingUser?.bodyProfile?.profileImageEnhanced
+      || requestingUser?.bodyProfile?.profileImage
+      || body.profileImage
+      || "";
 
     const bodyZones = body.bodyZones || {};
     const zoneEntries = await Promise.all(
@@ -118,6 +135,7 @@ export async function POST(req: NextRequest) {
           zone,
           {
             status,
+            size: value?.size || "",
             front:
               status && originPictures.front ? await publicPathToBase64(originPictures.front) : "",
             back:
@@ -136,12 +154,37 @@ export async function POST(req: NextRequest) {
     );
 
     const payload = {
-      profile_picture: await publicPathToBase64(body.profileImage || ""),
+      profile_picture: await publicPathToBase64(bestProfileImage),
       height: body.heightCm || "",
       weight: body.weightKg || "",
-      size: body.usualSize || "",
+      top_size: body.topSize || "",
+      bottom_size: body.bottomSize || "",
+      shoe_size: body.shoeSize || "",
       body_zones: Object.fromEntries(zoneEntries),
     };
+
+    if (!payload.profile_picture) {
+      console.error("[generate_outfit] profile picture is empty — profileImage path was:", body.profileImage || "(empty)");
+      return NextResponse.json(
+        { error: "Profile picture could not be loaded. Please re-upload your body profile image." },
+        { status: 400 }
+      );
+    }
+
+    const activeZonesWithNoImages = Object.entries(payload.body_zones)
+      .filter(([, value]) => {
+        const z = value as { status: boolean; front: string; back: string };
+        return z.status && !z.front && !z.back;
+      })
+      .map(([zone]) => zone);
+
+    if (activeZonesWithNoImages.length > 0) {
+      console.error("[generate_outfit] active zones with no images:", activeZonesWithNoImages);
+      return NextResponse.json(
+        { error: `Selected items have no images: ${activeZonesWithNoImages.join(", ")}` },
+        { status: 400 }
+      );
+    }
 
     const summarizedBodyZones = Object.fromEntries(
       Object.entries(payload.body_zones).map(([zone, value]) => {
@@ -169,7 +212,9 @@ export async function POST(req: NextRequest) {
     const requestPayloadSummary = {
       height: payload.height,
       weight: payload.weight,
-      size: payload.size,
+      top_size: payload.top_size,
+      bottom_size: payload.bottom_size,
+      shoe_size: payload.shoe_size,
       hasProfilePicture: payload.profile_picture.length > 0,
       body_zones: summarizedBodyZones,
     };

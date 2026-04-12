@@ -1,8 +1,9 @@
 """API endpoints for outfit generation with background tasks."""
 
 import logging
+import traceback
 
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from app.models.requests import OutfitRequest
 from app.models.responses import OutfitResponse
@@ -30,13 +31,28 @@ async def process_outfit_generation(
     body_zones,
     height: str,
     weight: str,
-    size: str
+    top_size: str,
+    bottom_size: str,
+    shoe_size: str
 ):
     """Background task to generate outfit and send webhooks."""
     logger.info(f"=== OUTFIT GENERATION START ===")
     logger.info(f"Job ID: {job_id}")
     logger.info(f"Webhook URL: {webhook_url}")
-    logger.info(f"Height: {height}, Weight: {weight}, Size: {size}")
+    logger.info(f"Profile picture: {len(profile_picture)} chars")
+    logger.info(f"Height: {height}, Weight: {weight}, Top size: {top_size}, Bottom size: {bottom_size}, Shoe size: {shoe_size}")
+
+    # Log each zone's status and image sizes
+    for zone_name, zone in [
+        ("headwear", body_zones.headwear),
+        ("outerwear", body_zones.outerwear),
+        ("top", body_zones.top),
+        ("bottom", body_zones.bottom),
+        ("footwear", body_zones.footwear)
+    ]:
+        front_len = len(zone.front) if zone.front else 0
+        back_len = len(zone.back) if zone.back else 0
+        logger.info(f"  Zone '{zone_name}': status={zone.status}, front={front_len} chars, back={back_len} chars")
 
     # Count active zones
     active_zones = [name for name, zone in [
@@ -60,7 +76,9 @@ async def process_outfit_generation(
             body_zones=body_zones,
             height=height,
             weight=weight,
-            size=size
+            top_size=top_size,
+            bottom_size=bottom_size,
+            shoe_size=shoe_size
         )
         logger.info(f"Job {job_id}: Front view generated successfully ({len(front_b64)} chars)")
 
@@ -92,7 +110,8 @@ async def process_outfit_generation(
         logger.info(f"Job {job_id}: === OUTFIT GENERATION COMPLETE ===")
 
     except Exception as e:
-        logger.error(f"Job {job_id}: Error during outfit generation: {str(e)}")
+        logger.error(f"Job {job_id}: Error during outfit generation: {type(e).__name__}: {str(e)}")
+        logger.error(f"Job {job_id}: Full traceback:\n{traceback.format_exc()}")
 
 
 @router.post("/generate_outfit", response_model=OutfitResponse)
@@ -121,6 +140,37 @@ async def generate_outfit_image(request: OutfitRequest, background_tasks: Backgr
     logger.info(f"Job ID: {request.job_id}")
     logger.info(f"Webhook: {request.webhook_url}")
     logger.info(f"Profile picture size: {len(request.profile_picture)} chars")
+    logger.info(f"Height: {request.height}, Weight: {request.weight}, Top size: {request.top_size}, Bottom size: {request.bottom_size}, Shoe size: {request.shoe_size}")
+    for zone_name, zone in [
+        ("headwear", request.body_zones.headwear),
+        ("outerwear", request.body_zones.outerwear),
+        ("top", request.body_zones.top),
+        ("bottom", request.body_zones.bottom),
+        ("footwear", request.body_zones.footwear),
+    ]:
+        logger.info(f"  Zone '{zone_name}': status={zone.status}, size={zone.size}, front={len(zone.front) if zone.front else 0} chars, back={len(zone.back) if zone.back else 0} chars")
+
+    # Validate required images
+    if not request.profile_picture or not request.profile_picture.strip():
+        raise HTTPException(status_code=400, detail="profile_picture is required and cannot be empty")
+
+    missing_zones = []
+    for zone_name, zone in [
+        ("headwear", request.body_zones.headwear),
+        ("outerwear", request.body_zones.outerwear),
+        ("top", request.body_zones.top),
+        ("bottom", request.body_zones.bottom),
+        ("footwear", request.body_zones.footwear),
+    ]:
+        if zone.status:
+            if not zone.front and not zone.back:
+                missing_zones.append(zone_name)
+
+    if missing_zones:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Active zones must have at least one image: {', '.join(missing_zones)}"
+        )
 
     background_tasks.add_task(
         process_outfit_generation,
@@ -130,7 +180,9 @@ async def generate_outfit_image(request: OutfitRequest, background_tasks: Backgr
         body_zones=request.body_zones,
         height=request.height,
         weight=request.weight,
-        size=request.size
+        top_size=request.top_size,
+        bottom_size=request.bottom_size,
+        shoe_size=request.shoe_size
     )
 
     logger.info(f"Job {request.job_id}: Background task started, returning processing status")

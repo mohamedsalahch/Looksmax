@@ -5,9 +5,8 @@ import User from "@/store/models/User";
 import { getSession } from "@/store/lib/auth";
 import {
   deleteBodyProfileImage,
-  saveBodyProfileImage,
 } from "@/store/lib/bodyProfileUploads";
-import { logRequestError, logRequestStart } from "@/lib/requestLogging";
+import { logRequestError } from "@/lib/requestLogging";
 
 function normalizeGender(value: FormDataEntryValue | null) {
   const normalized = String(value || "").trim().toLowerCase();
@@ -22,7 +21,6 @@ function normalizeGender(value: FormDataEntryValue | null) {
 
 export async function PUT(req: NextRequest) {
   try {
-    await logRequestStart("store.users.me.body-profile.put", req);
     const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -38,23 +36,20 @@ export async function PUT(req: NextRequest) {
     if (!existingUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
-    const previousImage = existingUser.bodyProfile?.profileImage || "";
 
     const formData = await req.formData();
-    const imageFile = formData.get("profileImage");
-    const currentImage = String(formData.get("existingProfileImage") || "");
-    const nextImage =
-      imageFile instanceof File && imageFile.size > 0
-        ? await saveBodyProfileImage(imageFile)
-        : currentImage;
-
     const nextBodyProfile = {
       heightCm: String(formData.get("heightCm") || ""),
       weightKg: String(formData.get("weightKg") || ""),
-      usualSize: String(formData.get("usualSize") || ""),
-      profileImage: nextImage,
+      topSize: String(formData.get("topSize") || ""),
+      bottomSize: String(formData.get("bottomSize") || ""),
+      shoeSize: String(formData.get("shoeSize") || ""),
+      profileImage: String(formData.get("existingProfileImage") || ""),
+      profileImageEnhanced: existingUser.bodyProfile?.profileImageEnhanced || "",
       gender: normalizeGender(formData.get("gender")),
+      imageEnhancing: Boolean(existingUser.bodyProfile?.imageEnhancing),
     };
+
     const updateResult = await usersCollection.findOneAndUpdate(
       { _id: userObjectId },
       {
@@ -68,17 +63,8 @@ export async function PUT(req: NextRequest) {
     );
 
     const updatedUser = updateResult;
-
     if (!updatedUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    if (
-      nextImage &&
-      previousImage &&
-      previousImage !== nextImage
-    ) {
-      await deleteBodyProfileImage(previousImage);
     }
 
     return NextResponse.json({

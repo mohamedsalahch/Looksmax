@@ -184,35 +184,60 @@ BODY PROPORTIONS:
 
 - Height: {height} cm
 - Weight: {weight} kg
-- Size: {size}
-
-Adjust garment fit realistically based on these proportions.
+- Top size (body): {top_size}
+- Bottom size (body): {bottom_size}
+- Shoe size (body): {shoe_size}
 
 --------------------------------
 OUTFIT (FRONT VIEW ONLY):
 
 HEADWEAR:
 - Status: {headwear_status}
+- Size: {headwear_piece_size}
 - If false: do NOT generate anything
 
 OUTERWEAR:
 - Status: {outerwear_status}
+- Size: {outerwear_piece_size}
 - If true: use FRONT view image and reconstruct faithfully
-- If False : do NOT generate anything
+- If false: do NOT generate anything
+
 TOP:
 - Status: {top_status}
+- Size: {top_piece_size}
 - If true: use FRONT view image and reconstruct faithfully
 - If false: generate a neutral minimal top (plain, solid color)
 
 BOTTOM:
 - Status: {bottom_status}
+- Size: {bottom_piece_size}
 - If true: use FRONT view image and reconstruct faithfully
 - If false: generate neutral pants (clean, no patterns)
 
 FOOTWEAR:
 - Status: {footwear_status}
+- Size: {footwear_piece_size}
 - If true: use FRONT view image and match exactly
 - If false: generate plain white shoes (minimalist)
+
+--------------------------------
+FIT SIMULATION (CRITICAL):
+
+You MUST simulate realistic garment fit based on the difference between BODY SIZE and GARMENT SIZE.
+
+- If garment size == body size → perfect fit
+- If garment size is smaller than body size:
+  - Tight fit
+  - Visible pulling, stretching, tension lines
+  - Fabric strain around chest, shoulders, waist, or thighs
+- If garment size is larger than body size:
+  - Loose / oversized fit
+  - Extra fabric, draping, folds
+  - Dropped shoulders, longer sleeves, baggy silhouette
+
+Fit must be visually obvious and physically realistic.
+
+Do NOT ignore size differences.
 
 --------------------------------
 GARMENT RULES:
@@ -225,8 +250,8 @@ GARMENT RULES:
 --------------------------------
 FIT & REALISM:
 
-- Clothing must fit naturally on the body
-- Add realistic folds and fabric behavior
+- Clothing must interact naturally with the body
+- Add realistic folds, wrinkles, and fabric physics
 - Avoid pasted or artificial look
 
 --------------------------------
@@ -265,13 +290,15 @@ STRICT CONSTRAINTS:
 
 - Do NOT change garment colors
 - Do NOT add logos or patterns
-- Do NOT distort shapes
+- Do NOT distort shapes (except natural fit effects)
 - Avoid artifacts and unrealistic textures
 
 --------------------------------
 FINAL REQUIREMENT:
+
 portrait orientation, 2:3 aspect ratio, full-body framing, model centered, feet visible, consistent margins, studio composition
-The output must be a clean, realistic FRONT VIEW product image.
+
+The output must be a clean, realistic FRONT VIEW product image with accurate garment fit representation.
 """
 
 BACK_VIEW_PROMPT_TEMPLATE = """
@@ -293,6 +320,7 @@ IDENTITY CONSISTENCY:
   - Body shape
   - Height and proportions
   - Skin tone
+  - (very important) the fitting of the clothes
 
 - The face is not visible, but head shape and hairstyle must remain consistent
 

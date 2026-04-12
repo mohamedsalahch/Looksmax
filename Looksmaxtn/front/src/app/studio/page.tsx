@@ -473,7 +473,7 @@ function StudioModel({
 }
 
 export default function OutfitStudioPage() {
-    const {user, loading} = useAuth();
+    const {user, loading, refreshUser} = useAuth();
     const isWomen = user?.bodyProfile?.gender === "women";
     const studioTitle = isWomen ? "Outfit Builder" : "Outfit Studio";
     const [categories, setCategories] = useState<CategoryNode[]>([]);
@@ -541,6 +541,16 @@ export default function OutfitStudioPage() {
         });
     }, []);
 
+    const imageEnhancing = Boolean(user?.bodyProfile?.imageEnhancing);
+
+    useEffect(() => {
+        if (!imageEnhancing) return;
+        const interval = window.setInterval(() => {
+            refreshUser();
+        }, 3000);
+        return () => window.clearInterval(interval);
+    }, [imageEnhancing, refreshUser]);
+
     const childCategories = useMemo(
         () => categories.find((category) => category.slug === selectedParent)?.children || [],
         [categories, selectedParent]
@@ -554,9 +564,12 @@ export default function OutfitStudioPage() {
     const profileReady = Boolean(
         user?.bodyProfile?.heightCm &&
         user?.bodyProfile?.weightKg &&
-        user?.bodyProfile?.usualSize &&
+        user?.bodyProfile?.topSize &&
+        user?.bodyProfile?.bottomSize &&
+        user?.bodyProfile?.shoeSize &&
         user?.bodyProfile?.profileImage &&
-        user?.bodyProfile?.gender
+        user?.bodyProfile?.gender &&
+        !imageEnhancing
     );
     const genderCollectionSlug = user?.bodyProfile?.gender === "women" ? "women" : "men";
 
@@ -690,16 +703,28 @@ export default function OutfitStudioPage() {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({
-                    profileImage: user?.bodyProfile?.profileImage || "",
+                    profileImage: user?.bodyProfile?.profileImageEnhanced || user?.bodyProfile?.profileImage || "",
                     heightCm: user?.bodyProfile?.heightCm || "",
                     weightKg: user?.bodyProfile?.weightKg || "",
-                    usualSize: user?.bodyProfile?.usualSize || "",
+                    topSize: user?.bodyProfile?.topSize || "",
+                    bottomSize: user?.bodyProfile?.bottomSize || "",
+                    shoeSize: user?.bodyProfile?.shoeSize || "",
                     bodyZones: Object.fromEntries(
                         BODY_ZONES.map((zone) => [
                             zone.id,
                             {
                                 status: Boolean(outfit[zone.id]),
                                 fashionSubtype: outfit[zone.id]?.fashionSubtype || "",
+                                size:
+                                    zone.id === "headwear"
+                                        ? ""
+                                        : zone.id === "outerwear" || zone.id === "top"
+                                            ? user?.bodyProfile?.topSize || ""
+                                            : zone.id === "bottom"
+                                                ? user?.bodyProfile?.bottomSize || ""
+                                                : zone.id === "footwear"
+                                                    ? user?.bodyProfile?.shoeSize || ""
+                                                    : "",
                                 originPictures: outfit[zone.id]?.originPictures || {
                                     front: "",
                                     back: "",
@@ -879,8 +904,8 @@ export default function OutfitStudioPage() {
                             Complete Your {studioTitle} Profile First
                         </h1>
                         <p className="text-sm text-text-secondary max-w-xl mx-auto">
-                            Before using the studio, add your height, weight, usual size, gender, and profile photo in
-                            account settings.
+                            Before using the studio, add your height, weight, top size, bottom size, shoe size, gender,
+                            and profile photo in account settings.
                         </p>
                         <Link
                             href="/account/settings"

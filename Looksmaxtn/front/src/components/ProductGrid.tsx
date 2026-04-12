@@ -32,6 +32,11 @@ interface Product {
   cloneSourceImage?: string;
 }
 
+interface Facets {
+  sizes: string[];
+  priceRange: { min: number; max: number };
+}
+
 function getMainImage(images?: ProductImage[]): string | undefined {
   if (!images || images.length === 0) return undefined;
   const main = images.find((i) => i.isMain);
@@ -42,6 +47,20 @@ export default function ProductGrid({ category }: { category?: string }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [total, setTotal] = useState(0);
   const [loaded, setLoaded] = useState(false);
+  const [facets, setFacets] = useState<Facets | null>(null);
+
+  const [selectedSize, setSelectedSize] = useState("");
+  const [priceMin, setPriceMin] = useState("");
+  const [priceMax, setPriceMax] = useState("");
+  const [appliedPriceMin, setAppliedPriceMin] = useState("");
+  const [appliedPriceMax, setAppliedPriceMax] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  const hasActiveFilters = selectedSize || appliedPriceMin || appliedPriceMax;
+  const rangeMin = facets ? Math.floor(facets.priceRange.min) : 0;
+  const rangeMax = facets ? Math.ceil(facets.priceRange.max) : 1000;
+  const sliderMin = priceMin !== "" ? Number(priceMin) : rangeMin;
+  const sliderMax = priceMax !== "" ? Number(priceMax) : rangeMax;
 
   useEffect(() => {
     let cancelled = false;
@@ -49,6 +68,10 @@ export default function ProductGrid({ category }: { category?: string }) {
     const loadProducts = () => {
       const params = new URLSearchParams();
       if (category) params.set("category", category);
+      if (selectedSize) params.set("size", selectedSize);
+      if (appliedPriceMin) params.set("priceMin", appliedPriceMin);
+      if (appliedPriceMax) params.set("priceMax", appliedPriceMax);
+      params.set("includeFacets", "1");
 
       fetch(`/api/products?${params}`)
         .then((r) => r.json())
@@ -56,6 +79,12 @@ export default function ProductGrid({ category }: { category?: string }) {
           if (cancelled) return;
           setProducts(data.products || []);
           setTotal(data.total || 0);
+          if (data.facets) {
+            setFacets({
+              sizes: data.facets.sizes || [],
+              priceRange: data.facets.priceRange || { min: 0, max: 0 },
+            });
+          }
         })
         .catch(() => {
           if (cancelled) return;
@@ -74,7 +103,20 @@ export default function ProductGrid({ category }: { category?: string }) {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [category]);
+  }, [category, selectedSize, appliedPriceMin, appliedPriceMax]);
+
+  const clearFilters = () => {
+    setSelectedSize("");
+    setPriceMin("");
+    setPriceMax("");
+    setAppliedPriceMin("");
+    setAppliedPriceMax("");
+  };
+
+  const applyPriceFilter = () => {
+    setAppliedPriceMin(priceMin);
+    setAppliedPriceMax(priceMax);
+  };
 
   if (!loaded) {
     return (
@@ -92,7 +134,7 @@ export default function ProductGrid({ category }: { category?: string }) {
     );
   }
 
-  if (products.length === 0) {
+  if (products.length === 0 && !hasActiveFilters) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-16 text-center">
         <p className="text-sm text-text-secondary">No products available in this category yet.</p>
@@ -102,11 +144,133 @@ export default function ProductGrid({ category }: { category?: string }) {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
-      {total > 0 && (
-        <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-4">
-          {total} product{total !== 1 ? "s" : ""}
-        </p>
-      )}
+      <div className="flex items-center gap-4 mb-4">
+        {total > 0 && (
+          <p className="text-[10px] text-text-secondary uppercase tracking-wider">
+            {total} product{total !== 1 ? "s" : ""}
+          </p>
+        )}
+        <button
+          onClick={() => setFiltersOpen(!filtersOpen)}
+          className="text-[10px] uppercase tracking-wider text-text-secondary hover:text-foreground cursor-pointer flex items-center gap-1"
+        >
+          Filters
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={`transition-transform duration-200 ${filtersOpen ? "rotate-180" : ""}`}
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </button>
+        {hasActiveFilters && !filtersOpen && (
+          <button
+            onClick={clearFilters}
+            className="text-[10px] uppercase tracking-wider text-text-secondary hover:text-foreground underline underline-offset-2 cursor-pointer"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
+      <div
+        className={`overflow-hidden transition-all duration-200 ease-out ${
+          filtersOpen ? "max-h-[300px] opacity-100 mb-4" : "max-h-0 opacity-0"
+        }`}
+      >
+        <div className="p-4 space-y-4">
+          {facets && facets.sizes.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[10px] uppercase tracking-wider text-text-secondary">Size</p>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {facets.sizes.map((size) => (
+                  <button
+                    key={size}
+                    onClick={() => setSelectedSize(selectedSize === size ? "" : size)}
+                    className={`px-2.5 py-1 text-[10px] uppercase tracking-wider transition-colors cursor-pointer ${
+                      selectedSize === size
+                        ? "bg-foreground text-background"
+                        : "text-text-secondary hover:text-foreground"
+                    }`}
+                  >
+                    {size}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] uppercase tracking-wider text-text-secondary">Price</p>
+              <button
+                onClick={applyPriceFilter}
+                className="text-[10px] uppercase tracking-wider text-text-secondary hover:text-foreground transition-colors cursor-pointer"
+              >
+                Apply
+              </button>
+            </div>
+            <div className="price-range-slider max-w-[240px]">
+              <div className="price-range-track">
+                <div
+                  className="price-range-fill"
+                  style={{
+                    left: `${((sliderMin - rangeMin) / (rangeMax - rangeMin || 1)) * 100}%`,
+                    width: `${((sliderMax - sliderMin) / (rangeMax - rangeMin || 1)) * 100}%`,
+                  }}
+                />
+              </div>
+              <input
+                type="range"
+                min={rangeMin}
+                max={rangeMax}
+                value={sliderMin}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  if (val <= sliderMax) setPriceMin(String(val));
+                }}
+                className="price-range-thumb"
+              />
+              <input
+                type="range"
+                min={rangeMin}
+                max={rangeMax}
+                value={sliderMax}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  if (val >= sliderMin) setPriceMax(String(val));
+                }}
+                className="price-range-thumb"
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-text-secondary">{sliderMin} TND</span>
+              <span className="text-[10px] text-text-secondary">{sliderMax} TND</span>
+            </div>
+          </div>
+
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="text-[10px] uppercase tracking-wider text-text-secondary hover:text-foreground underline underline-offset-2 cursor-pointer"
+            >
+              Clear all filters
+            </button>
+          )}
+        </div>
+      </div>
+
+      {products.length === 0 && hasActiveFilters ? (
+        <div className="py-16 text-center">
+          <p className="text-sm text-text-secondary">No products match your filters.</p>
+        </div>
+      ) : (
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-8">
         {products.map((product) => (
           <ProductCard
@@ -130,6 +294,7 @@ export default function ProductGrid({ category }: { category?: string }) {
           />
         ))}
       </div>
+      )}
     </div>
   );
 }

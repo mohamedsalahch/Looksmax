@@ -11,9 +11,13 @@ export interface IAddress {
 export interface IBodyProfile {
   heightCm: string;
   weightKg: string;
-  usualSize: string;
+  topSize: string;
+  bottomSize: string;
+  shoeSize: string;
   profileImage: string;
+  profileImageEnhanced: string;
   gender: string;
+  imageEnhancing: boolean;
 }
 
 export interface IUser extends Document {
@@ -50,9 +54,13 @@ const bodyProfileSchema = new Schema<IBodyProfile>(
   {
     heightCm: { type: String, default: "" },
     weightKg: { type: String, default: "" },
-    usualSize: { type: String, default: "" },
+    topSize: { type: String, default: "" },
+    bottomSize: { type: String, default: "" },
+    shoeSize: { type: String, default: "" },
     profileImage: { type: String, default: "" },
+    profileImageEnhanced: { type: String, default: "" },
     gender: { type: String, default: "" },
+    imageEnhancing: { type: Boolean, default: false },
   },
   { _id: false }
 );

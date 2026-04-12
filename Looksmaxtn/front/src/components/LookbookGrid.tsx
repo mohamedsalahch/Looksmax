@@ -68,7 +68,7 @@ export default function LookbookGrid({
   return (
     <section className="px-4 md:px-8 py-8">
       <div className="max-w-6xl mx-auto">
-        <div className="grid grid-cols-1 gap-1 md:grid-cols-3">
+        <div className="flex flex-wrap justify-center gap-1">
           {displayItems.map((item, index) => (
             <Link
               key={`${item._id}-${index}`}
@@ -77,7 +77,7 @@ export default function LookbookGrid({
                 itemRefs.current[index] = node;
               }}
               data-index={index}
-              className="relative aspect-[3/4] cursor-pointer group overflow-hidden bg-surface block"
+              className="relative aspect-[3/4] cursor-pointer group overflow-hidden bg-surface block w-full md:w-[calc(33.333%-3px)]"
             >
               {item.image ? (
                 <img
