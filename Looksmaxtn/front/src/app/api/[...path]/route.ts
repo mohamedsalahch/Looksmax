@@ -99,6 +99,14 @@ async function proxy(req: NextRequest, context: { params: Promise<{ path: string
     redirect: "manual",
   };
 
+  if (path[0] === "auth") {
+    console.log("[proxy][front]", {
+      method,
+      path: path.join("/"),
+      hasCookieHeader: req.headers.has("cookie"),
+    });
+  }
+
   const response = await fetch(buildTargetUrl(req, path), requestInit);
 
   const nextResponse = new NextResponse(response.body, {
@@ -112,6 +120,17 @@ async function proxy(req: NextRequest, context: { params: Promise<{ path: string
     }
   });
   applySetCookieHeader(response, nextResponse);
+
+  if (path[0] === "auth") {
+    const headers = response.headers as Headers & { getSetCookie?: () => string[] };
+    const setCookieCount = headers.getSetCookie?.().length ?? (response.headers.get("set-cookie") ? 1 : 0);
+    console.log("[proxy][front][response]", {
+      method,
+      path: path.join("/"),
+      status: response.status,
+      setCookieCount,
+    });
+  }
 
   return nextResponse;
 }

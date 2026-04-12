@@ -71,7 +71,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    fetch("/api/auth/me").then((r) => r.json()).then((data) => {
+    fetch("/api/auth/me", { credentials: "include" }).then((r) => r.json()).then((data) => {
       if (!data.user) { router.push("/"); return; }
       setUser(data.user);
     }).catch(() => router.push("/")).finally(() => setLoading(false));
@@ -101,7 +101,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
     const loadProcessingOrders = async () => {
       try {
-        const response = await fetch("/api/orders");
+        const response = await fetch("/api/orders", { credentials: "include" });
         const data = (await response.json()) as { orders?: DashboardOrder[] };
         if (!active || !data) return;
 
