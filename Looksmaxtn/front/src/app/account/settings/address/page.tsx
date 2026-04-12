@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/providers/AuthContext";
+import { withAuthRequest } from "@/lib/authClient";
 
 export default function AddressSettingsPage() {
   const { user, refreshUser } = useAuth();
@@ -35,9 +36,11 @@ export default function AddressSettingsPage() {
 
     try {
       const res = await fetch("/api/users/me/address", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(address),
+        ...withAuthRequest({
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(address),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { withAuthRequest } from "@/lib/authClient";
 
 interface Category {
   _id: string;
@@ -35,7 +36,7 @@ export default function CategoriesPage() {
   const [error, setError] = useState("");
 
   const fetchCategories = () => {
-    fetch("/api/categories")
+    fetch("/api/categories", withAuthRequest())
       .then((r) => r.json())
       .then((d) => setCategories(d.categories || []))
       .catch(() => {})
@@ -89,11 +90,11 @@ export default function CategoriesPage() {
       const url = editingId ? `/api/categories/${editingId}` : "/api/categories";
       const method = editingId ? "PUT" : "POST";
 
-      const res = await fetch(url, {
+      const res = await fetch(url, withAuthRequest({
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
-      });
+      }));
 
       const data = await res.json();
       if (!res.ok) { setError(data.error); setSaving(false); return; }
@@ -108,18 +109,18 @@ export default function CategoriesPage() {
 
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Delete category "${name}"?`)) return;
-    await fetch(`/api/categories/${id}`, { method: "DELETE" });
+    await fetch(`/api/categories/${id}`, withAuthRequest({ method: "DELETE" }));
     setCategories((c) => c.filter((x) => x._id !== id));
   };
 
   const toggleActive = async (cat: Category) => {
     setTogglingVisibilityId(cat._id);
     try {
-      const res = await fetch(`/api/categories/${cat._id}`, {
+      const res = await fetch(`/api/categories/${cat._id}`, withAuthRequest({
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isActive: !cat.isActive }),
-      });
+      }));
       if (res.ok) {
         setCategories((prev) =>
           prev.map((c) => (c._id === cat._id ? { ...c, isActive: !c.isActive } : c))

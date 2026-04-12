@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { withAuthRequest } from "@/lib/authClient";
 
 export default function PasswordSettingsPage() {
   const [currentPassword, setCurrentPassword] = useState("");
@@ -24,9 +25,11 @@ export default function PasswordSettingsPage() {
     setLoading(true);
     try {
       const res = await fetch("/api/users/me/password", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentPassword, newPassword }),
+        ...withAuthRequest({
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ currentPassword, newPassword }),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {

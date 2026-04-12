@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
 function getBackendBaseUrl(req: NextRequest) {
   const localHostnames = new Set(["localhost", "127.0.0.1"]);
@@ -28,6 +29,65 @@ function buildHeaders(req: NextRequest) {
   return headers;
 }
 
+function parseSetCookieHeader(rawSetCookie: string) {
+  const [nameValue, ...attributes] = rawSetCookie.split(";").map((part) => part.trim());
+  const [name, ...valueParts] = nameValue.split("=");
+  const value = valueParts.join("=");
+
+  if (!name || !value) return null;
+
+  const cookieOptions: {
+    path?: string;
+    maxAge?: number;
+    sameSite?: "lax" | "strict" | "none";
+    secure?: boolean;
+    httpOnly?: boolean;
+  } = {};
+
+  for (const attribute of attributes) {
+    const [rawKey, ...rawValueParts] = attribute.split("=");
+    const key = rawKey.toLowerCase();
+    const rawValue = rawValueParts.join("=");
+
+    if (key === "path") cookieOptions.path = rawValue || "/";
+    else if (key === "max-age") cookieOptions.maxAge = Number(rawValue);
+    else if (key === "samesite") {
+      const normalized = rawValue.toLowerCase();
+      if (normalized === "lax" || normalized === "strict" || normalized === "none") {
+        cookieOptions.sameSite = normalized;
+      }
+    } else if (key === "secure") {
+      cookieOptions.secure = true;
+    } else if (key === "httponly") {
+      cookieOptions.httpOnly = true;
+    }
+  }
+
+  return { name, value, cookieOptions };
+}
+
+function applySetCookieHeader(source: Response, destination: NextResponse) {
+  const headers = source.headers as Headers & { getSetCookie?: () => string[] };
+  const rawSetCookies = headers.getSetCookie?.() ?? [];
+
+  if (rawSetCookies.length > 0) {
+    for (const rawSetCookie of rawSetCookies) {
+      const parsed = parseSetCookieHeader(rawSetCookie);
+      if (!parsed) continue;
+      destination.cookies.set(parsed.name, parsed.value, parsed.cookieOptions);
+    }
+    return;
+  }
+
+  const rawSetCookie = source.headers.get("set-cookie");
+  if (!rawSetCookie) return;
+
+  const parsed = parseSetCookieHeader(rawSetCookie);
+  if (!parsed) return;
+
+  destination.cookies.set(parsed.name, parsed.value, parsed.cookieOptions);
+}
+
 async function proxy(req: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   const { path } = await context.params;
   const method = req.method;
@@ -39,13 +99,40 @@ async function proxy(req: NextRequest, context: { params: Promise<{ path: string
     redirect: "manual",
   };
 
+  if (path[0] === "auth") {
+    console.log("[proxy][front]", {
+      method,
+      path: path.join("/"),
+      hasCookieHeader: req.headers.has("cookie"),
+    });
+  }
+
   const response = await fetch(buildTargetUrl(req, path), requestInit);
 
-  return new Response(response.body, {
+  const nextResponse = new NextResponse(response.body, {
     status: response.status,
     statusText: response.statusText,
-    headers: response.headers,
   });
+
+  response.headers.forEach((value, key) => {
+    if (key.toLowerCase() !== "set-cookie") {
+      nextResponse.headers.set(key, value);
+    }
+  });
+  applySetCookieHeader(response, nextResponse);
+
+  if (path[0] === "auth") {
+    const headers = response.headers as Headers & { getSetCookie?: () => string[] };
+    const setCookieCount = headers.getSetCookie?.().length ?? (response.headers.get("set-cookie") ? 1 : 0);
+    console.log("[proxy][front][response]", {
+      method,
+      path: path.join("/"),
+      status: response.status,
+      setCookieCount,
+    });
+  }
+
+  return nextResponse;
 }
 
 export const GET = proxy;

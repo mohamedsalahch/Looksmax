@@ -2,6 +2,7 @@
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { withAuthRequest } from "@/lib/authClient";
 
 interface User {
   _id: string; name: string; email: string; role: string; createdAt: string;
@@ -24,7 +25,7 @@ export default function UsersPage() {
   const deferredSearch = useDeferredValue(search);
 
   useEffect(() => {
-    fetch("/api/users").then((r) => r.json()).then((d) => setUsers(d.users || [])).catch(() => {}).finally(() => setLoading(false));
+    fetch("/api/users", withAuthRequest()).then((r) => r.json()).then((d) => setUsers(d.users || [])).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   const handleToggleBlock = async (user: User) => {
@@ -36,11 +37,11 @@ export default function UsersPage() {
     );
     if (!confirmed) return;
 
-    const response = await fetch("/api/users", {
+    const response = await fetch("/api/users", withAuthRequest({
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: user._id, isBlocked: nextBlocked }),
-    });
+    }));
 
     const data = await response.json();
     if (!response.ok || !data.user) return;
@@ -54,7 +55,7 @@ export default function UsersPage() {
 
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Delete user "${name}"? This cannot be undone.`)) return;
-    await fetch(`/api/users?id=${id}`, { method: "DELETE" });
+    await fetch(`/api/users?id=${id}`, withAuthRequest({ method: "DELETE" }));
     setUsers((u) => u.filter((x) => x._id !== id));
   };
 

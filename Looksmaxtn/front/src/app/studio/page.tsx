@@ -12,6 +12,7 @@ import {
     subscribeToStudioTryOn,
 } from "@/lib/studioTryOn";
 import {formatTndPrice} from "@/lib/formatPrice";
+import { withAuthRequest } from "@/lib/authClient";
 
 interface CategoryNode {
     _id: string;
@@ -679,7 +680,7 @@ export default function OutfitStudioPage() {
             if (cancelled || completed) return;
 
             try {
-                const response = await fetch("/api/generate-outfit/latest", { cache: "no-store" });
+                const response = await fetch("/api/generate-outfit/latest", withAuthRequest({ cache: "no-store" }));
                 const data = await response.json();
                 if (cancelled || !response.ok) return;
 
@@ -900,7 +901,7 @@ export default function OutfitStudioPage() {
         }
 
         try {
-            const response = await fetch("/api/generate-outfit", {
+            const response = await fetch("/api/generate-outfit", withAuthRequest({
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({
@@ -937,7 +938,7 @@ export default function OutfitStudioPage() {
                         ])
                     ),
                 }),
-            });
+            }));
             const data = await response.json();
 
             if (!response.ok) {
@@ -977,7 +978,7 @@ export default function OutfitStudioPage() {
 
         setSavingOutfit(true);
         try {
-            const response = await fetch("/api/outfits", {
+            const response = await fetch("/api/outfits", withAuthRequest({
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({
@@ -988,7 +989,7 @@ export default function OutfitStudioPage() {
                     },
                     outfitSnapshot: outfit,
                 }),
-            });
+            }));
             const data = await response.json();
             if (!response.ok) {
                 setGenerationError(data.error || "Unable to save outfit.");
@@ -1015,7 +1016,7 @@ export default function OutfitStudioPage() {
     const handleDeleteOutfit = async (id: string) => {
         setDeletingOutfitId(id);
         try {
-            const response = await fetch(`/api/outfits/${id}`, {method: "DELETE"});
+            const response = await fetch(`/api/outfits/${id}`, withAuthRequest({ method: "DELETE" }));
             if (!response.ok) {
                 setGenerationError("Unable to delete outfit.");
                 setDeletingOutfitId("");

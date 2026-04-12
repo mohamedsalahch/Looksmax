@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { withAuthRequest } from "@/lib/authClient";
 
 interface Message {
   _id: string;
@@ -19,18 +20,18 @@ export default function MessagesPage() {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    fetch("/api/messages")
+    fetch("/api/messages", withAuthRequest())
       .then((r) => r.json())
       .then((d) => setMessages(d.messages || []))
       .finally(() => setLoading(false));
   }, []);
 
   const toggleRead = async (msg: Message) => {
-    const res = await fetch("/api/messages", {
+    const res = await fetch("/api/messages", withAuthRequest({
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: msg._id, isRead: !msg.isRead }),
-    });
+    }));
     if (res.ok) {
       setMessages((m) => m.map((x) => (x._id === msg._id ? { ...x, isRead: !x.isRead } : x)));
     }
@@ -38,11 +39,11 @@ export default function MessagesPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this message?")) return;
-    const res = await fetch("/api/messages", {
+    const res = await fetch("/api/messages", withAuthRequest({
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
-    });
+    }));
     if (res.ok) setMessages((m) => m.filter((x) => x._id !== id));
   };
 

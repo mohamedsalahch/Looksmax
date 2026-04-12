@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/providers/AuthContext";
+import { withAuthRequest } from "@/lib/authClient";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { formatStoreDate } from "@/lib/dateFormat";
 
@@ -20,7 +21,7 @@ export default function AccountOverview() {
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
 
   useEffect(() => {
-    fetch("/api/orders")
+    fetch("/api/orders", withAuthRequest())
       .then((r) => r.json())
       .then((data) => setRecentOrders((data.orders || []).slice(0, 3)))
       .catch(() => {});

@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import AuditMetaCard from "@/components/AuditMetaCard";
+import { withAuthRequest } from "@/lib/authClient";
 
 interface ProductImage {
   url: string;
@@ -84,7 +85,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
   const [isZoomOpen, setIsZoomOpen] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/products/${id}`)
+    fetch(`/api/products/${id}`, withAuthRequest())
       .then((r) => r.json())
       .then((data) => {
         const nextProduct = data.product || null;

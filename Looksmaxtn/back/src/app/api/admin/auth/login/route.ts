@@ -26,11 +26,22 @@ export async function POST(req: NextRequest) {
 
     const token = await createToken({ userId: user._id.toString(), role: user.role });
     const cookieOpts = getTokenCookieOptions();
+    console.log("[auth][admin][login] success", {
+      userId: String(user._id),
+      role: user.role,
+      secureCookie: cookieOpts.secure,
+      sameSite: cookieOpts.sameSite,
+    });
     const res = NextResponse.json({
       token,
       user: { id: user._id, name: user.name, email: user.email, role: user.role },
     });
     res.cookies.set(cookieOpts.name, token, cookieOpts);
+    console.log("[auth][admin][login] cookie set", {
+      name: cookieOpts.name,
+      secure: cookieOpts.secure,
+      maxAge: cookieOpts.maxAge,
+    });
     return res;
   } catch (error) {
     console.error("Admin login error:", error);

@@ -4,6 +4,7 @@ import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AuditMetaCard from "@/components/AuditMetaCard";
+import { withAuthRequest } from "@/lib/authClient";
 
 interface AuditActor {
   id: string;
@@ -40,16 +41,17 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/orders/${id}`).then((r) => r.json()).then((d) => setOrder(d.order)).catch(() => {}).finally(() => setLoading(false));
+    fetch(`/api/orders/${id}`, withAuthRequest()).then((r) => r.json()).then((d) => setOrder(d.order)).catch(() => {}).finally(() => setLoading(false));
   }, [id]);
 
   const updateStatus = async (orderStatus: string) => {
     setUpdating(true);
     try {
-      const res = await fetch(`/api/orders/${id}`, {
-        method: "PUT", headers: { "Content-Type": "application/json" },
+      const res = await fetch(`/api/orders/${id}`, withAuthRequest({
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderStatus }),
-      });
+      }));
       const d = await res.json();
       if (!res.ok) {
         alert(d.error || "Failed to update order status");
@@ -64,7 +66,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     if (!confirm("Delete this order? This cannot be undone.")) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/orders/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/orders/${id}`, withAuthRequest({ method: "DELETE" }));
       const data = await res.json();
       if (!res.ok) {
         alert(data.error || "Failed to delete order");

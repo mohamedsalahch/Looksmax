@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { storeAuthToken } from "@/lib/authClient";
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
@@ -18,10 +19,12 @@ export default function AdminLoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ email, password }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error); setLoading(false); return; }
+      if (data.token) storeAuthToken(data.token);
       router.push("/dashboard");
     } catch {
       setError("Network error");

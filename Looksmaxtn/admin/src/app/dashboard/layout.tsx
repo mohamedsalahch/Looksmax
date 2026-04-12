@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, ReactNode } from "react";
+import { clearAuthToken, withAuthRequest } from "@/lib/authClient";
 
 interface AdminUser { id: string; name: string; email: string; role: string; }
 
@@ -71,7 +72,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    fetch("/api/auth/me").then((r) => r.json()).then((data) => {
+    fetch("/api/auth/me", withAuthRequest()).then((r) => r.json()).then((data) => {
       if (!data.user) { router.push("/"); return; }
       setUser(data.user);
     }).catch(() => router.push("/")).finally(() => setLoading(false));
@@ -101,7 +102,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
     const loadProcessingOrders = async () => {
       try {
-        const response = await fetch("/api/orders");
+        const response = await fetch("/api/orders", withAuthRequest());
         const data = (await response.json()) as { orders?: DashboardOrder[] };
         if (!active || !data) return;
 
@@ -175,7 +176,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   };
 
   const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
+    await fetch("/api/auth/logout", withAuthRequest({ method: "POST" }));
+    clearAuthToken();
     router.push("/");
   };
 

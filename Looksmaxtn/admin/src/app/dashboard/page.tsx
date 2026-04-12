@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { withAuthRequest } from "@/lib/authClient";
 
 interface Stats {
   totalProducts: number;
@@ -14,7 +15,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
 
   useEffect(() => {
-    fetch("/api/stats").then((r) => r.json()).then(setStats).catch(() => {});
+    fetch("/api/stats", withAuthRequest()).then((r) => r.json()).then(setStats).catch(() => {});
   }, []);
 
   if (!stats) return <p className="text-xs text-text-secondary animate-pulse">Loading dashboard...</p>;

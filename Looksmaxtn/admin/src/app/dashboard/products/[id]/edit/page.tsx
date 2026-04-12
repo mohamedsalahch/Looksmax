@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { getConditionStatusFromScore } from "@/lib/productCondition";
 import { generateId } from "@/lib/uuid";
+import { withAuthRequest } from "@/lib/authClient";
 
 interface Category {
   _id: string;
@@ -220,19 +221,19 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const allowStockEditing = true;
 
   useEffect(() => {
-    fetch("/api/categories")
+    fetch("/api/categories", withAuthRequest())
       .then((r) => r.json())
       .then((d) => setCategories(d.categories || []));
 
-    fetch("/api/models")
+    fetch("/api/models", withAuthRequest())
       .then((r) => r.json())
       .then((d) => setModels(d.models || []));
 
-    fetch("/api/generated-images")
+    fetch("/api/generated-images", withAuthRequest())
       .then((r) => r.json())
       .then((d) => setGeneratedImages(d.generatedImages || []));
 
-    fetch(`/api/products/${id}`)
+    fetch(`/api/products/${id}`, withAuthRequest())
       .then((r) => r.json())
       .then((d) => {
         if (!d.product) return;
@@ -443,10 +444,10 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       if (generationInputs.right.file) body.append("right", generationInputs.right.file);
 
       // 1. Trigger the job
-      const triggerRes = await fetch("/api/products/generate", {
+      const triggerRes = await fetch("/api/products/generate", withAuthRequest({
         method: "POST",
         body,
-      });
+      }));
       const triggerData = await triggerRes.json();
 
       if (!triggerRes.ok) {
@@ -465,7 +466,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         // Wait 5 seconds
         await new Promise((resolve) => setTimeout(resolve, 5000));
 
-        const statusRes = await fetch(`/api/products/generate?job_id=${jobId}`);
+        const statusRes = await fetch(`/api/products/generate?job_id=${jobId}`, withAuthRequest());
         const statusData = await statusRes.json();
 
         if (statusData.status === "completed") {
@@ -605,10 +606,10 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         if (img.file) body.append("images", img.file);
       });
 
-      const res = await fetch(`/api/products/${id}`, {
+      const res = await fetch(`/api/products/${id}`, withAuthRequest({
         method: "PUT",
         body,
-      });
+      }));
 
       if (!res.ok) {
         const d = await res.json();

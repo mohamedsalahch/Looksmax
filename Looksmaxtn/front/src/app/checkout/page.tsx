@@ -7,6 +7,7 @@ import { useCart } from "@/providers/CartContext";
 import { useAuth } from "@/providers/AuthContext";
 import { getReservationKey, releaseProductReservation } from "@/lib/reservations";
 import { formatTndPrice } from "@/lib/formatPrice";
+import { withAuthRequest } from "@/lib/authClient";
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -147,9 +148,11 @@ export default function CheckoutPage() {
       }));
 
       const res = await fetch("/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: orderItems, shippingAddress: address, cartKey: getReservationKey() }),
+        ...withAuthRequest({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: orderItems, shippingAddress: address, cartKey: getReservationKey() }),
+        }),
       });
 
       const data = await res.json();

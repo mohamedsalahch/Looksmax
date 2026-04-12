@@ -4,6 +4,7 @@ import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { formatStoreDate } from "@/lib/dateFormat";
+import { withAuthRequest } from "@/lib/authClient";
 
 interface OrderDetail {
   _id: string;
@@ -36,7 +37,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const [archiving, setArchiving] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/orders/${id}`)
+    fetch(`/api/orders/${id}`, withAuthRequest())
       .then((r) => r.json())
       .then((data) => setOrder(data.order))
       .catch(() => {})
@@ -58,9 +59,11 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     setArchiving(true);
     try {
       const response = await fetch(`/api/orders/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ archive: true }),
+        ...withAuthRequest({
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ archive: true }),
+        }),
       });
       if (response.ok) {
         window.location.href = "/account/orders";

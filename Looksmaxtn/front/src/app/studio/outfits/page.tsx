@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { withAuthRequest } from "@/lib/authClient";
 
 interface SavedOutfitItem {
   id: string;
@@ -37,7 +38,7 @@ export default function SavedOutfitsPage() {
   useEffect(() => {
     let cancelled = false;
 
-    fetch("/api/outfits?ts=" + Date.now(), { cache: "no-store" })
+    fetch("/api/outfits?ts=" + Date.now(), withAuthRequest({ cache: "no-store" }))
       .then((response) => response.json())
       .then((data) => {
         if (cancelled) return;

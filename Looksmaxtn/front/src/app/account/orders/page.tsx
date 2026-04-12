@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { formatStoreDate } from "@/lib/dateFormat";
+import { withAuthRequest } from "@/lib/authClient";
 
 interface Order {
   _id: string;
@@ -23,7 +24,7 @@ export default function OrdersPage() {
   const [archivingOrderId, setArchivingOrderId] = useState("");
 
   useEffect(() => {
-    fetch("/api/orders")
+    fetch("/api/orders", withAuthRequest())
       .then((r) => r.json())
       .then((data) => setOrders(data.orders || []))
       .catch(() => {})
@@ -45,9 +46,11 @@ export default function OrdersPage() {
     setArchivingOrderId(orderId);
     try {
       const response = await fetch(`/api/orders/${orderId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ archive: true }),
+        ...withAuthRequest({
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ archive: true }),
+        }),
       });
       if (response.ok) {
         setOrders((current) => current.filter((order) => order._id !== orderId));

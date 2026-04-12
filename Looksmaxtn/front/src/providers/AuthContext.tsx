@@ -1,6 +1,11 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import {
+  clearAuthToken,
+  storeAuthToken,
+  withAuthRequest,
+} from "@/lib/authClient";
 
 interface User {
   id: string;
@@ -54,14 +59,13 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refreshUser = useCallback(async () => {
     try {
-      const res = await fetch(`/api/auth/me?ts=${Date.now()}`, { cache: "no-store" });
+      const res = await fetch(`/api/auth/me?ts=${Date.now()}`, withAuthRequest({ cache: "no-store" }));
       if (!res.ok) {
         setUser(null);
         return;
@@ -94,10 +98,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ email, password }),
       });
       const data = await res.json();
       if (!res.ok) return { error: data.error };
+      if (data.token) storeAuthToken(data.token);
       setUser(data.user);
       return {};
     } catch {
@@ -110,6 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ name, email, password }),
       });
       const data = await res.json();
@@ -128,6 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ email }),
       });
       const data = await res.json();
@@ -143,6 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await fetch("/api/auth/resend-verification", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ email }),
       });
       const data = await res.json();
@@ -158,6 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await fetch("/api/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ email, token, password }),
       });
       const data = await res.json();
@@ -169,7 +179,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
+    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    clearAuthToken();
     setUser(null);
   };
 

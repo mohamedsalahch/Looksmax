@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import AuditMetaCard from "@/components/AuditMetaCard";
+import { withAuthRequest } from "@/lib/authClient";
 
 interface HomeStat {
   label: string;
@@ -106,7 +107,7 @@ export default function HomePageEditor() {
   const [lookbookFiles, setLookbookFiles] = useState<File[]>([]);
 
   useEffect(() => {
-    fetch("/api/homepage")
+    fetch("/api/homepage", withAuthRequest())
       .then((r) => r.json())
       .then((data) => {
         if (data.content) {
@@ -140,7 +141,7 @@ export default function HomePageEditor() {
       .catch(() => {})
       .finally(() => setLoading(false));
 
-    fetch("/api/categories")
+    fetch("/api/categories", withAuthRequest())
       .then((r) => r.json())
       .then((data) =>
         setCategories((data.categories || []).filter((category: CategoryOption) => !category.parentSlug))
@@ -273,7 +274,7 @@ export default function HomePageEditor() {
 
       body.append("featuredTitle", content.featured.title);
 
-      const res = await fetch("/api/homepage", { method: "PUT", body });
+      const res = await fetch("/api/homepage", withAuthRequest({ method: "PUT", body }));
       const data = await res.json();
       if (!res.ok) {
         setMessage(data.error || "Unable to save homepage changes.");

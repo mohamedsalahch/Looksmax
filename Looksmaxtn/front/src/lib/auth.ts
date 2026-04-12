@@ -42,6 +42,12 @@ export async function verifyToken(token: string): Promise<JWTPayload | null> {
   }
 }
 
+function shouldUseSecureCookies() {
+  if (process.env.COOKIE_SECURE === "true") return true;
+  if (process.env.COOKIE_SECURE === "false") return false;
+  return process.env.NODE_ENV === "production";
+}
+
 export async function getSession(): Promise<JWTPayload | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(COOKIE_NAME)?.value;
@@ -53,7 +59,7 @@ export function getTokenCookieOptions() {
   return {
     name: COOKIE_NAME,
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: shouldUseSecureCookies(),
     sameSite: "lax" as const,
     path: "/",
     maxAge: TOKEN_TTL_SECONDS,
