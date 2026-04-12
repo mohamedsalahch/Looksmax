@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import ProductCard from "./ProductCard";
 
 interface ProductImage {
@@ -14,8 +14,9 @@ interface Product {
   categories?: string[];
   price: number;
   stock: number;
-  reservationExpiresAt?: string | null;
+  cartCount?: number;
   tag?: string;
+  sizes?: string[];
   images?: ProductImage[];
   conditionScore?: number | null;
   conditionStatus?: string | null;
@@ -49,6 +50,7 @@ export default function ProductGrid({ category }: { category?: string }) {
   const [facets, setFacets] = useState<Facets | null>(null);
 
   const [selectedSize, setSelectedSize] = useState("");
+  const [draftSelectedSize, setDraftSelectedSize] = useState("");
   const [priceMin, setPriceMin] = useState("");
   const [priceMax, setPriceMax] = useState("");
   const [appliedPriceMin, setAppliedPriceMin] = useState("");
@@ -56,64 +58,65 @@ export default function ProductGrid({ category }: { category?: string }) {
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const hasActiveFilters = selectedSize || appliedPriceMin || appliedPriceMax;
-
   const rangeMin = facets ? Math.floor(facets.priceRange.min) : 0;
   const rangeMax = facets ? Math.ceil(facets.priceRange.max) : 1000;
   const sliderMin = priceMin !== "" ? Number(priceMin) : rangeMin;
   const sliderMax = priceMax !== "" ? Number(priceMax) : rangeMax;
 
-  const loadProducts = useCallback(() => {
-    const params = new URLSearchParams();
-    if (category) params.set("category", category);
-    if (selectedSize) params.set("size", selectedSize);
-    if (appliedPriceMin) params.set("priceMin", appliedPriceMin);
-    if (appliedPriceMax) params.set("priceMax", appliedPriceMax);
-    params.set("includeFacets", "1");
-
-    return fetch(`/api/products?${params}`)
-      .then((r) => r.json())
-      .then((data) => {
-        setProducts(data.products || []);
-        setTotal(data.total || 0);
-        if (data.facets) {
-          setFacets({
-            sizes: data.facets.sizes || [],
-            priceRange: data.facets.priceRange || { min: 0, max: 0 },
-          });
-        }
-      })
-      .catch(() => {
-        setProducts([]);
-        setTotal(0);
-      });
-  }, [category, selectedSize, appliedPriceMin, appliedPriceMax]);
-
   useEffect(() => {
     let cancelled = false;
 
-    loadProducts().finally(() => {
-      if (!cancelled) setLoaded(true);
-    });
+    const loadProducts = () => {
+      const params = new URLSearchParams();
+      if (category) params.set("category", category);
+      if (selectedSize) params.set("size", selectedSize);
+      if (appliedPriceMin) params.set("priceMin", appliedPriceMin);
+      if (appliedPriceMax) params.set("priceMax", appliedPriceMax);
+      params.set("includeFacets", "1");
 
-    const interval = window.setInterval(() => {
-      loadProducts();
-    }, 5000);
+      fetch(`/api/products?${params}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (cancelled) return;
+          setProducts(data.products || []);
+          setTotal(data.total || 0);
+          if (data.facets) {
+            setFacets({
+              sizes: data.facets.sizes || [],
+              priceRange: data.facets.priceRange || { min: 0, max: 0 },
+            });
+          }
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setProducts([]);
+          setTotal(0);
+        })
+        .finally(() => {
+          if (!cancelled) setLoaded(true);
+        });
+    };
+
+    loadProducts();
+    const interval = window.setInterval(loadProducts, 5000);
 
     return () => {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [loadProducts]);
+  }, [category, selectedSize, appliedPriceMin, appliedPriceMax]);
 
   const clearFilters = () => {
     setSelectedSize("");
+    setDraftSelectedSize("");
     setPriceMin("");
     setPriceMax("");
     setAppliedPriceMin("");
     setAppliedPriceMax("");
   };
 
-  const applyPriceFilter = () => {
+  const applyFilters = () => {
+    setSelectedSize(draftSelectedSize);
     setAppliedPriceMin(priceMin);
     setAppliedPriceMax(priceMax);
   };
@@ -192,9 +195,9 @@ export default function ProductGrid({ category }: { category?: string }) {
                 {facets.sizes.map((size) => (
                   <button
                     key={size}
-                    onClick={() => setSelectedSize(selectedSize === size ? "" : size)}
+                    onClick={() => setDraftSelectedSize(draftSelectedSize === size ? "" : size)}
                     className={`px-2.5 py-1 text-[10px] uppercase tracking-wider transition-colors cursor-pointer ${
-                      selectedSize === size
+                      draftSelectedSize === size
                         ? "bg-foreground text-background"
                         : "text-text-secondary hover:text-foreground"
                     }`}
@@ -209,14 +212,8 @@ export default function ProductGrid({ category }: { category?: string }) {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-[10px] uppercase tracking-wider text-text-secondary">Price</p>
-              <button
-                onClick={applyPriceFilter}
-                className="text-[10px] uppercase tracking-wider text-text-secondary hover:text-foreground transition-colors cursor-pointer"
-              >
-                Apply
-              </button>
             </div>
-            <div className="price-range-slider max-w-[240px]">
+            <div className="price-range-slider w-full max-w-[240px]">
               <div className="price-range-track">
                 <div
                   className="price-range-fill"
@@ -249,20 +246,29 @@ export default function ProductGrid({ category }: { category?: string }) {
                 className="price-range-thumb"
               />
             </div>
-            <div className="flex items-center justify-between">
+            <div className="flex w-full max-w-[240px] items-center justify-between">
               <span className="text-[10px] text-text-secondary">{sliderMin} TND</span>
               <span className="text-[10px] text-text-secondary">{sliderMax} TND</span>
             </div>
           </div>
 
-          {hasActiveFilters && (
+          <div className="flex flex-wrap items-center gap-3 pt-1">
             <button
-              onClick={clearFilters}
-              className="text-[10px] uppercase tracking-wider text-text-secondary hover:text-foreground underline underline-offset-2 cursor-pointer"
+              onClick={applyFilters}
+              className="text-[10px] uppercase tracking-wider text-foreground underline underline-offset-2 cursor-pointer"
             >
-              Clear all filters
+              Apply filters
             </button>
-          )}
+
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="text-[10px] uppercase tracking-wider text-text-secondary hover:text-foreground underline underline-offset-2 cursor-pointer"
+              >
+                Clear all filters
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -271,28 +277,29 @@ export default function ProductGrid({ category }: { category?: string }) {
           <p className="text-sm text-text-secondary">No products match your filters.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-8">
-          {products.map((product) => (
-            <ProductCard
-              key={product._id}
-              id={product._id}
-              name={product.name}
-              categories={product.categories}
-              price={product.price.toFixed(2)}
-              stock={product.stock}
-              reservationExpiresAt={product.reservationExpiresAt}
-              tag={product.tag}
-              image={getMainImage(product.images)}
-              conditionScore={product.conditionScore}
-              conditionStatus={product.conditionStatus}
-              productType={product.productType}
-              fashionSubtype={product.fashionSubtype}
-              originPictures={product.originPictures}
-              cloneSourceName={product.cloneSourceName}
-              cloneSourceImage={product.cloneSourceImage}
-            />
-          ))}
-        </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-8">
+        {products.map((product) => (
+          <ProductCard
+            key={product._id}
+            id={product._id}
+            name={product.name}
+            categories={product.categories}
+            price={product.price.toFixed(2)}
+            stock={product.stock}
+            cartCount={product.cartCount}
+            tag={product.tag}
+            sizes={product.sizes}
+            image={getMainImage(product.images)}
+            conditionScore={product.conditionScore}
+            conditionStatus={product.conditionStatus}
+            productType={product.productType}
+            fashionSubtype={product.fashionSubtype}
+            originPictures={product.originPictures}
+            cloneSourceName={product.cloneSourceName}
+            cloneSourceImage={product.cloneSourceImage}
+          />
+        ))}
+      </div>
       )}
     </div>
   );

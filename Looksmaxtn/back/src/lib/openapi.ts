@@ -303,6 +303,16 @@ export function buildOpenApiSpec(baseUrl: string) {
           },
         },
       },
+      "/api/store/auth/resend-verification": {
+        post: {
+          tags: ["Store Auth"],
+          summary: "Resend the storefront verification email",
+          responses: {
+            "200": { description: "Verification email queued or sent" },
+            "429": { description: "Cooldown not finished" },
+          },
+        },
+      },
       "/api/store/auth/login": {
         post: {
           tags: ["Store Auth"],
@@ -312,6 +322,27 @@ export function buildOpenApiSpec(baseUrl: string) {
             "200": { description: "User authenticated" },
             "400": { description: "Email/password missing or invalid JSON" },
             "401": { description: "Invalid credentials" },
+          },
+        },
+      },
+      "/api/store/auth/forgot-password": {
+        post: {
+          tags: ["Store Auth"],
+          summary: "Request a password reset email",
+          responses: {
+            "200": { description: "Password reset email sent or queued" },
+            "429": { description: "Cooldown not finished" },
+          },
+        },
+      },
+      "/api/store/auth/reset-password": {
+        post: {
+          tags: ["Store Auth"],
+          summary: "Complete a password reset",
+          responses: {
+            "200": { description: "Password updated" },
+            "400": { description: "Invalid request" },
+            "410": { description: "Reset link expired or invalid" },
           },
         },
       },
@@ -331,6 +362,17 @@ export function buildOpenApiSpec(baseUrl: string) {
           security: userSecurity,
           responses: {
             "200": { description: "Current storefront user" },
+          },
+        },
+      },
+      "/api/store/auth/verify-email": {
+        post: {
+          tags: ["Store Auth"],
+          summary: "Verify a newly registered storefront email",
+          responses: {
+            "200": { description: "Email verified" },
+            "400": { description: "Invalid verification link" },
+            "410": { description: "Verification link expired" },
           },
         },
       },
@@ -385,7 +427,7 @@ export function buildOpenApiSpec(baseUrl: string) {
       "/api/store/cart/availability": {
         post: {
           tags: ["Store Catalog"],
-          summary: "Check cart or rail availability",
+          summary: "Check cart or try-on availability",
           responses: {
             "200": { description: "Availability status" },
           },

@@ -26,6 +26,7 @@ interface UserDetail {
   role: string;
   createdAt: string;
   isBlocked?: boolean;
+  emailVerified?: boolean;
   address?: {
     street: string;
     city: string;
@@ -132,7 +133,8 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
           <p className="text-xs text-text-secondary uppercase tracking-wider mb-3">User Details</p>
           <div className="space-y-2 text-xs">
             <p><span className="text-text-secondary">Role:</span> {user.role}</p>
-            <p><span className="text-text-secondary">Access:</span> {user.isBlocked ? "Blocked" : "Active"}</p>
+            <p><span className="text-text-secondary">Access:</span> {user.isBlocked ? "Blocked" : user.emailVerified === false ? "Pending Verification" : "Active"}</p>
+            <p><span className="text-text-secondary">Verification:</span> {user.emailVerified === false ? "Unverified" : "Verified"}</p>
             <p><span className="text-text-secondary">User ID:</span> <span className="font-mono">{user._id}</span></p>
             <p><span className="text-text-secondary">Joined:</span> {new Date(user.createdAt).toLocaleString()}</p>
           </div>

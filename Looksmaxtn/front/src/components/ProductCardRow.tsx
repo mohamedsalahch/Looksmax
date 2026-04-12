@@ -14,8 +14,9 @@ interface Product {
   categories?: string[];
   price: number;
   stock: number;
-  reservationExpiresAt?: string | null;
+  cartCount?: number;
   tag?: string;
+  sizes?: string[];
   images?: ProductImage[];
   conditionScore?: number | null;
   conditionStatus?: string | null;
@@ -77,13 +78,14 @@ export default function ProductCardRow({ title = "Featured selection" }: { title
           {products.map((product) => (
             <ProductCard
               key={product._id}
-              id={product._id}
-              name={product.name}
+            id={product._id}
+            name={product.name}
             categories={product.categories}
             price={product.price.toFixed(2)}
             stock={product.stock}
-            reservationExpiresAt={product.reservationExpiresAt}
+            cartCount={product.cartCount}
             tag={product.tag}
+            sizes={product.sizes}
             image={getMainImage(product.images)}
             conditionScore={product.conditionScore}
             conditionStatus={product.conditionStatus}

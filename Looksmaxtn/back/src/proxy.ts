@@ -22,16 +22,15 @@ function getBearerToken(authorizationHeader?: string | null) {
   return token;
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  
+
   if (!pathname.startsWith("/api")) {
     return NextResponse.next();
   }
-  
+
   const origin = request.headers.get("origin") || "*";
 
-  // Handle CORS preflight
   if (request.method === "OPTIONS") {
     return new NextResponse(null, {
       status: 204,
@@ -45,9 +44,6 @@ export async function middleware(request: NextRequest) {
     });
   }
 
-
-
-  // Define response with CORS headers
   const addCorsHeaders = (res: NextResponse) => {
     res.headers.set("Access-Control-Allow-Origin", origin);
     res.headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
@@ -56,12 +52,6 @@ export async function middleware(request: NextRequest) {
     return res;
   };
 
-  // Only handle /api routes
-  if (!pathname.startsWith("/api")) {
-    return NextResponse.next();
-  }
-
-  // Admin auth check
   if (
     pathname.startsWith("/api/admin") &&
     pathname !== "/api/admin/auth/login" &&
@@ -71,7 +61,7 @@ export async function middleware(request: NextRequest) {
     const token =
       getBearerToken(request.headers.get("authorization")) ||
       request.cookies.get(COOKIE_NAME)?.value;
-      
+
     if (!token) {
       return addCorsHeaders(NextResponse.json({ error: "Unauthorized" }, { status: 403 }));
     }
@@ -88,4 +78,3 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
-

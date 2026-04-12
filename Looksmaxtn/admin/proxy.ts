@@ -22,8 +22,9 @@ function getBearerToken(authorizationHeader?: string | null) {
   return token;
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
   const token =
     getBearerToken(request.headers.get("authorization")) ||
     request.cookies.get(COOKIE_NAME)?.value;

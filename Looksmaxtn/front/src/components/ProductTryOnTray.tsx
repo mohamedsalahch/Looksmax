@@ -5,14 +5,14 @@ import { usePathname } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
 import { formatTndPrice } from "@/lib/formatPrice";
 import {
-  addStudioRailItem,
-  clearStudioRailItems,
-  getStudioRailItems,
-  removeStudioRailItem,
-  replaceStudioRailItems,
-  StudioRailItem,
-  subscribeToStudioRail,
-} from "@/lib/studioRail";
+  addStudioTryOnItem,
+  clearStudioTryOnItems,
+  getStudioTryOnItems,
+  removeStudioTryOnItem,
+  replaceStudioTryOnItems,
+  StudioTryOnItem,
+  subscribeToStudioTryOn,
+} from "@/lib/studioTryOn";
 import {
   formatRemainingTime,
   getReservationKey,
@@ -20,44 +20,44 @@ import {
   subscribeToReservationChanges,
 } from "@/lib/reservations";
 
-export default function ProductRailTray() {
+function StudioProductTryOnTray() {
   const { addItem } = useCart();
   const pathname = usePathname();
-  const [railItems, setRailItems] = useState<StudioRailItem[]>([]);
-  const [collapsed, setCollapsed] = useState(false);
-  const [nowMs, setNowMs] = useState<number | null>(null);
-  const railItemsRef = useRef<StudioRailItem[]>([]);
+  const [tryOnItems, setTryOnItems] = useState<StudioTryOnItem[]>(() => getStudioTryOnItems());
+  const [collapsed, setCollapsed] = useState(true);
+  const [nowMs, setNowMs] = useState<number | null>(() =>
+    typeof window === "undefined" ? null : Date.now()
+  );
+  const tryOnItemsRef = useRef<StudioTryOnItem[]>([]);
 
   useEffect(() => {
-    setRailItems(getStudioRailItems());
-    return subscribeToStudioRail(setRailItems);
+    return subscribeToStudioTryOn((items) => {
+      setTryOnItems(items);
+      setCollapsed(items.length === 0);
+    });
   }, []);
 
   useEffect(() => {
-    railItemsRef.current = railItems;
-  }, [railItems]);
+    tryOnItemsRef.current = tryOnItems;
+  }, [tryOnItems]);
 
   useEffect(() => {
     const handleOpen = () => setCollapsed(false);
-    window.addEventListener("looksmax:studio-rail-open", handleOpen as EventListener);
+    window.addEventListener("looksmax:studio-try-on-open", handleOpen as EventListener);
     return () => {
-      window.removeEventListener("looksmax:studio-rail-open", handleOpen as EventListener);
+      window.removeEventListener("looksmax:studio-try-on-open", handleOpen as EventListener);
     };
   }, []);
 
-  useEffect(() => {
-    setNowMs(Date.now());
-  }, []);
-
-  const railItemIdsKey = useMemo(
-    () => railItems.map((item) => item.id.split("-")[0]).sort().join("|"),
-    [railItems]
+  const tryOnItemIdsKey = useMemo(
+    () => tryOnItems.map((item) => item.id.split("-")[0]).sort().join("|"),
+    [tryOnItems]
   );
 
   useEffect(() => {
-    if (collapsed || railItems.length === 0) return;
+    if (collapsed || tryOnItems.length === 0) return;
 
-    const hasReservations = railItems.some((item) => item.reservationExpiresAt);
+    const hasReservations = tryOnItems.some((item) => item.reservationExpiresAt);
     if (!hasReservations) return;
 
     const timer = window.setInterval(() => {
@@ -65,24 +65,24 @@ export default function ProductRailTray() {
     }, 1000);
 
     return () => window.clearInterval(timer);
-  }, [collapsed, railItems]);
+  }, [collapsed, tryOnItems]);
 
   useEffect(() => {
-    if (railItemIdsKey.length === 0) return;
+    if (tryOnItemIdsKey.length === 0) return;
 
     let cancelled = false;
 
-    const syncRailAvailability = () => {
-      const currentRailItems = railItemsRef.current;
-      if (currentRailItems.length === 0) return;
+    const syncTryOnAvailability = () => {
+      const currentTryOnItems = tryOnItemsRef.current;
+      if (currentTryOnItems.length === 0) return;
 
       fetch("/api/cart/availability", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          productIds: currentRailItems.map((item) => item.id.split("-")[0]),
+          productIds: currentTryOnItems.map((item) => item.id.split("-")[0]),
           reservationKey: getReservationKey(),
-          mode: "rail",
+          mode: "try-on",
         }),
       })
         .then((response) => response.json())
@@ -99,7 +99,7 @@ export default function ProductRailTray() {
             data.items.map((item: AvailabilityItem) => [item.productId, item])
           );
 
-          const nextItems = currentRailItems
+          const nextItems = currentTryOnItems
             .filter((item) => availabilityMap.get(item.id.split("-")[0])?.available)
             .map((item) => {
               const availability = availabilityMap.get(item.id.split("-")[0]);
@@ -109,26 +109,26 @@ export default function ProductRailTray() {
               };
             });
 
-          if (JSON.stringify(nextItems) !== JSON.stringify(currentRailItems)) {
-            replaceStudioRailItems(nextItems);
+          if (JSON.stringify(nextItems) !== JSON.stringify(currentTryOnItems)) {
+            replaceStudioTryOnItems(nextItems);
           }
         })
         .catch(() => {});
     };
 
-    syncRailAvailability();
-    const interval = window.setInterval(syncRailAvailability, 15000);
+    syncTryOnAvailability();
+    const interval = window.setInterval(syncTryOnAvailability, 5000);
 
     return () => {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [railItemIdsKey]);
+  }, [tryOnItemIdsKey]);
 
   useEffect(() => {
     return subscribeToReservationChanges(({ productId, reservationExpiresAt }) => {
-      replaceStudioRailItems(
-        getStudioRailItems().map((item) =>
+      replaceStudioTryOnItems(
+        getStudioTryOnItems().map((item) =>
           item.id.split("-")[0] === productId
             ? { ...item, reservationExpiresAt }
             : item
@@ -138,25 +138,7 @@ export default function ProductRailTray() {
     });
   }, []);
 
-  const handleAddRailItemToCart = async (item: StudioRailItem) => {
-    const isPerfume = item.productType === "perfume";
-
-    if (isPerfume) {
-        addItem({
-          id: item.id,
-          name: item.name,
-          categories: item.categories,
-          price: item.price,
-          brand: item.brand || "LOOKSMAX",
-        maxStock: Math.max(1, item.maxStock ?? item.quantity ?? 1),
-        image: item.image,
-        productType: item.productType,
-        fashionSubtype: item.fashionSubtype,
-        originPictures: item.originPictures,
-      });
-      return;
-    }
-
+  const handleAddTryOnItemToCart = async (item: StudioTryOnItem) => {
     try {
       const reservation = await reserveProduct(item.id);
       addItem({
@@ -165,15 +147,16 @@ export default function ProductRailTray() {
         categories: item.categories,
         price: item.price,
         brand: item.brand || "LOOKSMAX",
-        maxStock: 1,
+        maxStock: Math.max(1, item.maxStock ?? item.quantity ?? 1),
         image: item.image,
-        size: item.size,
+        size: item.productType === "perfume" ? undefined : item.size,
         productType: item.productType ?? "fashion",
         fashionSubtype: item.fashionSubtype,
         originPictures: item.originPictures,
         reservationExpiresAt: reservation.reservationExpiresAt,
+        cartCount: reservation.cartCount,
       });
-      addStudioRailItem({
+      addStudioTryOnItem({
         ...item,
         reservationExpiresAt: reservation.reservationExpiresAt,
       });
@@ -182,7 +165,7 @@ export default function ProductRailTray() {
     }
   };
 
-  const handleAssignToStudio = (item: StudioRailItem) => {
+  const handleAssignToStudio = (item: StudioTryOnItem) => {
     if (!pathname?.startsWith("/studio")) return;
     window.dispatchEvent(new CustomEvent("looksmax:studio-assign-item", { detail: item }));
   };
@@ -194,7 +177,7 @@ export default function ProductRailTray() {
         onClick={() => setCollapsed(false)}
         className="fixed right-4 bottom-4 z-40 border border-border-color bg-background/95 px-4 py-3 text-[10px] uppercase tracking-[0.22em] text-text-secondary shadow-2xl backdrop-blur-sm hover:text-foreground transition-colors"
       >
-        Product Rail
+        Try-On Picks
       </button>
     );
   }
@@ -204,14 +187,14 @@ export default function ProductRailTray() {
       <div className="flex items-center justify-between gap-3 border-b border-border-color px-4 py-3">
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
-            Product Rail
+            Try-On Picks
           </h2>
         </div>
         <div className="flex items-center gap-3">
-          {railItems.length > 0 && (
+          {tryOnItems.length > 0 && (
             <button
               type="button"
-              onClick={clearStudioRailItems}
+              onClick={clearStudioTryOnItems}
               className="text-[10px] uppercase tracking-[0.2em] text-text-secondary hover:text-foreground transition-colors"
             >
               Clear All
@@ -221,9 +204,18 @@ export default function ProductRailTray() {
             type="button"
             onClick={() => setCollapsed(true)}
             className="text-text-secondary hover:text-foreground transition-colors"
-            aria-label="Hide product rail"
+            aria-label="Hide Try-On Picks tray"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
@@ -232,7 +224,7 @@ export default function ProductRailTray() {
       </div>
 
       <div className="max-h-[26rem] overflow-y-auto p-3 space-y-3">
-        {railItems.map((item) => {
+        {tryOnItems.map((item) => {
           const reservationLabel =
             nowMs === null ? null : formatRemainingTime(item.reservationExpiresAt, nowMs);
 
@@ -253,9 +245,7 @@ export default function ProductRailTray() {
                   })
                 );
               }}
-              className={`border border-border-color p-3 active:cursor-grabbing bg-background hover:bg-hover transition-colors ${
-                pathname?.startsWith("/studio") ? "cursor-pointer" : "cursor-grab"
-              }`}
+              className="border border-border-color bg-background p-3 transition-colors hover:bg-hover active:cursor-grabbing cursor-pointer"
             >
               <div className="flex gap-3">
                 <div className="h-20 w-16 border border-border-color bg-hover shrink-0 overflow-hidden">
@@ -277,7 +267,7 @@ export default function ProductRailTray() {
                   </p>
                   {reservationLabel ? (
                     <p className="text-[10px] text-foreground mt-1 uppercase tracking-wider">
-                      Held {reservationLabel}
+                      In Cart {reservationLabel}
                     </p>
                   ) : (
                     <p className="text-[10px] text-text-secondary mt-1 truncate uppercase tracking-wider">
@@ -289,14 +279,9 @@ export default function ProductRailTray() {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        void handleAddRailItemToCart(item);
+                        void handleAddTryOnItemToCart(item);
                       }}
-                      disabled={Boolean(reservationLabel)}
-                      className={`text-[10px] uppercase tracking-[0.22em] underline underline-offset-4 transition-colors cursor-pointer ${
-                        reservationLabel
-                          ? "text-text-secondary/50 cursor-not-allowed no-underline"
-                          : "text-text-secondary hover:text-foreground"
-                      }`}
+                      className="text-[10px] uppercase tracking-[0.22em] text-text-secondary underline underline-offset-4 hover:text-foreground transition-colors cursor-pointer"
                     >
                       Move To Cart
                     </button>
@@ -304,7 +289,7 @@ export default function ProductRailTray() {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        removeStudioRailItem(item.id);
+                        removeStudioTryOnItem(item.id);
                       }}
                       className="text-[10px] uppercase tracking-[0.22em] text-text-secondary underline underline-offset-4 hover:text-foreground transition-colors cursor-pointer"
                     >
@@ -316,12 +301,16 @@ export default function ProductRailTray() {
             </div>
           );
         })}
-        {railItems.length === 0 && (
+        {tryOnItems.length === 0 && (
           <div className="border border-dashed border-border-color p-5 text-center text-xs text-text-secondary">
-            Add products from the cart or product pages to build your rail.
+            Add products from the cart or product pages to build your Try-On Picks list.
           </div>
         )}
       </div>
     </aside>
   );
+}
+
+export default function ProductTryOnTray() {
+  return <StudioProductTryOnTray />;
 }

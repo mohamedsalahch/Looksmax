@@ -78,19 +78,36 @@ export default function AccountOverview() {
         <h2 className="text-xs font-semibold uppercase tracking-wider mb-4 text-text-secondary">
           Outfit Studio
         </h2>
-        <div className="border border-border-color p-4 flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm text-foreground">Build outfits around your body profile.</p>
-            <p className="text-xs text-text-secondary mt-1">
-              Save your height, weight, size, and profile photo, then drag products onto body zones.
-            </p>
+        <div className="border border-border-color p-4 space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm text-foreground">Build outfits around your body profile.</p>
+              <p className="text-xs text-text-secondary mt-1">
+                Save your height, weight, size, and profile photo, then drag products onto body zones.
+              </p>
+            </div>
+            <Link
+              href="/studio"
+              className="bg-foreground text-background px-4 py-2 text-[10px] uppercase tracking-wider"
+            >
+              Open Studio
+            </Link>
           </div>
-          <Link
-            href="/studio"
-            className="bg-foreground text-background px-4 py-2 text-[10px] uppercase tracking-wider"
-          >
-            Open Studio
-          </Link>
+
+          <div className="flex items-center justify-between border-t border-border-color pt-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-text-secondary">Studio Profile</p>
+              <p className="text-xs text-text-secondary mt-1">
+                Keep your measurements and photos ready for outfit generation.
+              </p>
+            </div>
+            <Link
+              href="/account/settings"
+              className="text-[10px] uppercase tracking-[0.15em] text-foreground underline underline-offset-2"
+            >
+              Edit
+            </Link>
+          </div>
         </div>
       </div>
 

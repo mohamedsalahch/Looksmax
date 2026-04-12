@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/store/lib/mongodb";
-import Order from "@/store/models/Order";
 import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
 import { getSession } from "@/store/lib/auth";
-
-const BLOCKING_ORDER_STATUSES = ["processing", "confirmed", "shipping"];
-const ACTIVE_STOCK_ORDER_STATUSES = ["processing", "confirmed", "shipping", "delivered"];
 
 export async function GET(
   req: NextRequest,
@@ -16,52 +12,23 @@ export async function GET(
     await dbConnect();
     const { id } = await params;
     const now = new Date();
-    const [product, activeOrders, activeReservation] = await Promise.all([
+    const [product, activeCartPresences] = await Promise.all([
       Product.findById(id).lean(),
-      Order.find({
-        orderStatus: { $in: ACTIVE_STOCK_ORDER_STATUSES },
-        "items.product": id,
-      })
-        .select("orderStatus items.product items.quantity")
-        .lean(),
-      ProductReservation.findOne({ product: id, reservedUntil: { $gt: now } })
-        .select("reservedUntil")
+      ProductReservation.find({ product: id, reservedUntil: { $gt: now } })
+        .select("product reservedUntil")
         .lean(),
     ]);
     if (!product || product.isActive === false) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
-
-    const hasBlockingOrder = activeOrders.some((order) =>
-      BLOCKING_ORDER_STATUSES.includes(order.orderStatus)
-    );
-    const hasHiddenOrder =
-      product.productType !== "perfume" &&
-      activeOrders.some((order) => order.orderStatus === "delivered");
-    const perfumeQuantityInOrders = activeOrders.reduce((sum, order) => {
-      const quantity = order.items
-        .filter((item) => item.product?.toString() === id)
-        .reduce((itemSum, item) => itemSum + (item.quantity || 0), 0);
-      return sum + quantity;
-    }, 0);
-
-    if (hasHiddenOrder) {
-      return NextResponse.json({ error: "Product not found" }, { status: 404 });
-    }
+    const cartCount = activeCartPresences.length;
 
     return NextResponse.json({
       product: {
         ...product,
-        stock:
-          product.productType === "perfume"
-            ? Math.max((product.stock ?? 0) - perfumeQuantityInOrders, 0)
-            : hasBlockingOrder || activeReservation
-              ? 0
-              : Math.min(product.stock ?? 1, 1),
-        reservationExpiresAt:
-          product.productType === "perfume"
-            ? null
-            : activeReservation?.reservedUntil?.toISOString() || null,
+        stock: Math.max(product.stock ?? 0, 0),
+        cartCount,
+        reservationExpiresAt: null,
       },
     });
   } catch (error: unknown) {

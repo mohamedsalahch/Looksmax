@@ -1,15 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
 import { useAuth } from "@/providers/AuthContext";
-import { getReservationKey } from "@/lib/reservations";
+import { getReservationKey, releaseProductReservation } from "@/lib/reservations";
 import { formatTndPrice } from "@/lib/formatPrice";
 
 export default function CheckoutPage() {
-  const { items, totalPrice, clearCart } = useCart();
-  const { user } = useAuth();
+  const router = useRouter();
+  const { items, totalPrice, clearCart, removeItem, updateQuantity } = useCart();
+  const { user, loading: authLoading } = useAuth();
+  const shippingFee = 0;
+  const grandTotal = totalPrice + shippingFee;
 
   const [address, setAddress] = useState({
     fullName: user?.name || "",
@@ -19,25 +23,50 @@ export default function CheckoutPage() {
     zip: user?.address?.zip || "",
     phone: user?.address?.phone || "",
   });
-  const [loading, setLoading] = useState(false);
+  const [submitLoading, setSubmitLoading] = useState(false);
   const [error, setError] = useState("");
   const [orderPlaced, setOrderPlaced] = useState<string | null>(null);
+  const unavailableItems = items.filter((item) => item.isUnavailable);
+  const hasUnavailableItems = unavailableItems.length > 0;
+
+  const handleRemoveItem = async (itemId: string) => {
+    const productId = itemId.split("-")[0];
+    await releaseProductReservation(productId).catch(() => {});
+    removeItem(itemId);
+  };
+
+  const handleUpdateQuantity = (itemId: string, quantity: number) => {
+    updateQuantity(itemId, quantity);
+  };
+
+  useEffect(() => {
+    if (!orderPlaced) return;
+
+    const timeout = window.setTimeout(() => {
+      router.replace("/");
+    }, 5000);
+
+    return () => window.clearTimeout(timeout);
+  }, [orderPlaced, router]);
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace(`/login?next=${encodeURIComponent("/checkout")}`);
+    }
+  }, [authLoading, router, user]);
+
+  if (authLoading) {
+    return (
+      <div className="pt-[72px] min-h-screen flex items-center justify-center">
+        <p className="text-xs text-text-secondary uppercase tracking-wider">Loading...</p>
+      </div>
+    );
+  }
 
   if (!user) {
     return (
       <div className="pt-[72px] min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-lg font-semibold tracking-wide uppercase mb-3">Sign in Required</h1>
-          <p className="text-sm text-text-secondary mb-6">
-            Please sign in to proceed with checkout.
-          </p>
-          <Link
-            href="/login"
-            className="bg-foreground text-background px-8 py-3 text-sm font-medium tracking-wide uppercase hover:bg-accent transition-colors"
-          >
-            Sign In
-          </Link>
-        </div>
+        <p className="text-xs text-text-secondary uppercase tracking-wider">Redirecting to login...</p>
       </div>
     );
   }
@@ -102,7 +131,11 @@ export default function CheckoutPage() {
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    setLoading(true);
+    if (hasUnavailableItems) {
+      setError("Some products in your cart are already taken. Remove them manually to continue.");
+      return;
+    }
+    setSubmitLoading(true);
 
     try {
       const orderItems = items.map((item) => ({
@@ -116,22 +149,25 @@ export default function CheckoutPage() {
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: orderItems, shippingAddress: address, reservationKey: getReservationKey() }),
+        body: JSON.stringify({ items: orderItems, shippingAddress: address, cartKey: getReservationKey() }),
       });
 
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "Failed to place order");
-        setLoading(false);
+        setSubmitLoading(false);
         return;
       }
 
+      await Promise.all(
+        items.map((item) => releaseProductReservation(item.id.split("-")[0]).catch(() => {}))
+      );
       clearCart();
       setOrderPlaced(data.order._id);
     } catch {
       setError("Network error. Please try again.");
     }
-    setLoading(false);
+    setSubmitLoading(false);
   };
 
   return (
@@ -258,8 +294,17 @@ export default function CheckoutPage() {
               </h2>
               <div className="border border-border-color divide-y divide-border-color">
                 {items.map((item) => (
-                  <div key={item.id} className="flex gap-3 p-4">
-                    <div className="w-14 h-20 shrink-0 overflow-hidden bg-surface rounded-sm">
+                  <div
+                    key={item.id}
+                    className={`flex gap-3 p-4 ${
+                      item.isUnavailable ? "bg-red-50/80" : ""
+                    }`}
+                  >
+                    <div
+                      className={`w-14 h-20 shrink-0 overflow-hidden rounded-sm ${
+                        item.isUnavailable ? "bg-red-100" : "bg-surface"
+                      }`}
+                    >
                       {item.image ? (
                         <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
                       ) : (
@@ -275,12 +320,61 @@ export default function CheckoutPage() {
                           ? `Fragrance · Qty: ${item.quantity}`
                           : `${item.size || ""}${item.size && item.color ? " · " : ""}${item.color || ""} · Qty: ${item.quantity}`}
                       </p>
+                      {item.isUnavailable && (
+                        <p className="text-[10px] text-danger mt-1">
+                          {item.unavailableReason || "This product is already taken."}
+                        </p>
+                      )}
                       <p className="text-xs font-medium mt-1">
                         {formatTndPrice(parseFloat(item.price) * item.quantity)}
                       </p>
+                      <div className="mt-2 flex items-center gap-3 flex-wrap">
+                        <div className="flex items-center border border-border-color">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (item.quantity === 1) {
+                                void handleRemoveItem(item.id);
+                                return;
+                              }
+                              handleUpdateQuantity(item.id, item.quantity - 1);
+                            }}
+                            className="w-7 h-7 flex items-center justify-center text-xs hover:bg-hover transition-colors"
+                            aria-label="Decrease quantity"
+                          >
+                            −
+                          </button>
+                          <span className="w-8 h-7 flex items-center justify-center text-xs font-medium border-x border-border-color">
+                            {item.quantity}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
+                            className="w-7 h-7 flex items-center justify-center text-xs hover:bg-hover transition-colors"
+                            aria-label="Increase quantity"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveItem(item.id)}
+                          className="text-[10px] uppercase tracking-[0.2em] text-text-secondary hover:text-foreground transition-colors"
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
+
+                {hasUnavailableItems && (
+                  <div className="p-4 bg-danger/5">
+                    <p className="text-xs text-danger font-medium">
+                      Some items are already taken. Remove them from the cart to place your order.
+                    </p>
+                  </div>
+                )}
 
                 <div className="p-4 space-y-2">
                   <div className="flex justify-between text-xs text-text-secondary">
@@ -293,17 +387,21 @@ export default function CheckoutPage() {
                   </div>
                   <div className="flex justify-between text-sm font-semibold pt-2 border-t border-border-color">
                     <span>Total</span>
-                    <span>{formatTndPrice(totalPrice)}</span>
+                    <span>{formatTndPrice(grandTotal)}</span>
                   </div>
                 </div>
               </div>
 
               <button
                 type="submit"
-                disabled={loading}
-                className="w-full mt-6 bg-foreground text-background py-4 text-sm font-medium tracking-wide uppercase hover:bg-accent transition-colors cursor-pointer disabled:opacity-50"
+                disabled={submitLoading || hasUnavailableItems}
+                className="w-full mt-6 bg-foreground text-background py-4 text-sm font-medium tracking-wide uppercase hover:bg-accent transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? "Placing Order..." : `Place Order — ${formatTndPrice(totalPrice)}`}
+                {submitLoading
+                  ? "Placing Order..."
+                  : hasUnavailableItems
+                    ? "Remove Taken Items"
+                    : `Place Order — ${formatTndPrice(grandTotal)}`}
               </button>
 
               <p className="text-[10px] text-text-secondary text-center mt-3">

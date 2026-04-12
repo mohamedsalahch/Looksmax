@@ -4,13 +4,12 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useCart } from "@/providers/CartContext";
 import {
-  formatRemainingTime,
   reserveProduct,
   subscribeToReservationChanges,
 } from "@/lib/reservations";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { getConditionColor, getConditionLabel, getConditionPercent } from "@/lib/productCondition";
-import { addStudioRailItem } from "@/lib/studioRail";
+import { addStudioTryOnItem } from "@/lib/studioTryOn";
 
 type ProductType = "fashion" | "perfume" | "clothing" | "shoes";
 
@@ -22,11 +21,13 @@ interface ProductCardProps {
   tag?: string;
   image?: string;
   stock?: number;
-  reservationExpiresAt?: string | null;
+  cartCount?: number;
   conditionScore?: number | null;
   conditionStatus?: string | null;
   productType?: ProductType;
   fashionSubtype?: "clothes" | "shoes" | null;
+  sizes?: string[];
+  size?: string;
   originPictures?: {
     front?: string;
     back?: string;
@@ -37,7 +38,6 @@ interface ProductCardProps {
   cloneSourceImage?: string;
 }
 
-const SIZES = ["S", "M", "L", "XL"];
 const CLONE_PREVIEW_WIDTH = 184;
 const CLONE_PREVIEW_HEIGHT = 240;
 const CLONE_PREVIEW_OFFSET = 24;
@@ -50,97 +50,78 @@ export default function ProductCard({
   tag,
   image,
   stock = 1,
-  reservationExpiresAt: initialReservationExpiresAt = null,
+  cartCount: initialCartCount = 0,
   conditionScore = 7,
   conditionStatus = "used",
   productType = "fashion",
   fashionSubtype = "clothes",
+  sizes,
+  size,
   originPictures,
   cloneSourceName = "",
   cloneSourceImage = "",
 }: ProductCardProps) {
-  const { addItem } = useCart();
-  const [selectedSize, setSelectedSize] = useState("M");
+  const { addItem, items } = useCart();
+  const availableSizes = (sizes?.length ? sizes : size ? [size] : []).filter((entry) => Boolean(entry.trim()));
+  const [selectedSize, setSelectedSize] = useState(availableSizes[0] || "");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [reservationExpiresAt, setReservationExpiresAt] = useState(initialReservationExpiresAt);
-  const [nowMs, setNowMs] = useState<number | null>(null);
+  const [cartCount, setCartCount] = useState(initialCartCount);
   const [clonePreview, setClonePreview] = useState({ visible: false, x: 0, y: 0 });
   const dropdownRef = useRef<HTMLDivElement>(null);
   const isPerfume = productType === "perfume";
-  const reservationLabel = nowMs === null ? null : formatRemainingTime(reservationExpiresAt, nowMs);
   const conditionPercent = getConditionPercent(conditionScore ?? 7);
   const conditionLabel = getConditionLabel(conditionScore ?? 7, conditionStatus ?? undefined);
   const conditionColor = getConditionColor(conditionScore ?? 7);
   const showNewBadge = !isPerfume && (conditionScore ?? 0) >= 10;
+  const isSoldOut = stock < 1;
+  const hasSizes = !isPerfume && availableSizes.length > 0;
+  const isInLocalCart = items.some((item) => item.id.split("-")[0] === id);
+  const showReservedElsewhere = cartCount > (isInLocalCart ? 1 : 0);
 
   useEffect(() => {
-    setReservationExpiresAt(initialReservationExpiresAt);
-  }, [initialReservationExpiresAt]);
+    if (availableSizes.length === 0) {
+      setSelectedSize("");
+      return;
+    }
+
+    setSelectedSize((current) => (availableSizes.includes(current) ? current : availableSizes[0]));
+  }, [availableSizes.join("|")]);
 
   useEffect(() => {
-    setNowMs(Date.now());
-  }, []);
+    setCartCount(initialCartCount);
+  }, [initialCartCount]);
 
   useEffect(() => {
-    if (!reservationExpiresAt || nowMs === null || isPerfume) return;
-
-    const timer = window.setInterval(() => {
-      if (new Date(reservationExpiresAt).getTime() <= Date.now()) {
-        setReservationExpiresAt(null);
-        window.clearInterval(timer);
-      } else {
-        setNowMs(Date.now());
-      }
-    }, 1000);
-
-    return () => window.clearInterval(timer);
-  }, [reservationExpiresAt, nowMs, isPerfume]);
-
-  useEffect(() => {
-    if (isPerfume) return;
-
-    return subscribeToReservationChanges(({ productId, reservationExpiresAt: nextReservationExpiresAt }) => {
+    return subscribeToReservationChanges(({ productId, cartCount: nextCartCount }) => {
       if (productId !== id) return;
-      setReservationExpiresAt(nextReservationExpiresAt);
-      setNowMs(Date.now());
+      if (typeof nextCartCount === "number") {
+        setCartCount(nextCartCount);
+      }
     });
-  }, [id, isPerfume]);
+  }, [id]);
 
   const handleQuickAdd = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (stock < 1 || (!isPerfume && reservationLabel)) return;
+    if (isSoldOut) return;
 
     try {
-      if (isPerfume) {
-        addItem({
-          id,
-          name,
-          price,
-          brand: "LOOKSMAX",
-          maxStock: stock,
-          image,
-          categories,
-          productType,
-          fashionSubtype,
-          originPictures,
-        });
-        return;
-      }
-
       const reservation = await reserveProduct(id);
-      setReservationExpiresAt(reservation.reservationExpiresAt);
+      setCartCount(reservation.cartCount ?? cartCount + 1);
       addItem({
         id,
         name,
         price,
         brand: "LOOKSMAX",
-        size: selectedSize,
-        maxStock: 1,
+        size: isPerfume ? undefined : selectedSize,
+        maxStock: Math.max(1, stock),
         image,
+        categories,
         productType,
+        fashionSubtype,
         originPictures,
         reservationExpiresAt: reservation.reservationExpiresAt,
+        cartCount: reservation.cartCount,
       });
       setIsDropdownOpen(false);
     } catch {
@@ -148,12 +129,12 @@ export default function ProductCard({
     }
   };
 
-  const handleAddToRail = (e: React.MouseEvent) => {
+  const handleAddToTryOn = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (stock < 1 || isPerfume) return;
+    if (isSoldOut || isPerfume) return;
 
-    addStudioRailItem({
+    addStudioTryOnItem({
       id,
       name,
       categories,
@@ -161,18 +142,19 @@ export default function ProductCard({
       price,
       brand: "LOOKSMAX",
       quantity: 1,
-        maxStock: Math.max(1, stock),
-        productType,
-        fashionSubtype,
-        originPictures,
-        size: isPerfume ? undefined : selectedSize,
-      });
+      maxStock: Math.max(1, stock),
+      productType,
+      fashionSubtype,
+      originPictures,
+      size: isPerfume ? undefined : selectedSize,
+    });
     setIsDropdownOpen(false);
   };
 
   const toggleDropdown = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!hasSizes) return;
     setIsDropdownOpen((prev) => !prev);
   };
 
@@ -266,10 +248,27 @@ export default function ProductCard({
           </>
         )}
 
-        {(tag || stock < 1 || reservationLabel || showNewBadge) && (
-          <span className="absolute top-2 left-2 z-20 bg-foreground text-background text-[10px] px-2 py-0.5 font-medium tracking-wide">
-            {reservationLabel ? reservationLabel : stock < 1 ? "SOLD" : showNewBadge ? "NEW" : tag}
-          </span>
+        {(tag || isSoldOut || showReservedElsewhere || showNewBadge) && (
+          <div className="absolute top-2 left-2 z-20 flex flex-col gap-1">
+            {tag && (
+              <span className="bg-foreground text-background text-[10px] px-2 py-0.5 font-medium tracking-wide">
+                {tag}
+              </span>
+            )}
+            {isSoldOut ? (
+              <span className="bg-foreground text-background text-[10px] px-2 py-0.5 font-medium tracking-wide">
+                SOLD
+              </span>
+            ) : showReservedElsewhere ? (
+              <span className="bg-foreground text-background text-[10px] px-2 py-0.5 font-medium tracking-wide">
+                Reserved elsewhere
+              </span>
+            ) : showNewBadge ? (
+              <span className="bg-foreground text-background text-[10px] px-2 py-0.5 font-medium tracking-wide">
+                NEW
+              </span>
+            ) : null}
+          </div>
         )}
 
         {isPerfume && cloneSourceName && (
@@ -285,14 +284,14 @@ export default function ProductCard({
           <div className="absolute bottom-0 left-0 right-0 z-30 translate-y-full transition-transform duration-300 ease-out group-hover:translate-y-0">
             <button
               onClick={handleQuickAdd}
-              disabled={stock < 1}
+              disabled={isSoldOut}
               className={`w-full h-10 text-[10px] uppercase font-bold tracking-widest transition-colors ${
-                stock < 1
+                isSoldOut
                   ? "bg-border-color text-text-secondary cursor-not-allowed"
                   : "bg-foreground text-background hover:bg-black"
               }`}
             >
-              {stock < 1 ? "Sold Out" : "Add Cart"}
+              Add Cart
             </button>
           </div>
         ) : (
@@ -305,25 +304,29 @@ export default function ProductCard({
               <div className="relative w-[38%] h-full" ref={dropdownRef}>
                 <div
                   onClick={toggleDropdown}
-                  className="w-full h-full flex items-center justify-between px-3 text-[10px] text-foreground font-medium uppercase tracking-wide border-r border-border-color hover:bg-hover transition-colors"
+                  className={`w-full h-full flex items-center justify-between px-3 text-[10px] text-foreground font-medium uppercase tracking-wide border-r border-border-color transition-colors ${
+                    hasSizes ? "hover:bg-hover cursor-pointer" : "cursor-default"
+                  }`}
                 >
-                  <span>Size {selectedSize}</span>
-                  <svg
-                    width="10"
-                    height="10"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className={`transition-transform duration-200 ${isDropdownOpen ? "rotate-180" : ""}`}
-                  >
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
+                  <span>{hasSizes ? `Size ${selectedSize}` : "One size"}</span>
+                  {hasSizes && (
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className={`transition-transform duration-200 ${isDropdownOpen ? "rotate-180" : ""}`}
+                    >
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  )}
                 </div>
 
-                {isDropdownOpen && (
+                {hasSizes && isDropdownOpen && (
                   <div
                     className="absolute bottom-full left-0 w-[120%] bg-background border border-foreground z-40 flex flex-col mb-[-1px]"
                     onClick={(e) => {
@@ -331,13 +334,13 @@ export default function ProductCard({
                       e.stopPropagation();
                     }}
                   >
-                    {SIZES.map((size) => (
+                    {availableSizes.map((sizeOption) => (
                       <div
-                        key={size}
-                        onClick={(e) => handleSizeSelect(e, size)}
+                        key={sizeOption}
+                        onClick={(e) => handleSizeSelect(e, sizeOption)}
                         className="px-3 py-2.5 text-[10px] text-foreground font-medium hover:bg-surface transition-colors cursor-pointer"
                       >
-                        {size}
+                        {sizeOption}
                       </div>
                     ))}
                   </div>
@@ -346,25 +349,25 @@ export default function ProductCard({
 
               <button
                 onClick={handleQuickAdd}
-                disabled={stock < 1 || Boolean(reservationLabel)}
+                disabled={isSoldOut}
                 className={`w-[31%] h-full text-[10px] uppercase font-bold tracking-widest transition-colors ${
-                  stock < 1 || reservationLabel
+                  isSoldOut
                     ? "bg-border-color text-text-secondary cursor-not-allowed"
                     : "bg-foreground text-background hover:bg-black"
                 }`}
               >
-                {reservationLabel ? "Held" : stock < 1 ? "Sold" : "Cart"}
+                Cart
               </button>
               <button
-                onClick={handleAddToRail}
-                disabled={stock < 1}
+                onClick={handleAddToTryOn}
+                disabled={isSoldOut}
                 className={`w-[31%] h-full text-[10px] uppercase font-bold tracking-widest border-l border-border-color transition-colors ${
-                  stock < 1
+                  isSoldOut
                     ? "bg-border-color text-text-secondary cursor-not-allowed"
                     : "bg-background text-foreground hover:bg-hover"
                 }`}
               >
-                Rail
+                Try
               </button>
             </div>
           </div>

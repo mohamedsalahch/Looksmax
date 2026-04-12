@@ -36,13 +36,10 @@ export default function HeaderSearch() {
 
   useEffect(() => {
     if (!open || debouncedQuery.length < 2) {
-      setSuggestions([]);
-      setLoading(false);
       return;
     }
 
     let cancelled = false;
-    setLoading(true);
 
     fetch(`/api/products?search=${encodeURIComponent(debouncedQuery)}&limit=6`)
       .then((response) => response.json())
@@ -102,8 +99,16 @@ export default function HeaderSearch() {
     <div className="relative" ref={containerRef}>
       <button
         type="button"
-        onClick={() => setOpen((current) => !current)}
-        className="text-foreground hover:text-text-secondary transition-colors cursor-pointer"
+        onClick={() => {
+          setOpen((current) => {
+            const nextOpen = !current;
+            if (nextOpen && query.trim().length >= 2) {
+              setLoading(true);
+            }
+            return nextOpen;
+          });
+        }}
+        className="inline-flex h-9 w-9 items-center justify-center text-foreground hover:text-text-secondary transition-colors cursor-pointer"
         aria-label="Search"
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -133,7 +138,11 @@ export default function HeaderSearch() {
               ref={inputRef}
               type="text"
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                const nextQuery = event.target.value;
+                setQuery(nextQuery);
+                setLoading(nextQuery.trim().length >= 2);
+              }}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
                   event.preventDefault();

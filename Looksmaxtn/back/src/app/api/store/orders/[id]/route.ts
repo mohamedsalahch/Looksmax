@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/store/lib/mongodb";
 import Order from "@/store/models/Order";
 import Product from "@/store/models/Product";
+import ProductReservation from "@/store/models/ProductReservation";
 import { getSession } from "@/store/lib/auth";
 import { getAuditActorFromSession } from "@/store/lib/auditRoute";
 
@@ -115,6 +116,30 @@ export async function PUT(
         { error: `You cannot move an order from ${existingOrder.orderStatus} to ${orderStatus}.` },
         { status: 409 }
       );
+    }
+
+    if (["canceled", "returned"].includes(orderStatus || "") && existingOrder.orderStatus !== orderStatus) {
+      for (const item of existingOrder.items) {
+        const quantityToRestore = item.quantity || 0;
+        if (quantityToRestore > 0) {
+          await Product.updateOne(
+            { _id: item.product },
+            { $inc: { stock: quantityToRestore } }
+          );
+        }
+      }
+
+      const orderUserId =
+        typeof existingOrder.user === "object" && existingOrder.user !== null
+          ? String(existingOrder.user.toString?.() || existingOrder.user)
+          : String(existingOrder.user);
+
+      if (orderUserId) {
+        await ProductReservation.deleteMany({
+          product: { $in: existingOrder.items.map((item) => item.product) },
+          reservationKey: `user:${orderUserId}`,
+        });
+      }
     }
 
     if (orderStatus === "confirmed" && existingOrder.orderStatus !== "confirmed") {

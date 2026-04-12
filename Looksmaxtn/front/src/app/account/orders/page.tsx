@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { formatStoreDate } from "@/lib/dateFormat";
 
@@ -16,6 +17,7 @@ interface Order {
 }
 
 export default function OrdersPage() {
+  const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [archivingOrderId, setArchivingOrderId] = useState("");
@@ -57,6 +59,10 @@ export default function OrdersPage() {
     }
   };
 
+  const openOrder = (orderId: string) => {
+    router.push(`/account/orders/${orderId}`);
+  };
+
   if (loading) {
     return <p className="text-xs text-text-secondary">Loading orders...</p>;
   }
@@ -82,13 +88,23 @@ export default function OrdersPage() {
           {orders.map((order) => (
             <div
               key={order._id}
-              className="border border-border-color p-5 transition-colors hover:bg-hover"
+              role="link"
+              tabIndex={0}
+              onClick={() => openOrder(order._id)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  openOrder(order._id);
+                }
+              }}
+              className="border border-border-color p-5 transition-colors hover:bg-hover cursor-pointer focus:outline-none focus:ring-1 focus:ring-foreground"
             >
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <Link
                     href={`/account/orders/${order._id}`}
                     className="text-[10px] text-text-secondary font-mono hover:text-foreground transition-colors"
+                    onClick={(event) => event.stopPropagation()}
                   >
                     Order #{order._id.slice(-8).toUpperCase()}
                   </Link>
@@ -128,7 +144,10 @@ export default function OrdersPage() {
                   <span className="text-sm font-semibold">{formatTndPrice(order.totalPrice)}</span>
                   <button
                     type="button"
-                    onClick={() => void handleArchive(order._id)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void handleArchive(order._id);
+                    }}
                     disabled={archivingOrderId === order._id}
                     className="text-[10px] uppercase tracking-[0.15em] text-text-secondary transition-colors hover:text-foreground disabled:opacity-50"
                   >

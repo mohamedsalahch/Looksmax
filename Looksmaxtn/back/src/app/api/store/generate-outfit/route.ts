@@ -5,11 +5,13 @@ import path from "path";
 import mongoose from "mongoose";
 import dbConnect from "@/store/lib/mongodb";
 import { getSession } from "@/store/lib/auth";
+import Product from "@/store/models/Product";
 import User from "@/store/models/User";
 import OutfitGenerationJob from "@/store/models/OutfitGenerationJob";
 
 type ZonePayload = {
   status?: boolean;
+  productId?: string;
   fashionSubtype?: string;
   size?: string;
   originPictures?: {
@@ -114,18 +116,50 @@ export async function POST(req: NextRequest) {
       { _id: new mongoose.Types.ObjectId(session.userId) },
       { projection: { bodyProfile: 1 } }
     );
+    const generationLimit = 3;
+    const generationCount = Number(requestingUser?.bodyProfile?.outfitGenerationCount || 0);
+    if (generationCount >= generationLimit) {
+      return NextResponse.json(
+        { error: "Generation limit reached. Use your saved outfit results." },
+        { status: 403 }
+      );
+    }
     const bestProfileImage = requestingUser?.bodyProfile?.profileImageEnhanced
       || requestingUser?.bodyProfile?.profileImage
       || body.profileImage
       || "";
 
     const bodyZones = body.bodyZones || {};
+    const selectedProductIds = [...new Set(
+      Object.values(bodyZones)
+        .map((value) => value?.productId)
+        .filter((productId): productId is string => typeof productId === "string" && productId.length > 0)
+    )];
+    const selectedProducts = selectedProductIds.length > 0
+      ? await Product.find({ _id: { $in: selectedProductIds } })
+          .select("_id originPictures fashionSubtype")
+          .lean()
+      : [];
+    const productMap = new Map(
+      selectedProducts.map((product) => [product._id.toString(), product])
+    );
     const zoneEntries = await Promise.all(
       Object.entries(bodyZones).map(async ([zone, value]) => {
         const status = Boolean(value?.status);
-        const originPictures = value?.originPictures || {};
-        const isShoes = value?.fashionSubtype === "shoes";
+        const product = value?.productId ? productMap.get(value.productId) : null;
+        const originPictures = {
+          front: product?.originPictures?.front || value?.originPictures?.front || "",
+          back: product?.originPictures?.back || value?.originPictures?.back || "",
+          left: product?.originPictures?.left || value?.originPictures?.left || "",
+          right: product?.originPictures?.right || value?.originPictures?.right || "",
+        };
+        const fashionSubtype = product?.fashionSubtype || value?.fashionSubtype || "";
+        const isShoes = fashionSubtype === "shoes";
         const usesFourViews = zone === "footwear" && isShoes;
+        const frontImage = originPictures.front;
+        const backImage = originPictures.back;
+        const leftImage = usesFourViews ? originPictures.left : "";
+        const rightImage = usesFourViews ? originPictures.right : "";
 
         if (!status) {
           console.log("[generate_outfit] inactive body zone", { zone, status: false });
@@ -136,18 +170,10 @@ export async function POST(req: NextRequest) {
           {
             status,
             size: value?.size || "",
-            front:
-              status && originPictures.front ? await publicPathToBase64(originPictures.front) : "",
-            back:
-              status && originPictures.back ? await publicPathToBase64(originPictures.back) : "",
-            left:
-              status && usesFourViews && originPictures.left
-                ? await publicPathToBase64(originPictures.left)
-                : "",
-            right:
-              status && usesFourViews && originPictures.right
-                ? await publicPathToBase64(originPictures.right)
-                : "",
+            front: status && frontImage ? await publicPathToBase64(frontImage) : "",
+            back: status && backImage ? await publicPathToBase64(backImage) : "",
+            left: status && leftImage ? await publicPathToBase64(leftImage) : "",
+            right: status && rightImage ? await publicPathToBase64(rightImage) : "",
           },
         ];
       })
@@ -183,6 +209,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: `Selected items have no images: ${activeZonesWithNoImages.join(", ")}` },
         { status: 400 }
+      );
+    }
+
+    const generationCounterUpdate = await User.collection.updateOne(
+      {
+        _id: new mongoose.Types.ObjectId(session.userId),
+        "bodyProfile.outfitGenerationCount": { $lt: generationLimit },
+      },
+      {
+        $inc: { "bodyProfile.outfitGenerationCount": 1 },
+      }
+    );
+
+    if (generationCounterUpdate.matchedCount === 0) {
+      return NextResponse.json(
+        { error: "Generation limit reached. Use your saved outfit results." },
+        { status: 403 }
       );
     }
 

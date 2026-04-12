@@ -1,5 +1,15 @@
 {
   "scripts": {
     "dev": "concurrently \"npm run dev --prefix front\" \"npm run dev --prefix admin\" \"npm run dev --prefix back\""
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "jose": "^6.2.2",
+    "mongoose": "^9.4.1"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.27",
+    "postcss": "^8.5.9",
+    "tailwindcss": "^4.2.2"
   }
 }

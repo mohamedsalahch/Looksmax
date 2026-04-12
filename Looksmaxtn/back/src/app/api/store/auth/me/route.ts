@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import mongoose from "mongoose";
 import dbConnect from "@/store/lib/mongodb";
 import User from "@/store/models/User";
 import { getSession } from "@/store/lib/auth";
@@ -23,10 +22,9 @@ export async function GET() {
     }
 
     await dbConnect();
-    const user = await User.collection.findOne(
-      { _id: new mongoose.Types.ObjectId(session.userId) },
-      { projection: { name: 1, email: 1, role: 1, address: 1, bodyProfile: 1, isBlocked: 1 } }
-    );
+    const user = await User.findById(session.userId)
+      .select("name email role address bodyProfile isBlocked")
+      .lean();
     if (!user || user.isBlocked) {
       return NextResponse.json({ user: null }, { status: 401 });
     }
@@ -48,6 +46,8 @@ export async function GET() {
                 shoeSize: user.bodyProfile.shoeSize || "",
                 profileImage: user.bodyProfile.profileImage || "",
                 profileImageEnhanced: user.bodyProfile.profileImageEnhanced || "",
+                profileImageUploadCount: Number(user.bodyProfile.profileImageUploadCount || 0),
+                outfitGenerationCount: Number(user.bodyProfile.outfitGenerationCount || 0),
                 gender: normalizeGender(user.bodyProfile.gender),
                 imageEnhancing: Boolean(user.bodyProfile.imageEnhancing),
               }

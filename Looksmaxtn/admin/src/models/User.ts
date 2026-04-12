@@ -3,6 +3,13 @@ import mongoose, { Schema, Document, Model } from "mongoose";
 export interface IUser extends Document {
   name: string; email: string; password: string; role: "user" | "admin";
   isBlocked?: boolean;
+  emailVerified?: boolean;
+  emailVerificationTokenHash?: string | null;
+  emailVerificationExpiresAt?: Date | null;
+  emailVerificationSentAt?: Date | null;
+  passwordResetTokenHash?: string | null;
+  passwordResetExpiresAt?: Date | null;
+  passwordResetSentAt?: Date | null;
   address?: { street: string; city: string; state: string; zip: string; phone: string; };
   createdAt: Date; updatedAt: Date;
 }
@@ -13,6 +20,13 @@ const userSchema = new Schema<IUser>({
   password: { type: String, required: true },
   role: { type: String, enum: ["user", "admin"], default: "user" },
   isBlocked: { type: Boolean, default: false },
+  emailVerified: { type: Boolean, default: true },
+  emailVerificationTokenHash: { type: String, default: null },
+  emailVerificationExpiresAt: { type: Date, default: null },
+  emailVerificationSentAt: { type: Date, default: null },
+  passwordResetTokenHash: { type: String, default: null },
+  passwordResetExpiresAt: { type: Date, default: null },
+  passwordResetSentAt: { type: Date, default: null },
   address: {
     street: { type: String, default: "" }, city: { type: String, default: "" },
     state: { type: String, default: "" }, zip: { type: String, default: "" },

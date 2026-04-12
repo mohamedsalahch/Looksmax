@@ -3,12 +3,12 @@
 const RESERVATION_KEY_STORAGE = "looksmax-reservation-key";
 const RESERVATION_EVENT = "looksmax-reservation-change";
 
-function emitReservationChange(productId: string, reservationExpiresAt: string | null) {
+function emitReservationChange(productId: string, reservationExpiresAt: string | null, cartCount: number | null = null) {
   if (typeof window === "undefined") return;
 
   window.dispatchEvent(
     new CustomEvent(RESERVATION_EVENT, {
-      detail: { productId, reservationExpiresAt },
+      detail: { productId, reservationExpiresAt, cartCount },
     })
   );
 }
@@ -44,32 +44,33 @@ export async function reserveProduct(productId: string) {
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error || "Unable to reserve this product right now.");
+    throw new Error(data.error || "Unable to add this product to the cart right now.");
   }
 
-  emitReservationChange(productId, data.reservationExpiresAt || null);
-  return data as { reservationExpiresAt: string };
+  emitReservationChange(productId, data.reservationExpiresAt || null, data.cartCount ?? null);
+  return data as { reservationExpiresAt: string; cartCount?: number };
 }
 
 export async function releaseProductReservation(productId: string) {
   const reservationKey = getReservationKey();
 
-  await fetch(`/api/products/${productId}/reserve`, {
+  const response = await fetch(`/api/products/${productId}/reserve`, {
     method: "DELETE",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ reservationKey }),
   });
 
-  emitReservationChange(productId, null);
+  const data = await response.json().catch(() => ({}));
+  emitReservationChange(productId, null, typeof data.cartCount === "number" ? data.cartCount : null);
 }
 
 export function subscribeToReservationChanges(
-  callback: (payload: { productId: string; reservationExpiresAt: string | null }) => void
+  callback: (payload: { productId: string; reservationExpiresAt: string | null; cartCount?: number | null }) => void
 ) {
   if (typeof window === "undefined") return () => {};
 
   const handler = (event: Event) => {
-    const customEvent = event as CustomEvent<{ productId: string; reservationExpiresAt: string | null }>;
+    const customEvent = event as CustomEvent<{ productId: string; reservationExpiresAt: string | null; cartCount?: number | null }>;
     callback(customEvent.detail);
   };
 

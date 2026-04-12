@@ -78,6 +78,16 @@ export async function POST(req: NextRequest) {
       { projection: { bodyProfile: 1 } }
     );
     const previousImage = existingUser?.bodyProfile?.profileImage || "";
+    const uploadCount = Number(existingUser?.bodyProfile?.profileImageUploadCount || 0);
+    const outfitGenerationCount = Number(existingUser?.bodyProfile?.outfitGenerationCount || 0);
+    const uploadLimit = 3;
+
+    if (uploadCount >= uploadLimit) {
+      return NextResponse.json(
+        { error: "Upload limit reached. Use the last saved photo." },
+        { status: 403 }
+      );
+    }
 
     // Save raw upload
     const nextImage = await saveBodyProfileImage(imageFile);
@@ -89,6 +99,8 @@ export async function POST(req: NextRequest) {
         $set: {
           "bodyProfile.profileImage": nextImage,
           "bodyProfile.imageEnhancing": true,
+          "bodyProfile.profileImageUploadCount": uploadCount + 1,
+          "bodyProfile.outfitGenerationCount": outfitGenerationCount,
         },
       }
     );
@@ -104,7 +116,13 @@ export async function POST(req: NextRequest) {
       console.error("[profile-photo] Enhancement failed:", err);
     });
 
-    return NextResponse.json({ profileImage: nextImage, imageEnhancing: true });
+    return NextResponse.json({
+      profileImage: nextImage,
+      imageEnhancing: true,
+      profileImageUploadCount: uploadCount + 1,
+      outfitGenerationCount,
+      uploadLimit,
+    });
   } catch (error) {
     console.error("[profile-photo] Upload error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

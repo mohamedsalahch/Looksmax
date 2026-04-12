@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/store/lib/mongodb";
-import Order from "@/store/models/Order";
 import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
 import { getSession } from "@/store/lib/auth";
 import { filterAndRankProducts } from "@/store/lib/productSearch";
-
-const BLOCKING_ORDER_STATUSES = ["processing", "confirmed", "shipping"];
-const ACTIVE_STOCK_ORDER_STATUSES = ["processing", "confirmed", "shipping", "delivered"];
 
 function uniqueSortedValues(values: string[]) {
   return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -42,58 +38,24 @@ export async function GET(req: NextRequest) {
 
     const now = new Date();
 
-    const [products, activeOrders, activeReservations] = await Promise.all([
+    const [products, activeReservations] = await Promise.all([
       Product.find(filter)
         .sort(category === "new" ? { createdAt: -1 } : { createdAt: -1 })
-        .lean(),
-      Order.find({ orderStatus: { $in: ACTIVE_STOCK_ORDER_STATUSES } })
-        .select("orderStatus items.product items.quantity")
         .lean(),
       ProductReservation.find({ reservedUntil: { $gt: now } })
         .select("product reservedUntil")
         .lean(),
     ]);
 
-    const reservedSet = new Set<string>();
-    const hiddenSet = new Set<string>();
-    const perfumeQuantityMap = new Map<string, number>();
-
-    activeOrders.forEach((order) => {
-      order.items.forEach((item) => {
-        const productId = item.product?.toString();
-        if (!productId) return;
-        perfumeQuantityMap.set(productId, (perfumeQuantityMap.get(productId) || 0) + (item.quantity || 0));
-        if (BLOCKING_ORDER_STATUSES.includes(order.orderStatus)) {
-          reservedSet.add(productId);
-        }
-        if (order.orderStatus === "delivered") {
-          hiddenSet.add(productId);
-        }
-      });
-    });
-
-    const reservationMap = new Map(
-      activeReservations.map((reservation) => [
-        reservation.product.toString(),
-        reservation.reservedUntil.toISOString(),
-      ])
-    );
-    const visibleProducts = products.filter(
-      (product) => !(product.productType !== "perfume" && hiddenSet.has(product._id.toString()))
-    );
-
-    const productsWithAvailability = visibleProducts.map((product) => ({
+    const cartCountMap = activeReservations.reduce((map, reservation) => {
+      const productId = reservation.product.toString();
+      map.set(productId, (map.get(productId) || 0) + 1);
+      return map;
+    }, new Map<string, number>());
+    const productsWithAvailability = products.map((product) => ({
       ...product,
-      stock:
-        product.productType === "perfume"
-          ? Math.max((product.stock ?? 0) - (perfumeQuantityMap.get(product._id.toString()) || 0), 0)
-          : reservedSet.has(product._id.toString()) || reservationMap.has(product._id.toString())
-            ? 0
-            : Math.min(product.stock ?? 1, 1),
-      reservationExpiresAt:
-        product.productType === "perfume"
-          ? null
-          : reservationMap.get(product._id.toString()) || null,
+      stock: Math.max(product.stock ?? 0, 0),
+      cartCount: cartCountMap.get(product._id.toString()) || 0,
     }));
 
     const searchMatchedProducts = search

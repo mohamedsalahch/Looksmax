@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/providers/AuthContext";
 
 const navItems = [
@@ -13,7 +14,14 @@ const navItems = [
 
 export default function AccountLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, loading } = useAuth();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+    }
+  }, [loading, pathname, router, user]);
 
   if (loading) {
     return (
@@ -26,18 +34,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
   if (!user) {
     return (
       <div className="pt-[72px] min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-lg font-semibold tracking-wide uppercase mb-3">Sign In Required</h1>
-          <p className="text-sm text-text-secondary mb-6">
-            Please sign in to access your account.
-          </p>
-          <Link
-            href="/login"
-            className="bg-foreground text-background px-8 py-3 text-sm font-medium tracking-wide uppercase hover:bg-accent transition-colors"
-          >
-            Sign In
-          </Link>
-        </div>
+        <p className="text-xs text-text-secondary uppercase tracking-wider">Redirecting to login...</p>
       </div>
     );
   }

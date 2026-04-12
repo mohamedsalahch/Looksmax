@@ -3,7 +3,7 @@ import "./globals.css";
 import Header from "@/components/Header";
 import SidePanel from "@/components/SidePanel";
 import CartPanel from "@/components/CartPanel";
-import ProductRailTray from "@/components/ProductRailTray";
+import ProductTryOnTray from "@/components/ProductTryOnTray";
 import Footer from "@/components/Footer";
 import { CartProvider } from "@/providers/CartContext";
 import { AuthProvider } from "@/providers/AuthContext";
@@ -26,7 +26,7 @@ export default function RootLayout({
             <Header />
             <SidePanel />
             <CartPanel />
-            <ProductRailTray />
+            <ProductTryOnTray />
             <main className="flex-1">{children}</main>
             <Footer />
           </CartProvider>

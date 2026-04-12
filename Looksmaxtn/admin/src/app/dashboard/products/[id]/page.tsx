@@ -71,6 +71,11 @@ function getProductStatus(product: ProductDetail) {
     : { label: "Reserved", className: "bg-warning/10 text-warning" };
 }
 
+function formatStockLabel(product: ProductDetail) {
+  const unitLabel = product.productType === "perfume" ? "bottle" : "unit";
+  return `${product.stock} ${unitLabel}${product.stock === 1 ? "" : "s"}`;
+}
+
 export default function ProductViewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [product, setProduct] = useState<ProductDetail | null>(null);
@@ -190,7 +195,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
                 </span>
               )}
               <span className="text-[10px] bg-bg-secondary text-text-secondary px-2 py-1 font-medium uppercase tracking-wider">
-                Stock {product.stock}
+                Stock {formatStockLabel(product)}
               </span>
               <span className={`text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${status.className}`}>
                 {status.label}
@@ -211,6 +216,18 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
               </p>
             )}
             {product.description && <p className="text-sm text-text-secondary leading-relaxed">{product.description}</p>}
+            {details.length > 0 && (
+              <div className="pt-2 border-t border-border space-y-2">
+                <p className="text-xs text-text-secondary uppercase tracking-wider">Details</p>
+                <ul className="space-y-1.5">
+                  {details.map((detail, index) => (
+                    <li key={`${detail}-${index}`} className="text-sm text-text-secondary">
+                      {detail}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
 
           <div className="bg-bg-card border border-border rounded p-4">
@@ -242,21 +259,6 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="bg-bg-card border border-border rounded p-4">
-        <p className="text-xs text-text-secondary uppercase tracking-wider mb-3">Details</p>
-        {details.length > 0 ? (
-          <ul className="space-y-2">
-            {details.map((detail, index) => (
-              <li key={`${detail}-${index}`} className="text-sm text-text-secondary">
-                {detail}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-text-secondary">No extra product details.</p>
-        )}
       </div>
 
       <AuditMetaCard

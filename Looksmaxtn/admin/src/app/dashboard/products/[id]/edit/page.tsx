@@ -216,6 +216,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const [generationInputs, setGenerationInputs] = useState<GenerationInputs>(initialGenerationInputs);
   const [importingGeneratedImage, setImportingGeneratedImage] = useState<string | null>(null);
   const [isGeneratedImagesOpen, setIsGeneratedImagesOpen] = useState(false);
+  const [generatedImagesSearch, setGeneratedImagesSearch] = useState("");
+  const allowStockEditing = true;
 
   useEffect(() => {
     fetch("/api/categories")
@@ -540,7 +542,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       body.append("tag", form.tag);
       body.append("productType", form.productType);
       body.append("fashionSubtype", form.fashionSubtype);
-      body.append("stock", form.productType === "perfume" ? form.stock : "1");
+      body.append("stock", form.stock);
       body.append("conditionScore", form.conditionScore);
       body.append("originPictureFront", form.originPictures.front);
       body.append("originPictureBack", form.originPictures.back);
@@ -657,7 +659,6 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                   setForm((current) => ({
                     ...current,
                     productType: e.target.value as ProductType,
-                    stock: e.target.value === "perfume" ? current.stock : "1",
                   }))
                 }
                 className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
@@ -693,11 +694,11 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               <input
                 type="number"
                 min="0"
-                value={form.productType === "perfume" ? form.stock : "1"}
-                readOnly={form.productType !== "perfume"}
+                value={allowStockEditing ? form.stock : "1"}
+                readOnly={!allowStockEditing}
                 onChange={(e) => setForm({ ...form, stock: e.target.value })}
                 className={`w-full border px-4 py-3 text-sm ${
-                  form.productType === "perfume"
+                  allowStockEditing
                     ? "bg-bg-secondary border-border"
                     : "bg-bg-hover border-border text-text-secondary cursor-not-allowed"
                 }`}
@@ -865,7 +866,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           </SectionCard>
         )}
 
-        {form.productType === "perfume" && (
+        {form.productType === "fashion" && (
           <SectionCard
             title="Origin Pictures"
             description="Manage the product or body reference angles in one place."
@@ -875,15 +876,23 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 Clothes use front and back. Shoes use front, back, left, and right.
               </p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-3">
               {originPictureKeys.map((key) => {
                 const preview = form.originPictures[key];
                 const inputId = `origin-picture-${key}-upload-edit`;
                 return (
-                  <div key={key} className="space-y-2">
-                    <p className="text-[10px] uppercase tracking-[0.22em] text-text-secondary">
-                      {key}
-                    </p>
+                  <div
+                    key={key}
+                    className="flex flex-col gap-3 rounded border border-border bg-bg-secondary/40 p-3 lg:flex-row lg:items-center"
+                  >
+                    <div className="min-w-0 lg:w-28">
+                      <p className="text-[10px] uppercase tracking-[0.22em] text-text-secondary">
+                        {key}
+                      </p>
+                      <p className="mt-1 text-[10px] text-text-secondary">
+                        {key} reference
+                      </p>
+                    </div>
                     <input
                       id={inputId}
                       type="file"
@@ -898,33 +907,36 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                         e.preventDefault();
                         handleOriginPictureSelect(key, e.dataTransfer.files?.[0] || null);
                       }}
-                      className="flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded border border-dashed border-border bg-bg-secondary px-4 py-6 text-center transition-colors hover:border-accent hover:bg-bg-hover"
+                      className="flex min-h-20 flex-1 cursor-pointer items-center justify-center rounded border border-dashed border-border bg-bg-secondary px-4 py-3 text-center transition-colors hover:border-accent hover:bg-bg-hover"
                     >
                       <span className="text-sm font-medium text-text-primary">
                         Drag or click to import {key} origin image
                       </span>
-                      <span className="text-[10px] uppercase tracking-wider text-text-secondary">
-                        {key} reference
-                      </span>
                     </div>
-                    {preview && (
-                      <div className="space-y-2">
-                        <div className="aspect-[4/5] overflow-hidden rounded border border-border bg-bg-hover p-3">
-                          <img
-                            src={preview}
-                            alt={`${key} origin`}
-                            className="h-full w-full object-contain"
-                          />
+                    <div className="w-full lg:w-32 shrink-0 space-y-2">
+                      {preview ? (
+                        <>
+                          <div className="aspect-[4/3] overflow-hidden rounded border border-border bg-bg-hover">
+                            <img
+                              src={preview}
+                              alt={`${key} origin`}
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleOriginPictureSelect(key, null)}
+                            className="text-[10px] text-danger uppercase tracking-wider"
+                          >
+                            Remove
+                          </button>
+                        </>
+                      ) : (
+                        <div className="flex aspect-[4/3] items-center justify-center rounded border border-dashed border-border bg-bg-hover text-[10px] uppercase tracking-wider text-text-secondary">
+                          No image
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => handleOriginPictureSelect(key, null)}
-                          className="text-[10px] text-danger uppercase tracking-wider"
-                        >
-                          Remove image
-                        </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -1027,31 +1039,57 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               </span>
             </button>
             {isGeneratedImagesOpen && (
-              <div className="border-t border-border p-4">
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              <div className="border-t border-border p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={generatedImagesSearch}
+                    onChange={(e) => setGeneratedImagesSearch(e.target.value)}
+                    placeholder="Search by name or prompt..."
+                    className="w-full max-w-xs bg-bg-secondary border border-border px-3 py-2 text-xs placeholder:text-text-secondary/50"
+                  />
+                  <span className="text-[10px] text-text-secondary">
+                    {generatedImages.flatMap((a) => a.images).filter((image) => {
+                      const search = generatedImagesSearch.toLowerCase();
+                      const asset = generatedImages.find((a) => a.images.includes(image));
+                      return (
+                        (asset?.name || "").toLowerCase().includes(search) ||
+                        (asset?.prompt || "").toLowerCase().includes(search)
+                      );
+                    }).length} results
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-3 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
                   {generatedImages.flatMap((asset) =>
-                    asset.images.map((image, index) => (
-                      <button
-                        key={`${asset._id}-${index}`}
-                        type="button"
-                        onClick={() => importGeneratedImage(image)}
-                        disabled={importingGeneratedImage === image}
-                        className="group overflow-hidden rounded border border-border bg-bg-card text-left disabled:opacity-50"
-                      >
-                        <div className="aspect-[4/5] overflow-hidden bg-bg-secondary">
-                          <img src={image} alt={`Generated ${index + 1}`} className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]" />
-                        </div>
-                        <div className="p-2 space-y-1">
-                          <p className="line-clamp-1 text-[10px] font-medium uppercase tracking-wider text-text-primary">
-                            {asset.name || "Generated image"}
-                          </p>
-                          <p className="line-clamp-2 text-[10px] text-text-secondary">{asset.prompt}</p>
-                          <p className="text-[10px] uppercase tracking-wider text-accent">
-                            {importingGeneratedImage === image ? "Importing..." : "Import"}
-                          </p>
-                        </div>
-                      </button>
-                    ))
+                    asset.images.map((image, index) => {
+                      const search = generatedImagesSearch.toLowerCase();
+                      const matches =
+                        !search ||
+                        (asset.name || "").toLowerCase().includes(search) ||
+                        (asset.prompt || "").toLowerCase().includes(search);
+                      if (!matches) return null;
+                      return (
+                        <button
+                          key={`${asset._id}-${index}`}
+                          type="button"
+                          onClick={() => importGeneratedImage(image)}
+                          disabled={importingGeneratedImage === image}
+                          className="group overflow-hidden rounded border border-border bg-bg-card text-left disabled:opacity-50"
+                        >
+                          <div className="aspect-square overflow-hidden bg-bg-secondary">
+                            <img src={image} alt={`Generated ${index + 1}`} className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]" />
+                          </div>
+                          <div className="p-1.5 space-y-0.5">
+                            <p className="line-clamp-1 text-[8px] font-medium uppercase tracking-wider text-text-primary">
+                              {asset.name || "Generated"}
+                            </p>
+                            <p className="text-[8px] uppercase tracking-wider text-accent">
+                              {importingGeneratedImage === image ? "..." : "Import"}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -1071,193 +1109,156 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               </p>
             </div>
 
-            <div
-              className={`grid gap-5 items-start ${
-                form.fashionSubtype === "clothes"
-                  ? "grid-cols-1 lg:grid-cols-[180px_minmax(0,1fr)]"
-                  : "grid-cols-1"
-              }`}
-            >
-              {form.fashionSubtype === "clothes" && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3 min-h-[48px]">
-                    <label className="block min-w-10 text-[10px] text-text-secondary uppercase tracking-wider">
-                      Model
-                    </label>
-                    <select
-                      value={selectedModelId}
-                      onChange={(e) => setSelectedModelId(e.target.value)}
-                      className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-                    >
-                      <option value="">Select model</option>
-                      {models.map((model) => (
-                        <option key={model._id} value={model._id}>
-                          {model.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-2">
-                      <p className="text-[10px] text-text-secondary uppercase tracking-wider">Front</p>
-                      <div className="aspect-[3/4] max-h-[180px] bg-bg-secondary overflow-hidden rounded border border-border">
-                        {selectedModel ? (
-                          <img src={selectedModel.frontImage || selectedModel.images?.[0] || ""} alt={`${selectedModel.name} front`} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-[10px] text-text-secondary uppercase tracking-wider">
-                            Front
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-[10px] text-text-secondary uppercase tracking-wider">Back</p>
-                      <div className="aspect-[3/4] max-h-[180px] bg-bg-secondary overflow-hidden rounded border border-border">
-                        {selectedModel ? (
-                          <img src={selectedModel.backImage || selectedModel.images?.[1] || selectedModel.frontImage || ""} alt={`${selectedModel.name} back`} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-[10px] text-text-secondary uppercase tracking-wider">
-                            Back
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+            {form.fashionSubtype === "clothes" && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 min-h-[48px]">
+                  <label className="block min-w-10 text-[10px] text-text-secondary uppercase tracking-wider">
+                    Model
+                  </label>
+                  <select
+                    value={selectedModelId}
+                    onChange={(e) => setSelectedModelId(e.target.value)}
+                    className="w-full max-w-xs bg-bg-secondary border border-border px-4 py-3 text-sm"
+                  >
+                    <option value="">Select model</option>
+                    {models.map((model) => (
+                      <option key={model._id} value={model._id}>
+                        {model.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 content-start">
-                {(
-                  form.fashionSubtype === "shoes"
-                    ? (["front", "back", "left", "right"] as Array<keyof GenerationInputs>)
-                    : (["front", "back"] as Array<keyof GenerationInputs>)
-                ).map((key) => (
-                  <div key={key} className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-3 min-h-[48px]">
-                      <label className="block min-w-10 text-[10px] text-text-secondary uppercase tracking-wider">{key}</label>
-                      {generationInputs[key].previewUrl ? (
-                        <button
-                          type="button"
-                          onClick={() => clearGenerationInput(key)}
-                          className="text-[10px] text-danger uppercase tracking-wider"
-                        >
-                          Remove
-                        </button>
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <p className="text-[10px] text-text-secondary uppercase tracking-wider">Front</p>
+                    <div className="aspect-[3/4] max-h-[180px] bg-bg-secondary overflow-hidden rounded border border-border">
+                      {selectedModel ? (
+                        <img src={selectedModel.frontImage || selectedModel.images?.[0] || ""} alt={`${selectedModel.name} front`} className="w-full h-full object-cover" />
                       ) : (
-                        <span className="text-[10px] text-text-secondary uppercase tracking-wider">
-                          Drop only
-                        </span>
-                      )}
-                    </div>
-                    <div
-                      className={`bg-bg-secondary overflow-hidden rounded border border-dashed border-border ${
-                        form.fashionSubtype === "shoes"
-                          ? "aspect-square min-h-[140px] max-h-[180px]"
-                          : "aspect-[4/5]"
-                      }`}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        const imageId = e.dataTransfer.getData("text/product-image-id");
-                        if (imageId) void handleGenerationDrop(key, imageId);
-                      }}
-                    >
-                      {generationInputs[key].previewUrl ? (
-                        <img src={generationInputs[key].previewUrl} alt={`${key} preview`} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-[10px] text-text-secondary uppercase tracking-wider">
-                          <span>{key}</span>
-                          <span className="text-[8px] tracking-normal normal-case text-text-secondary/80">
-                            Drop from product images
-                          </span>
+                        <div className="w-full h-full flex items-center justify-center text-[10px] text-text-secondary uppercase tracking-wider">
+                          Front
                         </div>
                       )}
                     </div>
                   </div>
-                ))}
+                  <div className="space-y-2">
+                    <p className="text-[10px] text-text-secondary uppercase tracking-wider">Back</p>
+                    <div className="aspect-[3/4] max-h-[180px] bg-bg-secondary overflow-hidden rounded border border-border">
+                      {selectedModel ? (
+                        <img src={selectedModel.backImage || selectedModel.images?.[1] || selectedModel.frontImage || ""} alt={`${selectedModel.name} back`} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-[10px] text-text-secondary uppercase tracking-wider">
+                          Back
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {(["front", "back"] as Array<keyof GenerationInputs>).map((key) => (
+                    <div key={key} className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2 min-h-[20px]">
+                        <label className="text-[10px] text-text-secondary uppercase tracking-wider">
+                          {key}
+                        </label>
+                        {generationInputs[key].previewUrl ? (
+                          <button
+                            type="button"
+                            onClick={() => clearGenerationInput(key)}
+                            className="text-[10px] text-danger uppercase tracking-wider"
+                          >
+                            Remove
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-text-secondary uppercase tracking-wider">
+                            Drop only
+                          </span>
+                        )}
+                      </div>
+                      <div
+                        className="aspect-[4/5] max-h-[180px] bg-bg-secondary overflow-hidden rounded border border-dashed border-border"
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const imageId = e.dataTransfer.getData("text/product-image-id");
+                          if (imageId) void handleGenerationDrop(key, imageId);
+                        }}
+                      >
+                        {generationInputs[key].previewUrl ? (
+                          <img src={generationInputs[key].previewUrl} alt={`${key} preview`} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-[10px] text-text-secondary uppercase tracking-wider">
+                            <span>{key}</span>
+                            <span className="text-[8px] tracking-normal normal-case text-text-secondary/80">
+                              Drop from product images
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
+            )}
+
+            {form.fashionSubtype === "shoes" && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {(["front", "back", "left", "right"] as Array<keyof GenerationInputs>).map((key) => (
+                    <div key={key} className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2 min-h-[20px]">
+                        <label className="text-[10px] text-text-secondary uppercase tracking-wider">
+                          {key}
+                        </label>
+                        {generationInputs[key].previewUrl ? (
+                          <button
+                            type="button"
+                            onClick={() => clearGenerationInput(key)}
+                            className="text-[10px] text-danger uppercase tracking-wider"
+                          >
+                            Remove
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-text-secondary uppercase tracking-wider">
+                            Drop only
+                          </span>
+                        )}
+                      </div>
+                      <div
+                        className="aspect-square max-h-[180px] bg-bg-secondary overflow-hidden rounded border border-dashed border-border"
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const imageId = e.dataTransfer.getData("text/product-image-id");
+                          if (imageId) void handleGenerationDrop(key, imageId);
+                        }}
+                      >
+                        {generationInputs[key].previewUrl ? (
+                          <img src={generationInputs[key].previewUrl} alt={`${key} preview`} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-[10px] text-text-secondary uppercase tracking-wider">
+                            <span>{key}</span>
+                            <span className="text-[8px] tracking-normal normal-case text-text-secondary/80">
+                              Drop from product images
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleGenerate}
+                disabled={generating}
+                className="bg-accent text-bg-primary px-5 py-2.5 text-xs font-semibold uppercase tracking-wide disabled:opacity-50"
+              >
+                {generating ? "Generating..." : "Generate"}
+              </button>
             </div>
           </section>
-        )}
-
-        {form.productType === "fashion" && (
-          <SectionCard
-            title="Origin Pictures"
-            description="Manage the product or body reference angles in one place."
-          >
-            <div>
-              <p className="mt-1 text-[11px] text-text-secondary">
-                Clothes use front and back. Shoes use front, back, left, and right.
-              </p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {originPictureKeys.map((key) => {
-                const preview = form.originPictures[key];
-                const inputId = `origin-picture-${key}-upload-edit`;
-                return (
-                  <div key={key} className="space-y-2">
-                    <p className="text-[10px] uppercase tracking-[0.22em] text-text-secondary">
-                      {key}
-                    </p>
-                    <input
-                      id={inputId}
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => handleOriginPictureSelect(key, e.target.files?.[0] || null)}
-                      className="hidden"
-                    />
-                    <div
-                      onClick={() => document.getElementById(inputId)?.click()}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        handleOriginPictureSelect(key, e.dataTransfer.files?.[0] || null);
-                      }}
-                      className="flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded border border-dashed border-border bg-bg-secondary px-4 py-6 text-center transition-colors hover:border-accent hover:bg-bg-hover"
-                    >
-                      <span className="text-sm font-medium text-text-primary">
-                        Drag or click to import {key} origin image
-                      </span>
-                      <span className="text-[10px] uppercase tracking-wider text-text-secondary">
-                        {key} reference
-                      </span>
-                    </div>
-                    {preview && (
-                      <div className="space-y-2">
-                        <div className="aspect-[4/5] overflow-hidden rounded border border-border bg-bg-hover p-3">
-                          <img
-                            src={preview}
-                            alt={`${key} origin`}
-                            className="h-full w-full object-contain"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleOriginPictureSelect(key, null)}
-                          className="text-[10px] text-danger uppercase tracking-wider"
-                        >
-                          Remove image
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </SectionCard>
-        )}
-
-        {form.productType === "fashion" && (
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={handleGenerate}
-              disabled={generating}
-              className="bg-accent text-bg-primary px-5 py-2.5 text-xs font-semibold uppercase tracking-wide disabled:opacity-50"
-            >
-              {generating ? "Generating..." : "Generate"}
-            </button>
-          </div>
         )}
 
         <div className="flex gap-3">

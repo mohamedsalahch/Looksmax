@@ -15,13 +15,15 @@ export async function GET() {
       Product.countDocuments(),
       Order.countDocuments(),
       User.countDocuments(),
-      Order.find().select("totalPrice orderStatus createdAt").lean(),
+      Order.find().sort({ createdAt: -1 }).select("totalPrice orderStatus createdAt").lean(),
     ]);
 
     const totalRevenue = orders.reduce((sum, o) => sum + (o.totalPrice || 0), 0);
     const pendingOrders = orders.filter((o) => o.orderStatus === "processing" || o.orderStatus === "confirmed").length;
     const recentOrders = orders.slice(0, 5);
+    const latestOrderAt = recentOrders[0]?.createdAt || null;
+    const latestOrderId = recentOrders[0]?._id?.toString?.() || null;
 
-    return NextResponse.json({ totalProducts, totalOrders, totalUsers, totalRevenue, pendingOrders, recentOrders });
+    return NextResponse.json({ totalProducts, totalOrders, totalUsers, totalRevenue, pendingOrders, recentOrders, latestOrderAt, latestOrderId });
   } catch (error) { console.error(error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }

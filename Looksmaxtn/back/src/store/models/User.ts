@@ -16,6 +16,8 @@ export interface IBodyProfile {
   shoeSize: string;
   profileImage: string;
   profileImageEnhanced: string;
+  profileImageUploadCount: number;
+  outfitGenerationCount: number;
   gender: string;
   imageEnhancing: boolean;
 }
@@ -26,6 +28,13 @@ export interface IUser extends Document {
   password: string;
   role: "user" | "admin";
   isBlocked?: boolean;
+  emailVerified?: boolean;
+  emailVerificationTokenHash?: string | null;
+  emailVerificationExpiresAt?: Date | null;
+  emailVerificationSentAt?: Date | null;
+  passwordResetTokenHash?: string | null;
+  passwordResetExpiresAt?: Date | null;
+  passwordResetSentAt?: Date | null;
   address?: IAddress;
   bodyProfile?: IBodyProfile;
   createdAt: Date;
@@ -52,6 +61,8 @@ const bodyProfileSchema = new Schema<IBodyProfile>(
     shoeSize: { type: String, default: "" },
     profileImage: { type: String, default: "" },
     profileImageEnhanced: { type: String, default: "" },
+    profileImageUploadCount: { type: Number, default: 0 },
+    outfitGenerationCount: { type: Number, default: 0 },
     gender: { type: String, default: "" },
     imageEnhancing: { type: Boolean, default: false },
   },
@@ -65,6 +76,13 @@ const userSchema = new Schema<IUser>(
     password: { type: String, required: true },
     role: { type: String, enum: ["user", "admin"], default: "user" },
     isBlocked: { type: Boolean, default: false },
+    emailVerified: { type: Boolean, default: true },
+    emailVerificationTokenHash: { type: String, default: null },
+    emailVerificationExpiresAt: { type: Date, default: null },
+    emailVerificationSentAt: { type: Date, default: null },
+    passwordResetTokenHash: { type: String, default: null },
+    passwordResetExpiresAt: { type: Date, default: null },
+    passwordResetSentAt: { type: Date, default: null },
     address: { type: addressSchema, default: () => ({}) },
     bodyProfile: { type: bodyProfileSchema, default: () => ({}) },
   },
