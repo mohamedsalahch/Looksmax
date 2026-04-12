@@ -35,6 +35,7 @@ export default function SettingsPage() {
   const [imageEnhancing, setImageEnhancing] = useState(false);
   const [enhancedImage, setEnhancedImage] = useState("");
   const [zoomedImage, setZoomedImage] = useState<{ src: string; alt: string } | null>(null);
+  const [deletingPhoto, setDeletingPhoto] = useState<"original" | "enhanced" | null>(null);
 
   useEffect(() => {
     setBodyProfile({
@@ -110,6 +111,31 @@ export default function SettingsPage() {
       setImageEnhancing(false);
     }
   }, []);
+
+  const handleDeletePhoto = useCallback(async (target: "original" | "enhanced") => {
+    setDeletingPhoto(target);
+    setBodyError("");
+    try {
+      const res = await fetch(`/api/users/me/body-profile/photo?target=${target}`, {
+        ...withAuthRequest({ method: "DELETE" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setBodyError(data.error || "Failed to delete photo.");
+      } else {
+        if (target === "original") {
+          setBodyProfile((prev) => ({ ...prev, profileImage: "" }));
+          setEnhancedImage("");
+        } else {
+          setEnhancedImage("");
+        }
+        await refreshUser();
+      }
+    } catch {
+      setBodyError("Failed to delete photo.");
+    }
+    setDeletingPhoto(null);
+  }, [refreshUser]);
 
   const handleBodyProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -216,10 +242,19 @@ export default function SettingsPage() {
                         <button
                           type="button"
                           onClick={() => setZoomedImage({ src: bodyProfile.profileImage, alt: "Original photo" })}
-                          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center border border-[#00000012] bg-[#ede1ce] text-base text-[#1a1a1a]"
+                          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center bg-black text-base text-white opacity-0 group-hover:opacity-100 transition-opacity"
                           aria-label="Zoom original photo"
                         >
                           +
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePhoto("original")}
+                          disabled={deletingPhoto === "original"}
+                          className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center bg-black text-sm text-white opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"
+                          aria-label="Delete original photo"
+                        >
+                          {deletingPhoto === "original" ? "..." : "×"}
                         </button>
                       </>
                     ) : (
@@ -256,10 +291,19 @@ export default function SettingsPage() {
                           <button
                             type="button"
                             onClick={() => setZoomedImage({ src: enhancedImage, alt: "Enhanced photo" })}
-                            className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center border border-[#00000012] bg-[#ede1ce] text-base text-[#1a1a1a]"
+                            className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center bg-black text-base text-white opacity-0 group-hover:opacity-100 transition-opacity"
                             aria-label="Zoom enhanced photo"
                           >
                             +
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePhoto("enhanced")}
+                            disabled={deletingPhoto === "enhanced"}
+                            className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center bg-black text-sm text-white opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"
+                            aria-label="Delete enhanced photo"
+                          >
+                            {deletingPhoto === "enhanced" ? "..." : "×"}
                           </button>
                           {imageEnhancing && (
                             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
