@@ -29,6 +29,42 @@ function buildHeaders(req: NextRequest) {
   return headers;
 }
 
+function applySetCookieHeader(source: Response, destination: NextResponse) {
+  const rawSetCookie = source.headers.get("set-cookie");
+  if (!rawSetCookie) return;
+
+  const [nameValue, ...attributes] = rawSetCookie.split(";").map((part) => part.trim());
+  const [name, ...valueParts] = nameValue.split("=");
+  const value = valueParts.join("=");
+
+  if (!name || !value) return;
+
+  const cookieOptions: Parameters<typeof destination.cookies.set>[1] extends never
+    ? never
+    : Parameters<typeof destination.cookies.set>[2] = {};
+
+  for (const attribute of attributes) {
+    const [rawKey, ...rawValueParts] = attribute.split("=");
+    const key = rawKey.toLowerCase();
+    const rawValue = rawValueParts.join("=");
+
+    if (key === "path") cookieOptions.path = rawValue || "/";
+    else if (key === "max-age") cookieOptions.maxAge = Number(rawValue);
+    else if (key === "samesite") {
+      const normalized = rawValue.toLowerCase();
+      if (normalized === "lax" || normalized === "strict" || normalized === "none") {
+        cookieOptions.sameSite = normalized;
+      }
+    } else if (key === "secure") {
+      cookieOptions.secure = true;
+    } else if (key === "httponly") {
+      cookieOptions.httpOnly = true;
+    }
+  }
+
+  destination.cookies.set(name, value, cookieOptions);
+}
+
 async function proxy(req: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   const { path } = await context.params;
   const method = req.method;
@@ -52,11 +88,7 @@ async function proxy(req: NextRequest, context: { params: Promise<{ path: string
       nextResponse.headers.set(key, value);
     }
   });
-
-  const setCookie = response.headers.get("set-cookie");
-  if (setCookie) {
-    nextResponse.headers.set("set-cookie", setCookie);
-  }
+  applySetCookieHeader(response, nextResponse);
 
   return nextResponse;
 }
