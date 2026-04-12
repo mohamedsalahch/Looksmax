@@ -16,6 +16,7 @@ interface Product {
   stock: number;
   cartCount?: number;
   tag?: string;
+  sizes?: string[];
   images?: ProductImage[];
   conditionScore?: number | null;
   conditionStatus?: string | null;
@@ -84,6 +85,7 @@ export default function ProductCardRow({ title = "Featured selection" }: { title
             stock={product.stock}
             cartCount={product.cartCount}
             tag={product.tag}
+            sizes={product.sizes}
             image={getMainImage(product.images)}
             conditionScore={product.conditionScore}
             conditionStatus={product.conditionStatus}

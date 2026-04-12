@@ -16,6 +16,8 @@ export interface IBodyProfile {
   shoeSize: string;
   profileImage: string;
   profileImageEnhanced: string;
+  profileImageUploadCount: number;
+  outfitGenerationCount: number;
   gender: string;
   imageEnhancing: boolean;
 }
@@ -59,6 +61,8 @@ const bodyProfileSchema = new Schema<IBodyProfile>(
     shoeSize: { type: String, default: "" },
     profileImage: { type: String, default: "" },
     profileImageEnhanced: { type: String, default: "" },
+    profileImageUploadCount: { type: Number, default: 0 },
+    outfitGenerationCount: { type: Number, default: 0 },
     gender: { type: String, default: "" },
     imageEnhancing: { type: Boolean, default: false },
   },

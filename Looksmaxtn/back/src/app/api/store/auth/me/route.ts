@@ -46,6 +46,8 @@ export async function GET() {
                 shoeSize: user.bodyProfile.shoeSize || "",
                 profileImage: user.bodyProfile.profileImage || "",
                 profileImageEnhanced: user.bodyProfile.profileImageEnhanced || "",
+                profileImageUploadCount: Number(user.bodyProfile.profileImageUploadCount || 0),
+                outfitGenerationCount: Number(user.bodyProfile.outfitGenerationCount || 0),
                 gender: normalizeGender(user.bodyProfile.gender),
                 imageEnhancing: Boolean(user.bodyProfile.imageEnhancing),
               }

@@ -53,6 +53,13 @@ function SearchContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [queryInput, setQueryInput] = useState(searchParams.get("q") || "");
+  const [draftCategory, setDraftCategory] = useState(searchParams.get("category") || "");
+  const [draftBrand, setDraftBrand] = useState(searchParams.get("brand") || "");
+  const [draftSize, setDraftSize] = useState(searchParams.get("size") || "");
+  const [draftColor, setDraftColor] = useState(searchParams.get("color") || "");
+  const [draftAvailability, setDraftAvailability] = useState(searchParams.get("availability") || "");
+  const [draftPriceMin, setDraftPriceMin] = useState(searchParams.get("priceMin") || "");
+  const [draftPriceMax, setDraftPriceMax] = useState(searchParams.get("priceMax") || "");
   const [products, setProducts] = useState<Product[]>([]);
   const [facets, setFacets] = useState<Facets>({
     categories: [],
@@ -75,6 +82,16 @@ function SearchContent() {
   useEffect(() => {
     setQueryInput(q);
   }, [q]);
+
+  useEffect(() => {
+    setDraftCategory(category);
+    setDraftBrand(brand);
+    setDraftSize(size);
+    setDraftColor(color);
+    setDraftAvailability(availability);
+    setDraftPriceMin(priceMin);
+    setDraftPriceMax(priceMax);
+  }, [availability, brand, category, color, priceMax, priceMin, size]);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -120,10 +137,16 @@ function SearchContent() {
     };
   }, [q, category, brand, size, color, availability, priceMin, priceMax]);
 
-  const updateParam = (key: string, value: string) => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (value) params.set(key, value);
-    else params.delete(key);
+  const applyFilters = () => {
+    const params = new URLSearchParams();
+    if (queryInput.trim()) params.set("q", queryInput.trim());
+    if (draftCategory) params.set("category", draftCategory);
+    if (draftBrand) params.set("brand", draftBrand);
+    if (draftSize) params.set("size", draftSize);
+    if (draftColor) params.set("color", draftColor);
+    if (draftAvailability) params.set("availability", draftAvailability);
+    if (draftPriceMin) params.set("priceMin", draftPriceMin);
+    if (draftPriceMax) params.set("priceMax", draftPriceMax);
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
@@ -131,6 +154,13 @@ function SearchContent() {
     const params = new URLSearchParams();
     if (q) params.set("q", q);
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    setDraftCategory("");
+    setDraftBrand("");
+    setDraftSize("");
+    setDraftColor("");
+    setDraftAvailability("");
+    setDraftPriceMin("");
+    setDraftPriceMax("");
   };
 
   const hasFilters = useMemo(
@@ -147,7 +177,7 @@ function SearchContent() {
             className="mt-4"
             onSubmit={(event) => {
               event.preventDefault();
-              updateParam("q", queryInput.trim());
+              applyFilters();
             }}
           >
             <div className="relative">
@@ -177,7 +207,7 @@ function SearchContent() {
                   type="button"
                   onClick={() => {
                     setQueryInput("");
-                    updateParam("q", "");
+                    router.replace(pathname, { scroll: false });
                   }}
                   className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary hover:text-foreground"
                   aria-label="Clear search"
@@ -205,8 +235,8 @@ function SearchContent() {
             </div>
 
             <select
-              value={category}
-              onChange={(event) => updateParam("category", event.target.value)}
+              value={draftCategory}
+              onChange={(event) => setDraftCategory(event.target.value)}
               className="w-full border border-border-color bg-background px-4 py-3 text-sm"
             >
               <option value="">All categories</option>
@@ -218,8 +248,8 @@ function SearchContent() {
             </select>
 
             <select
-              value={brand}
-              onChange={(event) => updateParam("brand", event.target.value)}
+              value={draftBrand}
+              onChange={(event) => setDraftBrand(event.target.value)}
               className="w-full border border-border-color bg-background px-4 py-3 text-sm"
             >
               <option value="">All brands</option>
@@ -231,8 +261,8 @@ function SearchContent() {
             </select>
 
             <select
-              value={size}
-              onChange={(event) => updateParam("size", event.target.value)}
+              value={draftSize}
+              onChange={(event) => setDraftSize(event.target.value)}
               className="w-full border border-border-color bg-background px-4 py-3 text-sm"
             >
               <option value="">All sizes</option>
@@ -244,8 +274,8 @@ function SearchContent() {
             </select>
 
             <select
-              value={color}
-              onChange={(event) => updateParam("color", event.target.value)}
+              value={draftColor}
+              onChange={(event) => setDraftColor(event.target.value)}
               className="w-full border border-border-color bg-background px-4 py-3 text-sm"
             >
               <option value="">All colors</option>
@@ -257,8 +287,8 @@ function SearchContent() {
             </select>
 
             <select
-              value={availability}
-              onChange={(event) => updateParam("availability", event.target.value)}
+              value={draftAvailability}
+              onChange={(event) => setDraftAvailability(event.target.value)}
               className="w-full border border-border-color bg-background px-4 py-3 text-sm"
             >
               <option value="">All availability</option>
@@ -270,20 +300,28 @@ function SearchContent() {
               <input
                 type="number"
                 min="0"
-                value={priceMin}
-                onChange={(event) => updateParam("priceMin", event.target.value)}
+                value={draftPriceMin}
+                onChange={(event) => setDraftPriceMin(event.target.value)}
                 placeholder={`Min ${facets.priceRange.min || 0}`}
                 className="w-full border border-border-color bg-background px-4 py-3 text-sm"
               />
               <input
                 type="number"
                 min="0"
-                value={priceMax}
-                onChange={(event) => updateParam("priceMax", event.target.value)}
+                value={draftPriceMax}
+                onChange={(event) => setDraftPriceMax(event.target.value)}
                 placeholder={`Max ${facets.priceRange.max || 0}`}
                 className="w-full border border-border-color bg-background px-4 py-3 text-sm"
               />
             </div>
+
+            <button
+              type="button"
+              onClick={applyFilters}
+              className="w-full border border-foreground bg-foreground px-4 py-3 text-[10px] uppercase tracking-[0.22em] text-background transition-colors hover:bg-accent"
+            >
+              Apply filters
+            </button>
           </aside>
 
           <section>
@@ -321,6 +359,7 @@ function SearchContent() {
                     stock={product.stock}
                     cartCount={product.cartCount}
                     tag={product.tag}
+                    sizes={product.sizes}
                     image={getMainImage(product.images)}
                     conditionScore={product.conditionScore}
                     conditionStatus={product.conditionStatus}

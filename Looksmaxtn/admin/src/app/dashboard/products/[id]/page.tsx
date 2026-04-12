@@ -216,6 +216,18 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
               </p>
             )}
             {product.description && <p className="text-sm text-text-secondary leading-relaxed">{product.description}</p>}
+            {details.length > 0 && (
+              <div className="pt-2 border-t border-border space-y-2">
+                <p className="text-xs text-text-secondary uppercase tracking-wider">Details</p>
+                <ul className="space-y-1.5">
+                  {details.map((detail, index) => (
+                    <li key={`${detail}-${index}`} className="text-sm text-text-secondary">
+                      {detail}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
 
           <div className="bg-bg-card border border-border rounded p-4">
@@ -247,21 +259,6 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="bg-bg-card border border-border rounded p-4">
-        <p className="text-xs text-text-secondary uppercase tracking-wider mb-3">Details</p>
-        {details.length > 0 ? (
-          <ul className="space-y-2">
-            {details.map((detail, index) => (
-              <li key={`${detail}-${index}`} className="text-sm text-text-secondary">
-                {detail}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-text-secondary">No extra product details.</p>
-        )}
       </div>
 
       <AuditMetaCard

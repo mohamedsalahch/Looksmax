@@ -26,6 +26,8 @@ interface ProductCardProps {
   conditionStatus?: string | null;
   productType?: ProductType;
   fashionSubtype?: "clothes" | "shoes" | null;
+  sizes?: string[];
+  size?: string;
   originPictures?: {
     front?: string;
     back?: string;
@@ -36,7 +38,6 @@ interface ProductCardProps {
   cloneSourceImage?: string;
 }
 
-const SIZES = ["S", "M", "L", "XL"];
 const CLONE_PREVIEW_WIDTH = 184;
 const CLONE_PREVIEW_HEIGHT = 240;
 const CLONE_PREVIEW_OFFSET = 24;
@@ -54,12 +55,15 @@ export default function ProductCard({
   conditionStatus = "used",
   productType = "fashion",
   fashionSubtype = "clothes",
+  sizes,
+  size,
   originPictures,
   cloneSourceName = "",
   cloneSourceImage = "",
 }: ProductCardProps) {
-  const { addItem } = useCart();
-  const [selectedSize, setSelectedSize] = useState("M");
+  const { addItem, items } = useCart();
+  const availableSizes = (sizes?.length ? sizes : size ? [size] : []).filter((entry) => Boolean(entry.trim()));
+  const [selectedSize, setSelectedSize] = useState(availableSizes[0] || "");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [cartCount, setCartCount] = useState(initialCartCount);
   const [clonePreview, setClonePreview] = useState({ visible: false, x: 0, y: 0 });
@@ -70,6 +74,18 @@ export default function ProductCard({
   const conditionColor = getConditionColor(conditionScore ?? 7);
   const showNewBadge = !isPerfume && (conditionScore ?? 0) >= 10;
   const isSoldOut = stock < 1;
+  const hasSizes = !isPerfume && availableSizes.length > 0;
+  const isInLocalCart = items.some((item) => item.id.split("-")[0] === id);
+  const showReservedElsewhere = cartCount > (isInLocalCart ? 1 : 0);
+
+  useEffect(() => {
+    if (availableSizes.length === 0) {
+      setSelectedSize("");
+      return;
+    }
+
+    setSelectedSize((current) => (availableSizes.includes(current) ? current : availableSizes[0]));
+  }, [availableSizes.join("|")]);
 
   useEffect(() => {
     setCartCount(initialCartCount);
@@ -138,6 +154,7 @@ export default function ProductCard({
   const toggleDropdown = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!hasSizes) return;
     setIsDropdownOpen((prev) => !prev);
   };
 
@@ -231,7 +248,7 @@ export default function ProductCard({
           </>
         )}
 
-        {(tag || isSoldOut || cartCount > 0 || showNewBadge) && (
+        {(tag || isSoldOut || showReservedElsewhere || showNewBadge) && (
           <div className="absolute top-2 left-2 z-20 flex flex-col gap-1">
             {tag && (
               <span className="bg-foreground text-background text-[10px] px-2 py-0.5 font-medium tracking-wide">
@@ -242,9 +259,9 @@ export default function ProductCard({
               <span className="bg-foreground text-background text-[10px] px-2 py-0.5 font-medium tracking-wide">
                 SOLD
               </span>
-            ) : cartCount > 0 ? (
+            ) : showReservedElsewhere ? (
               <span className="bg-foreground text-background text-[10px] px-2 py-0.5 font-medium tracking-wide">
-                {cartCount} in cart{cartCount === 1 ? "" : "s"}
+                Reserved elsewhere
               </span>
             ) : showNewBadge ? (
               <span className="bg-foreground text-background text-[10px] px-2 py-0.5 font-medium tracking-wide">
@@ -287,25 +304,29 @@ export default function ProductCard({
               <div className="relative w-[38%] h-full" ref={dropdownRef}>
                 <div
                   onClick={toggleDropdown}
-                  className="w-full h-full flex items-center justify-between px-3 text-[10px] text-foreground font-medium uppercase tracking-wide border-r border-border-color hover:bg-hover transition-colors"
+                  className={`w-full h-full flex items-center justify-between px-3 text-[10px] text-foreground font-medium uppercase tracking-wide border-r border-border-color transition-colors ${
+                    hasSizes ? "hover:bg-hover cursor-pointer" : "cursor-default"
+                  }`}
                 >
-                  <span>Size {selectedSize}</span>
-                  <svg
-                    width="10"
-                    height="10"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className={`transition-transform duration-200 ${isDropdownOpen ? "rotate-180" : ""}`}
-                  >
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
+                  <span>{hasSizes ? `Size ${selectedSize}` : "One size"}</span>
+                  {hasSizes && (
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className={`transition-transform duration-200 ${isDropdownOpen ? "rotate-180" : ""}`}
+                    >
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  )}
                 </div>
 
-                {isDropdownOpen && (
+                {hasSizes && isDropdownOpen && (
                   <div
                     className="absolute bottom-full left-0 w-[120%] bg-background border border-foreground z-40 flex flex-col mb-[-1px]"
                     onClick={(e) => {
@@ -313,13 +334,13 @@ export default function ProductCard({
                       e.stopPropagation();
                     }}
                   >
-                    {SIZES.map((size) => (
+                    {availableSizes.map((sizeOption) => (
                       <div
-                        key={size}
-                        onClick={(e) => handleSizeSelect(e, size)}
+                        key={sizeOption}
+                        onClick={(e) => handleSizeSelect(e, sizeOption)}
                         className="px-3 py-2.5 text-[10px] text-foreground font-medium hover:bg-surface transition-colors cursor-pointer"
                       >
-                        {size}
+                        {sizeOption}
                       </div>
                     ))}
                   </div>

@@ -22,6 +22,8 @@ interface User {
     shoeSize: string;
     profileImage: string;
     profileImageEnhanced: string;
+    profileImageUploadCount: number;
+    outfitGenerationCount: number;
     gender: string;
     imageEnhancing: boolean;
   };
@@ -60,6 +62,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshUser = useCallback(async () => {
     try {
       const res = await fetch(`/api/auth/me?ts=${Date.now()}`, { cache: "no-store" });
+      if (!res.ok) {
+        setUser(null);
+        return;
+      }
       const data = await res.json();
       setUser(data.user || null);
     } catch {
@@ -72,6 +78,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     refreshUser();
   }, [refreshUser]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const interval = window.setInterval(() => {
+      void refreshUser();
+    }, 60000);
+
+    return () => window.clearInterval(interval);
+  }, [refreshUser, user]);
 
   const login = async (email: string, password: string) => {
     try {

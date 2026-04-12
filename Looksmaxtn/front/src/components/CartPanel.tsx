@@ -115,9 +115,7 @@ export default function CartPanel() {
                       </div>
                       <button
                         onClick={() => {
-                          if (item.productType !== "perfume") {
-                            void releaseProductReservation(item.id.split("-")[0]);
-                          }
+                          void releaseProductReservation(item.id.split("-")[0]);
                           removeItem(item.id);
                         }}
                         className="text-text-secondary hover:text-foreground transition-colors cursor-pointer shrink-0 mt-0.5"
@@ -157,7 +155,7 @@ export default function CartPanel() {
                       <div className="flex items-center border border-border-color">
                         <button
                           onClick={() => {
-                            if (item.quantity === 1 && item.productType !== "perfume") {
+                            if (item.quantity === 1) {
                               void releaseProductReservation(item.id.split("-")[0]);
                             }
                             updateQuantity(item.id, item.quantity - 1);

@@ -16,6 +16,7 @@ const defaultProduct: {
   brand: string;
   image?: string;
   size?: string;
+  sizes?: string[];
   stock: number;
   description: string;
     images: { url: string; isMain: boolean }[];
@@ -39,7 +40,7 @@ const defaultProduct: {
   price: "29.99",
   brand: "Unknown",
   image: "",
-  size: "M",
+  sizes: [],
   stock: 1,
   description:
     "A unique thrift find in great condition. One-of-a-kind piece curated for the LOOKSMAX collection.",
@@ -89,7 +90,7 @@ export default async function ProductDetailPage({
         price: dbProduct.price.toFixed(2),
         brand: dbProduct.brand || "LOOKSMAX",
         image: dbProduct.images?.find((image) => image.isMain)?.url || dbProduct.images?.[0]?.url || "",
-        size: dbProduct.sizes?.[0] || "",
+        sizes: dbProduct.sizes || [],
         stock: Math.max(dbProduct.stock ?? 0, 0),
         description: dbProduct.description || "",
         images: dbProduct.images || [],

@@ -49,10 +49,6 @@ export default function ContactPage() {
           {/* Contact Info */}
           <div className="space-y-8">
             <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wider mb-2">Email</h3>
-              <p className="text-sm text-text-secondary">support@looksmax.com</p>
-            </div>
-            <div>
               <h3 className="text-xs font-semibold uppercase tracking-wider mb-2">Response Time</h3>
               <p className="text-sm text-text-secondary">Within 24 hours</p>
             </div>

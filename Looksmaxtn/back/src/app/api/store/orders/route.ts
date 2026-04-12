@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/store/lib/mongodb";
 import Order from "@/store/models/Order";
 import Product from "@/store/models/Product";
+import ProductReservation from "@/store/models/ProductReservation";
+import User from "@/store/models/User";
 import { getSession } from "@/store/lib/auth";
 import { getAuditActorFromSession } from "@/store/lib/auditRoute";
+import { sendOrderStatusEmail } from "@/store/lib/mailer";
 import mongoose from "mongoose";
 
 export async function GET() {
@@ -137,6 +140,32 @@ export async function POST(req: NextRequest) {
       createdBy: auditActor,
       updatedBy: auditActor,
     });
+
+    try {
+      const customer = await User.findById(session.userId).select("name email").lean();
+      if (customer?.email) {
+        const frontendBaseUrl = (process.env.FRONTEND_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
+        await sendOrderStatusEmail({
+          to: customer.email,
+          name: customer.name || shippingAddress.fullName || "Customer",
+          orderNumber: order._id.toString().slice(-8).toUpperCase(),
+          orderStatus: "processing",
+          orderUrl: `${frontendBaseUrl}/account/orders/${order._id.toString()}`,
+        });
+      }
+    } catch (emailError) {
+      console.error("Order confirmation email error:", emailError);
+    }
+
+    try {
+      const reservationKey = `user:${session.userId}`;
+      await ProductReservation.deleteMany({
+        product: { $in: stockAdjustments.map((adjustment) => adjustment.productId) },
+        reservationKey,
+      });
+    } catch (reservationCleanupError) {
+      console.error("Cleanup order reservations error:", reservationCleanupError);
+    }
 
     return NextResponse.json({ order }, { status: 201 });
   } catch (error: unknown) {

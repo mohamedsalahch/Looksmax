@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import {useEffect, useMemo, useState} from "react";
+import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import {useAuth} from "@/providers/AuthContext";
 import ProductCard from "@/components/ProductCard";
 import {
@@ -34,6 +35,7 @@ interface StudioProduct {
     stock?: number;
     cartCount?: number;
     tag?: string;
+    sizes?: string[];
     conditionScore?: number | null;
     conditionStatus?: string | null;
     productType?: "fashion" | "perfume" | "clothing" | "shoes";
@@ -66,6 +68,15 @@ interface SavedOutfitItem {
         front?: string;
         back?: string;
     };
+    outfitSnapshot?: Record<
+        string,
+        {
+            status?: boolean;
+            productId?: string;
+            fashionSubtype?: string;
+            size?: string;
+        } | null
+    >;
     isPublic: boolean;
     shareToken?: string;
     updatedAt: string;
@@ -206,6 +217,16 @@ const WOMEN_HAND_BAG_KEYWORDS = [
 ];
 
 const WOMEN_OUTERWEAR_COLOR = "#2c3e50";
+const STORED_GENERATION_KEY = "looksmax-studio-generation-job";
+
+type StoredGenerationState = {
+    jobId: string;
+    images: string[];
+    errorMessage: string;
+    generating: boolean;
+    name: string;
+    pendingRecovery: boolean;
+};
 
 function getZoneButtonLabel(
     zoneId: (typeof BODY_ZONES)[number]["id"],
@@ -263,6 +284,44 @@ function getZoneCategoryKeywords(
     }
 
     return ZONE_CATEGORY_KEYWORDS[zoneId];
+}
+
+function getStoredGenerationKey(userId: string) {
+    return `${STORED_GENERATION_KEY}:${userId}`;
+}
+
+function readStoredGenerationState(userId: string): StoredGenerationState | null {
+    if (typeof window === "undefined") return null;
+
+    try {
+        const raw = window.localStorage.getItem(getStoredGenerationKey(userId));
+        if (!raw) return null;
+
+        const parsed = JSON.parse(raw) as Partial<StoredGenerationState>;
+        if (!parsed.jobId && !parsed.pendingRecovery) return null;
+
+        return {
+            jobId: parsed.jobId || "",
+            images: Array.isArray(parsed.images) ? parsed.images.filter((image): image is string => typeof image === "string") : [],
+            errorMessage: typeof parsed.errorMessage === "string" ? parsed.errorMessage : "",
+            generating: Boolean(parsed.generating),
+            name: typeof parsed.name === "string" ? parsed.name : "Outfit",
+            pendingRecovery: Boolean(parsed.pendingRecovery),
+        };
+    } catch {
+        return null;
+    }
+}
+
+function writeStoredGenerationState(userId: string, state: StoredGenerationState | null) {
+    if (typeof window === "undefined") return;
+
+    if (!state) {
+        window.localStorage.removeItem(getStoredGenerationKey(userId));
+        return;
+    }
+
+    window.localStorage.setItem(getStoredGenerationKey(userId), JSON.stringify(state));
 }
 
 function normalizeSearchableText(value: string) {
@@ -472,6 +531,8 @@ function StudioModel({
 }
 
 export default function OutfitStudioPage() {
+    const router = useRouter();
+    const pathname = usePathname();
     const {user, loading, refreshUser} = useAuth();
     const isWomen = user?.bodyProfile?.gender === "women";
     const studioTitle = isWomen ? "Outfit Builder" : "Outfit Studio";
@@ -493,7 +554,9 @@ export default function OutfitStudioPage() {
     const [generatedOutfitJobId, setGeneratedOutfitJobId] = useState("");
     const [generatedOutfitImages, setGeneratedOutfitImages] = useState<string[]>([]);
     const [generatedOutfitIndex, setGeneratedOutfitIndex] = useState(0);
+    const [outfitNameDraft, setOutfitNameDraft] = useState("Outfit");
     const [isGeneratedZoomOpen, setIsGeneratedZoomOpen] = useState(false);
+    const [needsGenerationRecovery, setNeedsGenerationRecovery] = useState(false);
     const [zoomedSavedOutfitId, setZoomedSavedOutfitId] = useState("");
     const [savedOutfits, setSavedOutfits] = useState<SavedOutfitItem[]>([]);
     const [savingOutfit, setSavingOutfit] = useState(false);
@@ -501,15 +564,50 @@ export default function OutfitStudioPage() {
     const [deletingOutfitId, setDeletingOutfitId] = useState("");
     const [savedOutfitIndexes, setSavedOutfitIndexes] = useState<Record<string, number>>({});
     const [generationError, setGenerationError] = useState("");
+    const [generationStateHydrated, setGenerationStateHydrated] = useState(false);
+
+    useEffect(() => {
+        if (!loading && !user) {
+            router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+        }
+    }, [loading, pathname, router, user]);
+
+    useEffect(() => {
+        if (!user?.id) return;
+
+        let cancelled = false;
+        queueMicrotask(() => {
+            if (cancelled) return;
+
+            const storedGeneration = readStoredGenerationState(user.id);
+            if (!storedGeneration) {
+                setGenerationStateHydrated(true);
+                return;
+            }
+
+            setGeneratedOutfitJobId(storedGeneration.jobId);
+            setGeneratedOutfitImages(storedGeneration.images);
+            setGeneratingOutfit(storedGeneration.generating || storedGeneration.images.length === 0);
+            setGenerationError(storedGeneration.errorMessage);
+            setOutfitNameDraft(storedGeneration.name || "Outfit");
+            setNeedsGenerationRecovery(Boolean(storedGeneration.pendingRecovery && !storedGeneration.jobId));
+            setGenerationStateHydrated(true);
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [user?.id]);
 
     const loadSavedOutfits = () => {
         fetch(`/api/outfits?ts=${Date.now()}`, {cache: "no-store"})
             .then((response) => response.json())
             .then((data) => {
-                setSavedOutfits(data.outfits || []);
+                const outfits = data.outfits || [];
+                setSavedOutfits(outfits);
                 setSavedOutfitIndexes((current) =>
                     Object.fromEntries(
-                        (data.outfits || []).map((outfit: SavedOutfitItem) => [
+                        outfits.map((outfit: SavedOutfitItem) => [
                             outfit.id,
                             Math.min(current[outfit.id] || 0, Math.max(getAvailableOutfitImages(outfit.images).length - 1, 0)),
                         ])
@@ -539,6 +637,87 @@ export default function OutfitStudioPage() {
             setIsTryOnOpen(items.length > 0);
         });
     }, []);
+
+    useEffect(() => {
+        if (!user?.id) return;
+        if (!generationStateHydrated) return;
+
+        if (!generatedOutfitJobId) {
+            if (!generatingOutfit && generatedOutfitImages.length === 0 && !generationError) {
+                writeStoredGenerationState(user.id, null);
+                setNeedsGenerationRecovery(false);
+            } else if (generatingOutfit) {
+                writeStoredGenerationState(user.id, {
+                    jobId: "",
+                    images: generatedOutfitImages,
+                    errorMessage: generationError,
+                    generating: true,
+                    name: outfitNameDraft,
+                    pendingRecovery: true,
+                });
+            }
+            return;
+        }
+
+        writeStoredGenerationState(user.id, {
+            jobId: generatedOutfitJobId,
+            images: generatedOutfitImages,
+            errorMessage: generationError,
+            generating: generatingOutfit,
+            name: outfitNameDraft,
+            pendingRecovery: false,
+        });
+    }, [generatedOutfitImages, generatedOutfitJobId, generatingOutfit, generationError, outfitNameDraft, user?.id, generationStateHydrated]);
+
+    useEffect(() => {
+        if (!user?.id || !needsGenerationRecovery || generatedOutfitJobId) return;
+
+        let cancelled = false;
+        let completed = false;
+
+        const recoverLatestJob = async () => {
+            if (cancelled || completed) return;
+
+            try {
+                const response = await fetch("/api/generate-outfit/latest", { cache: "no-store" });
+                const data = await response.json();
+                if (cancelled || !response.ok) return;
+
+                if (!data.job) {
+                    return;
+                }
+
+                const nextImages = [data.job.images?.front, data.job.images?.back]
+                    .filter((image: unknown): image is string => typeof image === "string" && image.length > 0)
+                    .map((image: string) => (image.startsWith("data:") ? image : `data:image/png;base64,${image}`));
+
+                setGeneratedOutfitJobId(String(data.job.id || ""));
+                setGeneratedOutfitImages(nextImages);
+                setGeneratingOutfit(data.job.status === "pending" || data.job.status === "processing");
+                setGenerationError(data.job.errorMessage || "");
+                setNeedsGenerationRecovery(false);
+                completed = true;
+                writeStoredGenerationState(user.id, {
+                    jobId: String(data.job.id || ""),
+                    images: nextImages,
+                    errorMessage: data.job.errorMessage || "",
+                    generating: data.job.status === "pending" || data.job.status === "processing",
+                    name: outfitNameDraft,
+                    pendingRecovery: false,
+                });
+            } catch {
+                // Keep retrying while the webhook job is still being created.
+            }
+        };
+
+        recoverLatestJob();
+        const interval = window.setInterval(recoverLatestJob, 2000);
+
+        return () => {
+            cancelled = true;
+            window.clearInterval(interval);
+        };
+    }, [generatedOutfitJobId, needsGenerationRecovery, outfitNameDraft, user?.id]);
 
     const imageEnhancing = Boolean(user?.bodyProfile?.imageEnhancing);
 
@@ -610,6 +789,11 @@ export default function OutfitStudioPage() {
     );
     const selectedZoneMeta = getZoneDetails(selectedZoneId, isWomen);
     const selectedZoneItem = outfit[selectedZoneId];
+    const hasSelectedOutfitItems = BODY_ZONES.some((zone) => Boolean(outfit[zone.id]));
+    const generationLimit = 3;
+    const generationRequestsUsed = Math.min(Number(user?.bodyProfile?.outfitGenerationCount || 0), generationLimit);
+    const remainingGenerationRequests = Math.max(generationLimit - generationRequestsUsed, 0);
+    const generationLimitReached = remainingGenerationRequests <= 0;
 
     const handleAddToTryOnFromProductList = (product: StudioProduct) => {
         addStudioTryOnItem({
@@ -692,10 +876,28 @@ export default function OutfitStudioPage() {
     };
 
     const handleGenerateOutfit = async () => {
+        if (generationLimitReached) {
+            setGenerationError("Generation limit reached.");
+            return;
+        }
+
         setGenerationError("");
         setGeneratedOutfitImages([]);
         setGeneratedOutfitIndex(0);
         setGeneratingOutfit(true);
+        setOutfitNameDraft("Outfit");
+        setNeedsGenerationRecovery(false);
+
+        if (user?.id) {
+            writeStoredGenerationState(user.id, {
+                jobId: "",
+                images: [],
+                errorMessage: "",
+                generating: true,
+                name: "Outfit",
+                pendingRecovery: true,
+            });
+        }
 
         try {
             const response = await fetch("/api/generate-outfit", {
@@ -713,6 +915,7 @@ export default function OutfitStudioPage() {
                             zone.id,
                             {
                                 status: Boolean(outfit[zone.id]),
+                                productId: outfit[zone.id]?.id || "",
                                 fashionSubtype: outfit[zone.id]?.fashionSubtype || "",
                                 size:
                                     zone.id === "headwear"
@@ -740,19 +943,32 @@ export default function OutfitStudioPage() {
             if (!response.ok) {
                 setGenerationError(data.error || "Unable to generate outfit.");
                 setGeneratingOutfit(false);
-                return;
-            }
-
-            if (!response.ok) {
-                setGenerationError(data.error || "Unable to generate outfit.");
-                setGeneratingOutfit(false);
+                if (user?.id) {
+                    writeStoredGenerationState(user.id, null);
+                    void refreshUser();
+                }
                 return;
             }
 
             setGeneratedOutfitJobId(String(data.jobId || ""));
+            setNeedsGenerationRecovery(false);
+            if (user?.id) {
+                writeStoredGenerationState(user.id, {
+                    jobId: String(data.jobId || ""),
+                    images: [],
+                    errorMessage: "",
+                    generating: true,
+                    name: "Outfit",
+                    pendingRecovery: false,
+                });
+                void refreshUser();
+            }
         } catch {
             setGenerationError("Generation request failed.");
             setGeneratingOutfit(false);
+            if (user?.id) {
+                writeStoredGenerationState(user.id, null);
+            }
         }
     };
 
@@ -765,7 +981,7 @@ export default function OutfitStudioPage() {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({
-                    name: "First Outfit",
+                    name: outfitNameDraft.trim() || "Outfit",
                     images: {
                         front: generatedOutfitImages[0] || "",
                         back: generatedOutfitImages[1] || "",
@@ -778,6 +994,15 @@ export default function OutfitStudioPage() {
                 setGenerationError(data.error || "Unable to save outfit.");
                 setSavingOutfit(false);
                 return;
+            }
+
+            setGeneratedOutfitJobId("");
+            setGeneratedOutfitImages([]);
+            setGeneratedOutfitIndex(0);
+            setGenerationError("");
+            setOutfitNameDraft("Outfit");
+            if (user?.id) {
+                writeStoredGenerationState(user.id, null);
             }
 
             loadSavedOutfits();
@@ -836,6 +1061,16 @@ export default function OutfitStudioPage() {
                     if (data.job.status === "failed") {
                         setGenerationError(data.job.errorMessage || "Outfit generation failed.");
                         setGeneratingOutfit(false);
+                        if (user?.id) {
+                            writeStoredGenerationState(user.id, {
+                                jobId: generatedOutfitJobId,
+                                images: generatedOutfitImages,
+                                errorMessage: data.job.errorMessage || "Outfit generation failed.",
+                                generating: false,
+                                name: outfitNameDraft,
+                                pendingRecovery: false,
+                            });
+                        }
                         return;
                     }
 
@@ -849,6 +1084,16 @@ export default function OutfitStudioPage() {
 
                     if (data.job.status === "completed") {
                         setGeneratingOutfit(false);
+                        if (user?.id) {
+                            writeStoredGenerationState(user.id, {
+                                jobId: generatedOutfitJobId,
+                                images: nextImages.length > 0 ? nextImages : generatedOutfitImages,
+                                errorMessage: "",
+                                generating: false,
+                                name: outfitNameDraft,
+                                pendingRecovery: false,
+                            });
+                        }
                     }
                 })
                 .catch(() => {
@@ -919,8 +1164,11 @@ export default function OutfitStudioPage() {
     }
 
     const activeGeneratedOutfitImage = generatedOutfitImages[generatedOutfitIndex] || "";
+    const generatingPreviewImage =
+        user?.bodyProfile?.profileImageEnhanced || user?.bodyProfile?.profileImage || "";
+    const isRestoringGeneration = needsGenerationRecovery && !generatedOutfitJobId;
     const showGeneratedOutfitPanel = Boolean(
-        generatingOutfit || activeGeneratedOutfitImage || generationError
+        generatingOutfit || activeGeneratedOutfitImage || generationError || isRestoringGeneration
     );
     const cycleGeneratedImage = () => {
         if (generatedOutfitImages.length <= 1) return;
@@ -1113,11 +1361,22 @@ export default function OutfitStudioPage() {
                                 <button
                                     type="button"
                                     onClick={handleGenerateOutfit}
-                                    disabled={generatingOutfit}
+                                    disabled={generatingOutfit || !hasSelectedOutfitItems || generationLimitReached}
                                     className="mt-6 w-full rounded-none bg-[#1a1a1a] px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-white transition-colors hover:bg-[#c9a96e] disabled:opacity-50"
                                 >
-                                    {generatingOutfit ? "Generating..." : "Generate outfit"}
+                                    {generatingOutfit
+                                        ? "Generating..."
+                                        : generationLimitReached
+                                            ? "Generation limit reached"
+                                        : hasSelectedOutfitItems
+                                            ? "Generate outfit"
+                                            : "Select at least one item"}
                                 </button>
+                                <p className="text-[10px] uppercase tracking-[0.18em] text-[#999]">
+                                    {remainingGenerationRequests > 0
+                                        ? `${remainingGenerationRequests} generation${remainingGenerationRequests === 1 ? "" : "s"} left`
+                                        : "No generations left"}
+                                </p>
                             </div>
                         </div>
 
@@ -1139,10 +1398,10 @@ export default function OutfitStudioPage() {
                                 <div
                                     className="flex h-[420px] items-center justify-center bg-[#ede1ce] p-4 text-[#666]">
                                     <div className="relative flex h-full w-full items-center justify-center">
-                                        {generatingOutfit && user.bodyProfile?.profileImage ? (
+                                        {generatingOutfit && generatingPreviewImage ? (
                                             <>
                                                 <img
-                                                    src={user.bodyProfile.profileImage}
+                                                    src={generatingPreviewImage}
                                                     alt={user.name}
                                                     className="max-h-full w-full object-contain blur-md opacity-60"
                                                 />
@@ -1153,31 +1412,53 @@ export default function OutfitStudioPage() {
                                                     <span className="text-[12px] text-[#666]">Generating...</span>
                                                 </div>
                                             </>
+                                        ) : isRestoringGeneration ? (
+                                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                                                <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#1a1a1a]/15 border-t-[#c9a96e]"/>
+                                                <span className="text-[12px] text-[#666]">Restoring generation...</span>
+                                            </div>
                                         ) : activeGeneratedOutfitImage ? (
                                             <>
-                                                <button
-                                                    type="button"
-                                                    onClick={cycleGeneratedImage}
-                                                    className="flex h-full w-full items-center justify-center rounded-none"
-                                                >
-                                                    <img
-                                                        src={activeGeneratedOutfitImage}
-                                                        alt={`Generated outfit ${generatedOutfitIndex + 1}`}
-                                                        className="max-h-full w-full object-contain"
-                                                    />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setIsGeneratedZoomOpen(true)}
-                                                    className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-none border border-[#00000012] bg-[#ede1ce] text-lg text-[#1a1a1a]"
-                                                    aria-label="Zoom generated outfit"
-                                                >
-                                                    +
-                                                </button>
+                                                <div className="image-area relative h-full w-full">
+                                                    <button
+                                                        type="button"
+                                                        onClick={cycleGeneratedImage}
+                                                        className="flex h-full w-full items-center justify-center rounded-none"
+                                                    >
+                                                        <img
+                                                            src={activeGeneratedOutfitImage}
+                                                            alt={`Generated outfit ${generatedOutfitIndex + 1}`}
+                                                            className="max-h-full w-full object-contain"
+                                                        />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setIsGeneratedZoomOpen(true)}
+                                                        className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-none border border-[#00000012] bg-[#ede1ce] text-base text-[#1a1a1a]"
+                                                        aria-label="Zoom generated outfit"
+                                                    >
+                                                        +
+                                                    </button>
+                                                </div>
                                             </>
                                         ) : null}
                                     </div>
                                 </div>
+
+                                {generatedOutfitImages.length > 0 && (
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] uppercase tracking-[0.18em] text-[#666]">
+                                            Outfit name
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={outfitNameDraft}
+                                            onChange={(e) => setOutfitNameDraft(e.target.value)}
+                                            className="w-full border border-[#00000012] bg-[#f7f2e8] px-3 py-2 text-sm text-[#1a1a1a] outline-none placeholder:text-[#999]"
+                                            placeholder="Outfit name"
+                                        />
+                                    </div>
+                                )}
 
                                 {generatedOutfitImages.length > 1 && !generatingOutfit && (
                                     <div className="flex items-center justify-center gap-2">
@@ -1211,9 +1492,14 @@ export default function OutfitStudioPage() {
                         <div className="flex flex-col gap-3 bg-transparent px-6 py-6 2xl:min-h-[560px]">
                             <div className="mb-2 flex items-center justify-between gap-3">
                                 <p className="text-[11px] uppercase tracking-[0.18em] text-[#666]">Saved outfits</p>
-                                <span className="text-[10px] uppercase tracking-[0.15em] text-[#999]">
-                  {savedOutfits.length}
-                </span>
+                                <div className="flex items-center gap-2">
+                                    <Link
+                                        href="/studio/outfits"
+                                        className="border border-[#00000012] bg-transparent px-3 py-1.5 text-[10px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:border-[#c9a96e] hover:text-[#c9a96e]"
+                                    >
+                                        View All
+                                    </Link>
+                                </div>
                             </div>
                             <div className="space-y-2 2xl:max-h-[420px] 2xl:overflow-y-auto 2xl:pr-1">
                                 {savedOutfits.map((outfitItem) => {
@@ -1265,7 +1551,7 @@ export default function OutfitStudioPage() {
                                                     </button>
                                                 ) : null}
                                             </div>
-                                            <div className="mt-3 space-y-2">
+                                            <div className="mt-3 space-y-3">
                                                 <p className="text-sm text-[#1a1a1a]">{outfitItem.name}</p>
                                                 <div className="flex flex-wrap gap-4">
                                                     <button
@@ -1325,6 +1611,7 @@ export default function OutfitStudioPage() {
                                     stock={product.stock}
                                     cartCount={product.cartCount}
                                     tag={product.tag}
+                                    sizes={product.sizes}
                                     image={getMainImage(product.images)}
                                     conditionScore={product.conditionScore}
                                     conditionStatus={product.conditionStatus}

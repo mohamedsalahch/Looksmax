@@ -3,6 +3,17 @@ import dbConnect from "@/store/lib/mongodb";
 import User from "@/store/models/User";
 import { comparePassword, createToken, getTokenCookieOptions } from "@/store/lib/auth";
 
+function normalizeGender(value: unknown) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "male" || normalized === "man" || normalized === "men") {
+    return "men";
+  }
+  if (normalized === "female" || normalized === "woman" || normalized === "women") {
+    return "women";
+  }
+  return "";
+}
+
 export async function POST(req: NextRequest) {
   try {
     await dbConnect();
@@ -26,7 +37,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).select("name email role address bodyProfile password isBlocked emailVerified");
     if (!user) {
       return NextResponse.json(
         { error: "Invalid email or password" },
@@ -62,11 +73,26 @@ export async function POST(req: NextRequest) {
     const res = NextResponse.json({
       token,
       user: {
-        id: user._id,
+        id: String(user._id),
         name: user.name,
         email: user.email,
         role: user.role,
         address: user.address,
+        bodyProfile: user.bodyProfile
+          ? {
+              heightCm: user.bodyProfile.heightCm || "",
+              weightKg: user.bodyProfile.weightKg || "",
+              topSize: user.bodyProfile.topSize || "",
+              bottomSize: user.bodyProfile.bottomSize || "",
+              shoeSize: user.bodyProfile.shoeSize || "",
+              profileImage: user.bodyProfile.profileImage || "",
+              profileImageEnhanced: user.bodyProfile.profileImageEnhanced || "",
+              profileImageUploadCount: Number(user.bodyProfile.profileImageUploadCount || 0),
+              outfitGenerationCount: Number(user.bodyProfile.outfitGenerationCount || 0),
+              gender: normalizeGender(user.bodyProfile.gender),
+              imageEnhancing: Boolean(user.bodyProfile.imageEnhancing),
+            }
+          : user.bodyProfile,
       },
     });
 

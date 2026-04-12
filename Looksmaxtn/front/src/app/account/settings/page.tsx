@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/providers/AuthContext";
 
 function normalizeGender(value: string | undefined) {
@@ -24,6 +24,8 @@ export default function SettingsPage() {
     bottomSize: "",
     shoeSize: "",
     profileImage: "",
+    profileImageUploadCount: 0,
+    outfitGenerationCount: 0,
     gender: "",
   });
   const [bodyError, setBodyError] = useState("");
@@ -31,6 +33,7 @@ export default function SettingsPage() {
   const [bodyLoading, setBodyLoading] = useState(false);
   const [imageEnhancing, setImageEnhancing] = useState(false);
   const [enhancedImage, setEnhancedImage] = useState("");
+  const [zoomedImage, setZoomedImage] = useState<{ src: string; alt: string } | null>(null);
 
   useEffect(() => {
     setBodyProfile({
@@ -40,6 +43,8 @@ export default function SettingsPage() {
       bottomSize: user?.bodyProfile?.bottomSize || "",
       shoeSize: user?.bodyProfile?.shoeSize || "",
       profileImage: user?.bodyProfile?.profileImage || "",
+      profileImageUploadCount: Number(user?.bodyProfile?.profileImageUploadCount || 0),
+      outfitGenerationCount: Number(user?.bodyProfile?.outfitGenerationCount || 0),
       gender: normalizeGender(user?.bodyProfile?.gender),
     });
     setImageEnhancing(Boolean(user?.bodyProfile?.imageEnhancing));
@@ -57,6 +62,12 @@ export default function SettingsPage() {
 
   const hasOriginal = Boolean(bodyProfile.profileImage);
   const hasEnhanced = Boolean(enhancedImage);
+  const uploadLimit = 3;
+  const uploadsUsed = Math.min(Number(bodyProfile.profileImageUploadCount || 0), uploadLimit);
+  const remainingUploads = Math.max(uploadLimit - uploadsUsed, 0);
+  const generationLimit = 3;
+  const generationsUsed = Math.min(Number(bodyProfile.outfitGenerationCount || 0), generationLimit);
+  const remainingGenerations = Math.max(generationLimit - generationsUsed, 0);
   // Show enhanced column only if there's an enhanced image OR one is being generated
   const showEnhanced = hasEnhanced || (hasOriginal && imageEnhancing);
 
@@ -89,34 +100,13 @@ export default function SettingsPage() {
       setBodyProfile((prev) => ({
         ...prev,
         profileImage: data.profileImage || prev.profileImage,
+        profileImageUploadCount: Number(data.profileImageUploadCount ?? prev.profileImageUploadCount),
       }));
     } catch {
       setBodyError("Failed to upload photo.");
       setImageEnhancing(false);
     }
   }, []);
-
-  const handleDeleteImage = async (target: "original" | "enhanced") => {
-    try {
-      const res = await fetch(`/api/users/me/body-profile/photo?target=${target}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) {
-        setBodyError("Failed to delete image.");
-        return;
-      }
-      if (target === "original") {
-        setBodyProfile((prev) => ({ ...prev, profileImage: "" }));
-        setEnhancedImage("");
-        setImageEnhancing(false);
-      } else {
-        setEnhancedImage("");
-      }
-      await refreshUser();
-    } catch {
-      setBodyError("Failed to delete image.");
-    }
-  };
 
   const handleBodyProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,6 +141,8 @@ export default function SettingsPage() {
           bottomSize: data.user?.bodyProfile?.bottomSize || "",
           shoeSize: data.user?.bodyProfile?.shoeSize || "",
           profileImage: data.user?.bodyProfile?.profileImage || "",
+          profileImageUploadCount: Number(data.user?.bodyProfile?.profileImageUploadCount || 0),
+          outfitGenerationCount: Number(data.user?.bodyProfile?.outfitGenerationCount || 0),
           gender: normalizeGender(data.user?.bodyProfile?.gender),
         });
         await refreshUser();
@@ -197,14 +189,14 @@ export default function SettingsPage() {
               {bodyError}
             </div>
           )}
-          {bodySuccess && (
-            <div className="bg-green-50 border border-green-200 text-green-700 text-xs px-4 py-3 rounded">
+            {bodySuccess && (
+            <div className="bg-[#f1ede8] border border-[#d8c9b8] text-[#6b6055] text-xs px-4 py-3 rounded">
               {bodySuccess}
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-6 items-start">
-            <div className="space-y-3">
-              <div className="flex gap-3">
+            <div className="flex flex-col items-center gap-3">
+              <div className="flex justify-center gap-3">
                 {/* Original */}
                 <div className="w-[160px] space-y-1.5">
                   <p className="text-[10px] uppercase tracking-wider text-text-secondary text-center">Original</p>
@@ -218,10 +210,11 @@ export default function SettingsPage() {
                         />
                         <button
                           type="button"
-                          onClick={() => handleDeleteImage("original")}
-                          className="absolute top-1.5 right-1.5 w-6 h-6 flex items-center justify-center bg-foreground/70 text-background text-xs opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                          onClick={() => setZoomedImage({ src: bodyProfile.profileImage, alt: "Original photo" })}
+                          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center border border-[#00000012] bg-[#ede1ce] text-base text-[#1a1a1a]"
+                          aria-label="Zoom original photo"
                         >
-                          x
+                          +
                         </button>
                       </>
                     ) : (
@@ -257,10 +250,11 @@ export default function SettingsPage() {
                           />
                           <button
                             type="button"
-                            onClick={() => handleDeleteImage("enhanced")}
-                            className="absolute top-1.5 right-1.5 w-6 h-6 flex items-center justify-center bg-foreground/70 text-background text-xs opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                            onClick={() => setZoomedImage({ src: enhancedImage, alt: "Enhanced photo" })}
+                            className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center border border-[#00000012] bg-[#ede1ce] text-base text-[#1a1a1a]"
+                            aria-label="Zoom enhanced photo"
                           >
-                            x
+                            +
                           </button>
                           {imageEnhancing && (
                             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
@@ -283,10 +277,10 @@ export default function SettingsPage() {
               </div>
 
               <label
-                className={`block py-2.5 text-xs font-medium tracking-wide uppercase text-center transition-all duration-300 cursor-pointer ${
-                  imageEnhancing
-                    ? "border border-border-color text-text-secondary cursor-not-allowed"
-                    : "border border-border-color text-foreground hover:bg-hover"
+                className={`block py-2.5 text-xs font-medium tracking-wide uppercase text-center transition-all duration-300 ${
+                  imageEnhancing || remainingUploads <= 0
+                    ? "border border-border-color text-text-secondary cursor-not-allowed opacity-60 pointer-events-none"
+                    : "border border-border-color text-foreground hover:bg-hover cursor-pointer"
                 }`}
                 style={{ width: showEnhanced ? 332 : 160 }}
               >
@@ -299,6 +293,18 @@ export default function SettingsPage() {
                 />
                 Upload File
               </label>
+
+              <p className="text-[10px] uppercase tracking-[0.18em] text-text-secondary text-center">
+                {remainingUploads > 0
+                  ? `${remainingUploads} upload${remainingUploads === 1 ? "" : "s"} left`
+                  : "Upload limit reached"}
+              </p>
+              <p className="text-[10px] uppercase tracking-[0.18em] text-text-secondary text-center">
+                {remainingGenerations > 0
+                  ? `${remainingGenerations} generation${remainingGenerations === 1 ? "" : "s"} left`
+                  : "Generation limit reached"}
+              </p>
+
             </div>
 
             <div className="space-y-4">
@@ -401,6 +407,33 @@ export default function SettingsPage() {
           </div>
         </form>
       </div>
+
+      {zoomedImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 py-8"
+          onClick={() => setZoomedImage(null)}
+        >
+          <div
+            className="relative w-full max-w-4xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setZoomedImage(null)}
+              className="absolute right-0 top-0 z-10 border border-white/20 bg-black/60 px-4 py-3 text-xs uppercase tracking-[0.24em] text-white backdrop-blur-sm"
+            >
+              Close
+            </button>
+            <div className="overflow-hidden border border-white/15 bg-black/40 p-4 md:p-8">
+              <img
+                src={zoomedImage.src}
+                alt={zoomedImage.alt}
+                className="max-h-[85vh] w-full object-contain"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -10,8 +10,10 @@ import { formatTndPrice } from "@/lib/formatPrice";
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { items, totalPrice, clearCart, removeItem } = useCart();
-  const { user } = useAuth();
+  const { items, totalPrice, clearCart, removeItem, updateQuantity } = useCart();
+  const { user, loading: authLoading } = useAuth();
+  const shippingFee = 0;
+  const grandTotal = totalPrice + shippingFee;
 
   const [address, setAddress] = useState({
     fullName: user?.name || "",
@@ -21,7 +23,7 @@ export default function CheckoutPage() {
     zip: user?.address?.zip || "",
     phone: user?.address?.phone || "",
   });
-  const [loading, setLoading] = useState(false);
+  const [submitLoading, setSubmitLoading] = useState(false);
   const [error, setError] = useState("");
   const [orderPlaced, setOrderPlaced] = useState<string | null>(null);
   const unavailableItems = items.filter((item) => item.isUnavailable);
@@ -31,6 +33,10 @@ export default function CheckoutPage() {
     const productId = itemId.split("-")[0];
     await releaseProductReservation(productId).catch(() => {});
     removeItem(itemId);
+  };
+
+  const handleUpdateQuantity = (itemId: string, quantity: number) => {
+    updateQuantity(itemId, quantity);
   };
 
   useEffect(() => {
@@ -43,21 +49,24 @@ export default function CheckoutPage() {
     return () => window.clearTimeout(timeout);
   }, [orderPlaced, router]);
 
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace(`/login?next=${encodeURIComponent("/checkout")}`);
+    }
+  }, [authLoading, router, user]);
+
+  if (authLoading) {
+    return (
+      <div className="pt-[72px] min-h-screen flex items-center justify-center">
+        <p className="text-xs text-text-secondary uppercase tracking-wider">Loading...</p>
+      </div>
+    );
+  }
+
   if (!user) {
     return (
       <div className="pt-[72px] min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-lg font-semibold tracking-wide uppercase mb-3">Sign in Required</h1>
-          <p className="text-sm text-text-secondary mb-6">
-            Please sign in to proceed with checkout.
-          </p>
-          <Link
-            href="/login"
-            className="bg-foreground text-background px-8 py-3 text-sm font-medium tracking-wide uppercase hover:bg-accent transition-colors"
-          >
-            Sign In
-          </Link>
-        </div>
+        <p className="text-xs text-text-secondary uppercase tracking-wider">Redirecting to login...</p>
       </div>
     );
   }
@@ -126,7 +135,7 @@ export default function CheckoutPage() {
       setError("Some products in your cart are already taken. Remove them manually to continue.");
       return;
     }
-    setLoading(true);
+    setSubmitLoading(true);
 
     try {
       const orderItems = items.map((item) => ({
@@ -146,7 +155,7 @@ export default function CheckoutPage() {
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "Failed to place order");
-        setLoading(false);
+        setSubmitLoading(false);
         return;
       }
 
@@ -158,7 +167,7 @@ export default function CheckoutPage() {
     } catch {
       setError("Network error. Please try again.");
     }
-    setLoading(false);
+    setSubmitLoading(false);
   };
 
   return (
@@ -319,7 +328,34 @@ export default function CheckoutPage() {
                       <p className="text-xs font-medium mt-1">
                         {formatTndPrice(parseFloat(item.price) * item.quantity)}
                       </p>
-                      <div className="mt-2 flex items-center gap-3">
+                      <div className="mt-2 flex items-center gap-3 flex-wrap">
+                        <div className="flex items-center border border-border-color">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (item.quantity === 1) {
+                                void handleRemoveItem(item.id);
+                                return;
+                              }
+                              handleUpdateQuantity(item.id, item.quantity - 1);
+                            }}
+                            className="w-7 h-7 flex items-center justify-center text-xs hover:bg-hover transition-colors"
+                            aria-label="Decrease quantity"
+                          >
+                            −
+                          </button>
+                          <span className="w-8 h-7 flex items-center justify-center text-xs font-medium border-x border-border-color">
+                            {item.quantity}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
+                            className="w-7 h-7 flex items-center justify-center text-xs hover:bg-hover transition-colors"
+                            aria-label="Increase quantity"
+                          >
+                            +
+                          </button>
+                        </div>
                         <button
                           type="button"
                           onClick={() => handleRemoveItem(item.id)}
@@ -351,21 +387,21 @@ export default function CheckoutPage() {
                   </div>
                   <div className="flex justify-between text-sm font-semibold pt-2 border-t border-border-color">
                     <span>Total</span>
-                    <span>{formatTndPrice(totalPrice)}</span>
+                    <span>{formatTndPrice(grandTotal)}</span>
                   </div>
                 </div>
               </div>
 
               <button
                 type="submit"
-                disabled={loading || hasUnavailableItems}
+                disabled={submitLoading || hasUnavailableItems}
                 className="w-full mt-6 bg-foreground text-background py-4 text-sm font-medium tracking-wide uppercase hover:bg-accent transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading
+                {submitLoading
                   ? "Placing Order..."
                   : hasUnavailableItems
                     ? "Remove Taken Items"
-                    : `Place Order — ${formatTndPrice(totalPrice)}`}
+                    : `Place Order — ${formatTndPrice(grandTotal)}`}
               </button>
 
               <p className="text-[10px] text-text-secondary text-center mt-3">

@@ -46,6 +46,8 @@ export async function PUT(req: NextRequest) {
       shoeSize: String(formData.get("shoeSize") || ""),
       profileImage: String(formData.get("existingProfileImage") || ""),
       profileImageEnhanced: existingUser.bodyProfile?.profileImageEnhanced || "",
+      profileImageUploadCount: Number(existingUser.bodyProfile?.profileImageUploadCount || 0),
+      outfitGenerationCount: Number(existingUser.bodyProfile?.outfitGenerationCount || 0),
       gender: normalizeGender(formData.get("gender")),
       imageEnhancing: Boolean(existingUser.bodyProfile?.imageEnhancing),
     };

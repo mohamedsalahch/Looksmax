@@ -34,7 +34,7 @@ interface CartContextType {
   openCart: () => void;
   closeCart: () => void;
   toggleCart: () => void;
-  addItem: (item: Omit<CartItem, "quantity">) => void;
+  addItem: (item: Omit<CartItem, "quantity"> & { quantity?: number }) => void;
   removeItem: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
@@ -209,9 +209,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const closeCart = useCallback(() => setIsOpen(false), []);
   const toggleCart = useCallback(() => setIsOpen((prev) => !prev), []);
 
-  const addItem = useCallback((newItem: Omit<CartItem, "quantity">) => {
+  const addItem = useCallback((newItem: Omit<CartItem, "quantity"> & { quantity?: number }) => {
     setItems((prev) => {
       const existing = prev.find((item) => item.id === newItem.id);
+      const nextQuantity = Math.max(1, newItem.quantity ?? 1);
       if (existing) {
         return prev.map((item) =>
           item.id === newItem.id
@@ -228,14 +229,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
                   productType: newItem.productType ?? item.productType,
                   originPictures: newItem.originPictures ?? item.originPictures,
                   maxStock: nextMaxStock,
-                  quantity: Math.min(item.quantity + 1, nextMaxStock),
+                  quantity: Math.min(item.quantity + nextQuantity, nextMaxStock),
                   reservationExpiresAt: newItem.reservationExpiresAt ?? item.reservationExpiresAt ?? null,
                 };
               })()
             : item
         );
       }
-      return [...prev, { ...newItem, quantity: 1 }];
+      return [...prev, { ...newItem, quantity: Math.min(nextQuantity, Math.max(newItem.maxStock, 1)) }];
     });
     setIsOpen(true); // Open cart when adding
   }, []);
@@ -258,7 +259,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  const clearCart = useCallback(() => setItems([]), []);
+  const clearCart = useCallback(() => {
+    itemsRef.current.forEach((item) => {
+      void releaseProductReservation(item.id.split("-")[0]);
+    });
+    setItems([]);
+  }, []);
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = items.reduce(

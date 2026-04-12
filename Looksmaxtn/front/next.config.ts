@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
   },
   output: "standalone",
   experimental: {
-    proxyClientMaxBodySize: "50mb",
+    proxyClientMaxBodySize: "100mb",
   },
 };
 

@@ -20,6 +20,7 @@ export default function ProductInfo({
     brand: string;
     image?: string;
     size?: string;
+    sizes?: string[];
     stock: number;
     description: string;
     reservationExpiresAt?: string | null;
@@ -42,9 +43,16 @@ export default function ProductInfo({
   const [currentStock, setCurrentStock] = useState(() => product.stock);
   const [reservationError, setReservationError] = useState("");
   const [cartCount, setCartCount] = useState(() => product.cartCount || 0);
-  const { addItem } = useCart();
+  const [selectedQuantity, setSelectedQuantity] = useState(1);
+  const availableSizes = (product.sizes?.length ? product.sizes : product.size ? [product.size] : []).filter(
+    (entry) => Boolean(entry.trim())
+  );
+  const [selectedSize, setSelectedSize] = useState(() => availableSizes[0] || "");
+  const { addItem, items } = useCart();
   const isPerfume = product.productType === "perfume";
   const isSoldOut = currentStock < 1;
+  const isInLocalCart = product.id ? items.some((item) => item.id.split("-")[0] === product.id) : false;
+  const showReservedElsewhere = cartCount > (isInLocalCart ? 1 : 0);
 
   useEffect(() => {
     if (!product.id) return;
@@ -71,6 +79,19 @@ export default function ProductInfo({
   }, [product.id]);
 
   useEffect(() => {
+    setSelectedQuantity((current) => Math.min(Math.max(1, current), Math.max(1, currentStock)));
+  }, [currentStock]);
+
+  useEffect(() => {
+    if (availableSizes.length === 0) {
+      setSelectedSize("");
+      return;
+    }
+
+    setSelectedSize((current) => (availableSizes.includes(current) ? current : availableSizes[0]));
+  }, [availableSizes.join("|")]);
+
+  useEffect(() => {
     if (!product.id) return;
 
     return subscribeToReservationChanges(({ productId, cartCount: nextCartCount }) => {
@@ -95,13 +116,14 @@ export default function ProductInfo({
         brand: product.brand,
         image: product.image,
         categories: product.categories,
-        size: isPerfume ? undefined : product.size,
+        size: isPerfume ? undefined : selectedSize,
         maxStock: Math.max(1, currentStock),
         productType: product.productType,
         fashionSubtype: product.fashionSubtype,
         originPictures: product.originPictures,
         reservationExpiresAt: reservation.reservationExpiresAt,
         cartCount: reservation.cartCount,
+        quantity: selectedQuantity,
       });
       setAddedToCart(true);
       setTimeout(() => setAddedToCart(false), 2000);
@@ -125,7 +147,7 @@ export default function ProductInfo({
       productType: product.productType,
       fashionSubtype: product.fashionSubtype,
       originPictures: product.originPictures,
-      size: product.size,
+      size: isPerfume ? undefined : selectedSize,
     });
   };
 
@@ -193,11 +215,26 @@ export default function ProductInfo({
         </div>
       )}
 
-      {!isPerfume && product.size && (
+      {!isPerfume && availableSizes.length > 0 && (
         <div>
-          <p className="text-xs text-text-secondary uppercase tracking-wider mb-2">Size</p>
-          <div className="inline-block border border-foreground px-4 py-2 text-sm font-medium">
-            {product.size}
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <p className="text-xs text-text-secondary uppercase tracking-wider">Sizes</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {availableSizes.map((sizeOption) => (
+              <button
+                key={sizeOption}
+                type="button"
+                onClick={() => setSelectedSize(sizeOption)}
+                className={`min-w-10 border px-3 py-2 text-sm font-medium transition-colors ${
+                  selectedSize === sizeOption
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border-color text-foreground hover:bg-hover"
+                }`}
+              >
+                {sizeOption}
+              </button>
+            ))}
           </div>
         </div>
       )}
@@ -213,16 +250,47 @@ export default function ProductInfo({
         </span>
       </div>
 
-      <div className="flex items-center gap-2">
-        <div className="w-2 h-2 rounded-full bg-foreground" />
-        <span className="text-xs text-text-secondary">
-          {cartCount > 0
-            ? `${cartCount} in cart${cartCount === 1 ? "" : "s"}`
-            : "Not in any cart yet"}
-        </span>
-      </div>
+      {showReservedElsewhere && (
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-foreground" />
+          <span className="text-xs text-text-secondary">Reserved elsewhere</span>
+        </div>
+      )}
 
       {reservationError && <p className="text-xs text-red-600">{reservationError}</p>}
+
+      <div className="flex items-center justify-between gap-4 border border-border-color bg-surface/40 px-4 py-3">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.24em] text-text-secondary">Quantity</p>
+          <p className="mt-1 text-xs text-text-secondary">Pick how many to add</p>
+        </div>
+        <div className="flex items-center border border-border-color">
+          <button
+            type="button"
+            onClick={() => setSelectedQuantity((current) => Math.max(1, current - 1))}
+            className="w-8 h-8 flex items-center justify-center text-sm hover:bg-hover transition-colors cursor-pointer"
+            aria-label="Decrease quantity"
+          >
+            −
+          </button>
+          <span className="w-10 h-8 flex items-center justify-center text-sm font-medium border-x border-border-color">
+            {selectedQuantity}
+          </span>
+          <button
+            type="button"
+            onClick={() =>
+              setSelectedQuantity((current) => Math.min(Math.max(1, current + 1), Math.max(1, currentStock)))
+            }
+            disabled={selectedQuantity >= currentStock}
+            className={`w-8 h-8 flex items-center justify-center text-sm transition-colors cursor-pointer ${
+              selectedQuantity >= currentStock ? "text-border-color cursor-not-allowed" : "hover:bg-hover"
+            }`}
+            aria-label="Increase quantity"
+          >
+            +
+          </button>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <button

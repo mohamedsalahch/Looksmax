@@ -3,8 +3,10 @@ import dbConnect from "@/admin/lib/mongodb";
 import Order from "@/admin/models/Order";
 import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
+import User from "@/store/models/User";
 import { getSession } from "@/admin/lib/auth";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
+import { sendOrderStatusEmail } from "@/store/lib/mailer";
 
 const VALID_ORDER_STATUSES = ["processing", "confirmed", "canceled", "shipping", "delivered", "returned"] as const;
 const FINAL_ORDER_STATUSES = ["delivered", "canceled", "returned"] as const;
@@ -125,6 +127,28 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       .populate("user", "name email")
       .lean();
     if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    if (orderStatus) {
+      try {
+        const customer = await User.findById(existingOrder.user)
+          .select("name email")
+          .lean();
+        if (!customer?.email) {
+          return NextResponse.json({ order: serializeOrder(order) });
+        }
+        const frontendBaseUrl = (process.env.FRONTEND_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
+        await sendOrderStatusEmail({
+          to: customer.email,
+          name: customer.name || order.shippingAddress?.fullName || "Customer",
+          orderNumber: String(order._id).slice(-8).toUpperCase(),
+          orderStatus: orderStatus as "processing" | "confirmed" | "shipping" | "delivered" | "canceled" | "returned",
+          orderUrl: `${frontendBaseUrl}/account/orders/${order._id}`,
+        });
+      } catch (emailError) {
+        console.error("Order status email error:", emailError);
+      }
+    }
+
     return NextResponse.json({ order: serializeOrder(order) });
   } catch (error) { console.error(error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }

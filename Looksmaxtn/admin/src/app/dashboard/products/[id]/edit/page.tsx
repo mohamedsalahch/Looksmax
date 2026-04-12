@@ -217,7 +217,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const [importingGeneratedImage, setImportingGeneratedImage] = useState<string | null>(null);
   const [isGeneratedImagesOpen, setIsGeneratedImagesOpen] = useState(false);
   const [generatedImagesSearch, setGeneratedImagesSearch] = useState("");
-  const allowStockEditing = form.productType === "perfume" || form.fashionSubtype === "clothes";
+  const allowStockEditing = true;
 
   useEffect(() => {
     fetch("/api/categories")
@@ -542,7 +542,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       body.append("tag", form.tag);
       body.append("productType", form.productType);
       body.append("fashionSubtype", form.fashionSubtype);
-      body.append("stock", form.productType === "perfume" || form.fashionSubtype === "clothes" ? form.stock : "1");
+      body.append("stock", form.stock);
       body.append("conditionScore", form.conditionScore);
       body.append("originPictureFront", form.originPictures.front);
       body.append("originPictureBack", form.originPictures.back);
@@ -876,15 +876,23 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 Clothes use front and back. Shoes use front, back, left, and right.
               </p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-3">
               {originPictureKeys.map((key) => {
                 const preview = form.originPictures[key];
                 const inputId = `origin-picture-${key}-upload-edit`;
                 return (
-                  <div key={key} className="space-y-2">
-                    <p className="text-[10px] uppercase tracking-[0.22em] text-text-secondary">
-                      {key}
-                    </p>
+                  <div
+                    key={key}
+                    className="flex flex-col gap-3 rounded border border-border bg-bg-secondary/40 p-3 lg:flex-row lg:items-center"
+                  >
+                    <div className="min-w-0 lg:w-28">
+                      <p className="text-[10px] uppercase tracking-[0.22em] text-text-secondary">
+                        {key}
+                      </p>
+                      <p className="mt-1 text-[10px] text-text-secondary">
+                        {key} reference
+                      </p>
+                    </div>
                     <input
                       id={inputId}
                       type="file"
@@ -899,33 +907,36 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                         e.preventDefault();
                         handleOriginPictureSelect(key, e.dataTransfer.files?.[0] || null);
                       }}
-                      className="flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded border border-dashed border-border bg-bg-secondary px-4 py-6 text-center transition-colors hover:border-accent hover:bg-bg-hover"
+                      className="flex min-h-20 flex-1 cursor-pointer items-center justify-center rounded border border-dashed border-border bg-bg-secondary px-4 py-3 text-center transition-colors hover:border-accent hover:bg-bg-hover"
                     >
                       <span className="text-sm font-medium text-text-primary">
                         Drag or click to import {key} origin image
                       </span>
-                      <span className="text-[10px] uppercase tracking-wider text-text-secondary">
-                        {key} reference
-                      </span>
                     </div>
-                    {preview && (
-                      <div className="space-y-2">
-                        <div className="aspect-[4/5] overflow-hidden rounded border border-border bg-bg-hover p-3">
-                          <img
-                            src={preview}
-                            alt={`${key} origin`}
-                            className="h-full w-full object-contain"
-                          />
+                    <div className="w-full lg:w-32 shrink-0 space-y-2">
+                      {preview ? (
+                        <>
+                          <div className="aspect-[4/3] overflow-hidden rounded border border-border bg-bg-hover">
+                            <img
+                              src={preview}
+                              alt={`${key} origin`}
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleOriginPictureSelect(key, null)}
+                            className="text-[10px] text-danger uppercase tracking-wider"
+                          >
+                            Remove
+                          </button>
+                        </>
+                      ) : (
+                        <div className="flex aspect-[4/3] items-center justify-center rounded border border-dashed border-border bg-bg-hover text-[10px] uppercase tracking-wider text-text-secondary">
+                          No image
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => handleOriginPictureSelect(key, null)}
-                          className="text-[10px] text-danger uppercase tracking-wider"
-                        >
-                          Remove image
-                        </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -1248,73 +1259,6 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               </button>
             </div>
           </section>
-        )}
-
-        {form.productType === "fashion" && (
-          <SectionCard
-            title="Origin Pictures"
-            description="Manage the product or body reference angles in one place."
-          >
-            <div>
-              <p className="mt-1 text-[11px] text-text-secondary">
-                Clothes use front and back. Shoes use front, back, left, and right.
-              </p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {originPictureKeys.map((key) => {
-                const preview = form.originPictures[key];
-                const inputId = `origin-picture-${key}-upload-edit`;
-                return (
-                  <div key={key} className="space-y-2">
-                    <p className="text-[10px] uppercase tracking-[0.22em] text-text-secondary">
-                      {key}
-                    </p>
-                    <input
-                      id={inputId}
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => handleOriginPictureSelect(key, e.target.files?.[0] || null)}
-                      className="hidden"
-                    />
-                    <div
-                      onClick={() => document.getElementById(inputId)?.click()}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        handleOriginPictureSelect(key, e.dataTransfer.files?.[0] || null);
-                      }}
-                      className="flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded border border-dashed border-border bg-bg-secondary px-4 py-6 text-center transition-colors hover:border-accent hover:bg-bg-hover"
-                    >
-                      <span className="text-sm font-medium text-text-primary">
-                        Drag or click to import {key} origin image
-                      </span>
-                      <span className="text-[10px] uppercase tracking-wider text-text-secondary">
-                        {key} reference
-                      </span>
-                    </div>
-                    {preview && (
-                      <div className="space-y-2">
-                        <div className="aspect-[4/5] overflow-hidden rounded border border-border bg-bg-hover p-3">
-                          <img
-                            src={preview}
-                            alt={`${key} origin`}
-                            className="h-full w-full object-contain"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleOriginPictureSelect(key, null)}
-                          className="text-[10px] text-danger uppercase tracking-wider"
-                        >
-                          Remove image
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </SectionCard>
         )}
 
         <div className="flex gap-3">

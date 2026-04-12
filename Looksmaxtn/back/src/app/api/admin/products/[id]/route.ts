@@ -176,7 +176,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       categories: parseStringArray(formData.get("categories")),
       description: String(formData.get("description") || ""),
       brand: String(formData.get("brand") || "LOOKSMAX"),
-      stock: productType === "perfume" || fashionSubtype === "clothes" ? Math.max(0, Number(formData.get("stock") || 0)) : 1,
+      stock: Math.max(0, Number(formData.get("stock") || 0)),
       tag: String(formData.get("tag") || ""),
       productType,
       fashionSubtype,

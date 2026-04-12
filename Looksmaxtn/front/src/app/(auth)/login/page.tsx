@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/providers/AuthContext";
 
 export default function LoginPage() {
@@ -14,6 +14,8 @@ export default function LoginPage() {
   const [resendCooldown, setResendCooldown] = useState(0);
   const { login, resendVerification } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath = searchParams.get("next") || "/";
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -38,7 +40,7 @@ export default function LoginPage() {
         setResendCooldown((current) => (current > 0 ? current : 60));
       }
     } else {
-      router.push("/");
+      router.push(nextPath.startsWith("/") ? nextPath : "/");
     }
   };
 
@@ -84,7 +86,7 @@ export default function LoginPage() {
           </div>
         )}
         {info && (
-          <div className="bg-green-50 border border-green-200 text-green-800 text-xs px-4 py-3 rounded">
+          <div className="bg-[#f1ede8] border border-[#d8c9b8] text-[#6b6055] text-xs px-4 py-3 rounded">
             {info}
           </div>
         )}
