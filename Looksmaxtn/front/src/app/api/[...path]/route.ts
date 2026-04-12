@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
 function getBackendBaseUrl(req: NextRequest) {
   const localHostnames = new Set(["localhost", "127.0.0.1"]);
@@ -41,11 +42,23 @@ async function proxy(req: NextRequest, context: { params: Promise<{ path: string
 
   const response = await fetch(buildTargetUrl(req, path), requestInit);
 
-  return new Response(response.body, {
+  const nextResponse = new NextResponse(response.body, {
     status: response.status,
     statusText: response.statusText,
-    headers: response.headers,
   });
+
+  response.headers.forEach((value, key) => {
+    if (key.toLowerCase() !== "set-cookie") {
+      nextResponse.headers.set(key, value);
+    }
+  });
+
+  const setCookie = response.headers.get("set-cookie");
+  if (setCookie) {
+    nextResponse.headers.set("set-cookie", setCookie);
+  }
+
+  return nextResponse;
 }
 
 export const GET = proxy;
