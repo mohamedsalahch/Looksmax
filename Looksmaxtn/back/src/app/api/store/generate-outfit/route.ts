@@ -8,6 +8,7 @@ import { getSession } from "@/store/lib/auth";
 import Product from "@/store/models/Product";
 import User from "@/store/models/User";
 import OutfitGenerationJob from "@/store/models/OutfitGenerationJob";
+import { getUploadCategoryDir } from "@/store/lib/uploadStorage";
 
 type ZonePayload = {
   status?: boolean;
@@ -57,9 +58,9 @@ async function publicPathToBase64(imagePath: string) {
 
   let fullPath = "";
   if (imagePath.startsWith("/uploads/body-profiles/")) {
-    fullPath = path.join(process.cwd(), "..", "front", "public", imagePath.replace(/^\//, ""));
+    fullPath = path.join(getUploadCategoryDir("body-profiles"), path.basename(imagePath));
   } else if (imagePath.startsWith("/uploads/products/")) {
-    fullPath = path.join(process.cwd(), "..", "admin", "public", imagePath.replace(/^\//, ""));
+    fullPath = path.join(getUploadCategoryDir("products"), path.basename(imagePath));
   } else {
      console.warn("[publicPathToBase64] unrecognized path format:", imagePath);
     return "";
