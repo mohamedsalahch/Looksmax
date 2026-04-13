@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile } from "fs/promises";
+import { writeFile, unlink } from "fs/promises";
 import path from "path";
 import mongoose from "mongoose";
 import dbConnect from "@/store/lib/mongodb";
@@ -44,8 +44,22 @@ export async function POST(req: NextRequest) {
 
     console.log(`[enhance-webhook] Saved enhanced photo for user ${userId} (${(enhancedBuffer.length / 1024).toFixed(1)} KB) → ${enhancedImagePath}`);
 
-    // Update DB: set enhanced path and mark done
+    // Update DB: set enhanced path and mark done — only if the imagePath still matches
+    // the current profileImage (prevents stale webhook from overwriting a newer upload)
     await dbConnect();
+    const currentUser = await User.collection.findOne(
+      { _id: new mongoose.Types.ObjectId(userId) },
+      { projection: { "bodyProfile.profileImage": 1 } }
+    );
+    const currentProfileImage = currentUser?.bodyProfile?.profileImage || "";
+
+    if (currentProfileImage !== imagePath) {
+      console.warn(`[enhance-webhook] Stale webhook ignored for user ${userId}: imagePath=${imagePath} but current profileImage=${currentProfileImage}`);
+      // Still delete the enhanced file since it's orphaned
+      try { await unlink(enhancedFullPath); } catch {}
+      return NextResponse.json({ ok: true, stale: true });
+    }
+
     await User.collection.updateOne(
       { _id: new mongoose.Types.ObjectId(userId) },
       {

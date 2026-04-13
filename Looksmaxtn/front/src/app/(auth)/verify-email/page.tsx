@@ -114,11 +114,11 @@ function VerifyEmailContent() {
       </div>
 
       <div
-        className={`border px-4 py-3 text-xs rounded ${
+        className={`border px-4 py-3 text-xs ${
           status === "success"
-            ? "bg-green-50 border-green-200 text-green-800"
+            ? "border-[#d8c9b8] bg-[#f1ede8] text-[#6b6055]"
             : status === "error"
-            ? "bg-red-50 border-red-200 text-red-700"
+            ? "border-[#e2c9c4] bg-[#faf3f2] text-[#8a5f57]"
             : "bg-surface border-border-color text-text-secondary"
         }`}
       >
@@ -169,7 +169,7 @@ function VerifyEmailContent() {
               {resendMessage && (
                 <p
                   className={`mt-2 text-[11px] ${
-                    resendStatus === "error" ? "text-red-600" : "text-green-700"
+                    resendStatus === "error" ? "text-[#8a5f57]" : "text-[#6b6055]"
                   }`}
                 >
                   {resendMessage}

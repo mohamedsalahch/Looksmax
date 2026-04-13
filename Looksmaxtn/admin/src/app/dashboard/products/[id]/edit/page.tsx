@@ -637,7 +637,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {error && <div className="bg-danger/10 border border-danger/30 text-danger text-xs px-4 py-3 rounded">{error}</div>}
+        {error && <div className="border border-[#BD3100] bg-[#faf3f2] px-4 py-3 text-xs text-[#BD3100]">{error}</div>}
 
         <SectionCard title="Product Basics" description="Edit the main fields in one horizontal section instead of a long vertical stack.">
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">

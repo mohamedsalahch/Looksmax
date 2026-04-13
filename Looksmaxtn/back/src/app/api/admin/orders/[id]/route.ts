@@ -184,7 +184,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       for (const item of existingOrder.items as LeanOrderItem[]) {
         const product = productMap.get(item.product.toString());
         if (!product) {
-          return NextResponse.json({ error: "Product not found" }, { status: 404 });
+          continue;
         }
 
         const quantityToRestore = item.quantity || 0;
@@ -207,6 +207,13 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
           reservationKey: `user:${orderUserId}`,
         });
       }
+    }
+
+    const productIds = existingOrder.items.map((item: LeanOrderItem) => item.product);
+    if (productIds.length > 0) {
+      await ProductReservation.deleteMany({
+        product: { $in: productIds },
+      });
     }
 
     await Order.deleteOne({ _id: id });

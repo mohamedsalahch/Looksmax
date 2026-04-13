@@ -35,6 +35,7 @@ export default function SettingsPage() {
   const [imageEnhancing, setImageEnhancing] = useState(false);
   const [enhancedImage, setEnhancedImage] = useState("");
   const [zoomedImage, setZoomedImage] = useState<{ src: string; alt: string } | null>(null);
+  const [deletingPhoto, setDeletingPhoto] = useState<"original" | "enhanced" | null>(null);
 
   useEffect(() => {
     setBodyProfile({
@@ -63,10 +64,10 @@ export default function SettingsPage() {
 
   const hasOriginal = Boolean(bodyProfile.profileImage);
   const hasEnhanced = Boolean(enhancedImage);
-  const uploadLimit = 3;
+  const uploadLimit = 100;
   const uploadsUsed = Math.min(Number(bodyProfile.profileImageUploadCount || 0), uploadLimit);
   const remainingUploads = Math.max(uploadLimit - uploadsUsed, 0);
-  const generationLimit = 3;
+  const generationLimit = 100;
   const generationsUsed = Math.min(Number(bodyProfile.outfitGenerationCount || 0), generationLimit);
   const remainingGenerations = Math.max(generationLimit - generationsUsed, 0);
   // Show enhanced column only if there's an enhanced image OR one is being generated
@@ -110,6 +111,31 @@ export default function SettingsPage() {
       setImageEnhancing(false);
     }
   }, []);
+
+  const handleDeletePhoto = useCallback(async (target: "original" | "enhanced") => {
+    setDeletingPhoto(target);
+    setBodyError("");
+    try {
+      const res = await fetch(`/api/users/me/body-profile/photo?target=${target}`, {
+        ...withAuthRequest({ method: "DELETE" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setBodyError(data.error || "Failed to delete photo.");
+      } else {
+        if (target === "original") {
+          setBodyProfile((prev) => ({ ...prev, profileImage: "" }));
+          setEnhancedImage("");
+        } else {
+          setEnhancedImage("");
+        }
+        await refreshUser();
+      }
+    } catch {
+      setBodyError("Failed to delete photo.");
+    }
+    setDeletingPhoto(null);
+  }, [refreshUser]);
 
   const handleBodyProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -190,12 +216,12 @@ export default function SettingsPage() {
         </h2>
         <form onSubmit={handleBodyProfileUpdate} className="max-w-3xl space-y-4">
           {bodyError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-xs px-4 py-3 rounded">
+            <div className="border border-[#BD3100] bg-[#faf3f2] px-4 py-3 text-xs text-[#BD3100]">
               {bodyError}
             </div>
           )}
             {bodySuccess && (
-            <div className="bg-[#f1ede8] border border-[#d8c9b8] text-[#6b6055] text-xs px-4 py-3 rounded">
+            <div className="border border-[#d8c9b8] bg-[#f1ede8] px-4 py-3 text-xs text-[#6b6055]">
               {bodySuccess}
             </div>
           )}
@@ -216,10 +242,19 @@ export default function SettingsPage() {
                         <button
                           type="button"
                           onClick={() => setZoomedImage({ src: bodyProfile.profileImage, alt: "Original photo" })}
-                          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center border border-[#00000012] bg-[#ede1ce] text-base text-[#1a1a1a]"
+                          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center bg-black text-base text-white opacity-0 group-hover:opacity-100 transition-opacity"
                           aria-label="Zoom original photo"
                         >
                           +
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePhoto("original")}
+                          disabled={deletingPhoto === "original"}
+                          className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center bg-black text-sm text-white opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"
+                          aria-label="Delete original photo"
+                        >
+                          {deletingPhoto === "original" ? "..." : "×"}
                         </button>
                       </>
                     ) : (
@@ -256,10 +291,19 @@ export default function SettingsPage() {
                           <button
                             type="button"
                             onClick={() => setZoomedImage({ src: enhancedImage, alt: "Enhanced photo" })}
-                            className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center border border-[#00000012] bg-[#ede1ce] text-base text-[#1a1a1a]"
+                            className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center bg-black text-base text-white opacity-0 group-hover:opacity-100 transition-opacity"
                             aria-label="Zoom enhanced photo"
                           >
                             +
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePhoto("enhanced")}
+                            disabled={deletingPhoto === "enhanced"}
+                            className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center bg-black text-sm text-white opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"
+                            aria-label="Delete enhanced photo"
+                          >
+                            {deletingPhoto === "enhanced" ? "..." : "×"}
                           </button>
                           {imageEnhancing && (
                             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">

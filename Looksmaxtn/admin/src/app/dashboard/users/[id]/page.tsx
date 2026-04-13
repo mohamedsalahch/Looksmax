@@ -86,7 +86,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
       case "returned":
         return "text-warning bg-warning/10";
       case "delivered":
-        return "text-success bg-success/10";
+        return "text-[#6b6055] bg-[#f1ede8]";
       case "shipping":
         return "text-info bg-info/10";
       case "confirmed":
@@ -119,7 +119,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
               onClick={handleToggleBlock}
               className={`px-4 py-2 text-[10px] font-semibold uppercase tracking-wider cursor-pointer ${
                 user.isBlocked
-                  ? "bg-success/10 text-success"
+                  ? "bg-[#f1ede8] text-[#6b6055]"
                   : "bg-danger/10 text-danger"
               }`}
             >

@@ -13,11 +13,8 @@ export async function PUT(req: NextRequest) {
     await dbConnect();
     const { currentPassword, newPassword } = await req.json();
 
-    if (!currentPassword || !newPassword) {
-      return NextResponse.json(
-        { error: "Current and new password are required" },
-        { status: 400 }
-      );
+    if (!newPassword) {
+      return NextResponse.json({ error: "New password is required" }, { status: 400 });
     }
 
     if (newPassword.length < 6) {
@@ -32,12 +29,22 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    const valid = await comparePassword(currentPassword, user.password);
-    if (!valid) {
-      return NextResponse.json(
-        { error: "Current password is incorrect" },
-        { status: 400 }
-      );
+    const isGoogleAccount = Boolean(user.googleId);
+    if (!isGoogleAccount) {
+      if (!currentPassword) {
+        return NextResponse.json(
+          { error: "Current password is required" },
+          { status: 400 }
+        );
+      }
+
+      const valid = await comparePassword(currentPassword, user.password);
+      if (!valid) {
+        return NextResponse.json(
+          { error: "Current password is incorrect" },
+          { status: 400 }
+        );
+      }
     }
 
     user.password = await hashPassword(newPassword);

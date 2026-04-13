@@ -166,8 +166,8 @@ export default function HomePageEditor() {
   );
   const lookbookCount = lookbookPreview.length;
   const messageTone = message.toLowerCase().includes("success")
-    ? "border-success/30 bg-success/10 text-success"
-    : "border-border bg-bg-card text-text-secondary";
+    ? "border-[#d8c9b8] bg-[#f1ede8] text-[#6b6055]"
+    : "border-[#e2c9c4] bg-[#faf3f2] text-[#8a5f57]";
 
   const updateStat = (index: number, field: keyof HomeStat, value: string) => {
     setContent((current) => ({
@@ -344,7 +344,7 @@ export default function HomePageEditor() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {message && (
-          <div className={`rounded-2xl border px-4 py-3 text-sm ${messageTone}`}>
+          <div className={`border px-4 py-3 text-sm ${messageTone}`}>
             {message}
           </div>
         )}

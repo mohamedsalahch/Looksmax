@@ -31,10 +31,10 @@ export default function AccountOverview() {
     switch (s) {
       case "canceled": return "text-red-700 bg-red-100";
       case "returned": return "text-amber-700 bg-amber-100";
-      case "delivered": return "text-green-700 bg-green-100";
+      case "delivered": return "text-[#6b6055] bg-[#f1ede8]";
       case "shipping": return "text-blue-700 bg-blue-100";
-      case "confirmed": return "text-emerald-700 bg-emerald-100";
-      default: return "text-yellow-700 bg-yellow-100";
+      case "confirmed": return "text-[#5d6358] bg-[#ecebe5]";
+      default: return "text-[#7d6e5f] bg-[#f6f2eb]";
     }
   };
 

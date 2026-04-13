@@ -12,6 +12,7 @@ interface User {
   name: string;
   email: string;
   role: string;
+  googleId?: string | null;
   address?: {
     street: string;
     city: string;
@@ -38,6 +39,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<{ error?: string }>;
+  loginWithGoogle: (credential: string) => Promise<{ error?: string }>;
   signup: (
     name: string,
     email: string,
@@ -103,6 +105,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       const data = await res.json();
       if (!res.ok) return { error: data.error };
+      if (data.token) storeAuthToken(data.token);
+      setUser(data.user);
+      return {};
+    } catch {
+      return { error: "Network error" };
+    }
+  };
+
+  const loginWithGoogle = async (credential: string) => {
+    try {
+      const res = await fetch("/api/auth/google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ credential }),
+      });
+      const data = await res.json();
+      if (!res.ok) return { error: data.error || "Unable to sign in with Google" };
       if (data.token) storeAuthToken(data.token);
       setUser(data.user);
       return {};
@@ -190,6 +210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         loading,
         login,
+        loginWithGoogle,
         signup,
         forgotPassword,
         resendVerification,

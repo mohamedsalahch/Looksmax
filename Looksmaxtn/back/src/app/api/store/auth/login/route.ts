@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const user = await User.findOne({ email }).select("name email role address bodyProfile password isBlocked emailVerified");
+    const user = await User.findOne({ email }).select("name email role address bodyProfile password isBlocked emailVerified googleId");
     if (!user) {
       return NextResponse.json(
         { error: "Invalid email or password" },
@@ -84,6 +84,7 @@ export async function POST(req: NextRequest) {
         name: user.name,
         email: user.email,
         role: user.role,
+        googleId: user.googleId || null,
         address: user.address,
         bodyProfile: user.bodyProfile
           ? {

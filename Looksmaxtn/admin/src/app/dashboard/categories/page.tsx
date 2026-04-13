@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { withAuthRequest } from "@/lib/authClient";
 
 interface Category {
@@ -15,6 +15,9 @@ interface Category {
   createdBy?: { id: string; name: string; email: string } | null;
   updatedBy?: { id: string; name: string; email: string } | null;
 }
+
+type SortKey = "order" | "name" | "parent" | "slug" | "visibility" | "created" | "updated";
+type SortDirection = "asc" | "desc";
 
 function formatAuditLine(date?: string, actor?: { name: string; email: string } | null) {
   const actorLabel = actor?.name || actor?.email || "—";
@@ -34,6 +37,8 @@ export default function CategoriesPage() {
   const [saving, setSaving] = useState(false);
   const [togglingVisibilityId, setTogglingVisibilityId] = useState("");
   const [error, setError] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("order");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
   const fetchCategories = () => {
     fetch("/api/categories", withAuthRequest())
@@ -132,13 +137,6 @@ export default function CategoriesPage() {
   };
 
   const normalizedSearch = search.trim().toLowerCase();
-  const filteredCategories = normalizedSearch
-    ? categories.filter((cat) =>
-        [cat.name, cat.slug, cat.parentSlug || "", String(cat.order)].some((value) =>
-          value.toLowerCase().includes(normalizedSearch)
-        )
-      )
-    : categories;
   const availableParentCategories = categories.filter((cat) => !editingId || cat._id !== editingId);
   const getCategoryPath = (category: Category) => {
     const segments = [category.name];
@@ -155,6 +153,62 @@ export default function CategoriesPage() {
   };
   const getParentName = (parentSlug?: string | null) =>
     categories.find((cat) => cat.slug === parentSlug)?.name || "Top level";
+  const filteredCategories = useMemo(() => {
+    const next = normalizedSearch
+      ? categories.filter((cat) =>
+          [cat.name, cat.slug, cat.parentSlug || "", String(cat.order)].some((value) =>
+            value.toLowerCase().includes(normalizedSearch)
+          )
+        )
+      : categories;
+
+    const getSortableValue = (category: Category) => {
+      switch (sortKey) {
+        case "order":
+          return category.order;
+        case "name":
+          return category.name;
+        case "parent":
+          return getParentName(category.parentSlug);
+        case "slug":
+          return category.slug;
+        case "visibility":
+          return category.isActive ? "active" : "inactive";
+        case "created":
+          return category.createdAt || "";
+        case "updated":
+          return category.updatedAt || "";
+        default:
+          return category.order;
+      }
+    };
+
+    return [...next].sort((a, b) => {
+      const left = getSortableValue(a);
+      const right = getSortableValue(b);
+      const comparison =
+        typeof left === "number" && typeof right === "number"
+          ? left - right
+          : String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: "base" });
+
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+  }, [categories, getParentName, normalizedSearch, sortDirection, sortKey]);
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortKey(key);
+    setSortDirection("asc");
+  };
+
+  const renderSortIndicator = (key: SortKey) => {
+    if (sortKey !== key) return <span className="text-[9px] text-text-secondary/60">↕</span>;
+    return <span className="text-[9px] text-accent">{sortDirection === "asc" ? "↑" : "↓"}</span>;
+  };
 
   return (
     <div>
@@ -186,7 +240,7 @@ export default function CategoriesPage() {
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="bg-danger/10 border border-danger/30 text-danger text-xs px-4 py-3 rounded">
+              <div className="border border-[#BD3100] bg-[#faf3f2] px-4 py-3 text-xs text-[#BD3100]">
                 {error}
               </div>
             )}
@@ -279,13 +333,41 @@ export default function CategoriesPage() {
           <table className="w-full text-left">
             <thead className="bg-bg-secondary">
               <tr className="text-[10px] text-text-secondary uppercase tracking-wider">
-                <th className="px-4 py-3">Order</th>
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Parent</th>
-                <th className="px-4 py-3">Slug</th>
-                <th className="px-4 py-3">Visibility</th>
-                <th className="px-4 py-3">Created</th>
-                <th className="px-4 py-3">Updated</th>
+                <th className="px-4 py-3">
+                  <button type="button" onClick={() => toggleSort("order")} className="inline-flex items-center gap-1 cursor-pointer">
+                    Order {renderSortIndicator("order")}
+                  </button>
+                </th>
+                <th className="px-4 py-3">
+                  <button type="button" onClick={() => toggleSort("name")} className="inline-flex items-center gap-1 cursor-pointer">
+                    Name {renderSortIndicator("name")}
+                  </button>
+                </th>
+                <th className="px-4 py-3">
+                  <button type="button" onClick={() => toggleSort("parent")} className="inline-flex items-center gap-1 cursor-pointer">
+                    Parent {renderSortIndicator("parent")}
+                  </button>
+                </th>
+                <th className="px-4 py-3">
+                  <button type="button" onClick={() => toggleSort("slug")} className="inline-flex items-center gap-1 cursor-pointer">
+                    Slug {renderSortIndicator("slug")}
+                  </button>
+                </th>
+                <th className="px-4 py-3">
+                  <button type="button" onClick={() => toggleSort("visibility")} className="inline-flex items-center gap-1 cursor-pointer">
+                    Visibility {renderSortIndicator("visibility")}
+                  </button>
+                </th>
+                <th className="px-4 py-3">
+                  <button type="button" onClick={() => toggleSort("created")} className="inline-flex items-center gap-1 cursor-pointer">
+                    Created {renderSortIndicator("created")}
+                  </button>
+                </th>
+                <th className="px-4 py-3">
+                  <button type="button" onClick={() => toggleSort("updated")} className="inline-flex items-center gap-1 cursor-pointer">
+                    Updated {renderSortIndicator("updated")}
+                  </button>
+                </th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>

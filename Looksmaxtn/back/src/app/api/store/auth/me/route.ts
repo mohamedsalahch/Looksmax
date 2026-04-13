@@ -24,7 +24,7 @@ export async function GET() {
 
     await dbConnect();
     const user = await User.findById(session.userId)
-      .select("name email role address bodyProfile isBlocked")
+      .select("name email role address bodyProfile isBlocked googleId")
       .lean();
     if (!user || user.isBlocked) {
       console.log("[auth][store][me] invalid user", {
@@ -46,6 +46,7 @@ export async function GET() {
           name: user.name,
           email: user.email,
           role: user.role,
+          googleId: user.googleId || null,
           address: user.address,
           bodyProfile: user.bodyProfile
             ? {
