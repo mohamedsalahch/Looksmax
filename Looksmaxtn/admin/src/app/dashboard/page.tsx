@@ -34,7 +34,7 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         {cards.map((card) => (
-          <div key={card.label} className="stat-card rounded-lg p-5">
+          <div key={card.label} className="stat-card border border-border p-5">
             <div className="flex items-center justify-between mb-3">
               <span className="text-2xl">{card.icon}</span>
             </div>

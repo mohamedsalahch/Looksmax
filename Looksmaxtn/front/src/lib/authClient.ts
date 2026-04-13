@@ -15,6 +15,32 @@ export function clearAuthToken() {
   window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
 }
 
+export function getTokenExpiryMs(token: string) {
+  try {
+    const payloadPart = token.split(".")[1];
+    if (!payloadPart) return null;
+    const normalized = payloadPart.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const decoded = JSON.parse(window.atob(padded)) as { exp?: number };
+    return typeof decoded.exp === "number" ? decoded.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function refreshStoreAuthToken() {
+  const response = await fetch("/api/auth/refresh", withAuthRequest({ method: "POST" }));
+  if (!response.ok) return null;
+
+  const data = (await response.json()) as { token?: string | null };
+  if (data.token) {
+    storeAuthToken(data.token);
+    return data.token;
+  }
+
+  return null;
+}
+
 export function withAuthHeaders(headers?: HeadersInit) {
   const token = getStoredAuthToken();
   if (!token) return headers;

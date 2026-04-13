@@ -79,6 +79,10 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     setDeleting(false);
   };
 
+  const printOrder = () => {
+    window.print();
+  };
+
   const statusColor = (s: string) => {
     switch (s) {
       case "processing": return "text-amber-300 bg-amber-500/10";
@@ -98,7 +102,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between print:hidden">
         <div>
           <Link href="/dashboard/orders" className="text-xs text-text-secondary hover:text-text-primary transition-colors mb-2 inline-block">← Back</Link>
           <h1 className="text-lg font-semibold">Order #{order._id.slice(-8).toUpperCase()}</h1>
@@ -118,7 +122,14 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-3 print:hidden">
+        <button
+          type="button"
+          onClick={printOrder}
+          className="border border-border px-4 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
+        >
+          Print Order
+        </button>
         <button
           type="button"
           onClick={deleteOrder}
@@ -129,8 +140,64 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         </button>
       </div>
 
+      <div className="hidden print:block mx-auto w-[210mm] max-w-full border border-black p-6 space-y-5 bg-white text-black font-sans">
+        <div className="flex items-start justify-between border-b border-black pb-4">
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.3em]">LOOKSMAX</p>
+            <h2 className="text-xl font-semibold mt-2">BON DE COMMANDE #{order._id.slice(-8).toUpperCase()}</h2>
+            <p className="text-xs mt-1">Imprimé le : {new Date().toLocaleString()}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="border border-black p-4">
+            <p className="text-xs uppercase tracking-wider mb-2">Client</p>
+            <p>{order.user?.name || order.shippingAddress.fullName}</p>
+          </div>
+          <div className="border border-black p-4">
+            <p className="text-xs uppercase tracking-wider mb-2">Adresse de livraison</p>
+            <p>{order.shippingAddress.fullName}</p>
+            <p>{order.shippingAddress.street}</p>
+            <p>{order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.zip}</p>
+            <p>{order.shippingAddress.phone}</p>
+          </div>
+        </div>
+
+        <div className="border border-black">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="text-[10px] uppercase tracking-wider">
+                <th className="px-3 py-2 border-b border-black">Produit</th>
+                <th className="px-3 py-2 border-b border-black">Taille</th>
+                <th className="px-3 py-2 border-b border-black">Qté</th>
+                <th className="px-3 py-2 border-b border-black text-right">Prix (TND)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {order.items.map((item) => (
+                <tr key={`${item.productId}-${item.name}`}>
+                  <td className="px-3 py-2 border-b border-black text-xs">{item.name}</td>
+                  <td className="px-3 py-2 border-b border-black text-xs">{item.size}</td>
+                  <td className="px-3 py-2 border-b border-black text-xs">{item.quantity}</td>
+                  <td className="px-3 py-2 border-b border-black text-xs text-right">{(item.price * item.quantity).toFixed(2)} TND</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="flex justify-end text-sm">
+          <div className="min-w-56 border border-black p-4">
+            <div className="flex items-center justify-between">
+              <span>Total</span>
+              <span>{order.totalPrice.toFixed(2)} TND</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Status Update */}
-      <div className="bg-bg-card border border-border rounded p-4">
+      <div className="bg-bg-card border border-border rounded p-4 print:hidden">
         <p className="text-xs text-text-secondary uppercase tracking-wider mb-3">Update Status</p>
         {isLocked && (
           <p className="text-xs text-danger mb-3">This order is locked and can no longer be updated.</p>
@@ -158,7 +225,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:hidden">
         {/* Customer */}
         <div className="bg-bg-card border border-border rounded p-4">
           <p className="text-xs text-text-secondary uppercase tracking-wider mb-3">Customer</p>
@@ -176,7 +243,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       </div>
 
       {/* Items */}
-      <div className="bg-bg-card border border-border rounded overflow-hidden">
+      <div className="bg-bg-card border border-border rounded overflow-hidden print:hidden">
         <table className="w-full text-left">
           <thead className="bg-bg-secondary">
             <tr className="text-[10px] text-text-secondary uppercase tracking-wider">
@@ -215,7 +282,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       </div>
 
       {/* Payment */}
-      <div className="bg-bg-card border border-border rounded p-4">
+      <div className="bg-bg-card border border-border rounded p-4 print:hidden">
         <div>
           <p className="text-xs text-text-secondary uppercase">Payment Method</p>
           <p className="text-sm font-medium">Cash on Delivery</p>
@@ -227,6 +294,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         updatedAt={order.updatedAt}
         createdBy={order.createdBy}
         updatedBy={order.updatedBy}
+        className="print:hidden"
       />
     </div>
   );

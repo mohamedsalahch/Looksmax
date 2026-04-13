@@ -50,6 +50,12 @@ type GenerationInputs = {
 };
 type OriginPictures = Record<OriginPictureKey, string>;
 type OriginPictureFiles = Record<OriginPictureKey, File | null>;
+type CategoryPath = {
+  parent: string;
+  child: string;
+  grandchild: string;
+  greatGrandchild: string;
+};
 
 const initialForm = {
   name: "",
@@ -117,7 +123,7 @@ function SectionCard({
   );
 }
 
-function getCategoryPath(categories: Category[], slugs: string[]) {
+function getCategoryPath(categories: Category[], slugs: string[]): CategoryPath {
   const selected = categories.filter((category) => slugs.includes(category.slug));
   const deepest = selected.reduce<Category | null>((current, category) => {
     const depth = getDepth(categories, category);
@@ -125,7 +131,7 @@ function getCategoryPath(categories: Category[], slugs: string[]) {
     return depth > currentDepth ? category : current;
   }, null);
 
-  if (!deepest) return { parent: "", child: "", grandchild: "" };
+  if (!deepest) return { parent: "", child: "", grandchild: "", greatGrandchild: "" };
 
   const chain: string[] = [];
   let cursor: Category | undefined = deepest;
@@ -139,6 +145,7 @@ function getCategoryPath(categories: Category[], slugs: string[]) {
     parent: chain[0] || "",
     child: chain[1] || "",
     grandchild: chain[2] || "",
+    greatGrandchild: chain[3] || "",
   };
 }
 
@@ -188,6 +195,14 @@ async function productImageToFile(image: ProductImage, label: keyof GenerationIn
   });
 }
 
+async function originPictureToFile(url: string, label: OriginPictureKey) {
+  const blob = await fetch(url).then((response) => response.blob());
+  const extension = blob.type.split("/")[1] || "png";
+  return new File([blob], `${label}-origin-${Date.now()}.${extension}`, {
+    type: blob.type || "image/png",
+  });
+}
+
 export default function NewProductPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -200,6 +215,7 @@ export default function NewProductPage() {
   const [selectedParentSlug, setSelectedParentSlug] = useState("");
   const [selectedChildSlug, setSelectedChildSlug] = useState("");
   const [selectedGrandchildSlug, setSelectedGrandchildSlug] = useState("");
+  const [selectedGreatGrandchildSlug, setSelectedGreatGrandchildSlug] = useState("");
   const [images, setImages] = useState<ProductImage[]>([]);
   const [originPictureFiles, setOriginPictureFiles] =
     useState<OriginPictureFiles>(emptyOriginPictureFiles);
@@ -231,7 +247,8 @@ export default function NewProductPage() {
       .then((d) => setGeneratedImages(d.generatedImages || []));
   }, []);
 
-  const selectedCategorySlug = selectedGrandchildSlug || selectedChildSlug || selectedParentSlug;
+  const selectedCategorySlug =
+    selectedGreatGrandchildSlug || selectedGrandchildSlug || selectedChildSlug || selectedParentSlug;
   const categoryOptions = useMemo(
     () =>
       categories.map((category) => ({
@@ -296,6 +313,54 @@ export default function NewProductPage() {
     }));
   };
 
+  const assignProductImageToOriginPicture = async (key: OriginPictureKey, imageId: string) => {
+    const image = images.find((entry) => entry.id === imageId);
+    if (!image) return;
+
+    try {
+      const file = await productImageToFile(image, key);
+      handleOriginPictureSelect(key, file);
+    } catch {
+      setError(`Unable to use this image for the ${key} origin picture.`);
+    }
+  };
+
+  const assignOriginPictureToGenerationSlot = async (
+    slotKey: keyof GenerationInputs,
+    originKey: OriginPictureKey
+  ) => {
+    const previewUrl = form.originPictures[originKey];
+    if (!previewUrl) return;
+
+    try {
+      const file =
+        originPictureFiles[originKey] ?? (await originPictureToFile(previewUrl, originKey));
+      setGenerationInputs((current) => ({
+        ...current,
+        [slotKey]: { file, previewUrl },
+      }));
+    } catch {
+      setError(`Unable to use the ${originKey} origin picture for ${slotKey}.`);
+    }
+  };
+
+  const handleOriginPictureDrop = async (
+    key: OriginPictureKey,
+    event: React.DragEvent<HTMLDivElement>
+  ) => {
+    event.preventDefault();
+    const imageId = event.dataTransfer.getData("text/product-image-id");
+
+    if (imageId) {
+      await assignProductImageToOriginPicture(key, imageId);
+      setDraggedImageId(null);
+      return;
+    }
+
+    handleOriginPictureSelect(key, event.dataTransfer.files?.[0] || null);
+    setDraggedImageId(null);
+  };
+
   const importGeneratedImage = async (imageUrl: string) => {
     try {
       setImportingGeneratedImage(imageUrl);
@@ -352,6 +417,32 @@ export default function NewProductPage() {
   const handleGenerationDrop = async (key: keyof GenerationInputs, imageId: string) => {
     await assignProductImageToGenerationSlot(key, imageId);
     setDraggedImageId(null);
+  };
+
+  const handleGenerationSlotDrop = async (
+    key: keyof GenerationInputs,
+    event: React.DragEvent<HTMLDivElement>
+  ) => {
+    event.preventDefault();
+    const imageId = event.dataTransfer.getData("text/product-image-id");
+    const originKey = event.dataTransfer.getData("text/origin-picture-key") as OriginPictureKey;
+
+    if (imageId) {
+      await handleGenerationDrop(key, imageId);
+      return;
+    }
+
+    if (originKey) {
+      await assignOriginPictureToGenerationSlot(key, originKey);
+      setDraggedImageId(null);
+      return;
+    }
+
+    const droppedFile = event.dataTransfer.files?.[0] || null;
+    if (droppedFile) {
+      handleGenerationInput(key, droppedFile);
+      setDraggedImageId(null);
+    }
   };
 
   const generationSlotsForSubtype =
@@ -486,6 +577,7 @@ export default function NewProductPage() {
         selectedParentSlug,
         selectedChildSlug,
         selectedGrandchildSlug,
+        selectedGreatGrandchildSlug,
       ].filter(Boolean);
 
       const body = new FormData();
@@ -648,6 +740,7 @@ export default function NewProductPage() {
                   setSelectedParentSlug("");
                   setSelectedChildSlug("");
                   setSelectedGrandchildSlug("");
+                  setSelectedGreatGrandchildSlug("");
                   return;
                 }
 
@@ -655,6 +748,7 @@ export default function NewProductPage() {
                 setSelectedParentSlug(path.parent);
                 setSelectedChildSlug(path.child);
                 setSelectedGrandchildSlug(path.grandchild);
+                setSelectedGreatGrandchildSlug(path.greatGrandchild || "");
               }}
               className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm md:col-span-3"
             >
@@ -799,84 +893,6 @@ export default function NewProductPage() {
                 className="w-full accent-accent cursor-pointer"
               />
               </div>
-            </div>
-          </SectionCard>
-        )}
-
-        {form.productType === "fashion" && (
-          <SectionCard
-            title="Origin Pictures"
-            description="Upload the body or product origin views used for presentation and generation."
-          >
-            <div>
-              <p className="mt-1 text-[11px] text-text-secondary">
-                Clothes use front and back. Shoes use front, back, left, and right.
-              </p>
-            </div>
-            <div className="space-y-3">
-              {originPictureKeys.map((key) => {
-                const preview = form.originPictures[key];
-                const inputId = `origin-picture-${key}-upload`;
-                return (
-                  <div
-                    key={key}
-                    className="flex flex-col gap-3 rounded border border-border bg-bg-secondary/40 p-3 lg:flex-row lg:items-center"
-                  >
-                    <div className="min-w-0 lg:w-28">
-                      <p className="text-[10px] uppercase tracking-[0.22em] text-text-secondary">
-                        {key}
-                      </p>
-                      <p className="mt-1 text-[10px] text-text-secondary">
-                        {key} reference
-                      </p>
-                    </div>
-                    <input
-                      id={inputId}
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => handleOriginPictureSelect(key, e.target.files?.[0] || null)}
-                      className="hidden"
-                    />
-                    <div
-                      onClick={() => document.getElementById(inputId)?.click()}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        handleOriginPictureSelect(key, e.dataTransfer.files?.[0] || null);
-                      }}
-                      className="flex min-h-20 flex-1 cursor-pointer items-center justify-center rounded border border-dashed border-border bg-bg-secondary px-4 py-3 text-center transition-colors hover:border-accent hover:bg-bg-hover"
-                    >
-                      <span className="text-sm font-medium text-text-primary">
-                        Drag or click to import {key} origin image
-                      </span>
-                    </div>
-                    <div className="w-full lg:w-32 shrink-0 space-y-2">
-                      {preview ? (
-                        <>
-                          <div className="aspect-[4/3] overflow-hidden rounded border border-border bg-bg-hover">
-                            <img
-                              src={preview}
-                              alt={`${key} origin`}
-                              className="h-full w-full object-cover"
-                            />
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleOriginPictureSelect(key, null)}
-                            className="text-[10px] text-danger uppercase tracking-wider"
-                          >
-                            Remove
-                          </button>
-                        </>
-                      ) : (
-                        <div className="flex aspect-[4/3] items-center justify-center rounded border border-dashed border-border bg-bg-hover text-[10px] uppercase tracking-wider text-text-secondary">
-                          No image
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
             </div>
           </SectionCard>
         )}
@@ -1040,17 +1056,56 @@ export default function NewProductPage() {
         )}
 
         {form.productType === "fashion" && (
-          <section className="bg-bg-card border border-border rounded p-5 space-y-5">
-            <div>
-              <h2 className="text-sm font-semibold">Generate Model Photos</h2>
-              <p className="mt-1 text-[11px] text-text-secondary">
-                Drag product images above into these slots, then generate.
-                {form.fashionSubtype === "shoes"
-                  ? " Shoes use front, back, left, and right with no model."
-                  : " Clothes use model front/back plus product front/back."}
-              </p>
+          <SectionCard
+            title="Origin Pictures"
+            description="Upload the body or product origin views used for presentation and generation."
+          >
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              {originPictureKeys.map((key) => {
+                const preview = form.originPictures[key];
+                return (
+                  <div key={key} className="space-y-2">
+                    <p className="text-[10px] text-text-secondary uppercase tracking-wider">{key}</p>
+                    <div
+                      draggable={!!preview}
+                      onDragStart={(e) => {
+                        if (!preview) return;
+                        e.dataTransfer.setData("text/origin-picture-key", key);
+                        e.dataTransfer.effectAllowed = "copy";
+                      }}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => void handleOriginPictureDrop(key, e)}
+                      className="aspect-square max-h-[180px] bg-bg-secondary overflow-hidden rounded border border-dashed border-border"
+                    >
+                      {preview ? (
+                        <img
+                          src={preview}
+                          alt={`${key} origin`}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div
+                          className="w-full h-full flex flex-col items-center justify-center gap-1 text-[10px] text-text-secondary uppercase tracking-wider"
+                        >
+                          <span>{key}</span>
+                          <span className="text-[8px] tracking-normal normal-case text-text-secondary/80">
+                            Drop from product images
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
+          </SectionCard>
+        )}
 
+        {form.productType === "fashion" && (
+          <SectionCard
+            title="Generate Model Photos"
+            description="Drag product images above into these slots, then generate."
+          >
             {form.fashionSubtype === "clothes" && (
               <div className="space-y-4">
                 <div className="flex items-center gap-3 min-h-[48px]">
@@ -1115,14 +1170,10 @@ export default function NewProductPage() {
                           </span>
                         )}
                       </div>
-                      <div
+                    <div
                         className="aspect-[4/5] max-h-[180px] bg-bg-secondary overflow-hidden rounded border border-dashed border-border"
                         onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          const imageId = e.dataTransfer.getData("text/product-image-id");
-                          if (imageId) void handleGenerationDrop(key, imageId);
-                        }}
+                        onDrop={(e) => void handleGenerationSlotDrop(key, e)}
                       >
                         {generationInputs[key].previewUrl ? (
                           <img src={generationInputs[key].previewUrl} alt={`${key} preview`} className="w-full h-full object-cover" />
@@ -1167,11 +1218,7 @@ export default function NewProductPage() {
                       <div
                         className="aspect-square max-h-[180px] bg-bg-secondary overflow-hidden rounded border border-dashed border-border"
                         onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          const imageId = e.dataTransfer.getData("text/product-image-id");
-                          if (imageId) void handleGenerationDrop(key, imageId);
-                        }}
+                        onDrop={(e) => void handleGenerationSlotDrop(key, e)}
                       >
                         {generationInputs[key].previewUrl ? (
                           <img src={generationInputs[key].previewUrl} alt={`${key} preview`} className="w-full h-full object-cover" />
@@ -1200,7 +1247,7 @@ export default function NewProductPage() {
                 {generating ? "Generating..." : "Generate"}
               </button>
             </div>
-          </section>
+          </SectionCard>
         )}
 
         <div className="flex gap-3">

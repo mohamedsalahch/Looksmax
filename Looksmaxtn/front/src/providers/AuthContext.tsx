@@ -1,8 +1,11 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from "react";
 import {
   clearAuthToken,
+  getStoredAuthToken,
+  getTokenExpiryMs,
+  refreshStoreAuthToken,
   storeAuthToken,
   withAuthRequest,
 } from "@/lib/authClient";
@@ -64,6 +67,42 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const refreshTimerRef = useRef<number | null>(null);
+
+  const clearRefreshTimer = useCallback(() => {
+    if (refreshTimerRef.current === null) return;
+    window.clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = null;
+  }, []);
+
+  const scheduleTokenRefresh = useCallback((token?: string | null) => {
+    clearRefreshTimer();
+    const currentToken = token || getStoredAuthToken();
+    if (!currentToken) return;
+
+    const expiryMs = getTokenExpiryMs(currentToken);
+    if (!expiryMs) return;
+
+    const refreshLeadMs = 2 * 60 * 1000;
+    const delayMs = Math.max(expiryMs - Date.now() - refreshLeadMs, 60 * 1000);
+
+    const nextTimerId = window.setTimeout(async () => {
+      try {
+        const nextToken = await refreshStoreAuthToken();
+        if (!nextToken) {
+          clearAuthToken();
+          setUser(null);
+          return;
+        }
+        scheduleTokenRefresh(nextToken);
+      } catch {
+        clearAuthToken();
+        setUser(null);
+      }
+    }, delayMs);
+
+    refreshTimerRef.current = nextTimerId;
+  }, [clearRefreshTimer]);
 
   const refreshUser = useCallback(async () => {
     try {
@@ -74,26 +113,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       const data = await res.json();
       setUser(data.user || null);
+      scheduleTokenRefresh();
     } catch {
       setUser(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [scheduleTokenRefresh]);
 
   useEffect(() => {
     refreshUser();
-  }, [refreshUser]);
-
-  useEffect(() => {
-    if (!user) return;
-
-    const interval = window.setInterval(() => {
-      void refreshUser();
-    }, 60000);
-
-    return () => window.clearInterval(interval);
-  }, [refreshUser, user]);
+    return () => clearRefreshTimer();
+  }, [clearRefreshTimer, refreshUser]);
 
   const login = async (email: string, password: string) => {
     try {
@@ -105,7 +136,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       const data = await res.json();
       if (!res.ok) return { error: data.error };
-      if (data.token) storeAuthToken(data.token);
+      if (data.token) {
+        storeAuthToken(data.token);
+        scheduleTokenRefresh(data.token);
+      }
       setUser(data.user);
       return {};
     } catch {
@@ -123,7 +157,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       const data = await res.json();
       if (!res.ok) return { error: data.error || "Unable to sign in with Google" };
-      if (data.token) storeAuthToken(data.token);
+      if (data.token) {
+        storeAuthToken(data.token);
+        scheduleTokenRefresh(data.token);
+      }
       setUser(data.user);
       return {};
     } catch {
@@ -201,6 +238,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     clearAuthToken();
+    clearRefreshTimer();
     setUser(null);
   };
 

@@ -115,6 +115,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
+    if (orderStatus === "delivered" && existingOrder.orderStatus !== "delivered") {
+      const productIds = existingOrder.items.map((item: LeanOrderItem) => item.product);
+      if (productIds.length > 0) {
+        await Product.updateMany(
+          { _id: { $in: productIds } },
+          { $set: { isActive: false } }
+        );
+      }
+    }
+
     const update: Record<string, unknown> = {};
     if (orderStatus) update.orderStatus = orderStatus;
     update.updatedBy = auditActor;

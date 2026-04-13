@@ -3,7 +3,13 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, ReactNode } from "react";
-import { clearAuthToken, withAuthRequest } from "@/lib/authClient";
+import {
+  clearAuthToken,
+  getStoredAuthToken,
+  getTokenExpiryMs,
+  refreshAdminAuthToken,
+  withAuthRequest,
+} from "@/lib/authClient";
 
 interface AdminUser { id: string; name: string; email: string; role: string; }
 
@@ -59,6 +65,42 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const notificationsRef = useRef<HTMLDivElement | null>(null);
   const showNotificationsRef = useRef(showNotifications);
   const readOrderIdsRef = useRef<Set<string>>(new Set());
+  const refreshTimerRef = useRef<number | null>(null);
+
+  const clearRefreshTimer = () => {
+    if (refreshTimerRef.current !== null) {
+      window.clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
+  };
+
+  const scheduleTokenRefresh = (token?: string | null) => {
+    clearRefreshTimer();
+
+    const currentToken = token || getStoredAuthToken();
+    if (!currentToken) return;
+
+    const expiryMs = getTokenExpiryMs(currentToken);
+    if (!expiryMs) return;
+
+    const refreshLeadMs = 2 * 60 * 1000;
+    const delayMs = Math.max(expiryMs - Date.now() - refreshLeadMs, 60 * 1000);
+
+    refreshTimerRef.current = window.setTimeout(async () => {
+      try {
+        const nextToken = await refreshAdminAuthToken();
+        if (!nextToken) {
+          clearAuthToken();
+          router.push("/");
+          return;
+        }
+        scheduleTokenRefresh(nextToken);
+      } catch {
+        clearAuthToken();
+        router.push("/");
+      }
+    }, delayMs);
+  };
 
   const loadReadOrderIds = () => {
     if (typeof window === "undefined") return new Set<string>();
@@ -103,10 +145,38 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    fetch("/api/auth/me", withAuthRequest()).then((r) => r.json()).then((data) => {
-      if (!data.user) { router.push("/"); return; }
-      setUser(data.user);
-    }).catch(() => router.push("/")).finally(() => setLoading(false));
+    let active = true;
+
+    fetch("/api/auth/me", withAuthRequest())
+      .then((r) => r.json())
+      .then(async (data) => {
+        if (!active) return;
+        if (!data.user) {
+          router.push("/");
+          return;
+        }
+
+        setUser(data.user);
+        try {
+          const refreshedToken = await refreshAdminAuthToken();
+          if (refreshedToken) {
+            scheduleTokenRefresh(refreshedToken);
+          } else {
+            scheduleTokenRefresh();
+          }
+        } catch {
+          scheduleTokenRefresh();
+        }
+      })
+      .catch(() => router.push("/"))
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+      clearRefreshTimer();
+    };
   }, [router]);
 
   useEffect(() => {
@@ -217,6 +287,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       window.clearInterval(interval);
       window.clearInterval(messageInterval);
       document.removeEventListener("mousedown", handlePointerDown);
+      clearRefreshTimer();
     };
   }, []);
 
@@ -264,8 +335,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen flex bg-bg-primary">
-      <aside className={`${sidebarOpen ? "w-56" : "w-16"} transition-all duration-300 bg-bg-secondary/65 flex flex-col shrink-0`}>
+    <div className="min-h-screen flex bg-bg-primary print:block print:bg-white print:text-black print:[&_*:not(.print\\:block)]:hidden">
+      <aside className={`${sidebarOpen ? "w-56" : "w-16"} transition-all duration-300 bg-bg-secondary/65 flex flex-col shrink-0 print:hidden`}>
         <div className="p-4 flex items-center justify-between">
           {sidebarOpen && (
             <div>
@@ -297,8 +368,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </nav>
       </aside>
 
-      <main className="flex-1 overflow-y-auto">
-        <div className="bg-bg-primary/70 px-6 py-4 backdrop-blur md:px-8">
+      <main className="flex-1 overflow-y-auto print:overflow-visible print:w-full print:bg-white">
+        <div className="bg-bg-primary/70 px-6 py-4 backdrop-blur md:px-8 print:hidden">
           <div className="flex items-center justify-end gap-4">
             <div className="relative" ref={notificationsRef}>
               <button
@@ -394,7 +465,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             </div>
         </div>
 
-        <div className="p-6 md:p-8">{children}</div>
+        <div className="p-6 md:p-8 print:p-0 print:!m-0 print:!bg-white print:!backdrop-blur-0 print:w-full print:block">{children}</div>
       </main>
     </div>
   );
