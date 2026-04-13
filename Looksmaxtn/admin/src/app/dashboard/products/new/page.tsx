@@ -425,7 +425,7 @@ export default function NewProductPage() {
           isCompleted = true;
           finalImages = statusData.images;
         } else if (statusData.status === "failed") {
-          setError(statusData.error || "Generation failed.");
+          setError("Generation failed. Please try again.");
           setGenerating(false);
           return;
         }

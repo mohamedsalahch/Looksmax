@@ -34,11 +34,31 @@ async def send_webhook(webhook_url: str, job_id: str, view: str, image: str) -> 
     async with httpx.AsyncClient() as client:
         try:
             await client.post(
-                webhook_url, 
-                json=payload.model_dump(), 
+                webhook_url,
+                json=payload.model_dump(),
                 headers=headers,
                 timeout=30.0
             )
             logger.info(f"Webhook sent successfully for job {job_id}, view: {view}")
         except Exception as e:
             logger.error(f"Failed to send webhook for job {job_id}: {str(e)}")
+
+
+async def send_error_webhook(webhook_url: str, job_id: str, error_message: str) -> None:
+    """Send error notification via webhook so the backend can mark the job as failed."""
+    secret = os.getenv("OUTFIT_WEBHOOK_SECRET", "")
+    headers = {}
+    if secret:
+        headers["x-webhook-secret"] = secret
+
+    async with httpx.AsyncClient() as client:
+        try:
+            await client.post(
+                webhook_url,
+                json={"job_id": job_id, "error": error_message},
+                headers=headers,
+                timeout=30.0,
+            )
+            logger.info(f"Error webhook sent for job {job_id}")
+        except Exception as e:
+            logger.error(f"Failed to send error webhook for job {job_id}: {str(e)}")

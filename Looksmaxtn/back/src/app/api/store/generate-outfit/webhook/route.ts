@@ -52,9 +52,10 @@ export async function POST(req: NextRequest) {
     await dbConnect();
 
     if (typeof body.error === "string" && body.error) {
+      console.error(`[outfit-webhook] Generation service error for job ${jobId}: ${body.error}`);
       await OutfitGenerationJob.findByIdAndUpdate(jobId, {
         status: "failed",
-        errorMessage: body.error,
+        errorMessage: "Outfit generation failed.",
       });
       return NextResponse.json({ ok: true });
     }

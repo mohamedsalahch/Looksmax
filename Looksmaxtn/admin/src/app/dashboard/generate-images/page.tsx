@@ -10,6 +10,7 @@ interface GeneratedImageAsset {
   sourceImages: string[];
   images: string[];
   status: "processing" | "completed" | "failed";
+  errorMessage?: string;
   createdAt: string;
   updatedAt?: string;
   createdBy?: { id: string; name: string; email: string } | null;
@@ -272,7 +273,7 @@ export default function GenerateImagesPage() {
                 <p className="text-[10px] text-text-secondary uppercase tracking-wider">
                   {item.sourceImages.length} source image{item.sourceImages.length !== 1 ? "s" : ""} · {item.images.length} result{item.images.length !== 1 ? "s" : ""}
                   {item.status === "processing" && " · PROCESSING"}
-                  {item.status === "failed" && " · FAILED"}
+                  {item.status === "failed" && ` · FAILED${item.errorMessage ? ` — ${item.errorMessage}` : ""}`}
                 </p>
                 <div className="space-y-1 pt-1 text-[10px] text-text-secondary">
                   <p>Created at: {formatAuditDate(item.createdAt)}</p>
