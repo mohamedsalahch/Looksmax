@@ -113,9 +113,15 @@ export default function Footer() {
         )}
 
         {message && (
-          <p className={`mt-3 text-xs ${message.startsWith("✓") ? "text-green-600" : "text-red-500"}`}>
+          <div
+            className={`mt-3 border px-4 py-3 text-xs ${
+              message.startsWith("✓")
+                ? "border-[#d8c9b8] bg-[#f1ede8] text-[#6b6055]"
+                : "border-[#e2c9c4] bg-[#faf3f2] text-[#8a5f57]"
+            }`}
+          >
             {message}
-          </p>
+          </div>
         )}
 
         <button

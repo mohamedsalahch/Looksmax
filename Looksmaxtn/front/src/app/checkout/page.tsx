@@ -95,10 +95,12 @@ export default function CheckoutPage() {
     return (
       <div className="pt-[72px] min-h-screen flex items-center justify-center">
         <div className="text-center max-w-md mx-auto px-4">
-          <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-6">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
+          <div className="border border-[#d8c9b8] bg-[#f1ede8] px-6 py-5 mb-6">
+            <div className="inline-flex h-10 w-10 items-center justify-center border border-[#d8c9b8] bg-[#faf7f2]">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6b6055" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
           </div>
           <h1 className="text-xl font-semibold tracking-wide uppercase mb-3">Order Placed!</h1>
           <p className="text-sm text-text-secondary mb-2">
@@ -187,7 +189,7 @@ export default function CheckoutPage() {
               </h2>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 text-xs px-4 py-3 mb-4 rounded">
+                <div className="border border-[#BD3100] bg-[#faf3f2] px-4 py-3 mb-4 text-xs text-[#BD3100]">
                   {error}
                 </div>
               )}
@@ -300,12 +302,12 @@ export default function CheckoutPage() {
                   <div
                     key={item.id}
                     className={`flex gap-3 p-4 ${
-                      item.isUnavailable ? "bg-red-50/80" : ""
+                      item.isUnavailable ? "bg-[#faf3f2]/80" : ""
                     }`}
                   >
                     <div
                       className={`w-14 h-20 shrink-0 overflow-hidden rounded-sm ${
-                        item.isUnavailable ? "bg-red-100" : "bg-surface"
+                        item.isUnavailable ? "bg-[#f6ddd7]" : "bg-surface"
                       }`}
                     >
                       {item.image ? (
@@ -324,7 +326,7 @@ export default function CheckoutPage() {
                           : `${item.size || ""}${item.size && item.color ? " · " : ""}${item.color || ""} · Qty: ${item.quantity}`}
                       </p>
                       {item.isUnavailable && (
-                        <p className="text-[10px] text-danger mt-1">
+                        <p className="text-[10px] text-[#BD3100] mt-1">
                           {item.unavailableReason || "This product is already taken."}
                         </p>
                       )}
@@ -372,8 +374,8 @@ export default function CheckoutPage() {
                 ))}
 
                 {hasUnavailableItems && (
-                  <div className="p-4 bg-danger/5">
-                    <p className="text-xs text-danger font-medium">
+                  <div className="border border-[#BD3100] bg-[#faf3f2] p-4">
+                    <p className="text-xs text-[#BD3100] font-medium">
                       Some items are already taken. Remove them from the cart to place your order.
                     </p>
                   </div>

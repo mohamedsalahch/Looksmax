@@ -133,7 +133,7 @@ export default function OrdersPage() {
       case "processing": return "text-amber-300 bg-amber-500/10";
       case "confirmed": return "text-sky-300 bg-sky-500/10";
       case "shipping": return "text-violet-300 bg-violet-500/10";
-      case "delivered": return "text-emerald-300 bg-emerald-500/10";
+      case "delivered": return "text-[#6b6055] bg-[#f1ede8]";
       case "returned": return "text-orange-300 bg-orange-500/10";
       case "canceled": return "text-rose-300 bg-rose-500/10";
       default: return "text-text-secondary bg-bg-secondary";
@@ -258,7 +258,7 @@ export default function OrdersPage() {
                   <td className="px-4 py-3">
                     <span
                       className={`text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider ${
-                        o.isArchived ? "text-neutral-700 bg-neutral-200" : "text-emerald-300 bg-emerald-500/10"
+                        o.isArchived ? "text-neutral-700 bg-neutral-200" : "text-[#6b6055] bg-[#f1ede8]"
                       }`}
                     >
                       {o.isArchived ? "Archived" : "Active"}

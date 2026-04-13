@@ -25,6 +25,15 @@ interface OrderNotice {
   createdAt: string;
 }
 
+interface MessageNotice {
+  id: string;
+  messageId: string;
+  title: string;
+  detail: string;
+  createdAt: string;
+  read: boolean;
+}
+
 const navItems = [
   { name: "Dashboard", href: "/dashboard", icon: "📊" },
   { name: "Home Page", href: "/dashboard/homepage", icon: "🏠" },
@@ -45,6 +54,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [orderNotifications, setOrderNotifications] = useState<OrderNotice[]>([]);
+  const [messageNotifications, setMessageNotifications] = useState<MessageNotice[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const notificationsRef = useRef<HTMLDivElement | null>(null);
   const showNotificationsRef = useRef(showNotifications);
@@ -69,6 +79,27 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const saveReadOrderIds = (ids: Set<string>) => {
     if (typeof window === "undefined") return;
     window.localStorage.setItem("looksmax-admin-read-orders", JSON.stringify(Array.from(ids)));
+  };
+
+  const markMessageRead = async (notice: MessageNotice) => {
+    setMessageNotifications((current) =>
+      current.map((messageNotice) =>
+        messageNotice.messageId === notice.messageId ? { ...messageNotice, read: true } : messageNotice
+      )
+    );
+
+    try {
+      await fetch(
+        "/api/messages",
+        withAuthRequest({
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: notice.messageId, isRead: true }),
+        })
+      );
+    } catch {
+      // Keep the optimistic UI update. The messages page can reconcile later if needed.
+    }
   };
 
   useEffect(() => {
@@ -136,8 +167,42 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       }
     };
 
+    const loadUnreadMessages = async () => {
+      try {
+        const response = await fetch("/api/messages", withAuthRequest());
+        const data = (await response.json()) as { messages?: Array<{ _id: string; name: string; email: string; subject: string; message: string; isRead?: boolean; createdAt: string }> };
+        if (!active || !data) return;
+
+        const unreadMessages = (data.messages || []).filter((message) => !message.isRead);
+
+        setMessageNotifications((current) => {
+          const currentById = new Map(current.map((notice) => [notice.messageId, notice]));
+
+          return unreadMessages
+            .map((message) => {
+              const existing = currentById.get(message._id);
+              const createdAt = message.createdAt;
+
+              return {
+                id: existing?.id || message._id,
+                messageId: message._id,
+                title: message.subject || "New message",
+                detail: `${message.name || "Customer"} • ${message.email || "No email"}`,
+                createdAt,
+                read: existing?.read ?? false,
+              };
+            })
+            .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+        });
+      } catch {
+        // Leave the current notification state untouched on polling failures.
+      }
+    };
+
     loadProcessingOrders();
+    loadUnreadMessages();
     const interval = window.setInterval(loadProcessingOrders, 20000);
+    const messageInterval = window.setInterval(loadUnreadMessages, 20000);
     const handlePointerDown = (event: MouseEvent) => {
       if (!showNotificationsRef.current) return;
       if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
@@ -150,6 +215,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     return () => {
       active = false;
       window.clearInterval(interval);
+      window.clearInterval(messageInterval);
       document.removeEventListener("mousedown", handlePointerDown);
     };
   }, []);
@@ -168,11 +234,19 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   };
 
   const unreadNotificationCount = orderNotifications.filter((notice) => !notice.read).length;
+  const unreadMessageCount = messageNotifications.filter((notice) => !notice.read).length;
+  const unreadTotalCount = unreadNotificationCount + unreadMessageCount;
 
   const handleNotificationClick = (notice: OrderNotice) => {
     markNotificationRead(notice.id);
     setShowNotifications(false);
     router.push(`/dashboard/orders/${notice.orderId}`);
+  };
+
+  const handleMessageNotificationClick = (notice: MessageNotice) => {
+    void markMessageRead(notice);
+    setShowNotifications(false);
+    router.push("/dashboard/messages");
   };
 
   const handleLogout = async () => {
@@ -234,40 +308,75 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               >
                 <span className="text-sm">🔔</span>
                 <span>Notifications</span>
-                {unreadNotificationCount > 0 && (
+                {unreadTotalCount > 0 && (
                   <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[9px] font-semibold text-bg-primary">
-                    {unreadNotificationCount}
+                    {unreadTotalCount}
                   </span>
                 )}
               </button>
-              {showNotifications && orderNotifications.length > 0 && (
+              {showNotifications && (orderNotifications.length > 0 || messageNotifications.length > 0) && (
                 <div className="absolute right-0 top-full z-20 mt-2 w-72 border border-border bg-bg-secondary/95 p-3 shadow-lg shadow-black/10">
-                  <div className="mb-2 flex items-center justify-between">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">Processing Orders</p>
-                    <button
-                      type="button"
-                      onClick={() => setOrderNotifications([])}
-                      className="text-[10px] uppercase tracking-[0.18em] text-text-secondary hover:text-text-primary cursor-pointer"
-                    >
-                      Clear
-                    </button>
-                  </div>
-                  <div className="space-y-2">
-                    {orderNotifications.map((notice) => (
-                      <button
-                        key={notice.id}
-                        type="button"
-                        onClick={() => handleNotificationClick(notice)}
-                        className="flex w-full items-start gap-2 border border-border bg-bg-primary/80 px-3 py-2 text-left transition-colors hover:bg-bg-hover"
-                      >
-                        {!notice.read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-accent" />}
-                        <span className="min-w-0">
-                          <span className="block text-xs font-medium text-text-primary">{notice.title}</span>
-                          <span className="block text-[10px] text-text-secondary">{notice.detail}</span>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
+                  {orderNotifications.length > 0 && (
+                    <>
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">Processing Orders</p>
+                        <button
+                          type="button"
+                          onClick={() => setOrderNotifications([])}
+                          className="text-[10px] uppercase tracking-[0.18em] text-text-secondary hover:text-text-primary cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                      <div className="space-y-2">
+                        {orderNotifications.map((notice) => (
+                          <button
+                            key={notice.id}
+                            type="button"
+                            onClick={() => handleNotificationClick(notice)}
+                            className="flex w-full items-start gap-2 border border-border bg-bg-primary/80 px-3 py-2 text-left transition-colors hover:bg-bg-hover"
+                          >
+                            {!notice.read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-accent" />}
+                            <span className="min-w-0">
+                              <span className="block text-xs font-medium text-text-primary">{notice.title}</span>
+                              <span className="block text-[10px] text-text-secondary">{notice.detail}</span>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  {messageNotifications.length > 0 && (
+                    <div className={orderNotifications.length > 0 ? "mt-4" : ""}>
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">Unread Messages</p>
+                        <button
+                          type="button"
+                          onClick={() => setMessageNotifications([])}
+                          className="text-[10px] uppercase tracking-[0.18em] text-text-secondary hover:text-text-primary cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                      <div className="space-y-2">
+                        {messageNotifications.map((notice) => (
+                          <button
+                            key={notice.id}
+                            type="button"
+                            onClick={() => handleMessageNotificationClick(notice)}
+                            className="flex w-full items-start gap-2 border border-border bg-bg-primary/80 px-3 py-2 text-left transition-colors hover:bg-bg-hover"
+                          >
+                            {!notice.read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-accent" />}
+                            <span className="min-w-0">
+                              <span className="block text-xs font-medium text-text-primary">{notice.title}</span>
+                              <span className="block text-[10px] text-text-secondary">{notice.detail}</span>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

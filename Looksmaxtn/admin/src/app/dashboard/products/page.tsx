@@ -27,7 +27,7 @@ function getProductStatus(product: Product) {
     return { label: "Low Stock", className: "bg-warning/10 text-warning" };
   }
   if (product.availabilityStatus === "in-stock") {
-    return { label: "In Stock", className: "bg-success/10 text-success" };
+    return { label: "In Stock", className: "bg-[#f1ede8] text-[#6b6055]" };
   }
 
   if (product.productType === "perfume") {
@@ -37,11 +37,11 @@ function getProductStatus(product: Product) {
     if (product.stock <= 3) {
       return { label: "Low Stock", className: "bg-warning/10 text-warning" };
     }
-    return { label: "In Stock", className: "bg-success/10 text-success" };
+    return { label: "In Stock", className: "bg-[#f1ede8] text-[#6b6055]" };
   }
 
   return product.stock > 0
-    ? { label: "Available", className: "bg-success/10 text-success" }
+    ? { label: "Available", className: "bg-[#f1ede8] text-[#6b6055]" }
     : { label: "Reserved", className: "bg-warning/10 text-warning" };
 }
 

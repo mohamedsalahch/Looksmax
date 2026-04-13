@@ -27,6 +27,7 @@ export interface IUser extends Document {
   email: string;
   password: string;
   role: "user" | "admin";
+  googleId?: string | null;
   isBlocked?: boolean;
   emailVerified?: boolean;
   emailVerificationTokenHash?: string | null;
@@ -75,6 +76,7 @@ const userSchema = new Schema<IUser>(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: true },
     role: { type: String, enum: ["user", "admin"], default: "user" },
+    googleId: { type: String, unique: true, sparse: true },
     isBlocked: { type: Boolean, default: false },
     emailVerified: { type: Boolean, default: true },
     emailVerificationTokenHash: { type: String, default: null },

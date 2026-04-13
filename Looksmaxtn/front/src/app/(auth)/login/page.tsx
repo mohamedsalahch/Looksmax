@@ -1,6 +1,7 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import Script from "next/script";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/providers/AuthContext";
@@ -12,10 +13,14 @@ function LoginPageContent() {
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
-  const { login, resendVerification } = useAuth();
+  const [googleReady, setGoogleReady] = useState(false);
+  const googleButtonRef = useRef<HTMLDivElement | null>(null);
+  const { login, loginWithGoogle, resendVerification } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next") || "/";
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
+  const googleConfigured = Boolean(googleClientId);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -26,6 +31,48 @@ function LoginPageContent() {
 
     return () => window.clearInterval(timer);
   }, [resendCooldown]);
+
+  useEffect(() => {
+    if (!googleReady || !googleConfigured || !googleButtonRef.current) return;
+
+    const google = (window as Window & { google?: any }).google;
+    if (!google?.accounts?.id) return;
+
+    google.accounts.id.initialize({
+      client_id: googleClientId,
+      callback: async (response: { credential?: string }) => {
+        const credential = String(response?.credential || "");
+        if (!credential) {
+          setError("Google sign-in failed. Please try again.");
+          return;
+        }
+
+        setError("");
+        setInfo("");
+        setLoading(true);
+
+        const result = await loginWithGoogle(credential);
+        setLoading(false);
+
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+
+        router.push(nextPath.startsWith("/") ? nextPath : "/");
+      },
+    });
+
+    googleButtonRef.current.innerHTML = "";
+    google.accounts.id.renderButton(googleButtonRef.current, {
+      theme: "outline",
+      size: "large",
+      width: googleButtonRef.current.offsetWidth || 384,
+      shape: "rectangular",
+      text: "signin_with",
+      logo_alignment: "left",
+    });
+  }, [googleClientId, googleConfigured, googleReady, loginWithGoogle, nextPath, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,7 +128,7 @@ function LoginPageContent() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-xs px-4 py-3 rounded">
+          <div className="border border-[#BD3100] bg-[#faf3f2] px-4 py-3 text-xs text-[#BD3100]">
             {error}
           </div>
         )}
@@ -127,6 +174,29 @@ function LoginPageContent() {
           {loading ? "Signing in..." : "Sign In"}
         </button>
       </form>
+
+      {googleConfigured && (
+        <div className="mt-6">
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-border-color" />
+            <span className="text-[10px] uppercase tracking-[0.24em] text-text-secondary">
+              or continue with
+            </span>
+            <div className="h-px flex-1 bg-border-color" />
+          </div>
+          <Script
+            src="https://accounts.google.com/gsi/client"
+            strategy="afterInteractive"
+            onLoad={() => setGoogleReady(true)}
+          />
+          <div ref={googleButtonRef} className="mt-4 min-h-[48px] w-full overflow-hidden" />
+        </div>
+      )}
+      {!googleConfigured && (
+        <p className="mt-6 text-center text-[10px] uppercase tracking-[0.22em] text-text-secondary">
+          Google sign-in is not configured yet.
+        </p>
+      )}
 
       {error.toLowerCase().includes("verify your email") && (
         <div className="mt-4 border border-border-color bg-surface/60 px-4 py-3">

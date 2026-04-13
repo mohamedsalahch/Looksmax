@@ -54,7 +54,7 @@ function getProductStatus(product: ProductDetail) {
     return { label: "Low Stock", className: "bg-warning/10 text-warning" };
   }
   if (product.availabilityStatus === "in-stock") {
-    return { label: "In Stock", className: "bg-success/10 text-success" };
+    return { label: "In Stock", className: "bg-[#f1ede8] text-[#6b6055]" };
   }
 
   if (product.productType === "perfume") {
@@ -64,11 +64,11 @@ function getProductStatus(product: ProductDetail) {
     if (product.stock <= 3) {
       return { label: "Low Stock", className: "bg-warning/10 text-warning" };
     }
-    return { label: "In Stock", className: "bg-success/10 text-success" };
+    return { label: "In Stock", className: "bg-[#f1ede8] text-[#6b6055]" };
   }
 
   return product.stock > 0
-    ? { label: "Available", className: "bg-success/10 text-success" }
+    ? { label: "Available", className: "bg-[#f1ede8] text-[#6b6055]" }
     : { label: "Reserved", className: "bg-warning/10 text-warning" };
 }
 
@@ -201,13 +201,13 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
               <span className={`text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${status.className}`}>
                 {status.label}
               </span>
-              <span
-                className={`text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${
-                  product.isActive === false || product.visibilityStatus === "inactive"
-                    ? "bg-neutral-200 text-neutral-700"
-                    : "bg-success/10 text-success"
-                }`}
-              >
+                <span
+                  className={`text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${
+                    product.isActive === false || product.visibilityStatus === "inactive"
+                      ? "bg-neutral-200 text-neutral-700"
+                      : "bg-[#f1ede8] text-[#6b6055]"
+                  }`}
+                >
                 {product.isActive === false || product.visibilityStatus === "inactive" ? "Inactive" : "Active"}
               </span>
             </div>

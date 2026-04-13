@@ -62,11 +62,13 @@ export default function ContactPage() {
           {/* Form */}
           <div className="md:col-span-2">
             {status && (
-              <div className={`mb-6 px-4 py-3 text-xs border ${
-                status.type === "success"
-                  ? "bg-green-50 border-green-200 text-green-700"
-                  : "bg-red-50 border-red-200 text-red-700"
-              }`}>
+                <div
+                className={`mb-6 border px-4 py-3 text-xs ${
+                  status.type === "success"
+                    ? "border-[#d8c9b8] bg-[#f1ede8] text-[#6b6055]"
+                    : "border-[#BD3100] bg-[#faf3f2] text-[#BD3100]"
+                }`}
+              >
                 {status.text}
               </div>
             )}

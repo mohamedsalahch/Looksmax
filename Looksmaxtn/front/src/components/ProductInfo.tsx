@@ -257,7 +257,7 @@ export default function ProductInfo({
         </div>
       )}
 
-      {reservationError && <p className="text-xs text-red-600">{reservationError}</p>}
+      {reservationError && <p className="text-xs text-[#BD3100]">{reservationError}</p>}
 
       <div className="flex items-center justify-between gap-4 border border-border-color bg-surface/40 px-4 py-3">
         <div>

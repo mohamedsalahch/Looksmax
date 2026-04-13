@@ -1483,7 +1483,7 @@ export default function OutfitStudioPage() {
                                 )}
 
                                 {generationError && (
-                                    <div className="bg-danger/10 px-3 py-3 text-xs text-danger">
+                                    <div className="border border-[#BD3100] bg-[#faf3f2] px-3 py-3 text-xs text-[#BD3100]">
                                         {generationError}
                                     </div>
                                 )}

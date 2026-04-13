@@ -120,7 +120,7 @@ export default function ModelViewPage({ params }: { params: Promise<{ id: string
       {editing && (
         <form onSubmit={handleUpdate} className="bg-bg-card border border-border rounded p-5 space-y-4">
           {error && (
-            <div className="bg-danger/10 border border-danger/30 text-danger text-xs px-4 py-3 rounded">
+            <div className="border border-[#BD3100] bg-[#faf3f2] px-4 py-3 text-xs text-[#BD3100]">
               {error}
             </div>
           )}

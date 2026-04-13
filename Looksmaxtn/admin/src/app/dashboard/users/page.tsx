@@ -248,7 +248,7 @@ export default function UsersPage() {
                           ? "text-danger bg-danger/10"
                           : u.emailVerified === false
                             ? "text-warning bg-warning/10"
-                            : "text-success bg-success/10"
+                            : "text-[#6b6055] bg-[#f1ede8]"
                       }`}
                     >
                       {u.isBlocked
@@ -276,7 +276,7 @@ export default function UsersPage() {
                         <button
                           onClick={() => handleToggleBlock(u)}
                           className={`text-[10px] uppercase font-medium cursor-pointer ${
-                            u.isBlocked ? "text-success hover:text-success/80" : "text-warning hover:text-warning/80"
+                            u.isBlocked ? "text-[#6b6055] hover:text-[#5a4f46]" : "text-warning hover:text-warning/80"
                           }`}
                         >
                           {u.isBlocked ? "Unblock" : "Block"}

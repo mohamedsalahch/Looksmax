@@ -66,8 +66,8 @@ export default function AddressSettingsPage() {
           Billing Address
         </h2>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {error && <div className="bg-red-50 border border-red-200 text-red-700 text-xs px-4 py-3 rounded">{error}</div>}
-          {success && <div className="bg-green-50 border border-green-200 text-green-700 text-xs px-4 py-3 rounded">{success}</div>}
+          {error && <div className="border border-[#BD3100] bg-[#faf3f2] px-4 py-3 text-xs text-[#BD3100]">{error}</div>}
+          {success && <div className="border border-[#d8c9b8] bg-[#f1ede8] px-4 py-3 text-xs text-[#6b6055]">{success}</div>}
           <div>
             <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">Street Address</label>
             <input type="text" value={address.street} onChange={(e) => setAddress({ ...address, street: e.target.value })} className="w-full border border-border-color bg-transparent px-4 py-3 text-sm" />

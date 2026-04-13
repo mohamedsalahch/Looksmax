@@ -216,12 +216,12 @@ export default function SettingsPage() {
         </h2>
         <form onSubmit={handleBodyProfileUpdate} className="max-w-3xl space-y-4">
           {bodyError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-xs px-4 py-3 rounded">
+            <div className="border border-[#BD3100] bg-[#faf3f2] px-4 py-3 text-xs text-[#BD3100]">
               {bodyError}
             </div>
           )}
             {bodySuccess && (
-            <div className="bg-[#f1ede8] border border-[#d8c9b8] text-[#6b6055] text-xs px-4 py-3 rounded">
+            <div className="border border-[#d8c9b8] bg-[#f1ede8] px-4 py-3 text-xs text-[#6b6055]">
               {bodySuccess}
             </div>
           )}

@@ -2,15 +2,18 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useAuth } from "@/providers/AuthContext";
 import { withAuthRequest } from "@/lib/authClient";
 
 export default function PasswordSettingsPage() {
+  const { user } = useAuth();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmNew, setConfirmNew] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const isGoogleAccount = Boolean(user?.googleId);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,7 +31,10 @@ export default function PasswordSettingsPage() {
         ...withAuthRequest({
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ currentPassword, newPassword }),
+          body: JSON.stringify({
+            currentPassword: isGoogleAccount ? undefined : currentPassword,
+            newPassword,
+          }),
         }),
       });
       const data = await res.json();
@@ -56,12 +62,19 @@ export default function PasswordSettingsPage() {
           Change Password
         </h2>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {error && <div className="bg-red-50 border border-red-200 text-red-700 text-xs px-4 py-3 rounded">{error}</div>}
-          {success && <div className="bg-green-50 border border-green-200 text-green-700 text-xs px-4 py-3 rounded">{success}</div>}
-          <div>
-            <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">Current Password</label>
-            <input type="password" required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="w-full border border-border-color bg-transparent px-4 py-3 text-sm" />
-          </div>
+          {error && <div className="border border-[#BD3100] bg-[#faf3f2] px-4 py-3 text-xs text-[#BD3100]">{error}</div>}
+          {success && <div className="border border-[#d8c9b8] bg-[#f1ede8] px-4 py-3 text-xs text-[#6b6055]">{success}</div>}
+          {!isGoogleAccount && (
+            <div>
+              <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">Current Password</label>
+              <input type="password" required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="w-full border border-border-color bg-transparent px-4 py-3 text-sm" />
+            </div>
+          )}
+          {isGoogleAccount && (
+            <div className="border border-[#d8c9b8] bg-[#f1ede8] px-4 py-3 text-xs text-[#6b6055]">
+              This account uses Google sign-in. You can create your first password without entering the current one.
+            </div>
+          )}
           <div>
             <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">New Password</label>
             <input type="password" required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full border border-border-color bg-transparent px-4 py-3 text-sm" />

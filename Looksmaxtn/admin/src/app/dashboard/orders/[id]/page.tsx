@@ -84,7 +84,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       case "processing": return "text-amber-300 bg-amber-500/10";
       case "confirmed": return "text-sky-300 bg-sky-500/10";
       case "shipping": return "text-violet-300 bg-violet-500/10";
-      case "delivered": return "text-emerald-300 bg-emerald-500/10";
+      case "delivered": return "text-[#6b6055] bg-[#f1ede8]";
       case "returned": return "text-orange-300 bg-orange-500/10";
       case "canceled": return "text-rose-300 bg-rose-500/10";
       default: return "text-text-secondary bg-bg-secondary";
@@ -110,7 +110,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               Archived
             </span>
           ) : (
-            <span className="text-[10px] px-3 py-1 font-medium uppercase tracking-wider text-emerald-300 bg-emerald-500/10">
+            <span className="text-[10px] px-3 py-1 font-medium uppercase tracking-wider text-[#6b6055] bg-[#f1ede8]">
               Active
             </span>
           )}
