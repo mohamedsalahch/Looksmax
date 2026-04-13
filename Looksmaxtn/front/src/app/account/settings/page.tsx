@@ -82,6 +82,8 @@ export default function SettingsPage() {
   const remainingGenerations = Math.max(generationLimit - generationsUsed, 0);
   // Show enhanced column only if there's an enhanced image OR one is being generated
   const showEnhanced = hasEnhanced || (hasOriginal && imageEnhancing);
+  // Hide original once enhanced is ready
+  const showOriginal = !hasEnhanced || imageEnhancing;
 
   const handlePhotoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -246,7 +248,8 @@ export default function SettingsPage() {
           <div className={`grid grid-cols-1 md:grid-cols-[auto_1fr] gap-6 items-start transition-all duration-300 ${imageEnhancing ? "pointer-events-none select-none blur-[2px] opacity-60" : ""}`}>
             <div className="flex flex-col items-center gap-3">
               <div className="flex justify-center gap-3">
-                {/* Original */}
+                {/* Original — hidden once enhanced photo is ready */}
+                {showOriginal && (
                 <div className="w-[160px] space-y-1.5">
                   <p className="text-[10px] uppercase tracking-wider text-text-secondary text-center">Original</p>
                   <div className="aspect-[4/5] border border-border-color bg-hover overflow-hidden relative group">
@@ -272,7 +275,7 @@ export default function SettingsPage() {
                           className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center bg-black text-sm text-white opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"
                           aria-label="Delete original photo"
                         >
-                          {deletingPhoto === "original" ? "..." : "×"}
+                          {deletingPhoto === "original" ? "..." : "\u00d7"}
                         </button>
                       </>
                     ) : (
@@ -282,6 +285,7 @@ export default function SettingsPage() {
                     )}
                   </div>
                 </div>
+                )}
 
                 {/* Enhanced — collapses smoothly */}
                 <div
@@ -302,9 +306,7 @@ export default function SettingsPage() {
                           <img
                             src={enhancedImage}
                             alt="Enhanced photo"
-                            className={`w-full h-full object-cover transition-opacity duration-300 ${
-                              imageEnhancing ? "blur-sm opacity-60" : ""
-                            }`}
+                            className="w-full h-full object-cover"
                           />
                           <button
                             type="button"
@@ -321,14 +323,8 @@ export default function SettingsPage() {
                             className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center bg-black text-sm text-white opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"
                             aria-label="Delete enhanced photo"
                           >
-                            {deletingPhoto === "enhanced" ? "..." : "×"}
+                            {deletingPhoto === "enhanced" ? "..." : "\u00d7"}
                           </button>
-                          {imageEnhancing && (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-                              <div className="h-6 w-6 animate-spin rounded-full border-2 border-border-color border-t-foreground" />
-                              <span className="text-[9px] uppercase tracking-wider text-text-secondary">Updating</span>
-                            </div>
-                          )}
                         </>
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
