@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/providers/AuthContext";
 
@@ -12,7 +12,20 @@ export default function SignupPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
-  const { signup } = useAuth();
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMessage, setResendMessage] = useState("");
+  const { signup, resendVerification } = useAuth();
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+
+    const timer = window.setInterval(() => {
+      setResendCooldown((current) => Math.max(0, current - 1));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [resendCooldown]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,11 +49,32 @@ export default function SignupPage() {
       setError(result.error);
     } else {
       setSuccess(result.message || "Check your email to verify your account.");
-      setName("");
-      setEmail("");
       setPassword("");
       setConfirmPassword("");
+      setResendCooldown(60);
+      setResendMessage("");
     }
+  };
+
+  const handleResendVerification = async () => {
+    if (!email || resendCooldown > 0 || resendLoading) return;
+
+    setResendLoading(true);
+    setResendMessage("");
+
+    const result = await resendVerification(email);
+    setResendLoading(false);
+
+    if (result.error) {
+      setError(result.error);
+      if (typeof result.retryAfterSeconds === "number") {
+        setResendCooldown(result.retryAfterSeconds);
+      }
+      return;
+    }
+
+    setResendMessage(result.message || "A new verification email has been sent.");
+    setResendCooldown(60);
   };
 
   return (
@@ -63,11 +97,42 @@ export default function SignupPage() {
             {error}
           </div>
         )}
-        {success && (
-          <div className="bg-[#f1ede8] border border-[#d8c9b8] text-[#6b6055] text-xs px-4 py-3 rounded">
+      {success && (
+        <div className="space-y-3">
+          <div className="bg-[#f1ede8] border border-[#d8c9b8] text-[#6b6055] text-xs px-4 py-3">
             {success}
           </div>
-        )}
+          {email && (
+            <div className="border border-border-color bg-surface/60 px-4 py-3">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-text-secondary">
+                Resend link
+              </p>
+              <p className="mt-1 text-[11px] text-text-secondary">
+                {resendCooldown > 0
+                  ? `You can request a new link in ${resendCooldown}s.`
+                  : "Request a fresh verification link now."}
+              </p>
+              <button
+                type="button"
+                onClick={handleResendVerification}
+                disabled={resendCooldown > 0 || resendLoading}
+                className="mt-3 w-full border border-border-color px-3 py-2 text-[10px] uppercase tracking-[0.22em] text-foreground transition-colors hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {resendLoading
+                  ? "Sending..."
+                  : resendCooldown > 0
+                    ? `Resend in ${resendCooldown}s`
+                    : "Resend verification email"}
+              </button>
+              {resendMessage && (
+                <p className="mt-2 text-[11px] text-[#6b6055]">
+                  {resendMessage}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
         <div>
           <label className="block text-xs text-text-secondary uppercase tracking-wider mb-2">
