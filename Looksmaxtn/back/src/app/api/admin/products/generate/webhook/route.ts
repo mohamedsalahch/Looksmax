@@ -26,8 +26,9 @@ export async function POST(req: NextRequest) {
     }
 
     if (body.error) {
+      console.error(`[product-webhook] Generation service error for job ${jobId}: ${body.error}`);
       job.status = "failed";
-      job.error = body.error;
+      job.error = "Generation failed.";
       await job.save();
       return NextResponse.json({ ok: true });
     }

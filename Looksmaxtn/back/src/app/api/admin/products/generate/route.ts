@@ -124,11 +124,19 @@ export async function POST(req: NextRequest) {
     const endpoint = normalizedType === "shoes" ? `${normalizedBaseUrl}/api/generate-shoes` : `${normalizedBaseUrl}/api/generate`;
 
     // 2. Trigger Python (Async)
-    await fetch(endpoint, {
+    const triggerResponse = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
+
+    if (!triggerResponse.ok) {
+      await ProductGenerationJob.findByIdAndUpdate(job._id, {
+        status: "failed",
+        error: "Failed to reach generation service.",
+      });
+      return NextResponse.json({ error: "Generation service unreachable.", job_id: job._id }, { status: 502 });
+    }
 
     // 3. Return the job immediately
     return NextResponse.json({ job_id: job._id, status: "processing" });

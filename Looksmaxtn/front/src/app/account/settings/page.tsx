@@ -34,10 +34,15 @@ export default function SettingsPage() {
   const [bodyLoading, setBodyLoading] = useState(false);
   const [imageEnhancing, setImageEnhancing] = useState(false);
   const [enhancedImage, setEnhancedImage] = useState("");
+  const [enhanceError, setEnhanceError] = useState("");
   const [zoomedImage, setZoomedImage] = useState<{ src: string; alt: string } | null>(null);
   const [deletingPhoto, setDeletingPhoto] = useState<"original" | "enhanced" | null>(null);
 
   useEffect(() => {
+    const wasEnhancing = imageEnhancing;
+    const nextEnhancing = Boolean(user?.bodyProfile?.imageEnhancing);
+    const nextEnhancedImage = user?.bodyProfile?.profileImageEnhanced || "";
+
     setBodyProfile({
       heightCm: user?.bodyProfile?.heightCm || "",
       weightKg: user?.bodyProfile?.weightKg || "",
@@ -49,8 +54,13 @@ export default function SettingsPage() {
       outfitGenerationCount: Number(user?.bodyProfile?.outfitGenerationCount || 0),
       gender: normalizeGender(user?.bodyProfile?.gender),
     });
-    setImageEnhancing(Boolean(user?.bodyProfile?.imageEnhancing));
-    setEnhancedImage(user?.bodyProfile?.profileImageEnhanced || "");
+    setImageEnhancing(nextEnhancing);
+    setEnhancedImage(nextEnhancedImage);
+
+    // Detect enhancement failure: was enhancing, now stopped, but no enhanced image
+    if (wasEnhancing && !nextEnhancing && !nextEnhancedImage) {
+      setEnhanceError("Photo enhancement failed. Please try uploading again.");
+    }
   }, [user]);
 
   // Poll while enhancing
@@ -78,6 +88,7 @@ export default function SettingsPage() {
     if (!file) return;
 
     setBodyError("");
+    setEnhanceError("");
     setImageEnhancing(true);
 
     const localPreview = URL.createObjectURL(file);
@@ -225,7 +236,14 @@ export default function SettingsPage() {
               {bodySuccess}
             </div>
           )}
-          <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-6 items-start">
+          <div className="relative">
+            {imageEnhancing && (
+              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-background/60 backdrop-blur-sm">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-border-color border-t-foreground" />
+                <span className="text-[11px] uppercase tracking-[0.18em] text-text-secondary">Enhancing photo...</span>
+              </div>
+            )}
+          <div className={`grid grid-cols-1 md:grid-cols-[auto_1fr] gap-6 items-start transition-all duration-300 ${imageEnhancing ? "pointer-events-none select-none blur-[2px] opacity-60" : ""}`}>
             <div className="flex flex-col items-center gap-3">
               <div className="flex justify-center gap-3">
                 {/* Original */}
@@ -354,6 +372,12 @@ export default function SettingsPage() {
                   : "Generation limit reached"}
               </p>
 
+              {enhanceError && (
+                <p className="text-[10px] uppercase tracking-[0.18em] text-[#BD3100] text-center">
+                  {enhanceError}
+                </p>
+              )}
+
             </div>
 
             <div className="space-y-4">
@@ -447,12 +471,13 @@ export default function SettingsPage() {
               </div>
               <button
                 type="submit"
-                disabled={bodyLoading}
+                disabled={bodyLoading || imageEnhancing}
                 className="bg-foreground text-background px-6 py-3 text-xs font-medium tracking-wide uppercase hover:bg-accent transition-colors cursor-pointer disabled:opacity-50"
               >
                 {bodyLoading ? "Saving..." : "Save Studio Profile"}
               </button>
             </div>
+          </div>
           </div>
         </form>
       </div>

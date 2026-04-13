@@ -97,6 +97,7 @@ function getPreferredIpv4Host() {
 }
 
 export async function POST(req: NextRequest) {
+  let job: InstanceType<typeof OutfitGenerationJob> | null = null;
   try {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -273,7 +274,7 @@ export async function POST(req: NextRequest) {
     };
 
     await dbConnect();
-    const job = new OutfitGenerationJob({
+    job = new OutfitGenerationJob({
       user: new mongoose.Types.ObjectId(session.userId),
       status: "processing",
       images: { front: "", back: "" },
@@ -354,6 +355,12 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error("[generate_outfit] route error", error);
+    if (job) {
+      await OutfitGenerationJob.findByIdAndUpdate(job._id, {
+        status: "failed",
+        errorMessage: "Generation request failed.",
+      });
+    }
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

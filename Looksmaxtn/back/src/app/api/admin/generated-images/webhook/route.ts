@@ -29,7 +29,9 @@ export async function POST(req: NextRequest) {
     }
 
     if (body.error) {
+      console.error(`[generated-images-webhook] Generation service error for job ${jobId}: ${body.error}`);
       asset.status = "failed";
+      asset.errorMessage = "Generation failed.";
       await asset.save();
       return NextResponse.json({ ok: true });
     }
