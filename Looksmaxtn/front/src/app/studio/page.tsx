@@ -125,6 +125,40 @@ const ZONE_PREVIEW_POSITIONS: Record<
     },
 };
 
+async function copyShareLink(text: string) {
+    if (!text) return false;
+
+    try {
+        if (typeof navigator !== "undefined" && navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+            return true;
+        }
+    } catch {
+        // Fall through to the legacy copy path below.
+    }
+
+    if (typeof document === "undefined") return false;
+
+    const input = document.createElement("input");
+    input.value = text;
+    input.setAttribute("readonly", "true");
+    input.style.position = "fixed";
+    input.style.left = "-9999px";
+    document.body.appendChild(input);
+    input.select();
+
+    try {
+        const copied = document.execCommand("copy");
+        document.body.removeChild(input);
+        if (copied) return true;
+    } catch {
+        document.body.removeChild(input);
+    }
+
+    window.prompt("Copy share link", text);
+    return false;
+}
+
 const ZONE_DETAILS: Record<
     (typeof BODY_ZONES)[number]["id"],
     { title: string; type: string; fit: string; season: string; care: string }
@@ -1032,7 +1066,7 @@ export default function OutfitStudioPage() {
     const handleShareOutfit = async (id: string) => {
         setSharingOutfitId(id);
         try {
-            const response = await fetch(`/api/outfits/${id}/share`, {method: "POST"});
+            const response = await fetch(`/api/outfits/${id}/share`, withAuthRequest({ method: "POST" }));
             const data = await response.json();
             if (!response.ok) {
                 setGenerationError(data.error || "Unable to share outfit.");
@@ -1040,10 +1074,13 @@ export default function OutfitStudioPage() {
                 return;
             }
 
-            await navigator.clipboard.writeText(String(data.shareUrl || ""));
+            const copied = await copyShareLink(String(data.shareUrl || ""));
+            if (!copied) {
+                setGenerationError(`Share link created: ${data.shareUrl || ""}`);
+            }
             loadSavedOutfits();
         } catch {
-            setGenerationError("Unable to copy share link.");
+            setGenerationError("Unable to share outfit.");
         }
         setSharingOutfitId("");
     };
