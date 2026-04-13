@@ -29,3 +29,4 @@ class WebhookPayload(BaseModel):
     job_id: str
     view: str  # "front" or "back"
     image: str  # base64 encoded image
+    error: str | None = None  # error message if generation failed

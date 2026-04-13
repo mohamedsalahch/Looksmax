@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks
 from app.models.requests import ClothesRequest
 from app.models.responses import GenerationResponse, ImageResult, OutfitResponse
 from app.services.generator import ImageGenerator
-from app.services.webhook import send_webhook
+from app.services.webhook import send_webhook, send_error_webhook
 
 router = APIRouter(prefix="/api", tags=["clothes"])
 logger = logging.getLogger(__name__)
@@ -48,6 +48,7 @@ async def process_clothes_generation(job_id: str, webhook_url: str, request: Clo
 
     except Exception as e:
         logger.error(f"Job {job_id}: Clothes error: {str(e)}")
+        await send_error_webhook(webhook_url, job_id, f"Clothes generation failed: {str(e)}")
 
 
 @router.post("/generate")

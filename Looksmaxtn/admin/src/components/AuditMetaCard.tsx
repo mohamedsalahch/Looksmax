@@ -12,6 +12,7 @@ interface AuditMetaCardProps {
   createdBy?: AuditActor | null;
   updatedBy?: AuditActor | null;
   title?: string;
+  className?: string;
 }
 
 function formatDate(value?: string) {
@@ -33,9 +34,10 @@ export default function AuditMetaCard({
   createdBy,
   updatedBy,
   title = "Traceability",
+  className = "",
 }: AuditMetaCardProps) {
   return (
-    <div className="bg-bg-card border border-border rounded p-4">
+    <div className={`bg-bg-card border border-border p-4 ${className}`.trim()}>
       <p className="text-xs text-text-secondary uppercase tracking-wider mb-3">{title}</p>
       <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>

@@ -298,7 +298,7 @@ export default function HomePageEditor() {
 
   return (
     <div className="max-w-6xl space-y-6">
-      <div className="rounded-[28px] border border-border bg-gradient-to-br from-bg-card via-bg-card to-bg-secondary/60 p-6 md:p-8">
+      <div className="border border-border bg-gradient-to-br from-bg-card via-bg-card to-bg-secondary/60 p-6 md:p-8">
         <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
           <div className="max-w-2xl space-y-2">
             <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-text-secondary">
@@ -314,17 +314,17 @@ export default function HomePageEditor() {
           </div>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl border border-border bg-bg-primary/65 px-4 py-3">
+            <div className="border border-border bg-bg-primary/65 px-4 py-3">
               <p className="text-[10px] uppercase tracking-[0.22em] text-text-secondary">Lookbook</p>
               <p className="mt-2 text-xl font-semibold text-text-primary">{lookbookCount}</p>
             </div>
-            <div className="rounded-2xl border border-border bg-bg-primary/65 px-4 py-3">
+            <div className="border border-border bg-bg-primary/65 px-4 py-3">
               <p className="text-[10px] uppercase tracking-[0.22em] text-text-secondary">Hero</p>
               <p className="mt-2 text-xl font-semibold text-text-primary">
                 {heroPreview ? "Ready" : "Empty"}
               </p>
             </div>
-            <div className="rounded-2xl border border-border bg-bg-primary/65 px-4 py-3 sm:col-span-1 col-span-2">
+            <div className="border border-border bg-bg-primary/65 px-4 py-3 sm:col-span-1 col-span-2">
               <p className="text-[10px] uppercase tracking-[0.22em] text-text-secondary">Editorial</p>
               <p className="mt-2 text-xl font-semibold text-text-primary">
                 {editorialPreview ? "Ready" : "Empty"}
@@ -349,7 +349,7 @@ export default function HomePageEditor() {
           </div>
         )}
 
-        <section className="rounded-[28px] border border-border bg-bg-card p-6 shadow-sm shadow-black/5 space-y-5">
+        <section className="border border-border bg-bg-card p-6 shadow-sm shadow-black/5 space-y-5">
           <SectionHeader
             eyebrow="01"
             title="Hero"
@@ -364,7 +364,7 @@ export default function HomePageEditor() {
                 value={content.hero.eyebrow}
                 onChange={(e) => setContent({ ...content, hero: { ...content.hero, eyebrow: e.target.value } })}
                 placeholder="Eyebrow"
-                className="w-full rounded-2xl bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
+                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
               />
               </div>
               <div className="space-y-2">
@@ -374,7 +374,7 @@ export default function HomePageEditor() {
                 value={content.hero.title}
                 onChange={(e) => setContent({ ...content, hero: { ...content.hero, title: e.target.value } })}
                 placeholder="Title"
-                className="w-full rounded-2xl bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
+                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
               />
               </div>
               <div className="space-y-2">
@@ -384,7 +384,7 @@ export default function HomePageEditor() {
                 onChange={(e) => setContent({ ...content, hero: { ...content.hero, subtitle: e.target.value } })}
                 placeholder="Subtitle"
                 rows={4}
-                className="w-full rounded-2xl bg-bg-secondary border border-border px-4 py-3 text-sm resize-none transition-colors focus:border-accent"
+                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm resize-none transition-colors focus:border-accent"
               />
               </div>
               <div className="space-y-2">
@@ -393,11 +393,11 @@ export default function HomePageEditor() {
                 type="file"
                 accept="image/*"
                 onChange={(e) => setHeroFile(e.target.files?.[0] || null)}
-                className="w-full rounded-2xl border border-dashed border-border bg-bg-secondary px-4 py-3 text-sm file:mr-3 file:rounded-xl file:border-0 file:bg-accent/10 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-accent"
+                className="w-full border border-dashed border-border bg-bg-secondary px-4 py-3 text-sm file:mr-3 file:border-0 file:bg-accent/10 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-accent"
               />
               </div>
             </div>
-            <div className="overflow-hidden rounded-[28px] border border-border bg-bg-secondary">
+            <div className="overflow-hidden border border-border bg-bg-secondary">
               <div className="flex items-center justify-between border-b border-border px-4 py-3">
                 <div>
                   <p className="text-xs font-medium text-text-primary">Live preview</p>
@@ -417,7 +417,7 @@ export default function HomePageEditor() {
           </div>
         </section>
 
-        <section className="rounded-[28px] border border-border bg-bg-card p-6 shadow-sm shadow-black/5 space-y-5">
+        <section className="border border-border bg-bg-card p-6 shadow-sm shadow-black/5 space-y-5">
           <SectionHeader
             eyebrow="02"
             title="Brand Story"
@@ -431,7 +431,7 @@ export default function HomePageEditor() {
               value={content.brandStory.eyebrow}
               onChange={(e) => setContent({ ...content, brandStory: { ...content.brandStory, eyebrow: e.target.value } })}
               placeholder="Section eyebrow"
-              className="w-full rounded-2xl bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
+              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
             />
             </div>
             <div className="space-y-2">
@@ -441,7 +441,7 @@ export default function HomePageEditor() {
               value={content.brandStory.title}
               onChange={(e) => setContent({ ...content, brandStory: { ...content.brandStory, title: e.target.value } })}
               placeholder="Section title"
-              className="w-full rounded-2xl bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
+              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
             />
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
@@ -452,7 +452,7 @@ export default function HomePageEditor() {
               onChange={(e) => setContent({ ...content, brandStory: { ...content.brandStory, paragraphOne: e.target.value } })}
               placeholder="First paragraph"
               rows={4}
-              className="w-full rounded-2xl bg-bg-secondary border border-border px-4 py-3 text-sm resize-none transition-colors focus:border-accent"
+              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm resize-none transition-colors focus:border-accent"
             />
               </div>
               <div className="space-y-2">
@@ -462,25 +462,25 @@ export default function HomePageEditor() {
               onChange={(e) => setContent({ ...content, brandStory: { ...content.brandStory, paragraphTwo: e.target.value } })}
               placeholder="Second paragraph"
               rows={4}
-              className="w-full rounded-2xl bg-bg-secondary border border-border px-4 py-3 text-sm resize-none transition-colors focus:border-accent"
+              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm resize-none transition-colors focus:border-accent"
             />
               </div>
             </div>
-            <div className="rounded-2xl border border-border bg-bg-secondary/40 p-4">
+            <div className="border border-border bg-bg-secondary/40 p-4">
               <div className="mb-3">
                 <p className="text-sm font-medium text-text-primary">Brand stats</p>
                 <p className="text-xs text-text-secondary">Three short proof points shown on the homepage.</p>
               </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {content.brandStory.stats.map((stat, index) => (
-                <div key={index} className="space-y-2 rounded-2xl border border-border bg-bg-card p-3">
+                <div key={index} className="space-y-2 border border-border bg-bg-card p-3">
                   <FieldLabel>Value</FieldLabel>
                   <input
                     type="text"
                     value={stat.value}
                     onChange={(e) => updateStat(index, "value", e.target.value)}
                     placeholder="Value"
-                    className="w-full rounded-2xl bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
+                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
                   />
                   <FieldLabel>Label</FieldLabel>
                   <input
@@ -488,7 +488,7 @@ export default function HomePageEditor() {
                     value={stat.label}
                     onChange={(e) => updateStat(index, "label", e.target.value)}
                     placeholder="Label"
-                    className="w-full rounded-2xl bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
+                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
                   />
                 </div>
               ))}
@@ -497,7 +497,7 @@ export default function HomePageEditor() {
           </div>
         </section>
 
-        <section className="rounded-[28px] border border-border bg-bg-card p-6 shadow-sm shadow-black/5 space-y-5">
+        <section className="border border-border bg-bg-card p-6 shadow-sm shadow-black/5 space-y-5">
           <SectionHeader
             eyebrow="03"
             title="Lookbook"
@@ -510,7 +510,7 @@ export default function HomePageEditor() {
             value={content.lookbook.caption}
             onChange={(e) => setContent({ ...content, lookbook: { ...content.lookbook, caption: e.target.value } })}
             placeholder="Lookbook caption"
-            className="w-full rounded-2xl bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
+            className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
           />
           </div>
           <div className="space-y-2">
@@ -520,20 +520,20 @@ export default function HomePageEditor() {
             accept="image/*"
             multiple
             onChange={(e) => handleLookbookFilesSelect(e.target.files)}
-            className="w-full rounded-2xl border border-dashed border-border bg-bg-secondary px-4 py-3 text-sm file:mr-3 file:rounded-xl file:border-0 file:bg-accent/10 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-accent"
+            className="w-full border border-dashed border-border bg-bg-secondary px-4 py-3 text-sm file:mr-3 file:border-0 file:bg-accent/10 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-accent"
           />
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {lookbookPreview.length > 0 ? (
               lookbookPreview.map((image, index) => (
-                <div key={`${image}-${index}`} className="overflow-hidden rounded-[24px] border border-border bg-bg-secondary/35">
+                <div key={`${image}-${index}`} className="overflow-hidden border border-border bg-bg-secondary/35">
                   <div className="relative aspect-[3/4] overflow-hidden">
                     <img src={image} alt={`Lookbook ${index + 1}`} className="w-full h-full object-cover" />
                     {index < content.lookbook.images.length && (
                       <button
                         type="button"
                         onClick={() => removeLookbookImage(index)}
-                        className="absolute top-3 right-3 rounded-full border border-border bg-bg-card/90 px-3 py-1 text-[10px] uppercase tracking-wider cursor-pointer backdrop-blur"
+                        className="absolute top-3 right-3 border border-border bg-bg-card/90 px-3 py-1 text-[10px] uppercase tracking-wider cursor-pointer backdrop-blur"
                       >
                         Remove
                       </button>
@@ -544,7 +544,7 @@ export default function HomePageEditor() {
                   <select
                     value={content.lookbook.categorySlugs[index] || ""}
                     onChange={(e) => updateLookbookCategory(index, e.target.value)}
-                    className="w-full rounded-2xl bg-bg-card border border-border px-3 py-2.5 text-xs transition-colors focus:border-accent"
+                    className="w-full bg-bg-card border border-border px-3 py-2.5 text-xs transition-colors focus:border-accent"
                   >
                     <option value="">Select category</option>
                     {categories.map((category) => (
@@ -557,14 +557,14 @@ export default function HomePageEditor() {
                 </div>
               ))
             ) : (
-              <div className="md:col-span-2 xl:col-span-3 rounded-[24px] border border-dashed border-border p-8 text-center text-sm text-text-secondary">
+              <div className="md:col-span-2 xl:col-span-3 border border-dashed border-border p-8 text-center text-sm text-text-secondary">
                 No lookbook images yet.
               </div>
             )}
           </div>
         </section>
 
-        <section className="rounded-[28px] border border-border bg-bg-card p-6 shadow-sm shadow-black/5 space-y-5">
+        <section className="border border-border bg-bg-card p-6 shadow-sm shadow-black/5 space-y-5">
           <SectionHeader
             eyebrow="04"
             title="Editorial + Featured"
@@ -579,7 +579,7 @@ export default function HomePageEditor() {
                 value={content.editorial.eyebrow}
                 onChange={(e) => setContent({ ...content, editorial: { ...content.editorial, eyebrow: e.target.value } })}
                 placeholder="Editorial eyebrow"
-                className="w-full rounded-2xl bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
+                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
               />
               </div>
               <div className="space-y-2">
@@ -589,7 +589,7 @@ export default function HomePageEditor() {
                 value={content.editorial.label}
                 onChange={(e) => setContent({ ...content, editorial: { ...content.editorial, label: e.target.value } })}
                 placeholder="Editorial label"
-                className="w-full rounded-2xl bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
+                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
               />
               </div>
               <div className="space-y-2">
@@ -599,7 +599,7 @@ export default function HomePageEditor() {
                 value={content.featured.title}
                 onChange={(e) => setContent({ ...content, featured: { ...content.featured, title: e.target.value } })}
                 placeholder="Featured products title"
-                className="w-full rounded-2xl bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
+                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
               />
               </div>
               <div className="space-y-2">
@@ -608,11 +608,11 @@ export default function HomePageEditor() {
                 type="file"
                 accept="image/*"
                 onChange={(e) => setEditorialFile(e.target.files?.[0] || null)}
-                className="w-full rounded-2xl border border-dashed border-border bg-bg-secondary px-4 py-3 text-sm file:mr-3 file:rounded-xl file:border-0 file:bg-accent/10 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-accent"
+                className="w-full border border-dashed border-border bg-bg-secondary px-4 py-3 text-sm file:mr-3 file:border-0 file:bg-accent/10 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-accent"
               />
               </div>
             </div>
-            <div className="overflow-hidden rounded-[28px] border border-border bg-bg-secondary">
+            <div className="overflow-hidden border border-border bg-bg-secondary">
               <div className="flex items-center justify-between border-b border-border px-4 py-3">
                 <div>
                   <p className="text-xs font-medium text-text-primary">Editorial preview</p>
@@ -636,7 +636,7 @@ export default function HomePageEditor() {
           <button
             type="submit"
             disabled={saving}
-            className="rounded-full bg-accent text-bg-primary px-8 py-3 text-xs font-semibold tracking-[0.18em] uppercase shadow-lg shadow-accent/20 hover:bg-accent-hover transition-colors disabled:opacity-50 cursor-pointer"
+            className="border border-border bg-accent text-bg-primary px-8 py-3 text-xs font-semibold tracking-[0.18em] uppercase shadow-lg shadow-accent/20 hover:bg-accent-hover transition-colors disabled:opacity-50 cursor-pointer"
           >
             {saving ? "Saving..." : "Save Home Page"}
           </button>

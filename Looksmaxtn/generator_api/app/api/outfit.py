@@ -8,7 +8,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from app.models.requests import OutfitRequest
 from app.models.responses import OutfitResponse
 from app.services.generator import ImageGenerator
-from app.services.webhook import send_webhook
+from app.services.webhook import send_webhook, send_error_webhook
 
 router = APIRouter(prefix="/api", tags=["outfit"])
 logger = logging.getLogger(__name__)
@@ -112,6 +112,7 @@ async def process_outfit_generation(
     except Exception as e:
         logger.error(f"Job {job_id}: Error during outfit generation: {type(e).__name__}: {str(e)}")
         logger.error(f"Job {job_id}: Full traceback:\n{traceback.format_exc()}")
+        await send_error_webhook(webhook_url, job_id, f"Outfit generation failed: {str(e)}")
 
 
 @router.post("/generate_outfit", response_model=OutfitResponse)

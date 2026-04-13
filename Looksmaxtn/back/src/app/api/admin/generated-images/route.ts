@@ -120,11 +120,18 @@ export async function POST(req: NextRequest) {
     };
 
     // 3. Trigger Python (Asynchronous)
-    await fetch(`${baseUrl.replace(/\/$/, "")}/api/proxy`, {
+    const triggerResponse = await fetch(`${baseUrl.replace(/\/$/, "")}/api/proxy`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
+
+    if (!triggerResponse.ok) {
+      generatedImage.status = "failed";
+      generatedImage.errorMessage = "Failed to reach generation service.";
+      await generatedImage.save();
+      return NextResponse.json({ error: "Generation service unreachable." }, { status: 502 });
+    }
 
     // 4. Return immediately to avoid 500 timeouts
     return NextResponse.json({ generatedImage }, { status: 201 });

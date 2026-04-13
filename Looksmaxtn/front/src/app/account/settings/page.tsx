@@ -34,10 +34,15 @@ export default function SettingsPage() {
   const [bodyLoading, setBodyLoading] = useState(false);
   const [imageEnhancing, setImageEnhancing] = useState(false);
   const [enhancedImage, setEnhancedImage] = useState("");
+  const [enhanceError, setEnhanceError] = useState("");
   const [zoomedImage, setZoomedImage] = useState<{ src: string; alt: string } | null>(null);
   const [deletingPhoto, setDeletingPhoto] = useState<"original" | "enhanced" | null>(null);
 
   useEffect(() => {
+    const wasEnhancing = imageEnhancing;
+    const nextEnhancing = Boolean(user?.bodyProfile?.imageEnhancing);
+    const nextEnhancedImage = user?.bodyProfile?.profileImageEnhanced || "";
+
     setBodyProfile({
       heightCm: user?.bodyProfile?.heightCm || "",
       weightKg: user?.bodyProfile?.weightKg || "",
@@ -49,8 +54,13 @@ export default function SettingsPage() {
       outfitGenerationCount: Number(user?.bodyProfile?.outfitGenerationCount || 0),
       gender: normalizeGender(user?.bodyProfile?.gender),
     });
-    setImageEnhancing(Boolean(user?.bodyProfile?.imageEnhancing));
-    setEnhancedImage(user?.bodyProfile?.profileImageEnhanced || "");
+    setImageEnhancing(nextEnhancing);
+    setEnhancedImage(nextEnhancedImage);
+
+    // Detect enhancement failure: was enhancing, now stopped, but no enhanced image
+    if (wasEnhancing && !nextEnhancing && !nextEnhancedImage) {
+      setEnhanceError("Photo enhancement failed. Please try uploading again.");
+    }
   }, [user]);
 
   // Poll while enhancing
@@ -72,12 +82,15 @@ export default function SettingsPage() {
   const remainingGenerations = Math.max(generationLimit - generationsUsed, 0);
   // Show enhanced column only if there's an enhanced image OR one is being generated
   const showEnhanced = hasEnhanced || (hasOriginal && imageEnhancing);
+  // Hide original once enhanced is ready
+  const showOriginal = !hasEnhanced || imageEnhancing;
 
   const handlePhotoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setBodyError("");
+    setEnhanceError("");
     setImageEnhancing(true);
 
     const localPreview = URL.createObjectURL(file);
@@ -225,10 +238,18 @@ export default function SettingsPage() {
               {bodySuccess}
             </div>
           )}
-          <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-6 items-start">
+          <div className="relative">
+            {imageEnhancing && (
+              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-background/60 backdrop-blur-sm">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-border-color border-t-foreground" />
+                <span className="text-[11px] uppercase tracking-[0.18em] text-text-secondary">Enhancing photo...</span>
+              </div>
+            )}
+          <div className={`grid grid-cols-1 md:grid-cols-[auto_1fr] gap-6 items-start transition-all duration-300 ${imageEnhancing ? "pointer-events-none select-none blur-[2px] opacity-60" : ""}`}>
             <div className="flex flex-col items-center gap-3">
               <div className="flex justify-center gap-3">
-                {/* Original */}
+                {/* Original — hidden once enhanced photo is ready */}
+                {showOriginal && (
                 <div className="w-[160px] space-y-1.5">
                   <p className="text-[10px] uppercase tracking-wider text-text-secondary text-center">Original</p>
                   <div className="aspect-[4/5] border border-border-color bg-hover overflow-hidden relative group">
@@ -254,7 +275,7 @@ export default function SettingsPage() {
                           className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center bg-black text-sm text-white opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"
                           aria-label="Delete original photo"
                         >
-                          {deletingPhoto === "original" ? "..." : "×"}
+                          {deletingPhoto === "original" ? "..." : "\u00d7"}
                         </button>
                       </>
                     ) : (
@@ -264,6 +285,7 @@ export default function SettingsPage() {
                     )}
                   </div>
                 </div>
+                )}
 
                 {/* Enhanced — collapses smoothly */}
                 <div
@@ -284,9 +306,7 @@ export default function SettingsPage() {
                           <img
                             src={enhancedImage}
                             alt="Enhanced photo"
-                            className={`w-full h-full object-cover transition-opacity duration-300 ${
-                              imageEnhancing ? "blur-sm opacity-60" : ""
-                            }`}
+                            className="w-full h-full object-cover"
                           />
                           <button
                             type="button"
@@ -303,14 +323,8 @@ export default function SettingsPage() {
                             className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center bg-black text-sm text-white opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"
                             aria-label="Delete enhanced photo"
                           >
-                            {deletingPhoto === "enhanced" ? "..." : "×"}
+                            {deletingPhoto === "enhanced" ? "..." : "\u00d7"}
                           </button>
-                          {imageEnhancing && (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-                              <div className="h-6 w-6 animate-spin rounded-full border-2 border-border-color border-t-foreground" />
-                              <span className="text-[9px] uppercase tracking-wider text-text-secondary">Updating</span>
-                            </div>
-                          )}
                         </>
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
@@ -353,6 +367,12 @@ export default function SettingsPage() {
                   ? `${remainingGenerations} generation${remainingGenerations === 1 ? "" : "s"} left`
                   : "Generation limit reached"}
               </p>
+
+              {enhanceError && (
+                <p className="text-[10px] uppercase tracking-[0.18em] text-[#BD3100] text-center">
+                  {enhanceError}
+                </p>
+              )}
 
             </div>
 
@@ -447,12 +467,13 @@ export default function SettingsPage() {
               </div>
               <button
                 type="submit"
-                disabled={bodyLoading}
+                disabled={bodyLoading || imageEnhancing}
                 className="bg-foreground text-background px-6 py-3 text-xs font-medium tracking-wide uppercase hover:bg-accent transition-colors cursor-pointer disabled:opacity-50"
               >
                 {bodyLoading ? "Saving..." : "Save Studio Profile"}
               </button>
             </div>
+          </div>
           </div>
         </form>
       </div>

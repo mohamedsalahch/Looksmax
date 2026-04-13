@@ -5,7 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from app.models.requests import ProxyRequest
 from app.models.responses import ProxyResponse, OutfitResponse
 from app.services.generator import ImageGenerator
-from app.services.webhook import send_webhook
+from app.services.webhook import send_webhook, send_error_webhook
 
 router = APIRouter(prefix="/api", tags=["proxy"])
 logger = logging.getLogger(__name__)
@@ -36,7 +36,7 @@ async def process_proxy_generation(job_id: str, webhook_url: str, prompt: str, i
         )
     except Exception as e:
         logger.error(f"Job {job_id}: Proxy error: {str(e)}")
-        # Optionally send error webhook here if you have a model for it
+        await send_error_webhook(webhook_url, job_id, f"Proxy generation failed: {str(e)}")
 
 
 @router.post("/proxy")

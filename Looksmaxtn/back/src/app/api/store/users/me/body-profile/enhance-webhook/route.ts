@@ -17,14 +17,27 @@ export async function POST(req: NextRequest) {
     }
 
     const body = (await req.json()) as Record<string, unknown>;
+    const userId = req.nextUrl.searchParams.get("userId") || "";
+    const imagePath = req.nextUrl.searchParams.get("imagePath") || "";
+
+    // Handle error from generation service
+    if (typeof body.error === "string" && body.error) {
+      if (userId) {
+        await dbConnect();
+        await User.collection.updateOne(
+          { _id: new mongoose.Types.ObjectId(userId) },
+          { $set: { "bodyProfile.imageEnhancing": false } }
+        );
+        console.warn(`[enhance-webhook] Generation service reported error for user ${userId}: ${body.error}`);
+      }
+      return NextResponse.json({ ok: true, error: true });
+    }
+
     const image = typeof body.image === "string" ? body.image : "";
 
     if (!image) {
       return NextResponse.json({ error: "Missing image" }, { status: 400 });
     }
-
-    const userId = req.nextUrl.searchParams.get("userId") || "";
-    const imagePath = req.nextUrl.searchParams.get("imagePath") || "";
 
     if (!userId || !imagePath) {
       return NextResponse.json({ error: "Missing userId or imagePath" }, { status: 400 });

@@ -142,6 +142,16 @@ export async function PUT(
       }
     }
 
+    if (orderStatus === "delivered" && existingOrder.orderStatus !== "delivered") {
+      const productIds = existingOrder.items.map((item) => item.product);
+      if (productIds.length > 0) {
+        await Product.updateMany(
+          { _id: { $in: productIds } },
+          { $set: { isActive: false } }
+        );
+      }
+    }
+
     if (orderStatus === "confirmed" && existingOrder.orderStatus !== "confirmed") {
       const productIds = existingOrder.items.map((item) => item.product);
       const conflictingOrders = await Order.find({
