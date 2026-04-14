@@ -4,6 +4,7 @@ import User from "@/store/models/User";
 import { hashPassword } from "@/store/lib/auth";
 import { createEmailVerificationToken } from "@/store/lib/emailVerification";
 import { sendVerificationEmail } from "@/store/lib/mailer";
+import { getEmailBaseUrl } from "@/store/lib/emailLinks";
 
 export async function POST(req: NextRequest) {
   try {
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
     });
 
     const verification = createEmailVerificationToken();
-    const verificationUrl = new URL("/verify-email", process.env.FRONTEND_BASE_URL || "http://localhost:3000");
+    const verificationUrl = new URL("/verify-email", getEmailBaseUrl());
     verificationUrl.searchParams.set("email", email);
     verificationUrl.searchParams.set("token", verification.token);
 

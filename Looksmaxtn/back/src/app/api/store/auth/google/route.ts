@@ -34,6 +34,7 @@ async function buildUserResponse(user: {
     outfitGenerationCount?: number;
     gender?: string;
     imageEnhancing?: boolean;
+    profileImageRequiresGeneration?: boolean;
   } | null;
 }) {
   return {
@@ -55,6 +56,9 @@ async function buildUserResponse(user: {
           outfitGenerationCount: Number(user.bodyProfile.outfitGenerationCount || 0),
           gender: normalizeGender(user.bodyProfile.gender),
           imageEnhancing: Boolean(user.bodyProfile.imageEnhancing),
+          profileImageRequiresGeneration: Boolean(
+            user.bodyProfile.profileImageRequiresGeneration
+          ),
         }
       : user.bodyProfile,
   };

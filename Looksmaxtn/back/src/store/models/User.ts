@@ -20,6 +20,7 @@ export interface IBodyProfile {
   outfitGenerationCount: number;
   gender: string;
   imageEnhancing: boolean;
+  profileImageRequiresGeneration: boolean;
 }
 
 export interface IUser extends Document {
@@ -66,6 +67,7 @@ const bodyProfileSchema = new Schema<IBodyProfile>(
     outfitGenerationCount: { type: Number, default: 0 },
     gender: { type: String, default: "" },
     imageEnhancing: { type: Boolean, default: false },
+    profileImageRequiresGeneration: { type: Boolean, default: false },
   },
   { _id: false }
 );

@@ -33,6 +33,33 @@ function LoginPageContent() {
   }, [resendCooldown]);
 
   useEffect(() => {
+    if (!googleConfigured) return;
+
+    let attempts = 0;
+    const maxAttempts = 80;
+
+    const syncGoogleReady = () => {
+      const google = (window as Window & { google?: any }).google;
+      if (google?.accounts?.id) {
+        setGoogleReady(true);
+        return true;
+      }
+      return false;
+    };
+
+    if (syncGoogleReady()) return;
+
+    const timer = window.setInterval(() => {
+      attempts += 1;
+      if (syncGoogleReady() || attempts >= maxAttempts) {
+        window.clearInterval(timer);
+      }
+    }, 250);
+
+    return () => window.clearInterval(timer);
+  }, [googleConfigured]);
+
+  useEffect(() => {
     if (!googleReady || !googleConfigured || !googleButtonRef.current) return;
 
     const google = (window as Window & { google?: any }).google;
@@ -188,6 +215,7 @@ function LoginPageContent() {
             src="https://accounts.google.com/gsi/client"
             strategy="afterInteractive"
             onLoad={() => setGoogleReady(true)}
+            onReady={() => setGoogleReady(true)}
           />
           <div ref={googleButtonRef} className="mt-4 min-h-[48px] w-full overflow-hidden" />
         </div>

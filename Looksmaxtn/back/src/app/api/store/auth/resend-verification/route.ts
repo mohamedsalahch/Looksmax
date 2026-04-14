@@ -3,6 +3,7 @@ import dbConnect from "@/store/lib/mongodb";
 import User from "@/store/models/User";
 import { createEmailVerificationToken } from "@/store/lib/emailVerification";
 import { sendVerificationEmail } from "@/store/lib/mailer";
+import { getEmailBaseUrl } from "@/store/lib/emailLinks";
 
 const RESEND_COOLDOWN_MS = 60 * 1000;
 
@@ -44,10 +45,7 @@ export async function POST(req: NextRequest) {
     }
 
     const verification = createEmailVerificationToken();
-    const verificationUrl = new URL(
-      "/verify-email",
-      process.env.FRONTEND_BASE_URL || "http://localhost:3000"
-    );
+    const verificationUrl = new URL("/verify-email", getEmailBaseUrl());
     verificationUrl.searchParams.set("email", user.email);
     verificationUrl.searchParams.set("token", verification.token);
 

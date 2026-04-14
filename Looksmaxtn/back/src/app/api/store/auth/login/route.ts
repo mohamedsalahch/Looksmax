@@ -99,6 +99,9 @@ export async function POST(req: NextRequest) {
               outfitGenerationCount: Number(user.bodyProfile.outfitGenerationCount || 0),
               gender: normalizeGender(user.bodyProfile.gender),
               imageEnhancing: Boolean(user.bodyProfile.imageEnhancing),
+              profileImageRequiresGeneration: Boolean(
+                user.bodyProfile.profileImageRequiresGeneration
+              ),
             }
           : user.bodyProfile,
       },

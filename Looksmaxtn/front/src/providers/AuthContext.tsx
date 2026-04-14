@@ -35,6 +35,7 @@ interface User {
     outfitGenerationCount: number;
     gender: string;
     imageEnhancing: boolean;
+    profileImageRequiresGeneration: boolean;
   };
 }
 
