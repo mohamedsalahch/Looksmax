@@ -51,7 +51,7 @@ export default function Header() {
           </span>
         </Link>
 
-        {/* Right — Search + User + Cart */}
+        {/* Right — Search + Cart + User */}
         <div className="flex items-center gap-2 md:gap-3">
           <Link
             href="/studio"
@@ -59,6 +59,26 @@ export default function Header() {
           >
             Outfit Studio
           </Link>
+
+          <HeaderSearch />
+
+          <button
+            onClick={openCart}
+            className="relative inline-flex h-9 w-9 items-center justify-center text-foreground hover:text-text-secondary transition-colors cursor-pointer"
+            aria-label="Open cart"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <path d="M16 10a4 4 0 0 1-8 0" />
+            </svg>
+            {/* Badge */}
+            {totalItems > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-foreground text-background text-[9px] font-bold rounded-full flex items-center justify-center">
+                {totalItems > 9 ? "9+" : totalItems}
+              </span>
+            )}
+          </button>
 
           {/* User Icon / Menu */}
           <div className="relative" ref={menuRef}>
@@ -128,26 +148,6 @@ export default function Header() {
               </div>
             )}
           </div>
-
-          <button
-            onClick={openCart}
-            className="relative inline-flex h-9 w-9 items-center justify-center text-foreground hover:text-text-secondary transition-colors cursor-pointer"
-            aria-label="Open cart"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <path d="M16 10a4 4 0 0 1-8 0" />
-            </svg>
-            {/* Badge */}
-            {totalItems > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-foreground text-background text-[9px] font-bold rounded-full flex items-center justify-center">
-                {totalItems > 9 ? "9+" : totalItems}
-              </span>
-            )}
-          </button>
-
-          <HeaderSearch />
         </div>
       </div>
     </header>
