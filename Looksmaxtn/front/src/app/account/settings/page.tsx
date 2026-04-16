@@ -275,7 +275,7 @@ export default function SettingsPage() {
         </h2>
         <form onSubmit={handleBodyProfileUpdate} className="max-w-3xl space-y-4">
           {bodyError && (
-            <div className="border border-[#BD3100] bg-[#faf3f2] px-4 py-3 text-xs text-[#BD3100]">
+            <div className="border border-[#430C05] bg-[#faf3f2] px-4 py-3 text-xs text-[#430C05]">
               {bodyError}
             </div>
           )}
@@ -417,7 +417,7 @@ export default function SettingsPage() {
                     type="button"
                     onClick={() => handleDeletePhoto("original")}
                     disabled={deletingPhoto !== null}
-                    className="flex w-full items-center justify-center py-2.5 text-xs font-medium tracking-wide uppercase text-center transition-all duration-300 border border-[#BD3100] text-[#BD3100] hover:bg-[#faf3f2] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex w-full items-center justify-center py-2.5 text-xs font-medium tracking-wide uppercase text-center transition-all duration-300 border border-[#430C05] text-[#430C05] hover:bg-[#faf3f2] disabled:cursor-not-allowed disabled:opacity-50"
                     aria-label="Delete photo"
                   >
                     {deletingPhoto !== null ? "Deleting..." : "Delete photo"}
@@ -455,7 +455,7 @@ export default function SettingsPage() {
               </p>
 
               {enhanceError && (
-                <p className="text-[10px] uppercase tracking-[0.18em] text-[#BD3100] text-center">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-[#430C05] text-center">
                   {enhanceError}
                 </p>
               )}
@@ -560,16 +560,6 @@ export default function SettingsPage() {
                 </div>
               </div>
               <div className="flex w-full flex-col gap-3 md:flex-row md:items-stretch">
-                {showGenerateButton && (
-                  <button
-                    type="button"
-                    onClick={handleGeneratePhoto}
-                    disabled={imageEnhancing}
-                    className="flex-1 border border-foreground bg-foreground px-6 py-3 text-xs font-medium tracking-wide uppercase text-background transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {imageEnhancing ? "Generating..." : "Generate Photo"}
-                  </button>
-                )}
                 <button
                   type="submit"
                   disabled={bodyLoading || imageEnhancing || !hasEnhanced}

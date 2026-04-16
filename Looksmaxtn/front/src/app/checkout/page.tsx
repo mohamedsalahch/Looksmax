@@ -189,7 +189,7 @@ export default function CheckoutPage() {
               </h2>
 
               {error && (
-                <div className="border border-[#BD3100] bg-[#faf3f2] px-4 py-3 mb-4 text-xs text-[#BD3100]">
+                <div className="border border-[#430C05] bg-[#faf3f2] px-4 py-3 mb-4 text-xs text-[#430C05]">
                   {error}
                 </div>
               )}
@@ -326,7 +326,7 @@ export default function CheckoutPage() {
                           : `${item.size || ""}${item.size && item.color ? " · " : ""}${item.color || ""} · Qty: ${item.quantity}`}
                       </p>
                       {item.isUnavailable && (
-                        <p className="text-[10px] text-[#BD3100] mt-1">
+                        <p className="text-[10px] text-[#430C05] mt-1">
                           {item.unavailableReason || "This product is already taken."}
                         </p>
                       )}
@@ -374,8 +374,8 @@ export default function CheckoutPage() {
                 ))}
 
                 {hasUnavailableItems && (
-                  <div className="border border-[#BD3100] bg-[#faf3f2] p-4">
-                    <p className="text-xs text-[#BD3100] font-medium">
+                  <div className="border border-[#430C05] bg-[#faf3f2] p-4">
+                    <p className="text-xs text-[#430C05] font-medium">
                       Some items are already taken. Remove them from the cart to place your order.
                     </p>
                   </div>

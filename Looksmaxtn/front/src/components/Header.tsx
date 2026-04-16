@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
 import { useAuth } from "@/providers/AuthContext";
 import HeaderSearch from "@/components/HeaderSearch";
@@ -11,6 +12,7 @@ export default function Header() {
   const { user, logout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
 
   const togglePanel = () => {
     const event = new CustomEvent("toggleSidePanel");
@@ -34,10 +36,6 @@ export default function Header() {
         <button
           id="hamburger-btn"
           onClick={togglePanel}
-          onMouseEnter={() => {
-            const event = new CustomEvent("openSidePanel");
-            window.dispatchEvent(event);
-          }}
           className="flex flex-col gap-[5px] group cursor-pointer p-1"
           aria-label="Open menu"
         >
@@ -61,7 +59,76 @@ export default function Header() {
           >
             Outfit Studio
           </Link>
-          <HeaderSearch />
+
+          {/* User Icon / Menu */}
+          <div className="relative" ref={menuRef}>
+            <button
+              type="button"
+              onClick={() => {
+                if (user) {
+                  setShowUserMenu((p) => !p);
+                  return;
+                }
+                router.push("/login");
+              }}
+              className="inline-flex h-9 w-9 items-center justify-center text-foreground hover:text-text-secondary transition-colors cursor-pointer"
+              aria-label={user ? "Account menu" : "Sign in"}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            </button>
+
+            {user && showUserMenu && (
+              <div className="absolute right-0 top-full mt-2 w-48 bg-background border border-border-color shadow-lg z-50">
+                <div className="px-4 py-3 border-b border-border-color">
+                  <p className="text-xs font-medium text-foreground truncate">{user.name}</p>
+                  <p className="text-[10px] text-text-secondary truncate">{user.email}</p>
+                </div>
+                <Link
+                  href="/studio"
+                  onClick={() => setShowUserMenu(false)}
+                  className="block px-4 py-2.5 text-xs text-foreground hover:bg-hover transition-colors md:hidden"
+                >
+                  Outfit Studio
+                </Link>
+                <Link
+                  href="/account"
+                  onClick={() => setShowUserMenu(false)}
+                  className="block px-4 py-2.5 text-xs text-foreground hover:bg-hover transition-colors"
+                >
+                  My Account
+                </Link>
+                <Link
+                  href="/account/orders"
+                  onClick={() => setShowUserMenu(false)}
+                  className="block px-4 py-2.5 text-xs text-foreground hover:bg-hover transition-colors"
+                >
+                  My Orders
+                </Link>
+                <Link
+                  href="/account/settings"
+                  onClick={() => setShowUserMenu(false)}
+                  className="block px-4 py-2.5 text-xs text-foreground hover:bg-hover transition-colors"
+                >
+                  Settings
+                </Link>
+                <button
+                  onClick={async () => {
+                    setShowUserMenu(false);
+                    await logout();
+                    router.replace("/login");
+                    router.refresh();
+                  }}
+                  className="block w-full text-left px-4 py-2.5 text-xs text-red-600 hover:bg-hover transition-colors border-t border-border-color cursor-pointer"
+                >
+                  Sign Out
+                </button>
+              </div>
+            )}
+          </div>
+
           <button
             onClick={openCart}
             className="relative inline-flex h-9 w-9 items-center justify-center text-foreground hover:text-text-secondary transition-colors cursor-pointer"
@@ -80,81 +147,7 @@ export default function Header() {
             )}
           </button>
 
-          {/* User Icon / Menu */}
-          <div className="relative" ref={menuRef}>
-            {user ? (
-              <>
-                <button
-                  onClick={() => setShowUserMenu((p) => !p)}
-                  className="inline-flex h-9 w-9 items-center justify-center text-foreground hover:text-text-secondary transition-colors cursor-pointer"
-                  aria-label="Account menu"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                    <circle cx="12" cy="7" r="4" />
-                  </svg>
-                </button>
-
-                {/* Dropdown */}
-                {showUserMenu && (
-                  <div className="absolute right-0 top-full mt-2 w-48 bg-background border border-border-color shadow-lg z-50">
-                    <div className="px-4 py-3 border-b border-border-color">
-                      <p className="text-xs font-medium text-foreground truncate">{user.name}</p>
-                      <p className="text-[10px] text-text-secondary truncate">{user.email}</p>
-                    </div>
-                    <Link
-                      href="/studio"
-                      onClick={() => setShowUserMenu(false)}
-                      className="block px-4 py-2.5 text-xs text-foreground hover:bg-hover transition-colors"
-                    >
-                      Outfit Studio
-                    </Link>
-                    <Link
-                      href="/account"
-                      onClick={() => setShowUserMenu(false)}
-                      className="block px-4 py-2.5 text-xs text-foreground hover:bg-hover transition-colors"
-                    >
-                      My Account
-                    </Link>
-                    <Link
-                      href="/account/orders"
-                      onClick={() => setShowUserMenu(false)}
-                      className="block px-4 py-2.5 text-xs text-foreground hover:bg-hover transition-colors"
-                    >
-                      My Orders
-                    </Link>
-                    <Link
-                      href="/account/settings"
-                      onClick={() => setShowUserMenu(false)}
-                      className="block px-4 py-2.5 text-xs text-foreground hover:bg-hover transition-colors"
-                    >
-                      Settings
-                    </Link>
-                    <button
-                      onClick={() => {
-                        logout();
-                        setShowUserMenu(false);
-                      }}
-                      className="block w-full text-left px-4 py-2.5 text-xs text-red-600 hover:bg-hover transition-colors border-t border-border-color cursor-pointer"
-                    >
-                      Sign Out
-                    </button>
-                  </div>
-                )}
-              </>
-            ) : (
-              <Link
-                href="/login"
-                className="inline-flex h-9 w-9 items-center justify-center text-foreground hover:text-text-secondary transition-colors"
-                aria-label="Sign in"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                  <circle cx="12" cy="7" r="4" />
-                </svg>
-              </Link>
-            )}
-          </div>
+          <HeaderSearch />
         </div>
       </div>
     </header>

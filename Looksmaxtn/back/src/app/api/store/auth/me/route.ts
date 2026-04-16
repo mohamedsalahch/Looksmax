@@ -18,7 +18,6 @@ export async function GET() {
   try {
     const session = await getSession();
     if (!session) {
-      console.log("[auth][store][me] no session");
       return NextResponse.json({ user: null }, { status: 401 });
     }
 
@@ -27,17 +26,8 @@ export async function GET() {
       .select("name email role address bodyProfile isBlocked googleId")
       .lean();
     if (!user || user.isBlocked) {
-      console.log("[auth][store][me] invalid user", {
-        userId: session.userId,
-        blocked: Boolean(user?.isBlocked),
-      });
       return NextResponse.json({ user: null }, { status: 401 });
     }
-
-    console.log("[auth][store][me] session ok", {
-      userId: session.userId,
-      role: session.role,
-    });
 
     return NextResponse.json(
       {

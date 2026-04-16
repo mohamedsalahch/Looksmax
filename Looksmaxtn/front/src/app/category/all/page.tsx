@@ -1,7 +1,28 @@
 import CategoryNav from "@/components/CategoryNav";
 import ProductGrid from "@/components/ProductGrid";
 
-export default function AllCategoriesPage() {
+async function loadAllCategoriesData() {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+  const params = new URLSearchParams();
+  params.set("includeFacets", "1");
+  params.set("limit", "24");
+
+  const response = await fetch(`${baseUrl}/api/products?${params.toString()}`, { cache: "no-store" });
+  if (!response.ok) {
+    return { products: [], total: 0, facets: null };
+  }
+
+  const data = await response.json();
+  return {
+    products: data.products || [],
+    total: data.total || 0,
+    facets: data.facets || null,
+  };
+}
+
+export default async function AllCategoriesPage() {
+  const initialData = await loadAllCategoriesData();
+
   return (
     <div className="pt-[57px]">
       <CategoryNav activeSlug="all-categories" />
@@ -10,7 +31,11 @@ export default function AllCategoriesPage() {
         <h1 className="text-sm font-medium tracking-wide">All Categories</h1>
       </div>
 
-      <ProductGrid />
+      <ProductGrid
+        initialProducts={initialData.products}
+        initialTotal={initialData.total}
+        initialFacets={initialData.facets}
+      />
     </div>
   );
 }

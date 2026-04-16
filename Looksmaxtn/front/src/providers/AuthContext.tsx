@@ -47,7 +47,8 @@ interface AuthContextType {
   signup: (
     name: string,
     email: string,
-    password: string
+    password: string,
+    gender: string
   ) => Promise<{ error?: string; verificationRequired?: boolean; message?: string }>;
   forgotPassword: (
     email: string
@@ -69,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const refreshTimerRef = useRef<number | null>(null);
+  const logoutInProgressRef = useRef(false);
 
   const clearRefreshTimer = useCallback(() => {
     if (refreshTimerRef.current === null) return;
@@ -88,6 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const delayMs = Math.max(expiryMs - Date.now() - refreshLeadMs, 60 * 1000);
 
     const nextTimerId = window.setTimeout(async () => {
+      if (logoutInProgressRef.current) return;
       try {
         const nextToken = await refreshStoreAuthToken();
         if (!nextToken) {
@@ -106,6 +109,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [clearRefreshTimer]);
 
   const refreshUser = useCallback(async () => {
+    if (logoutInProgressRef.current) {
+      setLoading(false);
+      return;
+    }
     try {
       const res = await fetch(`/api/auth/me?ts=${Date.now()}`, withAuthRequest({ cache: "no-store" }));
       if (!res.ok) {
@@ -128,6 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [clearRefreshTimer, refreshUser]);
 
   const login = async (email: string, password: string) => {
+    logoutInProgressRef.current = false;
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
@@ -149,6 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const loginWithGoogle = async (credential: string) => {
+    logoutInProgressRef.current = false;
     try {
       const res = await fetch("/api/auth/google", {
         method: "POST",
@@ -169,13 +178,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signup = async (name: string, email: string, password: string) => {
+  const signup = async (name: string, email: string, password: string, gender: string) => {
     try {
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email, password, gender }),
       });
       const data = await res.json();
       if (!res.ok) return { error: data.error };
@@ -237,10 +246,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-    clearAuthToken();
+    logoutInProgressRef.current = true;
     clearRefreshTimer();
+    clearAuthToken();
     setUser(null);
+    try {
+      await fetch("/api/auth/logout", { method: "POST", credentials: "include", cache: "no-store" });
+    } finally {
+      logoutInProgressRef.current = false;
+    }
   };
 
   return (

@@ -18,7 +18,6 @@ export async function POST() {
   try {
     const session = await getSession();
     if (!session) {
-      console.log("[auth][store][refresh] no session");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -28,10 +27,6 @@ export async function POST() {
       .lean();
 
     if (!user || user.isBlocked) {
-      console.log("[auth][store][refresh] invalid user", {
-        userId: session.userId,
-        blocked: Boolean(user?.isBlocked),
-      });
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -68,11 +63,6 @@ export async function POST() {
     });
 
     res.cookies.set(cookieOpts.name, token, cookieOpts);
-    console.log("[auth][store][refresh] success", {
-      userId: session.userId,
-      secureCookie: cookieOpts.secure,
-      maxAge: cookieOpts.maxAge,
-    });
     return res;
   } catch (error) {
     console.error("Store refresh error:", error);

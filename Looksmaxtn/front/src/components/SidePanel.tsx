@@ -17,6 +17,8 @@ export default function SidePanel() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [expandedParents, setExpandedParents] = useState<string[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
   const pathname = usePathname();
 
   useEffect(() => {
@@ -32,14 +34,11 @@ export default function SidePanel() {
   }, []);
 
   useEffect(() => {
-    const openHandler = () => setIsOpen(true);
     const toggleHandler = () => setIsOpen((prev) => !prev);
 
-    window.addEventListener("openSidePanel", openHandler);
     window.addEventListener("toggleSidePanel", toggleHandler);
 
     return () => {
-      window.removeEventListener("openSidePanel", openHandler);
       window.removeEventListener("toggleSidePanel", toggleHandler);
     };
   }, []);
@@ -48,6 +47,48 @@ export default function SidePanel() {
     setIsOpen(false);
     setExpandedParents([]);
   }, [pathname]);
+
+  useEffect(() => {
+    const handleTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1) return;
+
+      const touch = event.touches[0];
+      if (!isOpen && touch.clientX > 24) return;
+
+      touchStartXRef.current = touch.clientX;
+      touchStartYRef.current = touch.clientY;
+    };
+
+    const handleTouchEnd = (event: TouchEvent) => {
+      if (touchStartXRef.current === null || touchStartYRef.current === null) return;
+
+      const touch = event.changedTouches[0];
+      const deltaX = touch.clientX - touchStartXRef.current;
+      const deltaY = touch.clientY - touchStartYRef.current;
+
+      touchStartXRef.current = null;
+      touchStartYRef.current = null;
+
+      if (Math.abs(deltaY) > Math.abs(deltaX)) return;
+
+      if (!isOpen && deltaX > 70) {
+        setIsOpen(true);
+        return;
+      }
+
+      if (isOpen && deltaX < -70) {
+        setIsOpen(false);
+      }
+    };
+
+    window.addEventListener("touchstart", handleTouchStart, { passive: true });
+    window.addEventListener("touchend", handleTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [isOpen]);
 
   // Close on Escape
   useEffect(() => {
@@ -154,14 +195,6 @@ export default function SidePanel() {
 
   return (
     <>
-      <button
-        type="button"
-        onMouseEnter={() => setIsOpen(true)}
-        onFocus={() => setIsOpen(true)}
-        className="fixed left-0 top-0 bottom-0 z-30 w-3 bg-transparent cursor-ew-resize"
-        aria-label="Open category menu"
-      />
-
       {/* Overlay */}
       <div
         className={`fixed inset-0 z-50 panel-overlay transition-opacity duration-300 ${
@@ -176,9 +209,6 @@ export default function SidePanel() {
         className={`fixed top-0 left-0 h-full w-full max-w-md z-50 bg-background shadow-2xl transition-panel flex flex-col ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
-        onMouseLeave={() => {
-          setTimeout(() => setIsOpen(false), 300);
-        }}
       >
         {/* Top bar */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border-color">

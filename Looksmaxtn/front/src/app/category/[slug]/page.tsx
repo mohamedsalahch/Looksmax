@@ -5,6 +5,26 @@ function formatSlug(slug: string): string {
   return slug.charAt(0).toUpperCase() + slug.slice(1).replace(/-/g, " ");
 }
 
+async function loadCategoryData(slug: string) {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+  const params = new URLSearchParams();
+  params.set("category", slug);
+  params.set("includeFacets", "1");
+  params.set("limit", "24");
+
+  const response = await fetch(`${baseUrl}/api/products?${params.toString()}`, { cache: "no-store" });
+  if (!response.ok) {
+    return { products: [], total: 0, facets: null };
+  }
+
+  const data = await response.json();
+  return {
+    products: data.products || [],
+    total: data.total || 0,
+    facets: data.facets || null,
+  };
+}
+
 export default async function CategoryPage({
   params,
 }: {
@@ -31,6 +51,7 @@ export default async function CategoryPage({
       // fallback to formatted slug
     }
   }
+  const initialData = await loadCategoryData(slug);
 
   return (
     <div className="pt-[57px]">
@@ -41,7 +62,12 @@ export default async function CategoryPage({
         <h1 className="text-sm font-medium tracking-wide">{categoryName}</h1>
       </div>
 
-      <ProductGrid category={slug} />
+      <ProductGrid
+        category={slug}
+        initialProducts={initialData.products}
+        initialTotal={initialData.total}
+        initialFacets={initialData.facets}
+      />
     </div>
   );
 }

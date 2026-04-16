@@ -12,34 +12,17 @@ interface Category {
   children?: Category[];
 }
 
-const fallbackCategories: Category[] = [
-  {
-    _id: "1",
-    name: "Men",
-    slug: "men",
-    children: [
-      { _id: "1-1", name: "Garments", slug: "garments", parentSlug: "men" },
-      { _id: "1-2", name: "Fragrances", slug: "fragrances", parentSlug: "men" },
-      { _id: "1-3", name: "Shoes", slug: "shoes", parentSlug: "men" },
-    ],
-  },
-  {
-    _id: "2",
-    name: "Women",
-    slug: "women",
-    children: [
-      { _id: "2-1", name: "Garments", slug: "women-garments", parentSlug: "women" },
-      { _id: "2-2", name: "Fragrances", slug: "women-fragrances", parentSlug: "women" },
-      { _id: "2-3", name: "Shoes", slug: "women-shoes", parentSlug: "women" },
-    ],
-  },
-  { _id: "3", name: "Children", slug: "children", children: [] },
-];
-
-export default function CategoryNav({ activeSlug }: { activeSlug: string }) {
+export default function CategoryNav({
+  activeSlug,
+}: {
+  activeSlug: string;
+}) {
   const router = useRouter();
-  const [categories, setCategories] = useState<Category[]>(fallbackCategories);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoriesLoaded, setCategoriesLoaded] = useState(false);
   const findCategoryPath = (items: Category[], slug: string, trail: string[] = []): string[] | null => {
+    if (!Array.isArray(items)) return null;
+
     for (const item of items) {
       const nextTrail = [...trail, item.slug];
       if (item.slug === slug) return nextTrail;
@@ -52,6 +35,8 @@ export default function CategoryNav({ activeSlug }: { activeSlug: string }) {
     return null;
   };
   const findCategoryBySlug = (items: Category[], slug: string): Category | null => {
+    if (!Array.isArray(items)) return null;
+
     for (const item of items) {
       if (item.slug === slug) return item;
       if (item.children?.length) {
@@ -68,6 +53,11 @@ export default function CategoryNav({ activeSlug }: { activeSlug: string }) {
   const [previewPath, setPreviewPath] = useState<string[]>([]);
 
   useEffect(() => {
+    setExpandedParent(null);
+    setPreviewPath([]);
+  }, [activeSlug]);
+
+  useEffect(() => {
     fetch("/api/categories")
       .then((r) => r.json())
       .then((data) => {
@@ -75,13 +65,11 @@ export default function CategoryNav({ activeSlug }: { activeSlug: string }) {
           setCategories(data.tree);
         }
       })
-      .catch(() => {}); // Keep fallback
+      .catch(() => {})
+      .finally(() => {
+        setCategoriesLoaded(true);
+      });
   }, []);
-
-  useEffect(() => {
-    setExpandedParent(null);
-    setPreviewPath([]);
-  }, [activeSlug]);
 
   useEffect(() => {
     if (!expandedParent) {
@@ -138,7 +126,7 @@ export default function CategoryNav({ activeSlug }: { activeSlug: string }) {
           <Link href="/category/all" className={`text-xs whitespace-nowrap transition-colors py-1 px-1 ${activeSlug === "all-categories" ? "text-foreground font-medium border-b border-foreground" : "text-text-secondary hover:text-foreground"}`}>
             All Categories
           </Link>
-          {categories.map((item) => (
+          {categoriesLoaded && categories.map((item) => (
             <div
               key={item._id}
               className="flex items-center gap-1 whitespace-nowrap"
@@ -193,7 +181,7 @@ export default function CategoryNav({ activeSlug }: { activeSlug: string }) {
         </div>
         <div
           className={`overflow-hidden transition-all duration-200 ease-out ${
-            drilldownColumns.length > 0 ? "max-h-[420px] opacity-100 pb-4" : "max-h-0 opacity-0"
+            categoriesLoaded && drilldownColumns.length > 0 ? "max-h-[420px] opacity-100 pb-4" : "max-h-0 opacity-0"
           }`}
         >
           <div className="grid gap-3 border-t border-border-color pt-3 md:grid-cols-3">

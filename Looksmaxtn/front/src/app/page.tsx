@@ -62,6 +62,7 @@ export default async function Home() {
         eyebrow={content.hero.eyebrow}
         title={content.hero.title}
         subtitle={content.hero.subtitle}
+        href={content.hero.link}
       />
       <BrandStory
         eyebrow={content.brandStory.eyebrow}

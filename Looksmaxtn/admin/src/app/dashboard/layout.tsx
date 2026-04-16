@@ -321,9 +321,12 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   };
 
   const handleLogout = async () => {
-    await fetch("/api/auth/logout", withAuthRequest({ method: "POST" }));
+    clearRefreshTimer();
     clearAuthToken();
-    router.push("/");
+    setUser(null);
+    await fetch("/api/auth/logout", withAuthRequest({ method: "POST" }));
+    router.replace("/");
+    router.refresh();
   };
 
   if (loading) return (

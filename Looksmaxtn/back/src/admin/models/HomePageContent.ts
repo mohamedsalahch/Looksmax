@@ -8,7 +8,7 @@ interface HomeStat {
 
 export interface IHomePageContent extends Document {
   key: string;
-  hero: { image: string; eyebrow: string; title: string; subtitle: string };
+  hero: { image: string; eyebrow: string; title: string; subtitle: string; link: string };
   brandStory: {
     eyebrow: string;
     title: string;
@@ -41,6 +41,7 @@ const homePageContentSchema = new Schema<IHomePageContent>(
       eyebrow: { type: String, default: "" },
       title: { type: String, default: "" },
       subtitle: { type: String, default: "" },
+      link: { type: String, default: "" },
     },
     brandStory: {
       eyebrow: { type: String, default: "" },

@@ -46,8 +46,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, stale: true });
     }
 
-    console.log(`[enhance-webhook] Saved enhanced photo for user ${userId} → ${enhancedImagePath}`);
-
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("[enhance-webhook] Error:", error);

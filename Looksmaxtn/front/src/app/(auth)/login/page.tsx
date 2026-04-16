@@ -65,20 +65,20 @@ function LoginPageContent() {
     const google = (window as Window & { google?: any }).google;
     if (!google?.accounts?.id) return;
 
-    google.accounts.id.initialize({
-      client_id: googleClientId,
-      callback: async (response: { credential?: string }) => {
-        const credential = String(response?.credential || "");
-        if (!credential) {
-          setError("Google sign-in failed. Please try again.");
-          return;
-        }
+      google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: async (response: { credential?: string }) => {
+          const credential = String(response?.credential || "");
+          if (!credential) {
+            setError("Google sign-in failed. Please try again.");
+            return;
+          }
 
-        setError("");
-        setInfo("");
-        setLoading(true);
+          setError("");
+          setInfo("");
+          setLoading(true);
 
-        const result = await loginWithGoogle(credential);
+          const result = await loginWithGoogle(credential);
         setLoading(false);
 
         if (result.error) {
@@ -155,7 +155,7 @@ function LoginPageContent() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="border border-[#BD3100] bg-[#faf3f2] px-4 py-3 text-xs text-[#BD3100]">
+          <div className="border border-[#430C05] bg-[#faf3f2] px-4 py-3 text-xs text-[#430C05]">
             {error}
           </div>
         )}

@@ -81,7 +81,7 @@ function ResetPasswordContent() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="border border-[#BD3100] bg-[#faf3f2] px-4 py-3 text-xs text-[#BD3100]">
+          <div className="border border-[#430C05] bg-[#faf3f2] px-4 py-3 text-xs text-[#430C05]">
             {error}
           </div>
         )}

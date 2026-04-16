@@ -166,10 +166,6 @@ export async function POST(req: NextRequest) {
         const leftImage = usesFourViews ? originPictures.left : "";
         const rightImage = usesFourViews ? originPictures.right : "";
 
-        if (!status) {
-          console.log("[generate_outfit] inactive body zone", { zone, status: false });
-        }
-
         return [
           zone,
           {
@@ -291,12 +287,6 @@ export async function POST(req: NextRequest) {
     const webhookUrl = `${webhookBase}/api/store/generate-outfit/webhook`;
     const generatorUrl = `${baseUrl}api/generate_outfit`;
 
-    console.log("[generate_outfit] sending request", {
-      generatorUrl,
-      webhookUrl,
-      jobId: job._id.toString(),
-    });
-
     const generatorResponse = await fetch(generatorUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -308,13 +298,6 @@ export async function POST(req: NextRequest) {
     });
 
     const generatorData = await generatorResponse.json().catch(() => null);
-
-    console.log("[generate_outfit] generator response", {
-      ok: generatorResponse.ok,
-      status: generatorResponse.status,
-      jobId: job._id.toString(),
-      hasData: Boolean(generatorData),
-    });
 
     if (!generatorResponse.ok) {
       console.error("[generate_outfit] generator request failed", {

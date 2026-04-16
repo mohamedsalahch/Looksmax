@@ -70,13 +70,6 @@ export async function POST(req: NextRequest) {
     const token = await createToken({ userId: user._id.toString(), role: user.role });
     const cookieOpts = getTokenCookieOptions();
 
-    console.log("[auth][store][login] success", {
-      userId: String(user._id),
-      role: user.role,
-      secureCookie: cookieOpts.secure,
-      sameSite: cookieOpts.sameSite,
-    });
-
     const res = NextResponse.json({
       token,
       user: {
@@ -108,11 +101,6 @@ export async function POST(req: NextRequest) {
     });
 
     res.cookies.set(cookieOpts.name, token, cookieOpts);
-    console.log("[auth][store][login] cookie set", {
-      name: cookieOpts.name,
-      secure: cookieOpts.secure,
-      maxAge: cookieOpts.maxAge,
-    });
     return res;
   } catch (error: unknown) {
     console.error("Login error:", error);

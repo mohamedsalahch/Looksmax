@@ -9,6 +9,7 @@ export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [gender, setGender] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
@@ -42,8 +43,13 @@ export default function SignupPage() {
       return;
     }
 
+    if (!gender) {
+      setError("Gender is required");
+      return;
+    }
+
     setLoading(true);
-    const result = await signup(name, email, password);
+    const result = await signup(name, email, password, gender);
     setLoading(false);
     if (result.error) {
       setError(result.error);
@@ -93,7 +99,7 @@ export default function SignupPage() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="border border-[#BD3100] bg-[#faf3f2] px-4 py-3 text-xs text-[#BD3100]">
+          <div className="border border-[#430C05] bg-[#faf3f2] px-4 py-3 text-xs text-[#430C05]">
             {error}
           </div>
         )}
@@ -160,6 +166,24 @@ export default function SignupPage() {
             className="w-full border border-border-color bg-transparent px-4 py-3 text-sm text-foreground focus:border-foreground transition-colors placeholder:text-text-secondary/50"
             placeholder="your@email.com"
           />
+        </div>
+
+        <div>
+          <label className="block text-xs text-text-secondary uppercase tracking-wider mb-2">
+            Gender
+          </label>
+          <select
+            value={gender}
+            onChange={(e) => setGender(e.target.value)}
+            required
+            className="w-full border border-border-color bg-transparent px-4 py-3 text-sm text-foreground focus:border-foreground transition-colors"
+          >
+            <option value="" disabled>
+              Select gender
+            </option>
+            <option value="men">Men</option>
+            <option value="women">Women</option>
+          </select>
         </div>
 
         <div>

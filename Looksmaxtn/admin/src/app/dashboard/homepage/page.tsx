@@ -21,7 +21,7 @@ interface HomePageContent {
   updatedAt?: string;
   createdBy?: { id: string; name: string; email: string } | null;
   updatedBy?: { id: string; name: string; email: string } | null;
-  hero: { image: string; eyebrow: string; title: string; subtitle: string };
+  hero: { image: string; eyebrow: string; title: string; subtitle: string; link: string };
   brandStory: {
     eyebrow: string;
     title: string;
@@ -35,7 +35,7 @@ interface HomePageContent {
 }
 
 const emptyContent: HomePageContent = {
-  hero: { image: "", eyebrow: "", title: "", subtitle: "" },
+  hero: { image: "", eyebrow: "", title: "", subtitle: "", link: "" },
   brandStory: {
     eyebrow: "",
     title: "",
@@ -51,6 +51,41 @@ const emptyContent: HomePageContent = {
   editorial: { image: "", eyebrow: "", label: "" },
   featured: { title: "" },
 };
+
+function normalizeHomePageContent(nextContent?: Partial<HomePageContent> | null): HomePageContent {
+  const brandStats = nextContent?.brandStory?.stats ?? [];
+  return {
+    ...emptyContent,
+    ...(nextContent || {}),
+    hero: {
+      ...emptyContent.hero,
+      ...(nextContent?.hero || {}),
+      link: nextContent?.hero?.link || "",
+    },
+    brandStory: {
+      ...emptyContent.brandStory,
+      ...(nextContent?.brandStory || {}),
+      stats: brandStats.length > 0 ? brandStats : emptyContent.brandStory.stats,
+    },
+    lookbook: {
+      ...emptyContent.lookbook,
+      ...(nextContent?.lookbook || {}),
+      images: (nextContent?.lookbook?.images || []).filter((image) => Boolean(String(image).trim())),
+      categorySlugs: (nextContent?.lookbook?.categorySlugs || []).slice(
+        0,
+        (nextContent?.lookbook?.images || []).filter((image) => Boolean(String(image).trim())).length
+      ),
+    },
+    editorial: {
+      ...emptyContent.editorial,
+      ...(nextContent?.editorial || {}),
+    },
+    featured: {
+      ...emptyContent.featured,
+      ...(nextContent?.featured || {}),
+    },
+  };
+}
 
 function getCategoryPathLabel(categories: CategoryOption[], category: CategoryOption) {
   const segments = [category.name];
@@ -111,31 +146,7 @@ export default function HomePageEditor() {
       .then((r) => r.json())
       .then((data) => {
         if (data.content) {
-          setContent({
-            ...emptyContent,
-            ...data.content,
-            brandStory: {
-              ...emptyContent.brandStory,
-              ...data.content.brandStory,
-              stats:
-                data.content.brandStory?.stats?.length > 0
-                  ? data.content.brandStory.stats
-                  : emptyContent.brandStory.stats,
-            },
-            lookbook: {
-              ...emptyContent.lookbook,
-              ...data.content.lookbook,
-              images: (data.content.lookbook?.images || []).filter((image: string) =>
-                Boolean(String(image).trim())
-              ),
-              categorySlugs: (data.content.lookbook?.categorySlugs || []).slice(
-                0,
-                (data.content.lookbook?.images || []).filter((image: string) =>
-                  Boolean(String(image).trim())
-                ).length
-              ),
-            },
-          });
+          setContent(normalizeHomePageContent(data.content));
         }
       })
       .catch(() => {})
@@ -253,6 +264,7 @@ export default function HomePageEditor() {
       body.append("heroEyebrow", content.hero.eyebrow);
       body.append("heroTitle", content.hero.title);
       body.append("heroSubtitle", content.hero.subtitle);
+      body.append("heroLink", content.hero.link);
       body.append("existingHeroImage", content.hero.image || "");
       if (heroFile) body.append("heroImage", heroFile);
 
@@ -282,7 +294,7 @@ export default function HomePageEditor() {
         return;
       }
 
-      setContent(data.content || content);
+      setContent(normalizeHomePageContent(data.content || content));
       setHeroFile(null);
       setEditorialFile(null);
       setLookbookFiles([]);
@@ -385,6 +397,16 @@ export default function HomePageEditor() {
                 placeholder="Subtitle"
                 rows={4}
                 className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm resize-none transition-colors focus:border-accent"
+              />
+              </div>
+              <div className="space-y-2">
+                <FieldLabel>Hero link</FieldLabel>
+              <input
+                type="text"
+                value={content.hero.link}
+                onChange={(e) => setContent({ ...content, hero: { ...content.hero, link: e.target.value } })}
+                placeholder="/category/all"
+                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
               />
               </div>
               <div className="space-y-2">

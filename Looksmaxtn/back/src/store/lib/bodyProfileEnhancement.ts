@@ -69,8 +69,6 @@ export async function queueBodyProfileEnhancement(userId: string, imagePath: str
     const webhookBase = preferredWebhookBase || `http://127.0.0.1:3004`;
     const webhookUrl = `${webhookBase}/api/store/users/me/body-profile/enhance-webhook?userId=${userId}&imagePath=${encodeURIComponent(imagePath)}`;
 
-    console.log(`[profile-photo] Queueing enhancement for ${imagePath} (${(fileBuffer.length / 1024).toFixed(1)} KB)`);
-
     const response = await fetch(`${baseUrl}api/proxy`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -99,7 +97,6 @@ export async function markEnhancingDone(userId: string) {
       { _id: new mongoose.Types.ObjectId(userId) },
       { $set: { "bodyProfile.imageEnhancing": false } }
     );
-    console.log(`[profile-photo] Marked enhancing done for ${userId}`);
   } catch (err) {
     console.error("[profile-photo] Failed to mark done:", err);
   }

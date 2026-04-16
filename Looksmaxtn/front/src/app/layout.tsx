@@ -1,12 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import Header from "@/components/Header";
-import SidePanel from "@/components/SidePanel";
-import CartPanel from "@/components/CartPanel";
-import ProductTryOnTray from "@/components/ProductTryOnTray";
-import Footer from "@/components/Footer";
 import { CartProvider } from "@/providers/CartContext";
 import { AuthProvider } from "@/providers/AuthContext";
+import SiteChrome from "@/components/SiteChrome";
 
 export const metadata: Metadata = {
   title: "LOOKSMAX — Premium Menswear",
@@ -23,12 +19,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col font-sans bg-background text-foreground">
         <AuthProvider>
           <CartProvider>
-            <Header />
-            <SidePanel />
-            <CartPanel />
-            <ProductTryOnTray />
-            <main className="flex-1">{children}</main>
-            <Footer />
+            <SiteChrome>{children}</SiteChrome>
           </CartProvider>
         </AuthProvider>
       </body>
