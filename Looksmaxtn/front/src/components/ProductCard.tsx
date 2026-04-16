@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
 import {
   reserveProduct,
@@ -9,7 +10,7 @@ import {
 } from "@/lib/reservations";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { getConditionColor, getConditionLabel, getConditionPercent } from "@/lib/productCondition";
-import { addStudioTryOnItem } from "@/lib/studioTryOn";
+import { queueStudioAssignment } from "@/lib/studioAssignment";
 
 type ProductType = "fashion" | "perfume" | "clothing" | "shoes";
 
@@ -62,6 +63,7 @@ export default function ProductCard({
   cloneSourceImage = "",
 }: ProductCardProps) {
   const { addItem, items } = useCart();
+  const router = useRouter();
   const availableSizes = (sizes?.length ? sizes : size ? [size] : []).filter((entry) => Boolean(entry.trim()));
   const [selectedSize, setSelectedSize] = useState(availableSizes[0] || "");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -129,26 +131,48 @@ export default function ProductCard({
     }
   };
 
-  const handleAddToTryOn = (e: React.MouseEvent) => {
+  const handleAddToTryOn = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (isSoldOut || isPerfume) return;
 
-    addStudioTryOnItem({
-      id,
-      name,
-      categories,
-      image,
-      price,
-      brand: "LOOKSMAX",
-      quantity: 1,
-      maxStock: Math.max(1, stock),
-      productType,
-      fashionSubtype,
-      originPictures,
-      size: isPerfume ? undefined : selectedSize,
-    });
-    setIsDropdownOpen(false);
+    try {
+      const reservation = await reserveProduct(id);
+      setCartCount(reservation.cartCount ?? cartCount + 1);
+      addItem({
+        id,
+        name,
+        categories,
+        price,
+        brand: "LOOKSMAX",
+        size: isPerfume ? undefined : selectedSize,
+        maxStock: Math.max(1, stock),
+        image,
+        productType,
+        fashionSubtype,
+        originPictures,
+        reservationExpiresAt: reservation.reservationExpiresAt,
+        cartCount: reservation.cartCount,
+      }, { openCart: false });
+      queueStudioAssignment({
+        id,
+        name,
+        categories,
+        image,
+        price,
+        brand: "LOOKSMAX",
+        quantity: 1,
+        maxStock: Math.max(1, stock),
+        productType,
+        fashionSubtype,
+        originPictures,
+        size: isPerfume ? undefined : selectedSize,
+      });
+      router.push("/studio");
+      setIsDropdownOpen(false);
+    } catch {
+      setIsDropdownOpen(false);
+    }
   };
 
   const toggleDropdown = (e: React.MouseEvent) => {
@@ -367,7 +391,7 @@ export default function ProductCard({
                     : "bg-background text-foreground hover:bg-hover"
                 }`}
               >
-                Try
+                TRY
               </button>
             </div>
           </div>

@@ -66,7 +66,7 @@ export default function ContactPage() {
                 className={`mb-6 border px-4 py-3 text-xs ${
                   status.type === "success"
                     ? "border-[#d8c9b8] bg-[#f1ede8] text-[#6b6055]"
-                    : "border-[#BD3100] bg-[#faf3f2] text-[#BD3100]"
+                    : "border-[#430C05] bg-[#faf3f2] text-[#430C05]"
                 }`}
               >
                 {status.text}

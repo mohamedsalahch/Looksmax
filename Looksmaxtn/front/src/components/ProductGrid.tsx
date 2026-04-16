@@ -43,11 +43,21 @@ function getMainImage(images?: ProductImage[]): string | undefined {
   return main?.url || images[0]?.url;
 }
 
-export default function ProductGrid({ category }: { category?: string }) {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loaded, setLoaded] = useState(false);
-  const [facets, setFacets] = useState<Facets | null>(null);
+export default function ProductGrid({
+  category,
+  initialProducts = [],
+  initialTotal = 0,
+  initialFacets = null,
+}: {
+  category?: string;
+  initialProducts?: Product[];
+  initialTotal?: number;
+  initialFacets?: Facets | null;
+}) {
+  const [products, setProducts] = useState<Product[]>(initialProducts);
+  const [total, setTotal] = useState(initialTotal);
+  const [loaded, setLoaded] = useState(initialProducts.length > 0 || initialTotal > 0 || initialFacets !== null);
+  const [facets, setFacets] = useState<Facets | null>(initialFacets);
 
   const [selectedSize, setSelectedSize] = useState("");
   const [draftSelectedSize, setDraftSelectedSize] = useState("");

@@ -108,7 +108,7 @@ export default function HeaderSearch() {
             return nextOpen;
           });
         }}
-        className="inline-flex h-9 w-9 items-center justify-center text-foreground hover:text-text-secondary transition-colors cursor-pointer"
+        className="inline-flex h-9 w-9 shrink-0 items-center justify-center text-foreground hover:text-text-secondary transition-colors cursor-pointer"
         aria-label="Search"
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -118,7 +118,7 @@ export default function HeaderSearch() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-3 w-[min(32rem,calc(100vw-2rem))] border border-border-color bg-background p-4 shadow-[0_20px_60px_rgba(0,0,0,0.12)]">
+        <div className="fixed left-3 right-3 top-[62px] z-50 border border-border-color bg-background p-3 shadow-[0_20px_60px_rgba(0,0,0,0.12)] md:absolute md:right-0 md:left-auto md:top-full md:mt-3 md:w-[min(32rem,calc(100vw-2rem))] md:p-4">
           <div className="relative">
             <svg
               width="18"
@@ -150,7 +150,7 @@ export default function HeaderSearch() {
                 }
               }}
               placeholder="Search shoes, jackets, hats..."
-              className="h-14 w-full rounded-full border border-border-color bg-background pl-12 pr-12 text-sm text-foreground outline-none transition-all focus:border-foreground focus:shadow-[0_0_0_3px_rgba(0,0,0,0.05)]"
+              className="h-12 w-full rounded-full border border-border-color bg-background pl-11 pr-11 text-sm text-foreground outline-none transition-all focus:border-foreground focus:shadow-[0_0_0_3px_rgba(0,0,0,0.05)] md:h-14 md:pl-12 md:pr-12"
             />
             {query && (
               <button

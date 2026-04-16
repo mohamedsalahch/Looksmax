@@ -1,20 +1,47 @@
 import nodemailer from "nodemailer";
 
+function cleanEnvValue(value: string | undefined, fallback = "") {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return fallback;
+  return trimmed.replace(/^"(.*)"$/, "$1").replace(/^'(.*)'$/, "$1");
+}
+
 function getMailConfig() {
-  const host = process.env.SMTP_HOST || "mail.privateemail.com";
+  const host = cleanEnvValue(process.env.SMTP_HOST, "mail.privateemail.com");
   const port = Number(process.env.SMTP_PORT || "465");
   const secure = process.env.SMTP_SECURE
     ? process.env.SMTP_SECURE === "true"
     : port === 465;
-  const user = process.env.SMTP_USER || "";
-  const pass = process.env.SMTP_PASSWORD || "";
-  const from = process.env.SMTP_FROM || user;
+  const user = cleanEnvValue(process.env.SMTP_USER);
+  const pass = cleanEnvValue(process.env.SMTP_PASSWORD);
+  const from = cleanEnvValue(process.env.SMTP_FROM, user);
 
   if (!user || !pass || !from) {
     throw new Error("SMTP configuration is incomplete");
   }
 
   return { host, port, secure, auth: { user, pass }, from };
+}
+
+function createTransporter() {
+  const { host, port, secure, auth, from } = getMailConfig();
+  console.info("[mail] smtp config", {
+    host,
+    port,
+    secure,
+    user: auth.user,
+    from,
+  });
+
+  return {
+    from,
+    transporter: nodemailer.createTransport({
+      host,
+      port,
+      secure,
+      auth,
+    }),
+  };
 }
 
 export async function sendVerificationEmail({
@@ -26,13 +53,7 @@ export async function sendVerificationEmail({
   name: string;
   verificationUrl: string;
 }) {
-  const { host, port, secure, auth, from } = getMailConfig();
-  const transporter = nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth,
-  });
+  const { from, transporter } = createTransporter();
 
   const subject = "Verify your LOOKSMAX account";
   const text = [
@@ -98,13 +119,7 @@ export async function sendPasswordResetEmail({
   name: string;
   resetUrl: string;
 }) {
-  const { host, port, secure, auth, from } = getMailConfig();
-  const transporter = nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth,
-  });
+  const { from, transporter } = createTransporter();
 
   const subject = "Reset your LOOKSMAX password";
   const text = [
@@ -224,13 +239,7 @@ export async function sendOrderStatusEmail({
   orderStatus: OrderStatus;
   orderUrl: string;
 }) {
-  const { host, port, secure, auth, from } = getMailConfig();
-  const transporter = nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth,
-  });
+  const { from, transporter } = createTransporter();
 
   const copy = getOrderStatusCopy(orderStatus);
   const text = [

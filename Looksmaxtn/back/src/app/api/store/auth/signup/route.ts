@@ -4,6 +4,18 @@ import User from "@/store/models/User";
 import { hashPassword } from "@/store/lib/auth";
 import { createEmailVerificationToken } from "@/store/lib/emailVerification";
 import { sendVerificationEmail } from "@/store/lib/mailer";
+import { getEmailBaseUrl } from "@/store/lib/emailLinks";
+
+function normalizeGender(value: unknown) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "male" || normalized === "man" || normalized === "men") {
+    return "men";
+  }
+  if (normalized === "female" || normalized === "woman" || normalized === "women") {
+    return "women";
+  }
+  return "";
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,12 +24,17 @@ export async function POST(req: NextRequest) {
     const name = String(body?.name || "").trim();
     const email = String(body?.email || "").trim().toLowerCase();
     const password = String(body?.password || "");
+    const gender = normalizeGender(body?.gender);
 
     if (!name || !email || !password) {
       return NextResponse.json(
         { error: "Name, email, and password are required" },
         { status: 400 }
       );
+    }
+
+    if (!gender) {
+      return NextResponse.json({ error: "Gender is required" }, { status: 400 });
     }
 
     if (password.length < 6) {
@@ -41,10 +58,24 @@ export async function POST(req: NextRequest) {
       email,
       password: hashed,
       emailVerified: false,
+      bodyProfile: {
+        heightCm: "",
+        weightKg: "",
+        topSize: "",
+        bottomSize: "",
+        shoeSize: "",
+        profileImage: "",
+        profileImageEnhanced: "",
+        profileImageUploadCount: 0,
+        outfitGenerationCount: 0,
+        gender,
+        imageEnhancing: false,
+        profileImageRequiresGeneration: false,
+      },
     });
 
     const verification = createEmailVerificationToken();
-    const verificationUrl = new URL("/verify-email", process.env.FRONTEND_BASE_URL || "http://localhost:3000");
+    const verificationUrl = new URL("/verify-email", getEmailBaseUrl());
     verificationUrl.searchParams.set("email", email);
     verificationUrl.searchParams.set("token", verification.token);
 

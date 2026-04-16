@@ -4,13 +4,9 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {useAuth} from "@/providers/AuthContext";
+import { useCart } from "@/providers/CartContext";
 import ProductCard from "@/components/ProductCard";
-import {
-    addStudioTryOnItem,
-    getStudioTryOnItems,
-    StudioTryOnItem,
-    subscribeToStudioTryOn,
-} from "@/lib/studioTryOn";
+import { consumeStudioAssignments, inferStudioAssignmentZone, StudioAssignmentItem, StudioZoneId } from "@/lib/studioAssignment";
 import {formatTndPrice} from "@/lib/formatPrice";
 import { withAuthRequest } from "@/lib/authClient";
 
@@ -60,6 +56,10 @@ interface OutfitSlotItem {
         left?: string;
         right?: string;
     };
+}
+
+interface OutfitViewItem extends OutfitSlotItem {
+    zoneId: StudioZoneId;
 }
 
 interface SavedOutfitItem {
@@ -363,7 +363,7 @@ function normalizeSearchableText(value: string) {
     return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-function getStudioItemSearchText(item: Pick<StudioProduct, "categories" | "name"> | Pick<StudioTryOnItem, "name"> & {
+function getStudioItemSearchText(item: Pick<StudioProduct, "categories" | "name"> | Pick<StudioAssignmentItem, "name"> & {
     categories?: string[]
 }) {
     return normalizeSearchableText(
@@ -373,7 +373,7 @@ function getStudioItemSearchText(item: Pick<StudioProduct, "categories" | "name"
 
 function doesItemMatchZone(
     zoneId: (typeof BODY_ZONES)[number]["id"],
-    item: Pick<StudioProduct, "categories" | "name" | "fashionSubtype"> | Pick<StudioTryOnItem, "name" | "fashionSubtype"> & {
+    item: Pick<StudioProduct, "categories" | "name" | "fashionSubtype"> | Pick<StudioAssignmentItem, "name" | "fashionSubtype"> & {
         categories?: string[]
     },
     isWomen: boolean
@@ -427,7 +427,7 @@ function StudioModel({
     onZoneClick,
 }: {
     isWomen: boolean;
-    selectedZoneId: (typeof BODY_ZONES)[number]["id"];
+    selectedZoneId: string;
     onZoneClick: (zoneId: (typeof BODY_ZONES)[number]["id"]) => void;
 }) {
     if (isWomen) {
@@ -569,6 +569,7 @@ export default function OutfitStudioPage() {
     const router = useRouter();
     const pathname = usePathname();
     const {user, loading, refreshUser} = useAuth();
+    const { items: cartItems } = useCart();
     const isWomen = user?.bodyProfile?.gender === "women";
     const studioTitle = isWomen ? "Outfit Builder" : "Outfit Studio";
     const [categories, setCategories] = useState<CategoryNode[]>([]);
@@ -581,10 +582,13 @@ export default function OutfitStudioPage() {
     const [outfit, setOutfit] = useState<Record<string, OutfitSlotItem | null>>(
         Object.fromEntries(BODY_ZONES.map((zone) => [zone.id, null]))
     );
-    const [selectedZoneId, setSelectedZoneId] =
-        useState<(typeof BODY_ZONES)[number]["id"]>("outerwear");
-    const [tryOnItems, setTryOnItems] = useState<StudioTryOnItem[]>(() => getStudioTryOnItems());
-    const [isTryOnOpen, setIsTryOnOpen] = useState(() => getStudioTryOnItems().length > 0);
+    const [selectedZoneId, setSelectedZoneId] = useState<string>("");
+    const [zoneHistory, setZoneHistory] = useState<Record<StudioZoneId, OutfitSlotItem[]>>(
+        () => BODY_ZONES.reduce((acc, zone) => {
+            acc[zone.id] = [];
+            return acc;
+        }, {} as Record<StudioZoneId, OutfitSlotItem[]>)
+    );
     const [generatingOutfit, setGeneratingOutfit] = useState(false);
     const [generatedOutfitJobId, setGeneratedOutfitJobId] = useState("");
     const [generatedOutfitImages, setGeneratedOutfitImages] = useState<string[]>([]);
@@ -600,6 +604,7 @@ export default function OutfitStudioPage() {
     const [savedOutfitIndexes, setSavedOutfitIndexes] = useState<Record<string, number>>({});
     const [generationError, setGenerationError] = useState("");
     const [generationStateHydrated, setGenerationStateHydrated] = useState(false);
+    const [showAllSelectedItems, setShowAllSelectedItems] = useState(true);
 
     useEffect(() => {
         if (!loading && !user) {
@@ -665,13 +670,6 @@ export default function OutfitStudioPage() {
         if (!user) return;
         loadSavedOutfits();
     }, [user]);
-
-    useEffect(() => {
-        return subscribeToStudioTryOn((items) => {
-            setTryOnItems(items);
-            setIsTryOnOpen(items.length > 0);
-        });
-    }, []);
 
     useEffect(() => {
         if (!user?.id) return;
@@ -818,99 +816,181 @@ export default function OutfitStudioPage() {
     const filteredProducts = useMemo(() => {
         return products.filter((product) => product.productType !== "perfume");
     }, [products]);
-    const filteredTryOnItems = useMemo(
-        () => tryOnItems.filter((item) => doesItemMatchZone(selectedZoneId, item, isWomen)),
-        [tryOnItems, selectedZoneId, isWomen]
-    );
-    const selectedZoneMeta = getZoneDetails(selectedZoneId, isWomen);
-    const selectedZoneItem = outfit[selectedZoneId];
+    const activeZoneIdForSelection = showAllSelectedItems ? "" : selectedZoneId;
+    const selectedZoneMeta = showAllSelectedItems
+        ? {
+            title: "All selected items",
+            type: "All zones",
+            fit: "Complete outfit",
+            season: "Current cart",
+            care: "Tap a card to focus its zone",
+        }
+        : getZoneDetails(selectedZoneId as StudioZoneId, isWomen);
+    const selectedZoneItem = activeZoneIdForSelection ? outfit[activeZoneIdForSelection] : null;
+    const allSelectedOutfitItems: OutfitViewItem[] = cartItems.flatMap((cartItem) => {
+        if (cartItem.productType === "perfume") return [];
+
+        const zoneId = inferStudioAssignmentZone({
+            categories: cartItem.categories,
+            name: cartItem.name,
+            fashionSubtype: cartItem.fashionSubtype,
+        });
+
+        return [{
+            id: cartItem.id,
+            name: cartItem.name,
+            image: cartItem.image,
+            fashionSubtype: cartItem.fashionSubtype,
+            originPictures: cartItem.originPictures,
+            zoneId,
+        }];
+    });
+    const selectedZoneHistory: OutfitViewItem[] = showAllSelectedItems
+        ? allSelectedOutfitItems
+        : (zoneHistory[selectedZoneId as StudioZoneId] || []).map((item) => ({
+            ...item,
+            zoneId: selectedZoneId as StudioZoneId,
+        }));
     const hasSelectedOutfitItems = BODY_ZONES.some((zone) => Boolean(outfit[zone.id]));
     const generationLimit = 100;
     const generationRequestsUsed = Math.min(Number(user?.bodyProfile?.outfitGenerationCount || 0), generationLimit);
     const remainingGenerationRequests = Math.max(generationLimit - generationRequestsUsed, 0);
     const generationLimitReached = remainingGenerationRequests <= 0;
+    const canGenerateOutfit = profileReady && hasSelectedOutfitItems && !generationLimitReached;
+    const shouldOpenProfileSettings = !profileReady;
 
-    const handleAddToTryOnFromProductList = (product: StudioProduct) => {
-        addStudioTryOnItem({
-            id: product._id,
-            name: product.name,
-            categories: product.categories,
-            image: getMainImage(product.images),
-            price: product.price.toFixed(2),
-            brand: product.brand || "LOOKSMAX",
-            quantity: 1,
-            maxStock: Math.max(1, product.stock ?? 1),
-            productType: product.productType ?? "fashion",
-            fashionSubtype: product.fashionSubtype || "clothes",
-            originPictures: product.originPictures || {front: "", back: "", left: "", right: ""},
+    const applyAssignmentToZone = (zoneId: StudioZoneId, item: StudioAssignmentItem) => {
+        const nextItem: OutfitSlotItem = {
+            id: item.id,
+            name: item.name,
+            image: item.image,
+            fashionSubtype: item.fashionSubtype,
+            originPictures: item.originPictures,
+        };
+
+        setSelectedZoneId(zoneId);
+        setShowAllSelectedItems(false);
+        setOutfit((current) => ({
+            ...current,
+            [zoneId]: nextItem,
+        }));
+        setZoneHistory((current) => {
+            const currentZoneHistory = current[zoneId] || [];
+            const nextZoneHistory = [
+                nextItem,
+                ...currentZoneHistory.filter((entry) => entry.id !== nextItem.id),
+            ].slice(0, 5);
+
+            if (JSON.stringify(currentZoneHistory) === JSON.stringify(nextZoneHistory)) {
+                return current;
+            }
+
+            return {
+                ...current,
+                [zoneId]: nextZoneHistory,
+            };
         });
     };
 
-    const handleAssignTryOnItemToSelectedZone = (item: StudioTryOnItem) => {
-        if (!doesItemMatchZone(selectedZoneId, item, isWomen)) {
-            return;
+    useEffect(() => {
+        const nextOutfit: Record<string, OutfitSlotItem | null> = Object.fromEntries(
+            BODY_ZONES.map((zone) => [zone.id, null])
+        );
+        const nextHistory: Record<StudioZoneId, OutfitSlotItem[]> = BODY_ZONES.reduce((acc, zone) => {
+            acc[zone.id] = [];
+            return acc;
+        }, {} as Record<StudioZoneId, OutfitSlotItem[]>);
+
+        for (const cartItem of cartItems) {
+            if (cartItem.productType === "perfume") continue;
+
+            const zoneId = inferStudioAssignmentZone({
+                categories: cartItem.categories,
+                name: cartItem.name,
+                fashionSubtype: cartItem.fashionSubtype,
+            });
+
+            const nextItem: OutfitSlotItem = {
+                id: cartItem.id,
+                name: cartItem.name,
+                image: cartItem.image,
+                fashionSubtype: cartItem.fashionSubtype,
+                originPictures: cartItem.originPictures,
+            };
+
+            nextOutfit[zoneId] = nextItem;
+            nextHistory[zoneId] = [
+                nextItem,
+                ...nextHistory[zoneId].filter((entry) => entry.id !== nextItem.id),
+            ].slice(0, 5);
         }
 
-        if (selectedZoneItem?.id === item.id) {
-            setOutfit((current) => ({
-                ...current,
-                [selectedZoneId]: null,
-            }));
-            return;
-        }
-
-        setOutfit((current) => ({
-            ...current,
-            [selectedZoneId]: {
-                id: item.id,
-                name: item.name,
-                image: item.image,
-                fashionSubtype: item.fashionSubtype,
-                originPictures: item.originPictures,
-            },
-        }));
-    };
+        setOutfit((current) => (
+            JSON.stringify(current) === JSON.stringify(nextOutfit) ? current : nextOutfit
+        ));
+        setZoneHistory((current) => (
+            JSON.stringify(current) === JSON.stringify(nextHistory) ? current : nextHistory
+        ));
+    }, [cartItems, isWomen]);
 
     useEffect(() => {
-        const handleAssignFromTray = (event: Event) => {
-            const customEvent = event as CustomEvent<StudioTryOnItem>;
-            if (!customEvent.detail) return;
-            handleAssignTryOnItemToSelectedZone(customEvent.detail);
-        };
+        const pendingAssignments = consumeStudioAssignments();
+        if (pendingAssignments.length === 0) return;
 
-        window.addEventListener(
-            "looksmax:studio-assign-item",
-            handleAssignFromTray as EventListener
-        );
-
-        return () => {
-            window.removeEventListener(
-                "looksmax:studio-assign-item",
-                handleAssignFromTray as EventListener
-            );
-        };
-    }, [handleAssignTryOnItemToSelectedZone]);
-
-    const handleSelectZone = (zoneId: (typeof BODY_ZONES)[number]["id"]) => {
-        if (selectedZoneId === zoneId && outfit[zoneId]) {
-            setOutfit((current) => ({
-                ...current,
-                [zoneId]: null,
-            }));
-            return;
+        let lastZoneId: StudioZoneId | null = null;
+        for (const item of pendingAssignments) {
+            const zoneId = item.preferredZoneId || inferStudioAssignmentZone(item);
+            applyAssignmentToZone(zoneId, item);
+            lastZoneId = zoneId;
         }
 
+        if (lastZoneId) {
+            setSelectedZoneId(lastZoneId);
+        }
+    }, [isWomen]);
+
+    const handleSelectZone = (zoneId: (typeof BODY_ZONES)[number]["id"]) => {
+        setShowAllSelectedItems(false);
         setSelectedZoneId(zoneId);
     };
 
     const handleBuilderZoneClick = (zoneId: (typeof BODY_ZONES)[number]["id"]) => {
+        setShowAllSelectedItems(false);
         handleSelectZone(zoneId);
-        if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("looksmax:studio-try-on-open"));
+    };
+
+    const handleSelectedZoneItemClick = (zoneId: StudioZoneId, item: OutfitViewItem) => {
+        setOutfit((current) => {
+            if (current[zoneId]?.id === item.id) {
+                return {
+                    ...current,
+                    [zoneId]: null,
+                };
+            }
+
+            return {
+                ...current,
+                [zoneId]: {
+                    id: item.id,
+                    name: item.name,
+                    image: item.image,
+                    fashionSubtype: item.fashionSubtype,
+                    originPictures: item.originPictures,
+                },
+            };
+        });
+
+        if (!showAllSelectedItems) {
+            setSelectedZoneId(zoneId);
         }
     };
 
     const handleGenerateOutfit = async () => {
+        if (!profileReady) {
+            router.push("/account/settings");
+            return;
+        }
+
         if (generationLimitReached) {
             setGenerationError("Generation limit reached.");
             return;
@@ -1174,33 +1254,6 @@ export default function OutfitStudioPage() {
         );
     }
 
-    if (!profileReady) {
-        return (
-            <div className="pt-[72px] min-h-screen">
-                <div className="max-w-3xl mx-auto px-4 md:px-8 py-12">
-                    <div className="border border-border-color bg-background p-8 text-center space-y-4">
-                        <p className="text-[10px] uppercase tracking-[0.28em] text-text-secondary">
-                            {studioTitle}
-                        </p>
-                        <h1 className="text-2xl font-semibold tracking-wide uppercase">
-                            Complete Your {studioTitle} Profile First
-                        </h1>
-                        <p className="text-sm text-text-secondary max-w-xl mx-auto">
-                            Before using the studio, add your height, weight, top size, bottom size, shoe size, gender,
-                            and profile photo in account settings.
-                        </p>
-                        <Link
-                            href="/account/settings"
-                            className="inline-flex bg-foreground text-background px-6 py-3 text-xs font-medium tracking-wide uppercase"
-                        >
-                            Update Studio Profile
-                        </Link>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
     const activeGeneratedOutfitImage = generatedOutfitImages[generatedOutfitIndex] || "";
     const generatingPreviewImage =
         user?.bodyProfile?.profileImageEnhanced || user?.bodyProfile?.profileImage || "";
@@ -1224,18 +1277,14 @@ export default function OutfitStudioPage() {
     return (
         <div className="pt-[72px] min-h-screen bg-background">
             <div className="max-w-7xl mx-auto px-4 md:px-8 py-8 space-y-6">
-                <div className="flex items-start justify-between gap-4">
-                    <div>
+                <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 max-w-2xl">
                         <p className="text-[10px] uppercase tracking-[0.28em] text-text-secondary">New Feature</p>
-                        <h1 className="mt-2 text-2xl font-semibold tracking-wide uppercase">{studioTitle}</h1>
-                        <p className="mt-2 text-sm text-text-secondary max-w-2xl">
-                            Save your body profile, filter products by category, then drag pieces onto the body map
-                            from {isWomen ? "handbag" : "headwear"} to shoes.
-                        </p>
+                        <h1 className="mt-2 text-2xl font-semibold tracking-wide uppercase leading-tight">{studioTitle}</h1>
                     </div>
                     <Link
                         href="/account/settings"
-                        className="border border-border-color px-4 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:text-foreground"
+                        className="mt-1 inline-flex h-10 shrink-0 items-center border border-border-color px-4 text-[10px] uppercase tracking-wider text-text-secondary hover:text-foreground md:mt-0"
                     >
                         Edit Profile
                     </Link>
@@ -1250,24 +1299,27 @@ export default function OutfitStudioPage() {
                         }`}
                     >
                         <div className="flex flex-col gap-4 bg-transparent px-6 py-6 2xl:min-h-[560px]">
-                            <div>
-                                <p className="text-[11px] uppercase tracking-[0.18em] text-[#666]">Selected zone</p>
-                                <h2 className="mt-1 font-serif text-[28px] font-normal text-[#1a1a1a]">
-                                    {selectedZoneMeta.title}
-                                </h2>
-                                <p className="mt-1 text-xs text-[#666]">
-                                    Click a body zone or a tag below, then pick a product from your Try-On Picks.
-                                </p>
-                            </div>
+
 
                             <div className="flex flex-wrap gap-1.5">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAllSelectedItems(true)}
+                                    className={`px-0 py-1 text-[11px] uppercase tracking-[0.15em] transition-all ${
+                                        showAllSelectedItems
+                                            ? "font-bold text-[#1a1a1a] underline underline-offset-[6px] decoration-[1px]"
+                                            : "text-[#666] hover:text-[#1a1a1a]"
+                                    }`}
+                                >
+                                    ALL
+                                </button>
                                 {BODY_ZONES.map((zone) => (
                                     <button
                                         key={zone.id}
                                         type="button"
-                                        onClick={() => handleSelectZone(zone.id)}
-                                        className={`px-0 py-1 text-[11px] uppercase tracking-[0.15em] transition-all ${
-                                            selectedZoneId === zone.id
+                                    onClick={() => handleSelectZone(zone.id)}
+                                    className={`px-0 py-1 text-[11px] uppercase tracking-[0.15em] transition-all ${
+                                            activeZoneIdForSelection === zone.id
                                                 ? "font-bold text-[#1a1a1a] underline underline-offset-[6px] decoration-[1px]"
                                                 : "text-[#666] hover:text-[#1a1a1a]"
                                         }`}
@@ -1277,78 +1329,53 @@ export default function OutfitStudioPage() {
                                 ))}
                             </div>
 
-                            <div className="border border-[#00000012] bg-[#f6f1e7]">
-                                <button
-                                    type="button"
-                                    onClick={() => setIsTryOnOpen((current) => !current)}
-                                    className="flex w-full items-center justify-between px-4 py-3 text-left"
-                                    aria-expanded={isTryOnOpen}
-                                    aria-controls="studio-try-on-picks"
-                                >
-                                    <div>
-                                        <p className="text-[11px] uppercase tracking-[0.18em] text-[#666]">Try-On
-                                            Picks</p>
-                                        <p className="mt-1 text-xs text-[#666]">
-                                            {isTryOnOpen
-                                                ? "Hide the suggestions and keep the stage clean."
-                                                : "Open the picks to assign pieces to the selected zone."}
-                                        </p>
-                                    </div>
-                                    <span className="text-[11px] uppercase tracking-[0.18em] text-[#1a1a1a]">
-                    {isTryOnOpen ? "Hide" : "Show"}
-                  </span>
-                                </button>
+                            {selectedZoneHistory.length > 0 && (
+                                <div className="border border-[#00000012] bg-[#f6f1e7] px-4 py-3">
+                                    <p className="text-[11px] uppercase tracking-[0.18em] text-[#666]">
+                                        {showAllSelectedItems ? "All selected items" : "Selected zone items"}
+                                    </p>
+                                    <div className="mt-3 space-y-2">
+                                        {selectedZoneHistory.map((item) => {
+                                            const isSelectedHistoryItem =
+                                                outfit[item.zoneId]?.id === item.id ||
+                                                selectedZoneItem?.id === item.id;
 
-                                {isTryOnOpen && (
-                                    <div id="studio-try-on-picks"
-                                         className="space-y-1.5 border-t border-[#00000012] px-4 py-3 2xl:max-h-[300px] 2xl:overflow-y-auto 2xl:pr-1">
-                                        {filteredTryOnItems.map((item) => (
+                                            return (
                                             <button
-                                                key={item.id}
+                                                key={`${item.zoneId}-${item.id}`}
                                                 type="button"
-                                                onClick={() => handleAssignTryOnItemToSelectedZone(item)}
-                                                className={`flex w-full items-center gap-3 rounded-none p-3 text-left transition-colors ${
-                                                    selectedZoneItem?.id === item.id
+                                                onClick={() => handleSelectedZoneItemClick(item.zoneId, item)}
+                                                className={`flex w-full items-center gap-3 rounded-none p-2 text-left transition-colors ${
+                                                    isSelectedHistoryItem
                                                         ? "bg-[#ede1ce]"
                                                         : "bg-transparent hover:bg-[#ede1ce]"
                                                 }`}
                                             >
-                                                <div
-                                                    className="flex h-[64px] w-[52px] shrink-0 items-center justify-center overflow-hidden bg-[#e8dccb]">
+                                                <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden bg-[#e8dccb]">
                                                     {item.image ? (
-                                                        <img src={item.image} alt={item.name}
-                                                             className="h-full w-full object-cover"/>
+                                                        <img
+                                                            src={item.image}
+                                                            alt={item.name}
+                                                            className="h-full w-full object-cover"
+                                                        />
                                                     ) : (
-                                                        <div className="h-5 w-5 border border-[#666]/30"/>
+                                                        <div className="h-4 w-4 border border-[#666]/30" />
                                                     )}
                                                 </div>
                                                 <div className="min-w-0">
-                                                    <div
-                                                        className="text-[13px] leading-5 text-[#1a1a1a]">{item.name}</div>
-                                                    <div className="mt-1 text-[12px] text-[#1a1a1a]">
-                                                        {formatTndPrice(item.price)}
+                                                    <div className="truncate text-[12px] leading-5 text-[#1a1a1a]">
+                                                        {item.name}
                                                     </div>
-                                                    <div
-                                                        className="mt-1 text-[10px] uppercase tracking-[0.18em] text-[#666]">
-                                                        {item.brand || "LOOKSMAX"}
-                                                    </div>
+                                                <div className="text-[10px] uppercase tracking-[0.16em] text-[#666]">
+                                                    {getZoneButtonLabel(item.zoneId, isWomen)}
                                                 </div>
+                                            </div>
                                             </button>
-                                        ))}
-                                        {tryOnItems.length === 0 && (
-                                            <div className="bg-[#ede1ce] px-3 py-4 text-xs text-[#666]">
-                                                Add products to your Try-On Picks first, then assign them here.
-                                            </div>
-                                        )}
-                                        {tryOnItems.length > 0 && filteredTryOnItems.length === 0 && (
-                                            <div className="bg-[#ede1ce] px-3 py-4 text-xs text-[#666]">
-                                                No matching products in your Try-On Picks
-                                                for {selectedZoneMeta.title.toLowerCase()}.
-                                            </div>
-                                        )}
+                                            );
+                                        })}
                                     </div>
-                                )}
-                            </div>
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex flex-col items-center bg-transparent px-6 py-6 2xl:min-h-[560px]">
@@ -1375,13 +1402,19 @@ export default function OutfitStudioPage() {
                                                 <button
                                                     key={zone.id}
                                                     type="button"
-                                                    tabIndex={-1}
-                                                    aria-hidden="true"
-                                                    className={`pointer-events-none absolute z-30 ${getZonePreviewPosition(zone.id, isWomen).className} flex h-12 w-12 items-center justify-center overflow-hidden rounded-none border transition-colors ${
-                                                        selectedZoneId === zone.id
+                                                    onClick={() => {
+                                                        setShowAllSelectedItems(false);
+                                                        setOutfit((current) => ({
+                                                            ...current,
+                                                            [zone.id]: null,
+                                                        }));
+                                                    }}
+                                                    className={`absolute z-30 ${getZonePreviewPosition(zone.id, isWomen).className} flex h-12 w-12 items-center justify-center overflow-hidden rounded-none border transition-colors ${
+                                                        activeZoneIdForSelection === zone.id
                                                             ? "border-[#c9a96e] bg-[#f2d48f] shadow-[0_0_0_1px_rgba(201,169,110,0.45)]"
                                                             : "border-[#00000012] bg-[#ede1ce]"
                                                     }`}
+                                                    aria-label={`Remove ${assignedItem.name} from ${zone.label}`}
                                                 >
                                                     <img
                                                         src={assignedItem.image}
@@ -1394,23 +1427,27 @@ export default function OutfitStudioPage() {
                                     </div>
                                 </div>
 
-                                <p className="mt-4 text-[11px] uppercase tracking-[0.12em] text-[#999]">Click a zone to
-                                    assign</p>
                                 <button
                                     type="button"
                                     onClick={handleGenerateOutfit}
-                                    disabled={generatingOutfit || !hasSelectedOutfitItems || generationLimitReached}
-                                    className="mt-6 w-full rounded-none bg-[#1a1a1a] px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-white transition-colors hover:bg-[#c9a96e] disabled:opacity-50"
+                                    disabled={generatingOutfit || (!canGenerateOutfit && !shouldOpenProfileSettings)}
+                                    className={`mt-6 w-full rounded-none px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-white transition-colors ${
+                                        generatingOutfit || (!canGenerateOutfit && !shouldOpenProfileSettings)
+                                            ? "cursor-not-allowed bg-[#1a1a1a] opacity-50"
+                                            : "bg-[#1a1a1a] hover:bg-[#c9a96e]"
+                                    }`}
                                 >
                                     {generatingOutfit
                                         ? "Generating..."
+                                        : !profileReady
+                                            ? "Update profile to generate"
                                         : generationLimitReached
                                             ? "Generation limit reached"
                                         : hasSelectedOutfitItems
                                             ? "Generate outfit"
                                             : "Select at least one item"}
                                 </button>
-                                <p className="text-[10px] uppercase tracking-[0.18em] text-[#999]">
+                                <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-[#999]">
                                     {remainingGenerationRequests > 0
                                         ? `${remainingGenerationRequests} generation${remainingGenerationRequests === 1 ? "" : "s"} left`
                                         : "No generations left"}
@@ -1520,7 +1557,7 @@ export default function OutfitStudioPage() {
                                 )}
 
                                 {generationError && (
-                                    <div className="border border-[#BD3100] bg-[#faf3f2] px-3 py-3 text-xs text-[#BD3100]">
+                                    <div className="border border-[#430C05] bg-[#faf3f2] px-3 py-3 text-xs text-[#430C05]">
                                         {generationError}
                                     </div>
                                 )}

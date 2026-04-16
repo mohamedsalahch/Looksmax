@@ -2,15 +2,18 @@
 
 import { useCart } from "@/providers/CartContext";
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { releaseProductReservation } from "@/lib/reservations";
 import { formatTndPrice } from "@/lib/formatPrice";
-import { addStudioTryOnItem } from "@/lib/studioTryOn";
 
 export default function CartPanel() {
-  const { items, isOpen, closeCart, removeItem, updateQuantity, totalItems, totalPrice } =
+  const { items, isOpen, openCart, closeCart, removeItem, updateQuantity, totalItems, totalPrice } =
     useCart();
+  const router = useRouter();
   const hasUnavailableItems = items.some((item) => item.isUnavailable);
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
 
   // Close on Escape
   useEffect(() => {
@@ -28,6 +31,47 @@ export default function CartPanel() {
       document.body.style.overflow = "";
     };
   }, [isOpen, closeCart]);
+
+  useEffect(() => {
+    const handleTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1) return;
+
+      const touch = event.touches[0];
+      if (!isOpen && touch.clientX < window.innerWidth - 24) return;
+
+      touchStartXRef.current = touch.clientX;
+      touchStartYRef.current = touch.clientY;
+    };
+
+    const handleTouchEnd = (event: TouchEvent) => {
+      if (touchStartXRef.current === null || touchStartYRef.current === null) return;
+
+      const touch = event.changedTouches[0];
+      const deltaX = touch.clientX - touchStartXRef.current;
+      const deltaY = touch.clientY - touchStartYRef.current;
+
+      touchStartXRef.current = null;
+      touchStartYRef.current = null;
+
+      if (Math.abs(deltaY) > Math.abs(deltaX)) return;
+
+      if (!isOpen && deltaX < -70) {
+        return void openCart();
+      }
+
+      if (isOpen && deltaX > 70) {
+        closeCart();
+      }
+    };
+
+    window.addEventListener("touchstart", handleTouchStart, { passive: true });
+    window.addEventListener("touchend", handleTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [closeCart, isOpen, openCart]);
 
   return (
     <>
@@ -129,7 +173,7 @@ export default function CartPanel() {
                       </div>
 
                       {item.isUnavailable && (
-                        <p className="mt-1 text-[10px] text-danger">
+                        <p className="mt-1 text-[10px] text-[#430C05]">
                           {item.unavailableReason || "This product is already taken. Remove it manually."}
                         </p>
                       )}
@@ -188,30 +232,6 @@ export default function CartPanel() {
                       </p>
                     </div>
 
-                    {item.productType !== "perfume" && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          addStudioTryOnItem({
-                            id: item.id,
-                            name: item.name,
-                            categories: item.categories,
-                            image: item.image,
-                            price: item.price,
-                            brand: item.brand,
-                            quantity: item.quantity,
-                            maxStock: item.maxStock,
-                            productType: item.productType,
-                            fashionSubtype: item.fashionSubtype,
-                            size: item.size,
-                            originPictures: item.originPictures,
-                          })
-                        }
-                        className="mt-3 text-[10px] uppercase tracking-[0.22em] text-text-secondary underline underline-offset-4 hover:text-foreground transition-colors cursor-pointer"
-                      >
-                        Try
-                      </button>
-                    )}
                   </div>
                 </div>
               ))}
@@ -250,9 +270,38 @@ export default function CartPanel() {
                   ? "bg-border-color text-text-secondary cursor-not-allowed"
                   : "bg-foreground text-background hover:bg-accent cursor-pointer"
               }`}
-            >
+              >
               {hasUnavailableItems ? "Remove Taken Items" : "Proceed to Checkout"}
             </Link>
+
+            <button
+              type="button"
+              onClick={() => {
+                const firstTryOnItem = items.find((item) => item.productType !== "perfume");
+                if (!firstTryOnItem) return;
+
+                const { queueStudioAssignment } = require("@/lib/studioAssignment");
+                queueStudioAssignment({
+                  id: firstTryOnItem.id,
+                  name: firstTryOnItem.name,
+                  categories: firstTryOnItem.categories,
+                  image: firstTryOnItem.image,
+                  price: firstTryOnItem.price,
+                  brand: firstTryOnItem.brand,
+                  quantity: firstTryOnItem.quantity,
+                  maxStock: firstTryOnItem.maxStock,
+                  productType: firstTryOnItem.productType,
+                  fashionSubtype: firstTryOnItem.fashionSubtype,
+                  size: firstTryOnItem.size,
+                  originPictures: firstTryOnItem.originPictures,
+                });
+                closeCart();
+                router.push("/studio");
+              }}
+              className="block w-full border border-border-color px-4 py-3 text-[10px] uppercase tracking-[0.22em] text-foreground transition-colors hover:bg-hover cursor-pointer"
+            >
+              TRY ON
+            </button>
 
             {/* Continue shopping */}
             <button

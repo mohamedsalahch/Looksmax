@@ -77,14 +77,6 @@ export async function PUT(
         };
     const nextSnapshot = body.outfitSnapshot ?? outfit.outfitSnapshot ?? {};
 
-    console.log("[outfits] updating saved outfit", {
-      id,
-      hasName: Boolean(nextName),
-      hasFront: nextImages.front.length > 0,
-      hasBack: nextImages.back.length > 0,
-      hasSnapshot: Boolean(body.outfitSnapshot),
-    });
-
     const updatedOutfit = await SavedOutfit.findByIdAndUpdate(
       id,
       {

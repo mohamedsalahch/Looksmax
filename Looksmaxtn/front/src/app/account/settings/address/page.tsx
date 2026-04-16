@@ -66,7 +66,7 @@ export default function AddressSettingsPage() {
           Billing Address
         </h2>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {error && <div className="border border-[#BD3100] bg-[#faf3f2] px-4 py-3 text-xs text-[#BD3100]">{error}</div>}
+          {error && <div className="border border-[#430C05] bg-[#faf3f2] px-4 py-3 text-xs text-[#430C05]">{error}</div>}
           {success && <div className="border border-[#d8c9b8] bg-[#f1ede8] px-4 py-3 text-xs text-[#6b6055]">{success}</div>}
           <div>
             <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">Street Address</label>

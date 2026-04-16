@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
 import { reserveProduct, subscribeToReservationChanges } from "@/lib/reservations";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { getConditionColor, getConditionLabel, getConditionPercent } from "@/lib/productCondition";
-import { addStudioTryOnItem } from "@/lib/studioTryOn";
+import { queueStudioAssignment } from "@/lib/studioAssignment";
 
 type ProductType = "fashion" | "perfume" | "clothing" | "shoes";
 
@@ -38,7 +39,7 @@ export default function ProductInfo({
     cloneSourceName?: string;
     cloneSourceImage?: string;
   };
-}) {
+  }) {
   const [addedToCart, setAddedToCart] = useState(false);
   const [currentStock, setCurrentStock] = useState(() => product.stock);
   const [reservationError, setReservationError] = useState("");
@@ -49,6 +50,7 @@ export default function ProductInfo({
   );
   const [selectedSize, setSelectedSize] = useState(() => availableSizes[0] || "");
   const { addItem, items } = useCart();
+  const router = useRouter();
   const isPerfume = product.productType === "perfume";
   const isSoldOut = currentStock < 1;
   const isInLocalCart = product.id ? items.some((item) => item.id.split("-")[0] === product.id) : false;
@@ -124,7 +126,7 @@ export default function ProductInfo({
         reservationExpiresAt: reservation.reservationExpiresAt,
         cartCount: reservation.cartCount,
         quantity: selectedQuantity,
-      });
+      }, { openCart: true });
       setAddedToCart(true);
       setTimeout(() => setAddedToCart(false), 2000);
     } catch (error) {
@@ -132,23 +134,46 @@ export default function ProductInfo({
     }
   };
 
-  const handleAddToTryOn = () => {
+  const handleAddToTryOn = async () => {
     if (isSoldOut || isPerfume) return;
 
-    addStudioTryOnItem({
-      id: product.id || "unknown",
-      name: product.name,
-      image: product.image,
-      categories: product.categories,
-      price: product.price,
-      brand: product.brand,
-      quantity: 1,
-      maxStock: Math.max(1, currentStock),
-      productType: product.productType,
-      fashionSubtype: product.fashionSubtype,
-      originPictures: product.originPictures,
-      size: isPerfume ? undefined : selectedSize,
-    });
+    try {
+      const reservation = await reserveProduct(product.id || "unknown");
+      setCartCount(reservation.cartCount ?? cartCount + 1);
+      addItem({
+        id: product.id || "unknown",
+        name: product.name,
+        price: product.price,
+        brand: product.brand,
+        image: product.image,
+        categories: product.categories,
+        size: isPerfume ? undefined : selectedSize,
+        maxStock: Math.max(1, currentStock),
+        productType: product.productType,
+        fashionSubtype: product.fashionSubtype,
+        originPictures: product.originPictures,
+        reservationExpiresAt: reservation.reservationExpiresAt,
+        cartCount: reservation.cartCount,
+        quantity: selectedQuantity,
+      }, { openCart: false });
+      queueStudioAssignment({
+        id: product.id || "unknown",
+        name: product.name,
+        image: product.image,
+        categories: product.categories,
+        price: product.price,
+        brand: product.brand,
+        quantity: 1,
+        maxStock: Math.max(1, currentStock),
+        productType: product.productType,
+        fashionSubtype: product.fashionSubtype,
+        originPictures: product.originPictures,
+        size: isPerfume ? undefined : selectedSize,
+      });
+      router.push("/studio");
+    } catch {
+      setReservationError("Unable to add this product to your cart.");
+    }
   };
 
   const conditionPercent = getConditionPercent(product.conditionScore ?? 7);
@@ -257,7 +282,7 @@ export default function ProductInfo({
         </div>
       )}
 
-      {reservationError && <p className="text-xs text-[#BD3100]">{reservationError}</p>}
+      {reservationError && <p className="text-xs text-[#430C05]">{reservationError}</p>}
 
       <div className="flex items-center justify-between gap-4 border border-border-color bg-surface/40 px-4 py-3">
         <div>
@@ -321,7 +346,7 @@ export default function ProductInfo({
                 : "border border-border-color text-foreground hover:bg-hover"
             }`}
           >
-            Try Now
+            TRY ON
           </button>
         )}
       </div>
