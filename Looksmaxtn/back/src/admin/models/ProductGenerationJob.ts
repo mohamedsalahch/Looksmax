@@ -4,6 +4,7 @@ export interface IProductGenerationJob extends Document {
   status: "processing" | "completed" | "failed";
   productType: "fashion" | "perfume";
   fashionSubtype: "clothes" | "shoes";
+  garmentZone?: "top" | "bottom";
   images: {
     front?: string;
     back?: string;
@@ -24,6 +25,7 @@ const ProductGenerationJobSchema = new Schema<IProductGenerationJob>(
     },
     productType: { type: String, required: true },
     fashionSubtype: { type: String, required: true },
+    garmentZone: { type: String, enum: ["top", "bottom"], default: "top" },
     images: {
       front: { type: String, default: "" },
       back: { type: String, default: "" },

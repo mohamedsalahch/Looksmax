@@ -1,5 +1,177 @@
 """Prompt templates for image generation."""
 
+CLOTHES_TOP_PROMPT_TEMPLATE = """
+You are a professional fashion photography generator.
+
+Your task is to generate a high-end, photorealistic image of a model wearing the provided TOP garment.
+
+--------------------------------
+MODEL REFERENCE:
+Two images of the same model are provided (front and back views).
+
+- Preserve identity exactly:
+  - Face
+  - Skin tone
+  - Body shape
+- The person must remain identical across generations
+
+--------------------------------
+GARMENT PRIORITY (TOP = HERO):
+The TOP garment is the primary focus.
+
+REQUIREMENTS:
+- Must match EXACTLY:
+  - Color
+  - Fabric
+  - Fit
+  - Details (logos, stitching, patterns)
+
+- Reconstruct using front & back views
+- Ensure realistic fabric behavior (folds, tension)
+
+--------------------------------
+SECONDARY GARMENT (BOTTOM = FIXED):
+The bottom MUST be identical across all generations.
+
+STRICT RULES:
+- Plain black pants ONLY
+- Color: deep black (#111111 to #000000)
+- No patterns, no logos, no distressing
+- Straight or slightly relaxed fit
+- Matte fabric (no shine, no texture emphasis)
+- Must not attract attention
+
+--------------------------------
+BACKGROUND:
+- Minimalist studio backdrop
+- Warm off-white seamless background (#F2EFEA)
+- Floor blends seamlessly into backdrop
+- No visible horizon line, no texture
+
+--------------------------------
+LIGHTING:
+- Soft diffused studio lighting
+- Slight emphasis on upper body
+- Very soft shadows
+- No harsh contrast
+
+--------------------------------
+POSE:
+- Natural fashion pose
+- Slight 3/4 angle
+- Upper body subtly emphasized
+- Arms positioned to not block the garment
+
+--------------------------------
+CAMERA:
+- Mid-body to full-body framing
+- Eye-level camera
+- 50mm lens look
+- Sharp focus on upper body
+
+--------------------------------
+STYLE:
+- Premium e-commerce aesthetic (Zara / COS style)
+
+--------------------------------
+TARGET VIEW:
+{VIEW}
+
+--------------------------------
+STRICT CONSTRAINTS:
+- Do NOT alter garment color or design
+- Do NOT modify the black pants in any way
+- Do NOT add patterns/logos anywhere
+- Do NOT distort proportions
+- Face must remain clean and undistorted
+"""
+
+CLOTHES_BOTTOM_PROMPT_TEMPLATE = """
+You are a professional fashion photography generator.
+
+Your task is to generate a high-end, photorealistic image of a model wearing the provided BOTTOM garment.
+
+--------------------------------
+MODEL REFERENCE:
+Two images of the same model are provided (front and back views).
+
+- Preserve identity exactly:
+  - Face
+  - Skin tone
+  - Body shape
+- The person must remain identical across generations
+
+--------------------------------
+GARMENT PRIORITY (BOTTOM = HERO):
+The BOTTOM garment is the primary focus.
+
+REQUIREMENTS:
+- Must match EXACTLY:
+  - Color
+  - Fabric
+  - Fit
+  - Details (pockets, stitching, patterns)
+
+- Reconstruct using front & back views
+- Ensure realistic fabric behavior (folds, drape, tension)
+
+--------------------------------
+SECONDARY GARMENT (TOP = FIXED):
+The top MUST be identical across all generations.
+
+STRICT RULES:
+- Plain white t-shirt ONLY
+- Color: pure white (#FFFFFF)
+- No logos, no graphics, no texture
+- Crew neck
+- Short sleeves
+- Relaxed fit
+- Matte cotton appearance
+
+--------------------------------
+BACKGROUND:
+- Minimalist studio backdrop
+- Warm off-white seamless background (#F2EFEA)
+- Floor blends seamlessly into backdrop
+- No visible horizon line
+
+--------------------------------
+LIGHTING:
+- Soft diffused studio lighting
+- Slight emphasis on lower body
+- Soft shadows under feet
+
+--------------------------------
+POSE:
+- Natural stance
+- Slight 3/4 angle
+- One foot slightly forward to show structure
+- Ensure full visibility of garment
+
+--------------------------------
+CAMERA:
+- Full-body framing REQUIRED
+- Slight lower-body emphasis
+- Eye-level or slightly lowered camera
+- 50mm lens look
+
+--------------------------------
+STYLE:
+- Premium e-commerce aesthetic (Zara / COS style)
+
+--------------------------------
+TARGET VIEW:
+{VIEW}
+
+--------------------------------
+STRICT CONSTRAINTS:
+- Do NOT alter garment color or structure
+- Do NOT modify the white t-shirt in any way
+- Do NOT add patterns/logos
+- Do NOT distort proportions
+- Avoid hiding key garment areas
+"""
+
 CLOTHES_PROMPT_TEMPLATE = """
 You are a professional fashion photography generator.
 

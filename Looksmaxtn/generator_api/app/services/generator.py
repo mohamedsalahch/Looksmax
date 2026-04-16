@@ -10,7 +10,8 @@ from google.genai import types
 
 from app.models.requests import BodyZones
 from app.prompts.templates import (
-    CLOTHES_PROMPT_TEMPLATE,
+    CLOTHES_TOP_PROMPT_TEMPLATE,
+    CLOTHES_BOTTOM_PROMPT_TEMPLATE,
     SHOES_PROMPT_TEMPLATE,
     FRONT_VIEW_PROMPT_TEMPLATE,
     BACK_VIEW_PROMPT_TEMPLATE,
@@ -39,7 +40,8 @@ class ImageGenerator:
         model_front: str,
         model_back: str,
         product_front: str,
-        product_back: str
+        product_back: str,
+        garment_zone: str = "top"
     ) -> str:
         """Generate a single clothes view and return base64 image.
 
@@ -49,11 +51,13 @@ class ImageGenerator:
             model_back: Base64 encoded back view of model
             product_front: Base64 encoded front view of product
             product_back: Base64 encoded back view of product
+            garment_zone: The garment zone ("top" or "bottom")
 
         Returns:
             Base64 encoded generated image
         """
-        prompt = CLOTHES_PROMPT_TEMPLATE.replace("{VIEW}", view_name.upper())
+        template = CLOTHES_TOP_PROMPT_TEMPLATE if garment_zone == "top" else CLOTHES_BOTTOM_PROMPT_TEMPLATE
+        prompt = template.replace("{VIEW}", view_name.upper())
 
         logger.info(
             f"generate_clothes_view({view_name}): input sizes - "

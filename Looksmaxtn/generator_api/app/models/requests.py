@@ -29,6 +29,7 @@ class ClothesRequest(BaseModel):
     webhook_url: str | None = None
     model_pictures: ModelPictures
     product_pictures: ProductPictures
+    garment_zone: str = "top"
 
 
 class ShoesRequest(BaseModel):
