@@ -1,18 +1,6 @@
 import type { NextRequest } from "next/server";
 
 export async function logRequestStart(label: string, req: NextRequest) {
-  const contentType = req.headers.get("content-type") || "";
-  const details: Record<string, unknown> = {
-    method: req.method,
-    url: req.nextUrl.pathname,
-    contentType,
-  };
-
-  if (contentType.includes("multipart/form-data")) {
-    details.formData = "multipart";
-  }
-
-  console.log(`[request] ${label}`, details);
 }
 
 export function logRequestError(

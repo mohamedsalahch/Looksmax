@@ -8,16 +8,51 @@ import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 import { getSystemAuditActor } from "@/admin/lib/audit";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
 
+function normalizeHomePageContent(content: any) {
+  return {
+    ...content,
+    hero: {
+      image: String(content?.hero?.image || ""),
+      eyebrow: String(content?.hero?.eyebrow || ""),
+      title: String(content?.hero?.title || ""),
+      subtitle: String(content?.hero?.subtitle || ""),
+      link: String(content?.hero?.link || ""),
+    },
+    brandStory: {
+      eyebrow: String(content?.brandStory?.eyebrow || ""),
+      title: String(content?.brandStory?.title || ""),
+      paragraphOne: String(content?.brandStory?.paragraphOne || ""),
+      paragraphTwo: String(content?.brandStory?.paragraphTwo || ""),
+      stats: Array.isArray(content?.brandStory?.stats) ? content.brandStory.stats : [],
+    },
+    lookbook: {
+      caption: String(content?.lookbook?.caption || ""),
+      images: Array.isArray(content?.lookbook?.images) ? content.lookbook.images : [],
+      categorySlugs: Array.isArray(content?.lookbook?.categorySlugs)
+        ? content.lookbook.categorySlugs
+        : [],
+    },
+    editorial: {
+      image: String(content?.editorial?.image || ""),
+      eyebrow: String(content?.editorial?.eyebrow || ""),
+      label: String(content?.editorial?.label || ""),
+    },
+    featured: {
+      title: String(content?.featured?.title || ""),
+    },
+  };
+}
+
 async function getOrCreateHomePage() {
   const existing = await HomePageContent.findOne({ key: "home" }).lean();
-  if (existing) return existing;
+  if (existing) return normalizeHomePageContent(existing);
   const systemActor = getSystemAuditActor();
   const created = await HomePageContent.create({
     ...DEFAULT_HOME_PAGE,
     createdBy: systemActor,
     updatedBy: systemActor,
   });
-  return created.toObject();
+  return normalizeHomePageContent(created.toObject());
 }
 
 export async function GET() {
@@ -91,6 +126,7 @@ export async function PUT(req: NextRequest) {
         eyebrow: String(formData.get("heroEyebrow") || ""),
         title: String(formData.get("heroTitle") || ""),
         subtitle: String(formData.get("heroSubtitle") || ""),
+        link: String(formData.get("heroLink") || ""),
       },
       brandStory: {
         eyebrow: String(formData.get("brandEyebrow") || ""),
@@ -140,7 +176,7 @@ export async function PUT(req: NextRequest) {
         .map((image) => deleteHomePageFile(String(image)))
     );
 
-    return NextResponse.json({ content });
+    return NextResponse.json({ content: normalizeHomePageContent(content) });
   } catch (error) {
     logRequestError("admin.homepage.put", req, error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

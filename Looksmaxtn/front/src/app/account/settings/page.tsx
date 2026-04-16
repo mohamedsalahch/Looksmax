@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { KeyboardEvent } from "react";
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/providers/AuthContext";
 import { withAuthRequest } from "@/lib/authClient";
@@ -28,6 +29,7 @@ export default function SettingsPage() {
     profileImageUploadCount: 0,
     outfitGenerationCount: 0,
     gender: "",
+    profileImageRequiresGeneration: false,
   });
   const [bodyError, setBodyError] = useState("");
   const [bodySuccess, setBodySuccess] = useState("");
@@ -37,6 +39,9 @@ export default function SettingsPage() {
   const [enhanceError, setEnhanceError] = useState("");
   const [zoomedImage, setZoomedImage] = useState<{ src: string; alt: string } | null>(null);
   const [deletingPhoto, setDeletingPhoto] = useState<"original" | "enhanced" | null>(null);
+  const openZoom = useCallback((src: string, alt: string) => {
+    setZoomedImage({ src, alt });
+  }, []);
 
   useEffect(() => {
     const wasEnhancing = imageEnhancing;
@@ -53,6 +58,7 @@ export default function SettingsPage() {
       profileImageUploadCount: Number(user?.bodyProfile?.profileImageUploadCount || 0),
       outfitGenerationCount: Number(user?.bodyProfile?.outfitGenerationCount || 0),
       gender: normalizeGender(user?.bodyProfile?.gender),
+      profileImageRequiresGeneration: Boolean(user?.bodyProfile?.profileImageRequiresGeneration),
     });
     setImageEnhancing(nextEnhancing);
     setEnhancedImage(nextEnhancedImage);
@@ -74,6 +80,9 @@ export default function SettingsPage() {
 
   const hasOriginal = Boolean(bodyProfile.profileImage);
   const hasEnhanced = Boolean(enhancedImage);
+  const originalTileInteractive = hasOriginal;
+  const enhancedTileInteractive = hasEnhanced;
+  const showGenerateButton = hasOriginal && !hasEnhanced;
   const uploadLimit = 100;
   const uploadsUsed = Math.min(Number(bodyProfile.profileImageUploadCount || 0), uploadLimit);
   const remainingUploads = Math.max(uploadLimit - uploadsUsed, 0);
@@ -118,12 +127,45 @@ export default function SettingsPage() {
         ...prev,
         profileImage: data.profileImage || prev.profileImage,
         profileImageUploadCount: Number(data.profileImageUploadCount ?? prev.profileImageUploadCount),
+        profileImageRequiresGeneration: Boolean(
+          data.profileImageRequiresGeneration ?? prev.profileImageRequiresGeneration
+        ),
       }));
+      setImageEnhancing(Boolean(data.imageEnhancing));
     } catch {
       setBodyError("Failed to upload photo.");
       setImageEnhancing(false);
     }
   }, []);
+
+  const handleGeneratePhoto = useCallback(async () => {
+    if (!hasOriginal || hasEnhanced || imageEnhancing) return;
+
+    setBodyError("");
+    setEnhanceError("");
+    setImageEnhancing(true);
+
+    try {
+      const res = await fetch("/api/users/me/body-profile/enhance", {
+        ...withAuthRequest({ method: "POST" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setImageEnhancing(false);
+        setBodyError(data.error || "Failed to generate enhanced photo.");
+        return;
+      }
+
+      setBodyProfile((prev) => ({
+        ...prev,
+        profileImageRequiresGeneration: true,
+      }));
+      await refreshUser();
+    } catch {
+      setImageEnhancing(false);
+      setBodyError("Failed to generate enhanced photo.");
+    }
+  }, [hasEnhanced, hasOriginal, imageEnhancing, refreshUser]);
 
   const handleDeletePhoto = useCallback(async (target: "original" | "enhanced") => {
     setDeletingPhoto(target);
@@ -136,12 +178,13 @@ export default function SettingsPage() {
       if (!res.ok) {
         setBodyError(data.error || "Failed to delete photo.");
       } else {
-        if (target === "original") {
-          setBodyProfile((prev) => ({ ...prev, profileImage: "" }));
-          setEnhancedImage("");
-        } else {
-          setEnhancedImage("");
-        }
+        setBodyProfile((prev) => ({
+          ...prev,
+          profileImage: "",
+          profileImageRequiresGeneration: false,
+        }));
+        setEnhancedImage("");
+        setImageEnhancing(false);
         await refreshUser();
       }
     } catch {
@@ -188,6 +231,9 @@ export default function SettingsPage() {
           profileImageUploadCount: Number(data.user?.bodyProfile?.profileImageUploadCount || 0),
           outfitGenerationCount: Number(data.user?.bodyProfile?.outfitGenerationCount || 0),
           gender: normalizeGender(data.user?.bodyProfile?.gender),
+          profileImageRequiresGeneration: Boolean(
+            data.user?.bodyProfile?.profileImageRequiresGeneration
+          ),
         });
         await refreshUser();
       }
@@ -229,7 +275,7 @@ export default function SettingsPage() {
         </h2>
         <form onSubmit={handleBodyProfileUpdate} className="max-w-3xl space-y-4">
           {bodyError && (
-            <div className="border border-[#BD3100] bg-[#faf3f2] px-4 py-3 text-xs text-[#BD3100]">
+            <div className="border border-[#430C05] bg-[#faf3f2] px-4 py-3 text-xs text-[#430C05]">
               {bodyError}
             </div>
           )}
@@ -247,14 +293,33 @@ export default function SettingsPage() {
             )}
           <div className={`grid grid-cols-1 md:grid-cols-[auto_1fr] gap-6 items-start transition-all duration-300 ${imageEnhancing ? "pointer-events-none select-none blur-[2px] opacity-60" : ""}`}>
             <div className="flex flex-col items-center gap-3">
-              <div className="flex justify-center gap-3">
+              <div className="flex w-[332px] justify-center gap-3">
                 {/* Original — hidden once enhanced photo is ready */}
                 {showOriginal && (
                 <div className="w-[160px] space-y-1.5">
                   <p className="text-[10px] uppercase tracking-wider text-text-secondary text-center">Original</p>
-                  <div className="aspect-[4/5] border border-border-color bg-hover overflow-hidden relative group">
+                  <div
+                    className={`aspect-[4/5] border border-border-color bg-hover overflow-hidden relative group ${
+                      originalTileInteractive ? "cursor-zoom-in" : ""
+                    }`}
+                    {...(originalTileInteractive
+                      ? {
+                          role: "button" as const,
+                          tabIndex: 0,
+                          onClick: () => openZoom(bodyProfile.profileImage, "Original photo"),
+                          onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              openZoom(bodyProfile.profileImage, "Original photo");
+                            }
+                          },
+                          "aria-label": "Zoom original photo",
+                          title: "Tap to zoom",
+                        }
+                      : {})}
+                  >
                     {hasOriginal ? (
-                      <>
+                      <div className="h-full w-full">
                         <img
                           src={bodyProfile.profileImage}
                           alt="Original photo"
@@ -262,25 +327,19 @@ export default function SettingsPage() {
                         />
                         <button
                           type="button"
-                          onClick={() => setZoomedImage({ src: bodyProfile.profileImage, alt: "Original photo" })}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openZoom(bodyProfile.profileImage, "Original photo");
+                          }}
                           className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center bg-black text-base text-white opacity-0 group-hover:opacity-100 transition-opacity"
                           aria-label="Zoom original photo"
                         >
                           +
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeletePhoto("original")}
-                          disabled={deletingPhoto === "original"}
-                          className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center bg-black text-sm text-white opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"
-                          aria-label="Delete original photo"
-                        >
-                          {deletingPhoto === "original" ? "..." : "\u00d7"}
-                        </button>
-                      </>
+                      </div>
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-[10px] uppercase tracking-wider text-text-secondary">
-                        Original
+                      <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-[10px] uppercase tracking-wider text-text-secondary">
+                        <span>No image yet</span>
                       </div>
                     )}
                   </div>
@@ -300,9 +359,28 @@ export default function SettingsPage() {
                     <p className="text-[10px] uppercase tracking-wider text-text-secondary text-center whitespace-nowrap">
                       {imageEnhancing ? "Enhancing..." : "Enhanced"}
                     </p>
-                    <div className="aspect-[4/5] border border-border-color bg-hover overflow-hidden relative group">
+                    <div
+                      className={`aspect-[4/5] border border-border-color bg-hover overflow-hidden relative group ${
+                        enhancedTileInteractive ? "cursor-zoom-in" : ""
+                      }`}
+                      {...(enhancedTileInteractive
+                        ? {
+                            role: "button" as const,
+                            tabIndex: 0,
+                            onClick: () => openZoom(enhancedImage, "Enhanced photo"),
+                            onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                openZoom(enhancedImage, "Enhanced photo");
+                              }
+                            },
+                            "aria-label": "Zoom enhanced photo",
+                            title: "Tap to zoom",
+                          }
+                        : {})}
+                    >
                       {hasEnhanced ? (
-                        <>
+                        <div className="h-full w-full">
                           <img
                             src={enhancedImage}
                             alt="Enhanced photo"
@@ -310,22 +388,16 @@ export default function SettingsPage() {
                           />
                           <button
                             type="button"
-                            onClick={() => setZoomedImage({ src: enhancedImage, alt: "Enhanced photo" })}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openZoom(enhancedImage, "Enhanced photo");
+                            }}
                             className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center bg-black text-base text-white opacity-0 group-hover:opacity-100 transition-opacity"
                             aria-label="Zoom enhanced photo"
                           >
                             +
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeletePhoto("enhanced")}
-                            disabled={deletingPhoto === "enhanced"}
-                            className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center bg-black text-sm text-white opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"
-                            aria-label="Delete enhanced photo"
-                          >
-                            {deletingPhoto === "enhanced" ? "..." : "\u00d7"}
-                          </button>
-                        </>
+                        </div>
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <div className="flex flex-col items-center gap-2">
@@ -339,13 +411,27 @@ export default function SettingsPage() {
                 </div>
               </div>
 
+              <div className="flex w-[332px] flex-col gap-2">
+                {(hasOriginal || hasEnhanced) && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeletePhoto("original")}
+                    disabled={deletingPhoto !== null}
+                    className="flex w-full items-center justify-center py-2.5 text-xs font-medium tracking-wide uppercase text-center transition-all duration-300 border border-[#430C05] text-[#430C05] hover:bg-[#faf3f2] disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-label="Delete photo"
+                  >
+                    {deletingPhoto !== null ? "Deleting..." : "Delete photo"}
+                  </button>
+                )}
+              </div>
+
               <label
-                className={`block py-2.5 text-xs font-medium tracking-wide uppercase text-center transition-all duration-300 ${
+                className={`flex items-center justify-center py-2.5 text-xs font-medium tracking-wide uppercase text-center transition-all duration-300 ${
                   imageEnhancing || remainingUploads <= 0
                     ? "border border-border-color text-text-secondary cursor-not-allowed opacity-60 pointer-events-none"
                     : "border border-border-color text-foreground hover:bg-hover cursor-pointer"
                 }`}
-                style={{ width: showEnhanced ? 332 : 160 }}
+                style={{ width: 332 }}
               >
                 <input
                   type="file"
@@ -369,7 +455,7 @@ export default function SettingsPage() {
               </p>
 
               {enhanceError && (
-                <p className="text-[10px] uppercase tracking-[0.18em] text-[#BD3100] text-center">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-[#430C05] text-center">
                   {enhanceError}
                 </p>
               )}
@@ -386,6 +472,8 @@ export default function SettingsPage() {
                     type="text"
                     value={bodyProfile.heightCm}
                     onChange={(e) => setBodyProfile({ ...bodyProfile, heightCm: e.target.value })}
+                    required
+                    placeholder="e.g. 180"
                     className="w-full border border-border-color bg-transparent px-4 py-3 text-sm"
                   />
                 </div>
@@ -397,6 +485,8 @@ export default function SettingsPage() {
                     type="text"
                     value={bodyProfile.weightKg}
                     onChange={(e) => setBodyProfile({ ...bodyProfile, weightKg: e.target.value })}
+                    required
+                    placeholder="e.g. 75"
                     className="w-full border border-border-color bg-transparent px-4 py-3 text-sm"
                   />
                 </div>
@@ -407,9 +497,10 @@ export default function SettingsPage() {
                   <select
                     value={bodyProfile.gender}
                     onChange={(e) => setBodyProfile({ ...bodyProfile, gender: e.target.value })}
+                    required
                     className="w-full border border-border-color bg-transparent px-4 py-3 text-sm"
                   >
-                    <option value="">Select</option>
+                    <option value="">Select gender</option>
                     <option value="men">Men</option>
                     <option value="women">Women</option>
                   </select>
@@ -423,9 +514,10 @@ export default function SettingsPage() {
                   <select
                     value={bodyProfile.topSize}
                     onChange={(e) => setBodyProfile({ ...bodyProfile, topSize: e.target.value })}
+                    required
                     className="w-full border border-border-color bg-transparent px-4 py-3 text-sm"
                   >
-                    <option value="">Select</option>
+                    <option value="">Select size</option>
                     <option value="XS">XS</option>
                     <option value="S">S</option>
                     <option value="M">M</option>
@@ -441,9 +533,10 @@ export default function SettingsPage() {
                   <select
                     value={bodyProfile.bottomSize}
                     onChange={(e) => setBodyProfile({ ...bodyProfile, bottomSize: e.target.value })}
+                    required
                     className="w-full border border-border-color bg-transparent px-4 py-3 text-sm"
                   >
-                    <option value="">Select</option>
+                    <option value="">Select size</option>
                     {[36, 38, 40, 42, 44, 46, 48].map((size) => (
                       <option key={size} value={String(size)}>{size}</option>
                     ))}
@@ -456,22 +549,25 @@ export default function SettingsPage() {
                   <select
                     value={bodyProfile.shoeSize}
                     onChange={(e) => setBodyProfile({ ...bodyProfile, shoeSize: e.target.value })}
+                    required
                     className="w-full border border-border-color bg-transparent px-4 py-3 text-sm"
                   >
-                    <option value="">Select</option>
+                    <option value="">Select size</option>
                     {[38, 39, 40, 41, 42, 43, 44, 45, 46, 47].map((size) => (
                       <option key={size} value={String(size)}>{size}</option>
                     ))}
                   </select>
                 </div>
               </div>
-              <button
-                type="submit"
-                disabled={bodyLoading || imageEnhancing}
-                className="bg-foreground text-background px-6 py-3 text-xs font-medium tracking-wide uppercase hover:bg-accent transition-colors cursor-pointer disabled:opacity-50"
-              >
-                {bodyLoading ? "Saving..." : "Save Studio Profile"}
-              </button>
+              <div className="flex w-full flex-col gap-3 md:flex-row md:items-stretch">
+                <button
+                  type="submit"
+                  disabled={bodyLoading || imageEnhancing || !hasEnhanced}
+                  className="flex-1 bg-foreground px-6 py-3 text-xs font-medium tracking-wide uppercase text-background transition-colors hover:bg-accent cursor-pointer disabled:opacity-50"
+                >
+                  {bodyLoading ? "Saving..." : "Save Studio Profile"}
+                </button>
+              </div>
             </div>
           </div>
           </div>

@@ -10,6 +10,7 @@ export interface HomePageContentShape {
     eyebrow: string;
     title: string;
     subtitle: string;
+    link: string;
   };
   brandStory: {
     eyebrow: string;
@@ -40,6 +41,7 @@ export const DEFAULT_HOME_PAGE: HomePageContentShape = {
     eyebrow: "New Collection",
     title: "LOOKSMAX",
     subtitle: "Curated style for the next chapter.",
+    link: "",
   },
   brandStory: {
     eyebrow: "Our Philosophy",

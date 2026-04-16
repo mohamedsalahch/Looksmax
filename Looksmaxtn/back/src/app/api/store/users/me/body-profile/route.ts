@@ -38,18 +38,35 @@ export async function PUT(req: NextRequest) {
     }
 
     const formData = await req.formData();
+    const heightCm = String(formData.get("heightCm") || "").trim();
+    const weightKg = String(formData.get("weightKg") || "").trim();
+    const topSize = String(formData.get("topSize") || "").trim();
+    const bottomSize = String(formData.get("bottomSize") || "").trim();
+    const shoeSize = String(formData.get("shoeSize") || "").trim();
+    const gender = normalizeGender(formData.get("gender"));
+
+    if (!heightCm || !weightKg || !topSize || !bottomSize || !shoeSize || !gender) {
+      return NextResponse.json(
+        { error: "All outfit studio profile fields are required." },
+        { status: 400 }
+      );
+    }
+
     const nextBodyProfile = {
-      heightCm: String(formData.get("heightCm") || ""),
-      weightKg: String(formData.get("weightKg") || ""),
-      topSize: String(formData.get("topSize") || ""),
-      bottomSize: String(formData.get("bottomSize") || ""),
-      shoeSize: String(formData.get("shoeSize") || ""),
+      heightCm,
+      weightKg,
+      topSize,
+      bottomSize,
+      shoeSize,
       profileImage: String(formData.get("existingProfileImage") || ""),
       profileImageEnhanced: existingUser.bodyProfile?.profileImageEnhanced || "",
       profileImageUploadCount: Number(existingUser.bodyProfile?.profileImageUploadCount || 0),
       outfitGenerationCount: Number(existingUser.bodyProfile?.outfitGenerationCount || 0),
-      gender: normalizeGender(formData.get("gender")),
+      gender,
       imageEnhancing: Boolean(existingUser.bodyProfile?.imageEnhancing),
+      profileImageRequiresGeneration: Boolean(
+        existingUser.bodyProfile?.profileImageRequiresGeneration
+      ),
     };
 
     const updateResult = await usersCollection.findOneAndUpdate(

@@ -66,7 +66,7 @@ export default function AccountOverview() {
           <div className="border border-border-color border-dashed p-6 text-center">
             <p className="text-xs text-text-secondary mb-2">No address saved yet</p>
             <Link
-              href="/account/settings"
+              href="/account/settings/address"
               className="text-xs text-foreground underline underline-offset-2"
             >
               Add Address

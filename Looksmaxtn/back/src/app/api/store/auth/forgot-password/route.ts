@@ -3,6 +3,7 @@ import dbConnect from "@/store/lib/mongodb";
 import User from "@/store/models/User";
 import { createPasswordResetToken } from "@/store/lib/emailVerification";
 import { sendPasswordResetEmail } from "@/store/lib/mailer";
+import { getEmailBaseUrl } from "@/store/lib/emailLinks";
 
 const RESET_COOLDOWN_MS = 60 * 1000;
 
@@ -41,10 +42,7 @@ export async function POST(req: NextRequest) {
     }
 
     const reset = createPasswordResetToken();
-    const resetUrl = new URL(
-      "/reset-password",
-      process.env.FRONTEND_BASE_URL || "http://localhost:3000"
-    );
+    const resetUrl = new URL("/reset-password", getEmailBaseUrl());
     resetUrl.searchParams.set("email", user.email);
     resetUrl.searchParams.set("token", reset.token);
 

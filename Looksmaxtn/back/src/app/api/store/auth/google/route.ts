@@ -16,6 +16,23 @@ function normalizeGender(value: unknown) {
   return "";
 }
 
+function createDefaultBodyProfile(gender: string) {
+  return {
+    heightCm: "",
+    weightKg: "",
+    topSize: "",
+    bottomSize: "",
+    shoeSize: "",
+    profileImage: "",
+    profileImageEnhanced: "",
+    profileImageUploadCount: 0,
+    outfitGenerationCount: 0,
+    gender,
+    imageEnhancing: false,
+    profileImageRequiresGeneration: false,
+  };
+}
+
 async function buildUserResponse(user: {
   _id: { toString(): string };
   name: string;
@@ -34,6 +51,7 @@ async function buildUserResponse(user: {
     outfitGenerationCount?: number;
     gender?: string;
     imageEnhancing?: boolean;
+    profileImageRequiresGeneration?: boolean;
   } | null;
 }) {
   return {
@@ -55,6 +73,9 @@ async function buildUserResponse(user: {
           outfitGenerationCount: Number(user.bodyProfile.outfitGenerationCount || 0),
           gender: normalizeGender(user.bodyProfile.gender),
           imageEnhancing: Boolean(user.bodyProfile.imageEnhancing),
+          profileImageRequiresGeneration: Boolean(
+            user.bodyProfile.profileImageRequiresGeneration
+          ),
         }
       : user.bodyProfile,
   };
@@ -66,7 +87,6 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json().catch(() => null);
     const credential = String(body?.credential || body?.idToken || "").trim();
-
     if (!credential) {
       return NextResponse.json({ error: "Google credential is required" }, { status: 400 });
     }
@@ -105,6 +125,7 @@ export async function POST(req: NextRequest) {
         password: await hashPassword(`google-${randomUUID()}`),
         emailVerified: true,
         googleId,
+        bodyProfile: createDefaultBodyProfile(""),
       });
     } else {
       user.googleId = user.googleId || googleId;
@@ -112,18 +133,17 @@ export async function POST(req: NextRequest) {
       if (!user.name?.trim()) {
         user.name = name;
       }
+      if (!normalizeGender(user.bodyProfile?.gender)) {
+        user.bodyProfile = {
+          ...(user.bodyProfile || createDefaultBodyProfile("")),
+          gender: normalizeGender(user.bodyProfile?.gender),
+        };
+      }
       await user.save();
     }
 
     const token = await createToken({ userId: user._id.toString(), role: user.role });
     const cookieOpts = getTokenCookieOptions();
-
-    console.log("[auth][store][google] success", {
-      userId: String(user._id),
-      role: user.role,
-      secureCookie: cookieOpts.secure,
-      sameSite: cookieOpts.sameSite,
-    });
 
     const res = NextResponse.json({
       token,
