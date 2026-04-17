@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useAuth } from "@/providers/AuthContext";
 import { withAuthRequest } from "@/lib/authClient";
 import { shareOutfit } from "@/lib/share";
+import { readSavedOutfitsSession, writeSavedOutfitsSession } from "@/lib/savedOutfitsSession";
 
 interface SavedOutfitItem {
   id: string;
@@ -33,6 +35,7 @@ function getAvailableOutfitImages(images?: { front?: string; back?: string }) {
 }
 
 export default function SavedOutfitsPage() {
+  const { user, loading: authLoading } = useAuth();
   const [outfits, setOutfits] = useState<SavedOutfitItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [sharingOutfitId, setSharingOutfitId] = useState("");
@@ -46,13 +49,31 @@ export default function SavedOutfitsPage() {
   };
 
   useEffect(() => {
+    if (authLoading) return;
+
     let cancelled = false;
+    const nextUserId = user?.id || "";
+    const cachedOutfits = nextUserId ? readSavedOutfitsSession(nextUserId) : null;
+
+    if (cachedOutfits) {
+      setOutfits(cachedOutfits);
+      setLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setLoading(true);
 
     fetch("/api/outfits?ts=" + Date.now(), withAuthRequest({ cache: "no-store" }))
       .then((response) => response.json())
       .then((data) => {
         if (cancelled) return;
-        setOutfits(data.outfits || []);
+        const nextOutfits = data.outfits || [];
+        setOutfits(nextOutfits);
+        if (nextUserId) {
+          writeSavedOutfitsSession(nextUserId, nextOutfits);
+        }
       })
       .catch(() => {
         if (cancelled) return;
@@ -65,7 +86,7 @@ export default function SavedOutfitsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authLoading, user?.id]);
 
   useEffect(() => {
     return () => {
