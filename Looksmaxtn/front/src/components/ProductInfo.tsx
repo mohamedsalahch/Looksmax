@@ -221,6 +221,8 @@ export default function ProductInfo({
                 src={product.cloneSourceImage}
                 alt={product.cloneSourceName}
                 className="w-full h-full object-contain"
+                loading="lazy"
+                decoding="async"
               />
             ) : (
               <div className="w-full h-full placeholder-img">

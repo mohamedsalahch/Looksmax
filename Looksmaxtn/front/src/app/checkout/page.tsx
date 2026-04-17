@@ -311,7 +311,13 @@ export default function CheckoutPage() {
                       }`}
                     >
                       {item.image ? (
-                        <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          decoding="async"
+                        />
                       ) : (
                         <div className="w-full h-full placeholder-img">
                           <span className="text-[6px] tracking-wider opacity-50">IMG</span>

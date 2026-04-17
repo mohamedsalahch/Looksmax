@@ -88,9 +88,15 @@ export default function CartPanel() {
               {items.map((item) => (
                 <div key={item.id} className="flex gap-4 px-6 py-5">
                   <div className="w-20 h-24 shrink-0 overflow-hidden bg-surface">
-                    {item.image ? (
-                      <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-                    ) : (
+                      {item.image ? (
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      ) : (
                       <div className="w-full h-full placeholder-img">
                         <span className="relative z-10 text-[7px] tracking-wider opacity-50">
                           IMG

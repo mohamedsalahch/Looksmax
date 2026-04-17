@@ -189,6 +189,8 @@ export default function HeaderSearch() {
                             src={getMainImage(product.images)}
                             alt={product.name}
                             className="h-full w-full object-cover"
+                            loading="lazy"
+                            decoding="async"
                           />
                         ) : null}
                       </div>

@@ -249,6 +249,8 @@ export default function ProductCard({
             src={cloneSourceImage}
             alt={cloneSourceName || "Original fragrance"}
             className="w-full h-full object-contain"
+            loading="lazy"
+            decoding="async"
           />
         </div>
       )}
@@ -265,7 +267,13 @@ export default function ProductCard({
         onMouseLeave={() => setClonePreview({ visible: false, x: 0, y: 0 })}
       >
         {image ? (
-          <img src={image} alt={name} className="absolute inset-0 w-full h-full object-cover" />
+          <img
+            src={image}
+            alt={name}
+            className="absolute inset-0 w-full h-full object-cover"
+            loading="lazy"
+            decoding="async"
+          />
         ) : (
           <>
             <div className="absolute inset-0 placeholder-img" />
