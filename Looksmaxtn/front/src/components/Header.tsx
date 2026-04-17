@@ -11,6 +11,7 @@ export default function Header() {
   const { openCart, totalItems } = useCart();
   const { user, logout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
@@ -18,6 +19,11 @@ export default function Header() {
     const event = new CustomEvent("toggleSidePanel");
     window.dispatchEvent(event);
   };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -65,6 +71,7 @@ export default function Header() {
           <button
             onClick={openCart}
             className="relative inline-flex h-9 w-9 items-center justify-center text-foreground hover:text-text-secondary transition-colors cursor-pointer"
+            type="button"
             aria-label="Open cart"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -85,14 +92,14 @@ export default function Header() {
             <button
               type="button"
               onClick={() => {
-                if (user) {
+                if (mounted && user) {
                   setShowUserMenu((p) => !p);
                   return;
                 }
                 router.push("/login");
               }}
               className="inline-flex h-9 w-9 items-center justify-center text-foreground hover:text-text-secondary transition-colors cursor-pointer"
-              aria-label={user ? "Account menu" : "Sign in"}
+              aria-label={mounted && user ? "Account menu" : "Sign in"}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -100,7 +107,7 @@ export default function Header() {
               </svg>
             </button>
 
-            {user && showUserMenu && (
+            {mounted && user && showUserMenu && (
               <div className="absolute right-0 top-full mt-2 w-48 bg-background border border-border-color shadow-lg z-50">
                 <div className="px-4 py-3 border-b border-border-color">
                   <p className="text-xs font-medium text-foreground truncate">{user.name}</p>

@@ -68,6 +68,7 @@ export default function ProductCard({
   const [selectedSize, setSelectedSize] = useState(availableSizes[0] || "");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [cartCount, setCartCount] = useState(initialCartCount);
+  const [addedToCart, setAddedToCart] = useState(false);
   const [clonePreview, setClonePreview] = useState({ visible: false, x: 0, y: 0 });
   const dropdownRef = useRef<HTMLDivElement>(null);
   const isPerfume = productType === "perfume";
@@ -124,7 +125,9 @@ export default function ProductCard({
         originPictures,
         reservationExpiresAt: reservation.reservationExpiresAt,
         cartCount: reservation.cartCount,
-      });
+      }, { openCart: false });
+      setAddedToCart(true);
+      window.setTimeout(() => setAddedToCart(false), 2000);
       setIsDropdownOpen(false);
     } catch {
       setIsDropdownOpen(false);
@@ -372,17 +375,25 @@ export default function ProductCard({
               </div>
 
               <button
+                type="button"
                 onClick={handleQuickAdd}
                 disabled={isSoldOut}
-                className={`w-[31%] h-full text-[10px] uppercase font-bold tracking-widest transition-colors ${
+                className={`w-[31%] h-full px-2 py-3 text-[10px] font-medium uppercase tracking-wide transition-all duration-300 ${
                   isSoldOut
                     ? "bg-border-color text-text-secondary cursor-not-allowed"
-                    : "bg-foreground text-background hover:bg-black"
+                    : addedToCart
+                      ? "bg-[#5C6A47] text-white"
+                      : "bg-foreground text-background hover:bg-accent"
                 }`}
               >
-                Cart
+                {isSoldOut
+                  ? "Sold Out"
+                  : addedToCart
+                    ? "✓ ADDED"
+                    : "ADDche"}
               </button>
               <button
+                type="button"
                 onClick={handleAddToTryOn}
                 disabled={isSoldOut}
                 className={`w-[31%] h-full text-[10px] uppercase font-bold tracking-widest border-l border-border-color transition-colors ${

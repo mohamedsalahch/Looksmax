@@ -126,7 +126,7 @@ export default function ProductInfo({
         reservationExpiresAt: reservation.reservationExpiresAt,
         cartCount: reservation.cartCount,
         quantity: selectedQuantity,
-      }, { openCart: true });
+      }, { openCart: false });
       setAddedToCart(true);
       setTimeout(() => setAddedToCart(false), 2000);
     } catch (error) {
