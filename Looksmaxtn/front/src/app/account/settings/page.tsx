@@ -44,6 +44,10 @@ export default function SettingsPage() {
   }, []);
 
   useEffect(() => {
+    void refreshUser();
+  }, [refreshUser]);
+
+  useEffect(() => {
     const wasEnhancing = imageEnhancing;
     const nextEnhancing = Boolean(user?.bodyProfile?.imageEnhancing);
     const nextEnhancedImage = user?.bodyProfile?.profileImageEnhanced || "";
