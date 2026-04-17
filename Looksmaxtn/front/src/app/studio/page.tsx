@@ -11,6 +11,7 @@ import {formatTndPrice} from "@/lib/formatPrice";
 import { withAuthRequest } from "@/lib/authClient";
 import { shareOutfit } from "@/lib/share";
 import { upsertSavedOutfitSession } from "@/lib/savedOutfitsSession";
+import { readStudioSessionState, writeStudioSessionState, type StudioSessionZoneItem } from "@/lib/studioSession";
 
 interface CategoryNode {
     _id: string;
@@ -568,6 +569,7 @@ export default function OutfitStudioPage() {
         Object.fromEntries(BODY_ZONES.map((zone) => [zone.id, null]))
     );
     const [selectedZoneId, setSelectedZoneId] = useState<string>("");
+    const [zoneOverrides, setZoneOverrides] = useState<Partial<Record<StudioZoneId, StudioSessionZoneItem | null>>>({});
     const [zoneHistory, setZoneHistory] = useState<Record<StudioZoneId, OutfitSlotItem[]>>(
         () => BODY_ZONES.reduce((acc, zone) => {
             acc[zone.id] = [];
@@ -586,6 +588,7 @@ export default function OutfitStudioPage() {
     const [sharedOutfit, setSharedOutfit] = useState(false);
     const [generationError, setGenerationError] = useState("");
     const [generationStateHydrated, setGenerationStateHydrated] = useState(false);
+    const [studioStateHydrated, setStudioStateHydrated] = useState(false);
     const [showAllSelectedItems, setShowAllSelectedItems] = useState(true);
     const sharedResetTimerRef = useRef<number | null>(null);
 
@@ -623,6 +626,19 @@ export default function OutfitStudioPage() {
     }, [user?.id]);
 
     useEffect(() => {
+        if (!user?.id) return;
+
+        const storedStudioState = readStudioSessionState(user.id);
+        if (storedStudioState) {
+            setSelectedZoneId(storedStudioState.selectedZoneId || "");
+            setShowAllSelectedItems(storedStudioState.showAllSelectedItems);
+            setZoneOverrides(storedStudioState.zoneOverrides || {});
+        }
+
+        setStudioStateHydrated(true);
+    }, [user?.id]);
+
+    useEffect(() => {
         fetch("/api/categories")
             .then((response) => response.json())
             .then((data) => setCategories(data.tree || []))
@@ -631,7 +647,7 @@ export default function OutfitStudioPage() {
     }, []);
 
     useEffect(() => {
-        if (!user?.id) return;
+        if (!user?.id || !studioStateHydrated) return;
         if (!generationStateHydrated) return;
 
         if (!generatedOutfitJobId) {
@@ -659,7 +675,17 @@ export default function OutfitStudioPage() {
             name: outfitNameDraft,
             pendingRecovery: false,
         });
-    }, [generatedOutfitImages, generatedOutfitJobId, generatingOutfit, generationError, outfitNameDraft, user?.id, generationStateHydrated]);
+    }, [generatedOutfitImages, generatedOutfitJobId, generatingOutfit, generationError, outfitNameDraft, user?.id, generationStateHydrated, studioStateHydrated]);
+
+    useEffect(() => {
+        if (!user?.id || !studioStateHydrated) return;
+
+        writeStudioSessionState(user.id, {
+            selectedZoneId: selectedZoneId as StudioZoneId | "",
+            showAllSelectedItems,
+            zoneOverrides,
+        });
+    }, [selectedZoneId, showAllSelectedItems, zoneOverrides, studioStateHydrated, user?.id]);
 
     useEffect(() => {
         if (!user?.id || !needsGenerationRecovery || generatedOutfitJobId) return;
@@ -829,6 +855,10 @@ export default function OutfitStudioPage() {
 
         setSelectedZoneId(zoneId);
         setShowAllSelectedItems(false);
+        setZoneOverrides((current) => ({
+            ...current,
+            [zoneId]: nextItem,
+        }));
         setOutfit((current) => ({
             ...current,
             [zoneId]: nextItem,
@@ -852,6 +882,8 @@ export default function OutfitStudioPage() {
     };
 
     useEffect(() => {
+        if (!studioStateHydrated) return;
+
         const nextOutfit: Record<string, OutfitSlotItem | null> = Object.fromEntries(
             BODY_ZONES.map((zone) => [zone.id, null])
         );
@@ -884,13 +916,28 @@ export default function OutfitStudioPage() {
             ].slice(0, 5);
         }
 
+        for (const zone of BODY_ZONES) {
+            if (!(zone.id in zoneOverrides)) continue;
+
+            const override = zoneOverrides[zone.id];
+            nextOutfit[zone.id] = override
+                ? {
+                    id: override.id,
+                    name: override.name,
+                    image: override.image,
+                    fashionSubtype: override.fashionSubtype,
+                    originPictures: override.originPictures,
+                }
+                : null;
+        }
+
         setOutfit((current) => (
             JSON.stringify(current) === JSON.stringify(nextOutfit) ? current : nextOutfit
         ));
         setZoneHistory((current) => (
             JSON.stringify(current) === JSON.stringify(nextHistory) ? current : nextHistory
         ));
-    }, [cartItems, isWomen]);
+    }, [cartItems, isWomen, zoneOverrides, studioStateHydrated]);
 
     useEffect(() => {
         const pendingAssignments = consumeStudioAssignments();
@@ -921,11 +968,26 @@ export default function OutfitStudioPage() {
     const handleSelectedZoneItemClick = (zoneId: StudioZoneId, item: OutfitViewItem) => {
         setOutfit((current) => {
             if (current[zoneId]?.id === item.id) {
+                setZoneOverrides((currentOverrides) => ({
+                    ...currentOverrides,
+                    [zoneId]: null,
+                }));
                 return {
                     ...current,
                     [zoneId]: null,
                 };
             }
+
+            setZoneOverrides((currentOverrides) => ({
+                ...currentOverrides,
+                [zoneId]: {
+                    id: item.id,
+                    name: item.name,
+                    image: item.image,
+                    fashionSubtype: item.fashionSubtype,
+                    originPictures: item.originPictures,
+                },
+            }));
 
             return {
                 ...current,
@@ -1387,6 +1449,10 @@ export default function OutfitStudioPage() {
                                                     key={zone.id}
                                                     type="button"
                                                     onClick={() => {
+                                                        setZoneOverrides((currentOverrides) => ({
+                                                            ...currentOverrides,
+                                                            [zone.id]: null,
+                                                        }));
                                                         setOutfit((current) => ({
                                                             ...current,
                                                             [zone.id]: null,
