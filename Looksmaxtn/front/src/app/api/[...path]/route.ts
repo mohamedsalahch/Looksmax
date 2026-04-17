@@ -34,7 +34,7 @@ function parseSetCookieHeader(rawSetCookie: string) {
   const [name, ...valueParts] = nameValue.split("=");
   const value = valueParts.join("=");
 
-  if (!name || !value) return null;
+  if (!name) return null;
 
   const cookieOptions: {
     path?: string;

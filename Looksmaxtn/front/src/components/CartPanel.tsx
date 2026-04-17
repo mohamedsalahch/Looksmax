@@ -12,8 +12,6 @@ export default function CartPanel() {
     useCart();
   const router = useRouter();
   const hasUnavailableItems = items.some((item) => item.isUnavailable);
-  const touchStartXRef = useRef<number | null>(null);
-  const touchStartYRef = useRef<number | null>(null);
 
   // Close on Escape
   useEffect(() => {
@@ -31,47 +29,6 @@ export default function CartPanel() {
       document.body.style.overflow = "";
     };
   }, [isOpen, closeCart]);
-
-  useEffect(() => {
-    const handleTouchStart = (event: TouchEvent) => {
-      if (event.touches.length !== 1) return;
-
-      const touch = event.touches[0];
-      if (!isOpen && touch.clientX < window.innerWidth - 24) return;
-
-      touchStartXRef.current = touch.clientX;
-      touchStartYRef.current = touch.clientY;
-    };
-
-    const handleTouchEnd = (event: TouchEvent) => {
-      if (touchStartXRef.current === null || touchStartYRef.current === null) return;
-
-      const touch = event.changedTouches[0];
-      const deltaX = touch.clientX - touchStartXRef.current;
-      const deltaY = touch.clientY - touchStartYRef.current;
-
-      touchStartXRef.current = null;
-      touchStartYRef.current = null;
-
-      if (Math.abs(deltaY) > Math.abs(deltaX)) return;
-
-      if (!isOpen && deltaX < -70) {
-        return void openCart();
-      }
-
-      if (isOpen && deltaX > 70) {
-        closeCart();
-      }
-    };
-
-    window.addEventListener("touchstart", handleTouchStart, { passive: true });
-    window.addEventListener("touchend", handleTouchEnd, { passive: true });
-
-    return () => {
-      window.removeEventListener("touchstart", handleTouchStart);
-      window.removeEventListener("touchend", handleTouchEnd);
-    };
-  }, [closeCart, isOpen, openCart]);
 
   return (
     <>
