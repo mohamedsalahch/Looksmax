@@ -58,7 +58,7 @@ export default function SavedOutfitDetailPage({
       sharedResetTimerRef.current = window.setTimeout(() => {
         setShared(false);
         sharedResetTimerRef.current = null;
-      }, 2000);
+      }, 1800);
     } catch {
       setShared(false);
     }
@@ -98,9 +98,12 @@ export default function SavedOutfitDetailPage({
               type="button"
               onClick={handleShare}
               disabled={sharing}
-              className="border border-border-color px-4 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:text-foreground disabled:opacity-50"
+              aria-busy={sharing}
+              className={`inline-flex min-w-[84px] justify-center border border-border-color px-4 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:text-foreground disabled:opacity-50 ${
+                shared ? "cursor-default" : "cursor-pointer"
+              }`}
             >
-              {sharing ? "Sharing..." : shared ? "Copied" : "Share"}
+              {shared ? "Copied" : "Share"}
             </button>
             <Link
               href="/studio/outfits"

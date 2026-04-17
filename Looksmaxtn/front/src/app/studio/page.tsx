@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {useAuth} from "@/providers/AuthContext";
 import { useCart } from "@/providers/CartContext";
@@ -135,7 +135,6 @@ async function copyShareLink(text: string) {
         document.body.removeChild(input);
     }
 
-    window.prompt("Copy share link", text);
     return false;
 }
 
@@ -583,9 +582,11 @@ export default function OutfitStudioPage() {
     const [needsGenerationRecovery, setNeedsGenerationRecovery] = useState(false);
     const [savingOutfit, setSavingOutfit] = useState(false);
     const [sharingOutfit, setSharingOutfit] = useState(false);
+    const [sharedOutfit, setSharedOutfit] = useState(false);
     const [generationError, setGenerationError] = useState("");
     const [generationStateHydrated, setGenerationStateHydrated] = useState(false);
     const [showAllSelectedItems, setShowAllSelectedItems] = useState(true);
+    const sharedResetTimerRef = useRef<number | null>(null);
 
     useEffect(() => {
         if (!loading && !user) {
@@ -1097,11 +1098,28 @@ export default function OutfitStudioPage() {
             if (!outfitId) return;
 
             await shareOutfit(outfitId);
+            setSharedOutfit(true);
+            if (sharedResetTimerRef.current !== null) {
+                window.clearTimeout(sharedResetTimerRef.current);
+            }
+            sharedResetTimerRef.current = window.setTimeout(() => {
+                setSharedOutfit(false);
+                sharedResetTimerRef.current = null;
+            }, 1800);
         } catch {
             setGenerationError("Unable to share outfit.");
+            setSharedOutfit(false);
         }
         setSharingOutfit(false);
     };
+
+    useEffect(() => {
+        return () => {
+            if (sharedResetTimerRef.current !== null) {
+                window.clearTimeout(sharedResetTimerRef.current);
+            }
+        };
+    }, []);
 
 
     useEffect(() => {
@@ -1342,7 +1360,6 @@ export default function OutfitStudioPage() {
                                                     key={zone.id}
                                                     type="button"
                                                     onClick={() => {
-                                                        setShowAllSelectedItems(false);
                                                         setOutfit((current) => ({
                                                             ...current,
                                                             [zone.id]: null,
@@ -1419,9 +1436,10 @@ export default function OutfitStudioPage() {
                                                 type="button"
                                                 onClick={handleShareGeneratedOutfit}
                                                 disabled={savingOutfit || sharingOutfit || generatedOutfitImages.length === 0}
-                                                className="rounded-none border border-[#00000012] bg-transparent px-3.5 py-2 text-[11px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:border-[#c9a96e] hover:text-[#c9a96e] disabled:opacity-50"
+                                                aria-busy={sharingOutfit}
+                                                className="inline-flex min-w-[84px] justify-center rounded-none border border-[#00000012] bg-transparent px-3.5 py-2 text-[11px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:border-[#c9a96e] hover:text-[#c9a96e] disabled:opacity-50"
                                             >
-                                                {sharingOutfit ? "Sharing..." : "Share"}
+                                                {sharedOutfit ? "Copied" : "Share"}
                                             </button>
                                         </div>
                                     ) : null}

@@ -32,7 +32,6 @@ export async function copyShareLink(text: string) {
     document.body.removeChild(input);
   }
 
-  window.prompt("Copy share link", text);
   return false;
 }
 

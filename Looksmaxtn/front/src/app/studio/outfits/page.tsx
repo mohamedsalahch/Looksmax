@@ -84,7 +84,7 @@ export default function SavedOutfitsPage() {
       shareResetTimerRef.current = window.setTimeout(() => {
         setSharedOutfitId("");
         shareResetTimerRef.current = null;
-      }, copied ? 2000 : 4000);
+      }, copied ? 1800 : 1200);
     } catch {
       setSharedOutfitId("");
     }
@@ -164,13 +164,12 @@ export default function SavedOutfitsPage() {
                           type="button"
                           onClick={() => handleShareOutfit(outfit.id)}
                           disabled={sharingOutfitId === outfit.id}
-                          className="border border-[#00000012] bg-transparent px-3.5 py-2 text-[11px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:border-[#c9a96e] hover:text-[#c9a96e] disabled:opacity-50"
+                          aria-busy={sharingOutfitId === outfit.id}
+                          className={`inline-flex min-w-[84px] justify-center border border-[#00000012] bg-transparent px-3.5 py-2 text-[11px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:border-[#c9a96e] hover:text-[#c9a96e] disabled:opacity-50 ${
+                            sharedOutfitId === outfit.id ? "cursor-default" : "cursor-pointer"
+                          }`}
                         >
-                          {sharingOutfitId === outfit.id
-                            ? "Sharing..."
-                            : sharedOutfitId === outfit.id
-                              ? "Copied"
-                              : "Share"}
+                          {sharedOutfitId === outfit.id ? "Copied" : "Share"}
                         </button>
                       </div>
                     </div>
