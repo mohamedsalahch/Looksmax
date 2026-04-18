@@ -27,7 +27,7 @@ const STORAGE_KEY = "looksmax-studio-pending-assignments";
 const EVENT_NAME = "looksmax:studio-assignment-change";
 
 const ZONE_KEYWORDS: Record<StudioZoneId, string[]> = {
-  headwear: ["headwear", "hat", "hats", "cap", "caps", "beanie", "beanies", "bag", "bags", "handbag", "handbags", "purse", "purses"],
+  headwear: ["headwear", "hat", "hats", "cap", "caps", "beanie", "beanies"],
   outerwear: ["outerwear", "jacket", "jackets", "coat", "coats", "blazer", "blazers", "veste", "vestes"],
   top: ["top", "tops", "shirt", "shirts", "pull", "pulls", "hoodie", "hoodies", "sweater", "sweaters", "tee", "t-shirt", "tshirts", "polo", "polos"],
   bottom: ["bottom", "bottoms", "pant", "pants", "jean", "jeans", "trouser", "trousers", "short", "shorts"],
@@ -36,6 +36,17 @@ const ZONE_KEYWORDS: Record<StudioZoneId, string[]> = {
 
 function normalizeText(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function matchesKeyword(haystack: string, keyword: string) {
+  const normalizedKeyword = normalizeText(keyword);
+  if (!normalizedKeyword) return false;
+
+  if (normalizedKeyword.includes(" ")) {
+    return haystack.includes(normalizedKeyword);
+  }
+
+  return haystack.split(" ").includes(normalizedKeyword);
 }
 
 function readAssignments(): StudioAssignmentItem[] {
@@ -64,7 +75,7 @@ export function inferStudioAssignmentZone(
   const haystack = normalizeText([item.name, ...(item.categories || [])].filter(Boolean).join(" "));
 
   for (const zoneId of ["headwear", "outerwear", "top", "bottom", "footwear"] as const) {
-    if (ZONE_KEYWORDS[zoneId].some((keyword) => haystack.includes(keyword))) {
+    if (ZONE_KEYWORDS[zoneId].some((keyword) => matchesKeyword(haystack, keyword))) {
       return zoneId;
     }
   }
@@ -94,4 +105,3 @@ export function consumeStudioAssignments() {
   }
   return assignments;
 }
-

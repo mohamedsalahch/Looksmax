@@ -2,18 +2,18 @@
 
 import { useCart } from "@/providers/CartContext";
 import Link from "next/link";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { releaseProductReservation } from "@/lib/reservations";
+import { formatRemainingTime } from "@/lib/reservations";
 import { formatTndPrice } from "@/lib/formatPrice";
+import { getCartItemProductId } from "@/lib/cartItem";
 
 export default function CartPanel() {
   const { items, isOpen, openCart, closeCart, removeItem, updateQuantity, totalItems, totalPrice } =
     useCart();
   const router = useRouter();
   const hasUnavailableItems = items.some((item) => item.isUnavailable);
-  const touchStartXRef = useRef<number | null>(null);
-  const touchStartYRef = useRef<number | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   // Close on Escape
   useEffect(() => {
@@ -33,45 +33,14 @@ export default function CartPanel() {
   }, [isOpen, closeCart]);
 
   useEffect(() => {
-    const handleTouchStart = (event: TouchEvent) => {
-      if (event.touches.length !== 1) return;
+    if (!isOpen) return;
 
-      const touch = event.touches[0];
-      if (!isOpen && touch.clientX < window.innerWidth - 24) return;
+    const interval = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
 
-      touchStartXRef.current = touch.clientX;
-      touchStartYRef.current = touch.clientY;
-    };
-
-    const handleTouchEnd = (event: TouchEvent) => {
-      if (touchStartXRef.current === null || touchStartYRef.current === null) return;
-
-      const touch = event.changedTouches[0];
-      const deltaX = touch.clientX - touchStartXRef.current;
-      const deltaY = touch.clientY - touchStartYRef.current;
-
-      touchStartXRef.current = null;
-      touchStartYRef.current = null;
-
-      if (Math.abs(deltaY) > Math.abs(deltaX)) return;
-
-      if (!isOpen && deltaX < -70) {
-        return void openCart();
-      }
-
-      if (isOpen && deltaX > 70) {
-        closeCart();
-      }
-    };
-
-    window.addEventListener("touchstart", handleTouchStart, { passive: true });
-    window.addEventListener("touchend", handleTouchEnd, { passive: true });
-
-    return () => {
-      window.removeEventListener("touchstart", handleTouchStart);
-      window.removeEventListener("touchend", handleTouchEnd);
-    };
-  }, [closeCart, isOpen, openCart]);
+    return () => window.clearInterval(interval);
+  }, [isOpen]);
 
   return (
     <>
@@ -128,48 +97,62 @@ export default function CartPanel() {
             </div>
           ) : (
             <div className="divide-y divide-border-color">
-              {items.map((item) => (
-                <div key={item.id} className="flex gap-4 px-6 py-5">
-                  <div className="w-20 h-24 shrink-0 overflow-hidden bg-surface">
-                    {item.image ? (
-                      <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full placeholder-img">
-                        <span className="relative z-10 text-[7px] tracking-wider opacity-50">
-                          IMG
-                        </span>
-                      </div>
-                    )}
-                  </div>
+              {items.map((item) => {
+                const remainingTime = item.reservationExpiresAt
+                  ? formatRemainingTime(item.reservationExpiresAt, nowMs)
+                  : null;
 
-                  {/* Info */}
+                return (
+                  <div key={item.id} className="flex gap-4 px-6 py-5">
+                    <div className="w-20 h-24 shrink-0 overflow-hidden bg-surface">
+                      {item.image ? (
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      ) : (
+                        <div className="w-full h-full placeholder-img">
+                          <span className="relative z-10 text-[7px] tracking-wider opacity-50">
+                            IMG
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
-                        <div>
+                        <div className="min-w-0">
                           <p className="text-[10px] text-text-secondary uppercase tracking-wider">
                             {item.brand}
-                        </p>
-                        <Link
-                          href={`/product/${item.id.split("-")[0]}`}
-                          onClick={closeCart}
-                          className="text-sm font-medium hover:text-text-secondary transition-colors line-clamp-1"
+                          </p>
+                          <Link
+                            href={`/product/${getCartItemProductId(item.id)}`}
+                            onClick={closeCart}
+                            className="text-sm font-medium hover:text-text-secondary transition-colors line-clamp-1"
+                          >
+                            {item.name}
+                          </Link>
+                          {remainingTime && (
+                            <p className="mt-1 text-[10px] uppercase tracking-[0.18em] text-[#7a8362]">
+                              Hold expires in {remainingTime}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => {
+                            removeItem(item.id);
+                          }}
+                          className="text-text-secondary hover:text-foreground transition-colors cursor-pointer shrink-0 mt-0.5"
+                          aria-label={`Remove ${item.name}`}
                         >
-                          {item.name}
-                        </Link>
-                      </div>
-                      <button
-                        onClick={() => {
-                          void releaseProductReservation(item.id.split("-")[0]);
-                          removeItem(item.id);
-                        }}
-                        className="text-text-secondary hover:text-foreground transition-colors cursor-pointer shrink-0 mt-0.5"
-                        aria-label={`Remove ${item.name}`}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="18" y1="6" x2="6" y2="18" />
-                          <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                      </button>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
+                        </button>
                       </div>
 
                       {item.isUnavailable && (
@@ -178,63 +161,62 @@ export default function CartPanel() {
                         </p>
                       )}
 
-                    {(item.size || item.color || item.productType === "perfume") && (
-                      <div className="flex items-center gap-2 mt-1">
-                        {item.productType === "perfume" ? (
-                          <span className="text-[10px] text-text-secondary uppercase tracking-wider">
-                            Fragrance
+                      {(item.size || item.color || item.productType === "perfume") && (
+                        <div className="flex items-center gap-2 mt-1">
+                          {item.productType === "perfume" ? (
+                            <span className="text-[10px] text-text-secondary uppercase tracking-wider">
+                              Fragrance
+                            </span>
+                          ) : (
+                            <>
+                              {item.size && <span className="text-[10px] text-text-secondary">{item.size}</span>}
+                              {item.size && item.color && <span className="text-[10px] text-text-secondary">·</span>}
+                              {item.color && <span className="text-[10px] text-text-secondary">{item.color}</span>}
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between mt-3">
+                        <div className="flex items-center border border-border-color">
+                          <button
+                            onClick={() => {
+                              if (item.quantity === 1) {
+                                updateQuantity(item.id, 0);
+                                return;
+                              }
+                              updateQuantity(item.id, item.quantity - 1);
+                            }}
+                            className="w-7 h-7 flex items-center justify-center text-xs hover:bg-hover transition-colors cursor-pointer"
+                            aria-label="Decrease quantity"
+                          >
+                            −
+                          </button>
+                          <span className="w-8 h-7 flex items-center justify-center text-xs font-medium border-x border-border-color">
+                            {item.quantity}
                           </span>
-                        ) : (
-                          <>
-                            {item.size && <span className="text-[10px] text-text-secondary">{item.size}</span>}
-                            {item.size && item.color && <span className="text-[10px] text-text-secondary">·</span>}
-                            {item.color && <span className="text-[10px] text-text-secondary">{item.color}</span>}
-                          </>
-                        )}
-                      </div>
-                    )}
+                          <button
+                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                            disabled={item.quantity >= item.maxStock}
+                            className={`w-7 h-7 flex items-center justify-center text-xs transition-colors cursor-pointer ${
+                              item.quantity >= item.maxStock
+                                ? "text-border-color cursor-not-allowed"
+                                : "hover:bg-hover"
+                            }`}
+                            aria-label="Increase quantity"
+                          >
+                            +
+                          </button>
+                        </div>
 
-                    <div className="flex items-center justify-between mt-3">
-                      {/* Quantity controls */}
-                      <div className="flex items-center border border-border-color">
-                        <button
-                          onClick={() => {
-                            if (item.quantity === 1) {
-                              void releaseProductReservation(item.id.split("-")[0]);
-                            }
-                            updateQuantity(item.id, item.quantity - 1);
-                          }}
-                          className="w-7 h-7 flex items-center justify-center text-xs hover:bg-hover transition-colors cursor-pointer"
-                          aria-label="Decrease quantity"
-                        >
-                          −
-                        </button>
-                        <span className="w-8 h-7 flex items-center justify-center text-xs font-medium border-x border-border-color">
-                          {item.quantity}
-                        </span>
-                        <button
-                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                          disabled={item.quantity >= item.maxStock}
-                          className={`w-7 h-7 flex items-center justify-center text-xs transition-colors cursor-pointer ${
-                            item.quantity >= item.maxStock
-                              ? "text-border-color cursor-not-allowed"
-                              : "hover:bg-hover"
-                          }`}
-                          aria-label="Increase quantity"
-                        >
-                          +
-                        </button>
+                        <p className="text-sm font-medium">
+                          {formatTndPrice(parseFloat(item.price) * item.quantity)}
+                        </p>
                       </div>
-
-                      {/* Price */}
-                      <p className="text-sm font-medium">
-                        {formatTndPrice(parseFloat(item.price) * item.quantity)}
-                      </p>
                     </div>
-
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

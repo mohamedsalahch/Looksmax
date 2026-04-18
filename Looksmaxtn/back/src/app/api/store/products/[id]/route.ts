@@ -3,6 +3,7 @@ import dbConnect from "@/store/lib/mongodb";
 import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
 import { getSession } from "@/store/lib/auth";
+import { getActiveOrderHoldMapByProductIds } from "@/lib/productInventory";
 
 export async function GET(
   req: NextRequest,
@@ -11,23 +12,43 @@ export async function GET(
   try {
     await dbConnect();
     const { id } = await params;
+    const session = await getSession();
     const now = new Date();
-    const [product, activeCartPresences] = await Promise.all([
+    const reservationKey = session?.userId ? `user:${session.userId}` : null;
+    const [product, activeReservations] = await Promise.all([
       Product.findById(id).lean(),
       ProductReservation.find({ product: id, reservedUntil: { $gt: now } })
-        .select("product reservedUntil")
+        .select("reservationKey quantity")
         .lean(),
     ]);
-    if (!product || product.isActive === false) {
+    const activeOrderHoldMap = await getActiveOrderHoldMapByProductIds([id], session?.userId || null);
+    const activeOrderHold = activeOrderHoldMap.get(id);
+    if (!product) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
-    const cartCount = activeCartPresences.length;
+    const ownedReservationQuantity = activeReservations
+      .filter((reservation) => reservation.reservationKey === reservationKey)
+      .reduce((sum, reservation) => sum + Math.max(1, Number(reservation.quantity) || 1), 0);
+    const reservedByOthersQuantity = activeReservations
+      .filter((reservation) => reservation.reservationKey !== reservationKey)
+      .reduce((sum, reservation) => sum + Math.max(1, Number(reservation.quantity) || 1), 0);
+    const stock = Math.max(product.stock ?? 0, 0);
+    const cartReservedElsewhere = reservedByOthersQuantity > 0 && reservedByOthersQuantity >= stock;
+    const blockedByOrder = Boolean(activeOrderHold) && stock <= 0;
+    if (stock <= 0 && !blockedByOrder) {
+      return NextResponse.json({ error: "Product not found" }, { status: 404 });
+    }
+    const reservedElsewhere = cartReservedElsewhere;
+    const ownedReservation = ownedReservationQuantity > 0;
 
     return NextResponse.json({
       product: {
         ...product,
-        stock: Math.max(product.stock ?? 0, 0),
-        cartCount,
+        stock,
+        cartCount: 0,
+        blockedByOrder,
+        reservedElsewhere,
+        ownedReservation,
         reservationExpiresAt: null,
       },
     });

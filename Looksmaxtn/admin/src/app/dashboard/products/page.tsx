@@ -7,7 +7,7 @@ import { withAuthRequest } from "@/lib/authClient";
 
 interface Product {
   _id: string; name: string; price: number; categories: string[];
-  stock: number; tag: string; brand: string; createdAt: string; productType?: "fashion" | "perfume" | "clothing" | "shoes"; availabilityStatus?: string; isActive?: boolean; visibilityStatus?: string;
+  stock: number; availableStock?: number; soldQuantity?: number; fullStock?: number; tag: string; brand: string; createdAt: string; productType?: "fashion" | "perfume" | "clothing" | "shoes"; availabilityStatus?: string; isActive?: boolean; visibilityStatus?: string;
 }
 
 type SortKey = "name" | "_id" | "categories" | "productType" | "price" | "stock" | "status" | "visibility" | "tag";
@@ -46,8 +46,10 @@ function getProductStatus(product: Product) {
 }
 
 function formatStockLabel(product: Product) {
-  const unitLabel = product.productType === "perfume" ? "bottle" : "unit";
-  return `${product.stock} ${unitLabel}${product.stock === 1 ? "" : "s"}`;
+  const available = Math.max(product.availableStock ?? product.stock ?? 0, 0);
+  const sold = Math.max(product.soldQuantity ?? 0, 0);
+  const full = Math.max(product.fullStock ?? available + sold, 0);
+  return `Available: ${available} · Sold: ${sold} · Full: ${full}`;
 }
 
 export default function ProductsPage() {
@@ -150,7 +152,7 @@ export default function ProductsPage() {
         case "price":
           return product.price;
         case "stock":
-          return product.stock;
+          return product.availableStock ?? product.stock;
         case "status":
           return getProductStatus(product).label;
         case "visibility":
@@ -196,9 +198,9 @@ export default function ProductsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-xl font-semibold tracking-wide">Products</h1>
-        <Link href="/dashboard/products/new" className="bg-accent text-bg-primary px-4 py-2 text-xs font-semibold tracking-wide uppercase hover:bg-accent-hover transition-colors">
+        <Link href="/dashboard/products/new" className="inline-flex w-full justify-center bg-accent text-bg-primary px-4 py-2 text-xs font-semibold tracking-wide uppercase hover:bg-accent-hover transition-colors sm:w-auto">
           + Add Product
         </Link>
       </div>
@@ -238,8 +240,8 @@ export default function ProductsPage() {
           <p className="text-sm text-text-secondary">No products found</p>
         </div>
       ) : (
-        <div className="border border-border rounded overflow-hidden">
-          <table className="w-full text-left">
+        <div className="overflow-x-auto border border-border rounded">
+          <table className="min-w-[760px] w-full text-left">
             <thead className="bg-bg-secondary">
               <tr className="text-[10px] text-text-secondary uppercase tracking-wider">
                 <th className="px-4 py-3">
@@ -269,7 +271,7 @@ export default function ProductsPage() {
                 </th>
                 <th className="px-4 py-3">
                   <button type="button" onClick={() => toggleSort("stock")} className="inline-flex items-center gap-1 cursor-pointer">
-                    Stock {renderSortIndicator("stock")}
+                    Inventory {renderSortIndicator("stock")}
                   </button>
                 </th>
                 <th className="px-4 py-3">
@@ -312,9 +314,12 @@ export default function ProductsPage() {
                   </td>
                   <td className="px-4 py-3 text-xs font-medium">{p.price.toFixed(2)} TND</td>
                   <td className="px-4 py-3">
-                    <span className="text-xs font-medium text-text-primary">
-                      {formatStockLabel(p)}
-                    </span>
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-medium text-text-primary">
+                        {formatStockLabel(p)}
+                      </span>
+
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <span className={`text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${status.className}`}>

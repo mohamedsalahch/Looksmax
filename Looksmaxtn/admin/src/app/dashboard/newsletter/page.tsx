@@ -41,9 +41,9 @@ export default function NewsletterPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-xl font-semibold tracking-wide">Newsletter Subscribers</h1>
-        <span className="text-xs text-text-secondary bg-bg-secondary px-3 py-1 rounded">
+        <span className="text-xs text-text-secondary bg-bg-secondary px-3 py-1 rounded w-fit">
           {subscribers.length} subscriber{subscribers.length !== 1 ? "s" : ""}
         </span>
       </div>
@@ -67,8 +67,8 @@ export default function NewsletterPage() {
           </p>
         </div>
       ) : (
-        <div className="border border-border rounded overflow-hidden">
-          <table className="w-full text-left">
+        <div className="overflow-x-auto border border-border rounded">
+          <table className="min-w-[520px] w-full text-left">
             <thead className="bg-bg-secondary">
               <tr className="text-[10px] text-text-secondary uppercase tracking-wider">
                 <th className="px-4 py-3">Email</th>

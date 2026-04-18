@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { shareOutfit } from "@/lib/share";
 
 interface SavedOutfitDetail {
   id: string;
@@ -22,6 +23,9 @@ export default function SavedOutfitDetailPage({
 }) {
   const [outfit, setOutfit] = useState<SavedOutfitDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sharing, setSharing] = useState(false);
+  const [shared, setShared] = useState(false);
+  const sharedResetTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     params.then(({ id }) => {
@@ -32,6 +36,34 @@ export default function SavedOutfitDetailPage({
         .finally(() => setLoading(false));
     });
   }, [params]);
+
+  useEffect(() => {
+    return () => {
+      if (sharedResetTimerRef.current !== null) {
+        window.clearTimeout(sharedResetTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleShare = async () => {
+    if (!outfit) return;
+
+    setSharing(true);
+    try {
+      await shareOutfit(outfit.id);
+      setShared(true);
+      if (sharedResetTimerRef.current !== null) {
+        window.clearTimeout(sharedResetTimerRef.current);
+      }
+      sharedResetTimerRef.current = window.setTimeout(() => {
+        setShared(false);
+        sharedResetTimerRef.current = null;
+      }, 1800);
+    } catch {
+      setShared(false);
+    }
+    setSharing(false);
+  };
 
   if (loading) {
     return (
@@ -61,12 +93,25 @@ export default function SavedOutfitDetailPage({
             </p>
             <h1 className="mt-2 text-2xl font-semibold tracking-wide uppercase">{outfit.name}</h1>
           </div>
-          <Link
-            href="/studio"
-            className="border border-border-color px-4 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:text-foreground"
-          >
-            Back to Studio
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleShare}
+              disabled={sharing}
+              aria-busy={sharing}
+              className={`inline-flex min-w-[84px] justify-center border border-border-color px-4 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:text-foreground disabled:opacity-50 ${
+                shared ? "cursor-default" : "cursor-pointer"
+              }`}
+            >
+              {shared ? "Copied" : "Share"}
+            </button>
+            <Link
+              href="/studio/outfits"
+              className="border border-border-color px-4 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:text-foreground"
+            >
+              Back to Outfits
+            </Link>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

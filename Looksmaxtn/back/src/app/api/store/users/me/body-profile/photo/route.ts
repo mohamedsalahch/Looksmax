@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
           "bodyProfile.profileImageRequiresGeneration": requiresManualGeneration,
           "bodyProfile.profileImageUploadCount": uploadCount + 1,
           "bodyProfile.outfitGenerationCount": outfitGenerationCount,
+          "bodyProfile.profileImageValidationError": "",
         },
       }
     );

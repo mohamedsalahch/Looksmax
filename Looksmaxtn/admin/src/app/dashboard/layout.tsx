@@ -48,6 +48,7 @@ const navItems = [
   { name: "Generate Images", href: "/dashboard/generate-images", icon: "🖼️" },
   { name: "Products", href: "/dashboard/products", icon: "📦" },
   { name: "Orders", href: "/dashboard/orders", icon: "🛒" },
+  { name: "Coupons", href: "/dashboard/coupons", icon: "🏷️" },
   { name: "Users", href: "/dashboard/users", icon: "👥" },
   { name: "Newsletter", href: "/dashboard/newsletter", icon: "📧" },
   { name: "Messages", href: "/dashboard/messages", icon: "💬" },
@@ -62,6 +63,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const [orderNotifications, setOrderNotifications] = useState<OrderNotice[]>([]);
   const [messageNotifications, setMessageNotifications] = useState<MessageNotice[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const notificationsRef = useRef<HTMLDivElement | null>(null);
   const showNotificationsRef = useRef(showNotifications);
   const readOrderIdsRef = useRef<Set<string>>(new Set());
@@ -291,6 +293,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    setMobileSidebarOpen(false);
+  }, [pathname]);
+
   const markNotificationRead = (noticeId: string) => {
     setOrderNotifications((current) => {
       const next = current.map((notice) => {
@@ -338,9 +344,22 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen flex bg-bg-primary print:block print:bg-white print:text-black print:[&_*:not(.print\\:block)]:hidden">
-      <aside className={`${sidebarOpen ? "w-56" : "w-16"} transition-all duration-300 bg-bg-secondary/65 flex flex-col shrink-0 print:hidden`}>
-        <div className="p-4 flex items-center justify-between">
+    <div className="min-h-screen bg-bg-primary md:flex print:block print:bg-white print:text-black print:[&_*:not(.print\\:block)]:hidden">
+      {mobileSidebarOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          onClick={() => setMobileSidebarOpen(false)}
+          className="fixed inset-0 z-30 bg-black/30 md:hidden"
+        />
+      )}
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col shrink-0 bg-bg-secondary/90 backdrop-blur md:static md:z-auto md:backdrop-blur-0 print:hidden transition-transform duration-300 md:transition-[width] ${
+          mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
+        } md:translate-x-0 ${sidebarOpen ? "md:w-56" : "md:w-16"}`}
+      >
+        <div className="flex items-center justify-between p-4">
           {sidebarOpen && (
             <div>
               <h1 className="text-xs font-bold tracking-[0.2em] uppercase text-accent">LOOKSMAX</h1>
@@ -372,8 +391,26 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       </aside>
 
       <main className="flex-1 overflow-y-auto print:overflow-visible print:w-full print:bg-white">
-        <div className="bg-bg-primary/70 px-6 py-4 backdrop-blur md:px-8 print:hidden">
-          <div className="flex items-center justify-end gap-4">
+        <div className="sticky top-0 z-20 border-b border-border/60 bg-bg-primary/80 px-4 py-3 backdrop-blur md:px-6 print:hidden">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-end md:gap-4">
+            <div className="flex items-center justify-between gap-3 md:mr-auto">
+              <button
+                type="button"
+                onClick={() => setMobileSidebarOpen((current) => !current)}
+                className="inline-flex items-center gap-2 border border-border bg-bg-secondary px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-text-secondary transition-colors hover:text-text-primary md:hidden"
+              >
+                <span>☰</span>
+                Menu
+              </button>
+              <button
+                type="button"
+                onClick={() => setSidebarOpen((current) => !current)}
+                className="hidden md:inline-flex items-center gap-2 border border-border bg-bg-secondary px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-text-secondary transition-colors hover:text-text-primary"
+              >
+                {sidebarOpen ? "Collapse" : "Expand"}
+              </button>
+            </div>
+
             <div className="relative" ref={notificationsRef}>
               <button
                 type="button"
@@ -465,10 +502,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             >
               Logout
             </button>
-            </div>
+          </div>
         </div>
 
-        <div className="p-6 md:p-8 print:p-0 print:!m-0 print:!bg-white print:!backdrop-blur-0 print:w-full print:block">{children}</div>
+        <div className="p-4 md:p-6 lg:p-8 print:p-0 print:!m-0 print:!bg-white print:!backdrop-blur-0 print:w-full print:block">{children}</div>
       </main>
     </div>
   );

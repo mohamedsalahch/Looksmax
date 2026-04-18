@@ -6,6 +6,7 @@ import { useCart } from "@/providers/CartContext";
 import { reserveProduct, subscribeToReservationChanges } from "@/lib/reservations";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { getConditionColor, getConditionLabel, getConditionPercent } from "@/lib/productCondition";
+import { buildCartItemId } from "@/lib/cartItem";
 import { queueStudioAssignment } from "@/lib/studioAssignment";
 
 type ProductType = "fashion" | "perfume" | "clothing" | "shoes";
@@ -26,6 +27,9 @@ export default function ProductInfo({
     description: string;
     reservationExpiresAt?: string | null;
     cartCount?: number;
+    reservedElsewhere?: boolean;
+    ownedReservation?: boolean;
+    blockedByOrder?: boolean;
     conditionScore?: number | null;
     conditionStatus?: string | null;
     productType?: ProductType;
@@ -43,46 +47,79 @@ export default function ProductInfo({
   const [addedToCart, setAddedToCart] = useState(false);
   const [currentStock, setCurrentStock] = useState(() => product.stock);
   const [reservationError, setReservationError] = useState("");
-  const [cartCount, setCartCount] = useState(() => product.cartCount || 0);
+  const [reservedElsewhere, setReservedElsewhere] = useState(false);
+  const [ownedReservation, setOwnedReservation] = useState(() => Boolean(product.ownedReservation));
+  const [blockedByOrder, setBlockedByOrder] = useState(() => Boolean(product.blockedByOrder));
   const [selectedQuantity, setSelectedQuantity] = useState(1);
   const availableSizes = (product.sizes?.length ? product.sizes : product.size ? [product.size] : []).filter(
     (entry) => Boolean(entry.trim())
   );
   const [selectedSize, setSelectedSize] = useState(() => availableSizes[0] || "");
-  const { addItem, items } = useCart();
+  const { addItem, items, updateQuantity } = useCart();
   const router = useRouter();
   const isPerfume = product.productType === "perfume";
   const isSoldOut = currentStock < 1;
-  const isInLocalCart = product.id ? items.some((item) => item.id.split("-")[0] === product.id) : false;
-  const showReservedElsewhere = cartCount > (isInLocalCart ? 1 : 0);
+  const showReservedElsewhere = reservedElsewhere;
+  const isBlocked = isSoldOut || blockedByOrder;
+  const isReserved = isBlocked;
+  const cartItemId = product.id
+    ? buildCartItemId(product.id, isPerfume ? undefined : selectedSize)
+    : "";
+  const cartItemQuantity = items.find((item) => item.id === cartItemId)?.quantity || 0;
+
+  const refreshAvailability = () => {
+    if (!product.id) return;
+
+    fetch(`/api/products/${product.id}`)
+      .then((response) => response.json())
+      .then((data) => {
+        if (!data.product) return;
+        setCurrentStock(data.product.stock ?? 0);
+        setReservedElsewhere(Boolean(data.product.reservedElsewhere));
+        setOwnedReservation(Boolean(data.product.ownedReservation));
+        setBlockedByOrder(Boolean(data.product.blockedByOrder));
+      })
+      .catch(() => {});
+  };
 
   useEffect(() => {
     if (!product.id) return;
 
     let cancelled = false;
+    const interval = window.setInterval(() => {
+      if (!cancelled) refreshAvailability();
+    }, 5000);
 
-    const refreshAvailability = () => {
-      fetch(`/api/products/${product.id}`)
-        .then((response) => response.json())
-        .then((data) => {
-          if (cancelled || !data.product) return;
-          setCurrentStock(data.product.stock ?? 0);
-          setCartCount(data.product.cartCount ?? 0);
-        })
-        .catch(() => {});
+    const handleFocus = () => {
+      refreshAvailability();
     };
-
-    const interval = window.setInterval(refreshAvailability, 5000);
+    window.addEventListener("focus", handleFocus);
 
     return () => {
       cancelled = true;
       window.clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
     };
   }, [product.id]);
 
   useEffect(() => {
     setSelectedQuantity((current) => Math.min(Math.max(1, current), Math.max(1, currentStock)));
   }, [currentStock]);
+
+  useEffect(() => {
+    if (!product.id) return;
+
+    const nextQuantity = cartItemQuantity > 0 ? cartItemQuantity : 1;
+    setSelectedQuantity(Math.min(Math.max(1, nextQuantity), Math.max(1, currentStock)));
+  }, [product.id, cartItemQuantity, currentStock, selectedSize, isPerfume]);
+
+  const syncQuantity = (nextQuantity: number) => {
+    const boundedQuantity = Math.min(Math.max(1, nextQuantity), Math.max(1, currentStock));
+    setSelectedQuantity(boundedQuantity);
+    if (cartItemQuantity > 0 && cartItemId) {
+      updateQuantity(cartItemId, boundedQuantity);
+    }
+  };
 
   useEffect(() => {
     if (availableSizes.length === 0) {
@@ -94,23 +131,35 @@ export default function ProductInfo({
   }, [availableSizes.join("|")]);
 
   useEffect(() => {
+    setOwnedReservation(Boolean(product.ownedReservation));
+  }, [product.ownedReservation]);
+
+  useEffect(() => {
+    setBlockedByOrder(Boolean(product.blockedByOrder));
+  }, [product.blockedByOrder]);
+
+  useEffect(() => {
     if (!product.id) return;
 
-    return subscribeToReservationChanges(({ productId, cartCount: nextCartCount }) => {
-      if (productId !== product.id) return;
-      if (typeof nextCartCount === "number") {
-        setCartCount(nextCartCount);
-      }
+    const unsubscribe = subscribeToReservationChanges((payload) => {
+      if (payload.productId !== product.id) return;
+      refreshAvailability();
     });
+
+    return unsubscribe;
   }, [product.id]);
 
   const handleAddToCart = async () => {
     setReservationError("");
-    if (isSoldOut) return;
+    if (isBlocked) return;
+    if (cartItemQuantity > 0) {
+      setAddedToCart(true);
+      setTimeout(() => setAddedToCart(false), 2000);
+      return;
+    }
 
     try {
-      const reservation = await reserveProduct(product.id || "unknown");
-      setCartCount(reservation.cartCount ?? cartCount + 1);
+      const reservation = await reserveProduct(product.id || "unknown", 1);
       addItem({
         id: product.id || "unknown",
         name: product.name,
@@ -125,8 +174,8 @@ export default function ProductInfo({
         originPictures: product.originPictures,
         reservationExpiresAt: reservation.reservationExpiresAt,
         cartCount: reservation.cartCount,
-        quantity: selectedQuantity,
-      }, { openCart: true });
+        quantity: 1,
+      }, { openCart: false });
       setAddedToCart(true);
       setTimeout(() => setAddedToCart(false), 2000);
     } catch (error) {
@@ -135,11 +184,10 @@ export default function ProductInfo({
   };
 
   const handleAddToTryOn = async () => {
-    if (isSoldOut || isPerfume) return;
+    if (isBlocked || isPerfume) return;
 
     try {
-      const reservation = await reserveProduct(product.id || "unknown");
-      setCartCount(reservation.cartCount ?? cartCount + 1);
+      const reservation = await reserveProduct(product.id || "unknown", selectedQuantity);
       addItem({
         id: product.id || "unknown",
         name: product.name,
@@ -221,6 +269,8 @@ export default function ProductInfo({
                 src={product.cloneSourceImage}
                 alt={product.cloneSourceName}
                 className="w-full h-full object-contain"
+                loading="lazy"
+                decoding="async"
               />
             ) : (
               <div className="w-full h-full placeholder-img">
@@ -282,6 +332,13 @@ export default function ProductInfo({
         </div>
       )}
 
+      {blockedByOrder && (
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-foreground" />
+          <span className="text-xs text-text-secondary">Reserved for confirmation</span>
+        </div>
+      )}
+
       {reservationError && <p className="text-xs text-[#430C05]">{reservationError}</p>}
 
       <div className="flex items-center justify-between gap-4 border border-border-color bg-surface/40 px-4 py-3">
@@ -292,7 +349,8 @@ export default function ProductInfo({
         <div className="flex items-center border border-border-color">
           <button
             type="button"
-            onClick={() => setSelectedQuantity((current) => Math.max(1, current - 1))}
+            onClick={() => syncQuantity(selectedQuantity - 1)}
+            disabled={isBlocked}
             className="w-8 h-8 flex items-center justify-center text-sm hover:bg-hover transition-colors cursor-pointer"
             aria-label="Decrease quantity"
           >
@@ -303,12 +361,10 @@ export default function ProductInfo({
           </span>
           <button
             type="button"
-            onClick={() =>
-              setSelectedQuantity((current) => Math.min(Math.max(1, current + 1), Math.max(1, currentStock)))
-            }
-            disabled={selectedQuantity >= currentStock}
+            onClick={() => syncQuantity(selectedQuantity + 1)}
+            disabled={isBlocked || selectedQuantity >= currentStock}
             className={`w-8 h-8 flex items-center justify-center text-sm transition-colors cursor-pointer ${
-              selectedQuantity >= currentStock ? "text-border-color cursor-not-allowed" : "hover:bg-hover"
+              isBlocked || selectedQuantity >= currentStock ? "text-border-color cursor-not-allowed" : "hover:bg-hover"
             }`}
             aria-label="Increase quantity"
           >
@@ -317,39 +373,37 @@ export default function ProductInfo({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {isBlocked ? (
+        <button
+          type="button"
+          disabled
+          className="w-full py-3.5 text-sm font-medium tracking-wide uppercase bg-border-color text-text-secondary cursor-not-allowed"
+        >
+          {isSoldOut ? "Sold Out" : "Reserved for confirmation"}
+        </button>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <button
             onClick={handleAddToCart}
-            disabled={isSoldOut}
             className={`w-full py-3.5 text-sm font-medium tracking-wide uppercase transition-all duration-300 cursor-pointer ${
-              isSoldOut
-                ? "bg-border-color text-text-secondary cursor-not-allowed"
-                : addedToCart
-                  ? "bg-[#5C6A47] text-white"
-                  : "bg-foreground text-background hover:bg-accent"
+              addedToCart
+                ? "bg-[#5C6A47] text-white"
+                : "bg-foreground text-background hover:bg-accent"
             }`}
           >
-          {isSoldOut
-            ? "Sold Out"
-            : addedToCart
-              ? "✓ Added to Cart"
-              : "Add to Cart"}
-        </button>
-        {!isPerfume && (
-          <button
-            type="button"
-            onClick={handleAddToTryOn}
-            disabled={isSoldOut}
-            className={`w-full py-3.5 text-sm font-medium tracking-wide uppercase transition-all duration-300 cursor-pointer ${
-              isSoldOut
-                ? "border border-border-color text-text-secondary cursor-not-allowed"
-                : "border border-border-color text-foreground hover:bg-hover"
-            }`}
-          >
-            TRY ON
+            {addedToCart ? "✓ Added to Cart" : "Add to Cart"}
           </button>
-        )}
-      </div>
+          {!isPerfume && (
+            <button
+              type="button"
+              onClick={handleAddToTryOn}
+              className="w-full py-3.5 text-sm font-medium tracking-wide uppercase transition-all duration-300 cursor-pointer border border-border-color text-foreground hover:bg-hover"
+            >
+              TRY ON
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="border-t border-border-color" />
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {useAuth} from "@/providers/AuthContext";
 import { useCart } from "@/providers/CartContext";
@@ -9,6 +9,9 @@ import ProductCard from "@/components/ProductCard";
 import { consumeStudioAssignments, inferStudioAssignmentZone, StudioAssignmentItem, StudioZoneId } from "@/lib/studioAssignment";
 import {formatTndPrice} from "@/lib/formatPrice";
 import { withAuthRequest } from "@/lib/authClient";
+import { shareOutfit } from "@/lib/share";
+import { upsertSavedOutfitSession } from "@/lib/savedOutfitsSession";
+import { readStudioSessionState, writeStudioSessionState, type StudioSessionZoneItem } from "@/lib/studioSession";
 
 interface CategoryNode {
     _id: string;
@@ -31,6 +34,8 @@ interface StudioProduct {
     brand?: string;
     stock?: number;
     cartCount?: number;
+    reservedElsewhere?: boolean;
+    ownedReservation?: boolean;
     tag?: string;
     sizes?: string[];
     conditionScore?: number | null;
@@ -60,27 +65,6 @@ interface OutfitSlotItem {
 
 interface OutfitViewItem extends OutfitSlotItem {
     zoneId: StudioZoneId;
-}
-
-interface SavedOutfitItem {
-    id: string;
-    name: string;
-    images: {
-        front?: string;
-        back?: string;
-    };
-    outfitSnapshot?: Record<
-        string,
-        {
-            status?: boolean;
-            productId?: string;
-            fashionSubtype?: string;
-            size?: string;
-        } | null
-    >;
-    isPublic: boolean;
-    shareToken?: string;
-    updatedAt: string;
 }
 
 const BODY_ZONES = [
@@ -155,7 +139,6 @@ async function copyShareLink(text: string) {
         document.body.removeChild(input);
     }
 
-    window.prompt("Copy share link", text);
     return false;
 }
 
@@ -363,6 +346,17 @@ function normalizeSearchableText(value: string) {
     return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
+function matchesSearchKeyword(haystack: string, keyword: string) {
+    const normalizedKeyword = normalizeSearchableText(keyword);
+    if (!normalizedKeyword) return false;
+
+    if (normalizedKeyword.includes(" ")) {
+        return haystack.includes(normalizedKeyword);
+    }
+
+    return haystack.split(" ").includes(normalizedKeyword);
+}
+
 function getStudioItemSearchText(item: Pick<StudioProduct, "categories" | "name"> | Pick<StudioAssignmentItem, "name"> & {
     categories?: string[]
 }) {
@@ -380,7 +374,7 @@ function doesItemMatchZone(
 ) {
     if (zoneId === "footwear") {
         return item.fashionSubtype === "shoes" || ZONE_CATEGORY_KEYWORDS.footwear.some((keyword) =>
-            getStudioItemSearchText(item).includes(keyword)
+            matchesSearchKeyword(getStudioItemSearchText(item), keyword)
         );
     }
 
@@ -389,7 +383,7 @@ function doesItemMatchZone(
     }
 
     const haystack = getStudioItemSearchText(item);
-    return getZoneCategoryKeywords(zoneId, isWomen).some((keyword) => haystack.includes(keyword));
+    return getZoneCategoryKeywords(zoneId, isWomen).some((keyword) => matchesSearchKeyword(haystack, keyword));
 }
 
 function getMainImage(images?: ProductImage[]) {
@@ -413,12 +407,6 @@ function extractGeneratedImages(data: unknown) {
     return candidates
         .filter((image): image is string => typeof image === "string" && image.length > 0)
         .map((image) => (image.startsWith("data:") ? image : `data:image/png;base64,${image}`));
-}
-
-function getAvailableOutfitImages(images?: { front?: string; back?: string }) {
-    return [images?.front, images?.back].filter(
-        (image): image is string => typeof image === "string" && image.length > 0
-    );
 }
 
 function StudioModel({
@@ -583,6 +571,7 @@ export default function OutfitStudioPage() {
         Object.fromEntries(BODY_ZONES.map((zone) => [zone.id, null]))
     );
     const [selectedZoneId, setSelectedZoneId] = useState<string>("");
+    const [zoneOverrides, setZoneOverrides] = useState<Partial<Record<StudioZoneId, StudioSessionZoneItem | null>>>({});
     const [zoneHistory, setZoneHistory] = useState<Record<StudioZoneId, OutfitSlotItem[]>>(
         () => BODY_ZONES.reduce((acc, zone) => {
             acc[zone.id] = [];
@@ -596,15 +585,14 @@ export default function OutfitStudioPage() {
     const [outfitNameDraft, setOutfitNameDraft] = useState("Outfit");
     const [isGeneratedZoomOpen, setIsGeneratedZoomOpen] = useState(false);
     const [needsGenerationRecovery, setNeedsGenerationRecovery] = useState(false);
-    const [zoomedSavedOutfitId, setZoomedSavedOutfitId] = useState("");
-    const [savedOutfits, setSavedOutfits] = useState<SavedOutfitItem[]>([]);
     const [savingOutfit, setSavingOutfit] = useState(false);
-    const [sharingOutfitId, setSharingOutfitId] = useState("");
-    const [deletingOutfitId, setDeletingOutfitId] = useState("");
-    const [savedOutfitIndexes, setSavedOutfitIndexes] = useState<Record<string, number>>({});
+    const [sharingOutfit, setSharingOutfit] = useState(false);
+    const [sharedOutfit, setSharedOutfit] = useState(false);
     const [generationError, setGenerationError] = useState("");
     const [generationStateHydrated, setGenerationStateHydrated] = useState(false);
+    const [studioStateHydrated, setStudioStateHydrated] = useState(false);
     const [showAllSelectedItems, setShowAllSelectedItems] = useState(true);
+    const sharedResetTimerRef = useRef<number | null>(null);
 
     useEffect(() => {
         if (!loading && !user) {
@@ -639,24 +627,18 @@ export default function OutfitStudioPage() {
         };
     }, [user?.id]);
 
-    const loadSavedOutfits = () => {
-        fetch(`/api/outfits?ts=${Date.now()}`, {cache: "no-store"})
-            .then((response) => response.json())
-            .then((data) => {
-                const outfits = data.outfits || [];
-                setSavedOutfits(outfits);
-                setSavedOutfitIndexes((current) =>
-                    Object.fromEntries(
-                        outfits.map((outfit: SavedOutfitItem) => [
-                            outfit.id,
-                            Math.min(current[outfit.id] || 0, Math.max(getAvailableOutfitImages(outfit.images).length - 1, 0)),
-                        ])
-                    )
-                );
-            })
-            .catch(() => {
-            });
-    };
+    useEffect(() => {
+        if (!user?.id) return;
+
+        const storedStudioState = readStudioSessionState(user.id);
+        if (storedStudioState) {
+            setSelectedZoneId(storedStudioState.selectedZoneId || "");
+            setShowAllSelectedItems(storedStudioState.showAllSelectedItems);
+            setZoneOverrides(storedStudioState.zoneOverrides || {});
+        }
+
+        setStudioStateHydrated(true);
+    }, [user?.id]);
 
     useEffect(() => {
         fetch("/api/categories")
@@ -667,12 +649,7 @@ export default function OutfitStudioPage() {
     }, []);
 
     useEffect(() => {
-        if (!user) return;
-        loadSavedOutfits();
-    }, [user]);
-
-    useEffect(() => {
-        if (!user?.id) return;
+        if (!user?.id || !studioStateHydrated) return;
         if (!generationStateHydrated) return;
 
         if (!generatedOutfitJobId) {
@@ -700,7 +677,17 @@ export default function OutfitStudioPage() {
             name: outfitNameDraft,
             pendingRecovery: false,
         });
-    }, [generatedOutfitImages, generatedOutfitJobId, generatingOutfit, generationError, outfitNameDraft, user?.id, generationStateHydrated]);
+    }, [generatedOutfitImages, generatedOutfitJobId, generatingOutfit, generationError, outfitNameDraft, user?.id, generationStateHydrated, studioStateHydrated]);
+
+    useEffect(() => {
+        if (!user?.id || !studioStateHydrated) return;
+
+        writeStudioSessionState(user.id, {
+            selectedZoneId: selectedZoneId as StudioZoneId | "",
+            showAllSelectedItems,
+            zoneOverrides,
+        });
+    }, [selectedZoneId, showAllSelectedItems, zoneOverrides, studioStateHydrated, user?.id]);
 
     useEffect(() => {
         if (!user?.id || !needsGenerationRecovery || generatedOutfitJobId) return;
@@ -870,6 +857,10 @@ export default function OutfitStudioPage() {
 
         setSelectedZoneId(zoneId);
         setShowAllSelectedItems(false);
+        setZoneOverrides((current) => ({
+            ...current,
+            [zoneId]: nextItem,
+        }));
         setOutfit((current) => ({
             ...current,
             [zoneId]: nextItem,
@@ -893,6 +884,8 @@ export default function OutfitStudioPage() {
     };
 
     useEffect(() => {
+        if (!studioStateHydrated) return;
+
         const nextOutfit: Record<string, OutfitSlotItem | null> = Object.fromEntries(
             BODY_ZONES.map((zone) => [zone.id, null])
         );
@@ -925,13 +918,28 @@ export default function OutfitStudioPage() {
             ].slice(0, 5);
         }
 
+        for (const zone of BODY_ZONES) {
+            if (!(zone.id in zoneOverrides)) continue;
+
+            const override = zoneOverrides[zone.id];
+            nextOutfit[zone.id] = override
+                ? {
+                    id: override.id,
+                    name: override.name,
+                    image: override.image,
+                    fashionSubtype: override.fashionSubtype,
+                    originPictures: override.originPictures,
+                }
+                : null;
+        }
+
         setOutfit((current) => (
             JSON.stringify(current) === JSON.stringify(nextOutfit) ? current : nextOutfit
         ));
         setZoneHistory((current) => (
             JSON.stringify(current) === JSON.stringify(nextHistory) ? current : nextHistory
         ));
-    }, [cartItems, isWomen]);
+    }, [cartItems, isWomen, zoneOverrides, studioStateHydrated]);
 
     useEffect(() => {
         const pendingAssignments = consumeStudioAssignments();
@@ -962,11 +970,26 @@ export default function OutfitStudioPage() {
     const handleSelectedZoneItemClick = (zoneId: StudioZoneId, item: OutfitViewItem) => {
         setOutfit((current) => {
             if (current[zoneId]?.id === item.id) {
+                setZoneOverrides((currentOverrides) => ({
+                    ...currentOverrides,
+                    [zoneId]: null,
+                }));
                 return {
                     ...current,
                     [zoneId]: null,
                 };
             }
+
+            setZoneOverrides((currentOverrides) => ({
+                ...currentOverrides,
+                [zoneId]: {
+                    id: item.id,
+                    name: item.name,
+                    image: item.image,
+                    fashionSubtype: item.fashionSubtype,
+                    originPictures: item.originPictures,
+                },
+            }));
 
             return {
                 ...current,
@@ -1087,10 +1110,9 @@ export default function OutfitStudioPage() {
         }
     };
 
-    const handleSaveOutfit = async () => {
+    const persistGeneratedOutfit = async () => {
         if (generatedOutfitImages.length === 0) return;
 
-        setSavingOutfit(true);
         try {
             const response = await fetch("/api/outfits", withAuthRequest({
                 method: "POST",
@@ -1107,8 +1129,7 @@ export default function OutfitStudioPage() {
             const data = await response.json();
             if (!response.ok) {
                 setGenerationError(data.error || "Unable to save outfit.");
-                setSavingOutfit(false);
-                return;
+                return "";
             }
 
             setGeneratedOutfitJobId("");
@@ -1118,52 +1139,66 @@ export default function OutfitStudioPage() {
             setOutfitNameDraft("Outfit");
             if (user?.id) {
                 writeStoredGenerationState(user.id, null);
+                upsertSavedOutfitSession(user.id, {
+                    id: String(data.outfit?.id || ""),
+                    name: String(data.outfit?.name || outfitNameDraft.trim() || "Outfit"),
+                    images: {
+                        front: String(data.outfit?.images?.front || generatedOutfitImages[0] || ""),
+                        back: String(data.outfit?.images?.back || generatedOutfitImages[1] || ""),
+                    },
+                    outfitSnapshot: data.outfit?.outfitSnapshot || undefined,
+                    isPublic: Boolean(data.outfit?.isPublic),
+                    shareToken: String(data.outfit?.shareToken || ""),
+                    createdAt: String(data.outfit?.createdAt || ""),
+                    updatedAt: String(data.outfit?.updatedAt || new Date().toISOString()),
+                });
             }
 
-            loadSavedOutfits();
+            return String(data.outfit?.id || "");
         } catch {
             setGenerationError("Unable to save outfit.");
+            return "";
         }
+    };
+
+    const handleSaveOutfit = async () => {
+        setSavingOutfit(true);
+        await persistGeneratedOutfit();
         setSavingOutfit(false);
     };
 
-    const handleDeleteOutfit = async (id: string) => {
-        setDeletingOutfitId(id);
-        try {
-            const response = await fetch(`/api/outfits/${id}`, withAuthRequest({ method: "DELETE" }));
-            if (!response.ok) {
-                setGenerationError("Unable to delete outfit.");
-                setDeletingOutfitId("");
-                return;
-            }
-            loadSavedOutfits();
-        } catch {
-            setGenerationError("Unable to delete outfit.");
-        }
-        setDeletingOutfitId("");
-    };
+    const handleShareGeneratedOutfit = async () => {
+        if (generatedOutfitImages.length === 0) return;
 
-    const handleShareOutfit = async (id: string) => {
-        setSharingOutfitId(id);
+        setSharingOutfit(true);
         try {
-            const response = await fetch(`/api/outfits/${id}/share`, withAuthRequest({ method: "POST" }));
-            const data = await response.json();
-            if (!response.ok) {
-                setGenerationError(data.error || "Unable to share outfit.");
-                setSharingOutfitId("");
-                return;
-            }
+            const outfitId = await persistGeneratedOutfit();
+            if (!outfitId) return;
 
-            const copied = await copyShareLink(String(data.shareUrl || ""));
-            if (!copied) {
-                setGenerationError(`Share link created: ${data.shareUrl || ""}`);
+            await shareOutfit(outfitId);
+            setSharedOutfit(true);
+            if (sharedResetTimerRef.current !== null) {
+                window.clearTimeout(sharedResetTimerRef.current);
             }
-            loadSavedOutfits();
+            sharedResetTimerRef.current = window.setTimeout(() => {
+                setSharedOutfit(false);
+                sharedResetTimerRef.current = null;
+            }, 1800);
         } catch {
             setGenerationError("Unable to share outfit.");
+            setSharedOutfit(false);
         }
-        setSharingOutfitId("");
+        setSharingOutfit(false);
     };
+
+    useEffect(() => {
+        return () => {
+            if (sharedResetTimerRef.current !== null) {
+                window.clearTimeout(sharedResetTimerRef.current);
+            }
+        };
+    }, []);
+
 
     useEffect(() => {
         if (!generatedOutfitJobId || !generatingOutfit) return;
@@ -1294,8 +1329,8 @@ export default function OutfitStudioPage() {
                     <div
                         className={`grid grid-cols-1 gap-8 md:grid-cols-2 2xl:transition-all 2xl:duration-300 ${
                             showGeneratedOutfitPanel
-                                ? "2xl:[grid-template-columns:repeat(4,minmax(0,1fr))]"
-                                : "2xl:[grid-template-columns:repeat(3,minmax(0,1fr))]"
+                                ? "2xl:[grid-template-columns:repeat(3,minmax(0,1fr))]"
+                                : "2xl:[grid-template-columns:repeat(2,minmax(0,1fr))]"
                         }`}
                     >
                         <div className="flex flex-col gap-4 bg-transparent px-6 py-6 2xl:min-h-[560px]">
@@ -1381,7 +1416,7 @@ export default function OutfitStudioPage() {
                         <div className="flex flex-col items-center bg-transparent px-6 py-6 2xl:min-h-[560px]">
                             <div
                                 className={`flex w-full max-w-[280px] transform-gpu flex-col items-center transition-transform duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] ${
-                                    showGeneratedOutfitPanel ? "-translate-x-6" : "translate-x-0"
+                                    showGeneratedOutfitPanel ? "2xl:-translate-x-6" : "translate-x-0"
                                 }`}
                             >
                                 <p className="text-[11px] uppercase tracking-[0.18em] text-[#666]">{isWomen ? "Outfit builder" : "Outfit studio"}</p>
@@ -1403,7 +1438,10 @@ export default function OutfitStudioPage() {
                                                     key={zone.id}
                                                     type="button"
                                                     onClick={() => {
-                                                        setShowAllSelectedItems(false);
+                                                        setZoneOverrides((currentOverrides) => ({
+                                                            ...currentOverrides,
+                                                            [zone.id]: null,
+                                                        }));
                                                         setOutfit((current) => ({
                                                             ...current,
                                                             [zone.id]: null,
@@ -1447,6 +1485,12 @@ export default function OutfitStudioPage() {
                                             ? "Generate outfit"
                                             : "Select at least one item"}
                                 </button>
+                                <Link
+                                    href="/studio/outfits"
+                                    className="mt-3 inline-flex w-full items-center justify-center rounded-none border border-[#00000012] bg-transparent px-3.5 py-2 text-[11px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:border-[#c9a96e] hover:text-[#c9a96e]"
+                                >
+                                    SEE ALL OUTFITS
+                                </Link>
                                 <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-[#999]">
                                     {remainingGenerationRequests > 0
                                         ? `${remainingGenerationRequests} generation${remainingGenerationRequests === 1 ? "" : "s"} left`
@@ -1460,18 +1504,31 @@ export default function OutfitStudioPage() {
                                 <div className="flex items-center justify-between gap-3">
                                     <p className="text-[11px] uppercase tracking-[0.18em] text-[#666]">Generated
                                         outfit</p>
-                                    <button
-                                        type="button"
-                                        onClick={handleSaveOutfit}
-                                        disabled={savingOutfit || generatedOutfitImages.length === 0}
-                                        className="rounded-none border border-[#00000012] bg-transparent px-3.5 py-2 text-[11px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:border-[#c9a96e] hover:text-[#c9a96e] disabled:opacity-50"
-                                    >
-                                        {savingOutfit ? "Saving..." : "Save"}
-                                    </button>
+                                    {activeGeneratedOutfitImage && !generatingOutfit && !isRestoringGeneration ? (
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={handleSaveOutfit}
+                                                disabled={savingOutfit || sharingOutfit || generatedOutfitImages.length === 0}
+                                                className="rounded-none border border-[#00000012] bg-transparent px-3.5 py-2 text-[11px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:border-[#c9a96e] hover:text-[#c9a96e] disabled:opacity-50"
+                                            >
+                                                {savingOutfit ? "Saving..." : "Save"}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleShareGeneratedOutfit}
+                                                disabled={savingOutfit || sharingOutfit || generatedOutfitImages.length === 0}
+                                                aria-busy={sharingOutfit}
+                                                className="inline-flex min-w-[84px] justify-center rounded-none border border-[#00000012] bg-transparent px-3.5 py-2 text-[11px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:border-[#c9a96e] hover:text-[#c9a96e] disabled:opacity-50"
+                                            >
+                                                {sharedOutfit ? "Copied" : "Share"}
+                                            </button>
+                                        </div>
+                                    ) : null}
                                 </div>
 
                                 <div
-                                    className="flex h-[420px] items-center justify-center bg-[#ede1ce] p-4 text-[#666]">
+                                    className="flex h-[420px] items-center justify-center p-0 text-[#666]">
                                     <div className="relative flex h-full w-full items-center justify-center">
                                         {generatingOutfit && generatingPreviewImage ? (
                                             <>
@@ -1494,25 +1551,23 @@ export default function OutfitStudioPage() {
                                             </div>
                                         ) : activeGeneratedOutfitImage ? (
                                             <>
-                                                <div className="image-area relative h-full w-full">
+                                                <div className="image-area relative inline-block max-h-full max-w-full">
                                                     <button
                                                         type="button"
-                                                        onClick={cycleGeneratedImage}
-                                                        className="flex h-full w-full items-center justify-center rounded-none"
+                                                        onClick={() => {
+                                                            if (generatedOutfitImages.length > 1) {
+                                                                cycleGeneratedImage();
+                                                                return;
+                                                            }
+                                                            setIsGeneratedZoomOpen(true);
+                                                        }}
+                                                        className="block h-full w-full rounded-none"
                                                     >
                                                         <img
                                                             src={activeGeneratedOutfitImage}
                                                             alt={`Generated outfit ${generatedOutfitIndex + 1}`}
-                                                            className="max-h-full w-full object-contain"
+                                                            className="block max-h-[420px] max-w-full object-contain"
                                                         />
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setIsGeneratedZoomOpen(true)}
-                                                        className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-none border border-[#00000012] bg-[#ede1ce] text-base text-[#1a1a1a]"
-                                                        aria-label="Zoom generated outfit"
-                                                    >
-                                                        +
                                                     </button>
                                                 </div>
                                             </>
@@ -1564,99 +1619,6 @@ export default function OutfitStudioPage() {
                             </div>
                         )}
 
-                        <div className="flex flex-col gap-3 bg-transparent px-6 py-6 2xl:min-h-[560px]">
-                            <div className="mb-2 flex items-center justify-between gap-3">
-                                <p className="text-[11px] uppercase tracking-[0.18em] text-[#666]">Saved outfits</p>
-                                <div className="flex items-center gap-2">
-                                    <Link
-                                        href="/studio/outfits"
-                                        className="border border-[#00000012] bg-transparent px-3 py-1.5 text-[10px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:border-[#c9a96e] hover:text-[#c9a96e]"
-                                    >
-                                        View All
-                                    </Link>
-                                </div>
-                            </div>
-                            <div className="space-y-2 2xl:max-h-[420px] 2xl:overflow-y-auto 2xl:pr-1">
-                                {savedOutfits.map((outfitItem) => {
-                                    const outfitImages = getAvailableOutfitImages(outfitItem.images);
-                                    const activeIndex = Math.min(
-                                        savedOutfitIndexes[outfitItem.id] || 0,
-                                        Math.max(outfitImages.length - 1, 0)
-                                    );
-                                    const activeImage = outfitImages[activeIndex] || "";
-
-                                    return (
-                                        <div key={outfitItem.id} className="bg-[#ede1ce] p-3">
-                                            <div
-                                                className="relative flex h-[220px] items-center justify-center overflow-hidden bg-[#e8dccb]">
-                                                {activeImage ? (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            setSavedOutfitIndexes((current) => ({
-                                                                ...current,
-                                                                [outfitItem.id]:
-                                                                    outfitImages.length <= 1
-                                                                        ? 0
-                                                                        : ((current[outfitItem.id] || 0) + 1) % outfitImages.length,
-                                                            }))
-                                                        }
-                                                        className="flex h-full w-full items-center justify-center rounded-none"
-                                                    >
-                                                        <img
-                                                            src={activeImage}
-                                                            alt={outfitItem.name}
-                                                            className="h-full w-full object-contain"
-                                                        />
-                                                    </button>
-                                                ) : (
-                                                    <div
-                                                        className="text-[11px] uppercase tracking-[0.14em] text-[#999]">
-                                                        No image
-                                                    </div>
-                                                )}
-                                                {activeImage ? (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setZoomedSavedOutfitId(outfitItem.id)}
-                                                        className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-none border border-[#00000012] bg-[#ede1ce] text-base text-[#1a1a1a]"
-                                                        aria-label={`Zoom ${outfitItem.name}`}
-                                                    >
-                                                        +
-                                                    </button>
-                                                ) : null}
-                                            </div>
-                                            <div className="mt-3 space-y-3">
-                                                <p className="text-sm text-[#1a1a1a]">{outfitItem.name}</p>
-                                                <div className="flex flex-wrap gap-4">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleDeleteOutfit(outfitItem.id)}
-                                                        disabled={deletingOutfitId === outfitItem.id}
-                                                        className="text-[10px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:text-[#c9a96e] disabled:opacity-50"
-                                                    >
-                                                        {deletingOutfitId === outfitItem.id ? "Deleting..." : "Delete"}
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleShareOutfit(outfitItem.id)}
-                                                        disabled={sharingOutfitId === outfitItem.id}
-                                                        className="text-[10px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:text-[#c9a96e] disabled:opacity-50"
-                                                    >
-                                                        {sharingOutfitId === outfitItem.id ? "Sharing..." : "Share"}
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                                {savedOutfits.length === 0 && (
-                                    <div className="bg-[#f1ede8] px-3 py-4 text-xs text-[#666]">
-                                        Saved outfits will appear here after you generate and save one.
-                                    </div>
-                                )}
-                            </div>
-                        </div>
                     </div>
                 </section>
 
@@ -1685,6 +1647,8 @@ export default function OutfitStudioPage() {
                                     price={product.price.toFixed(2)}
                                     stock={product.stock}
                                     cartCount={product.cartCount}
+                                    reservedElsewhere={product.reservedElsewhere}
+                                    ownedReservation={product.ownedReservation}
                                     tag={product.tag}
                                     sizes={product.sizes}
                                     image={getMainImage(product.images)}
@@ -1752,75 +1716,6 @@ export default function OutfitStudioPage() {
                 </div>
             )}
 
-            {zoomedSavedOutfitId &&
-                (() => {
-                    const zoomedOutfit = savedOutfits.find((outfitItem) => outfitItem.id === zoomedSavedOutfitId);
-                    const zoomedImages = getAvailableOutfitImages(zoomedOutfit?.images);
-                    const zoomedIndex = Math.min(
-                        savedOutfitIndexes[zoomedSavedOutfitId] || 0,
-                        Math.max(zoomedImages.length - 1, 0)
-                    );
-                    const zoomedImage = zoomedImages[zoomedIndex] || "";
-
-                    if (!zoomedOutfit || !zoomedImage) return null;
-
-                    const showPreviousSavedZoom = () =>
-                        setSavedOutfitIndexes((current) => ({
-                            ...current,
-                            [zoomedSavedOutfitId]:
-                                zoomedIndex === 0 ? zoomedImages.length - 1 : zoomedIndex - 1,
-                        }));
-                    const showNextSavedZoom = () =>
-                        setSavedOutfitIndexes((current) => ({
-                            ...current,
-                            [zoomedSavedOutfitId]:
-                                zoomedIndex === zoomedImages.length - 1 ? 0 : zoomedIndex + 1,
-                        }));
-
-                    return (
-                        <div
-                            className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 px-4 py-8"
-                            onClick={() => setZoomedSavedOutfitId("")}
-                        >
-                            <div className="relative w-full max-w-5xl" onClick={(e) => e.stopPropagation()}>
-                                <button
-                                    type="button"
-                                    onClick={() => setZoomedSavedOutfitId("")}
-                                    className="absolute right-0 top-0 z-10 border border-white/20 bg-black/60 px-4 py-3 text-xs uppercase tracking-[0.24em] text-white backdrop-blur-sm"
-                                >
-                                    Close
-                                </button>
-                                <div className="overflow-hidden border border-white/15 bg-black/40 p-4 md:p-8">
-                                    <img
-                                        src={zoomedImage}
-                                        alt={`${zoomedOutfit.name} enlarged`}
-                                        className="max-h-[85vh] w-full object-contain"
-                                    />
-                                </div>
-                                {zoomedImages.length > 1 && (
-                                    <>
-                                        <button
-                                            type="button"
-                                            onClick={showPreviousSavedZoom}
-                                            className="absolute left-4 top-1/2 -translate-y-1/2 border border-white/20 bg-black/60 px-4 py-4 text-lg text-white backdrop-blur-sm"
-                                            aria-label="Show previous saved outfit image"
-                                        >
-                                            ←
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={showNextSavedZoom}
-                                            className="absolute right-4 top-1/2 -translate-y-1/2 border border-white/20 bg-black/60 px-4 py-4 text-lg text-white backdrop-blur-sm"
-                                            aria-label="Show next saved outfit image"
-                                        >
-                                            →
-                                        </button>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                    );
-                })()}
         </div>
     );
 }

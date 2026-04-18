@@ -1,7 +1,8 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode, useMemo, useRef } from "react";
-import { getReservationKey, releaseProductReservation } from "@/lib/reservations";
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode, useRef } from "react";
+import { getReservationKey, releaseProductReservation, reserveProduct } from "@/lib/reservations";
+import { buildCartItemId, getCartItemProductId } from "@/lib/cartItem";
 
 export interface CartItem {
   id: string;
@@ -53,12 +54,15 @@ function loadCart(): CartItem[] {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) return [];
 
-    return (JSON.parse(stored) as CartItem[]).map((item) => ({
-      ...item,
-      id: item.id.split("-")[0],
-      quantity: Math.max(1, item.quantity || 1),
-      maxStock: Math.max(1, item.maxStock || 1),
-    }));
+    return (JSON.parse(stored) as CartItem[]).map((item) => {
+      const productId = getCartItemProductId(item.id);
+      return {
+        ...item,
+        id: buildCartItemId(productId, item.size, item.color),
+        quantity: Math.max(1, item.quantity || 1),
+        maxStock: Math.max(1, item.maxStock || 1),
+      };
+    });
   } catch {
     return [];
   }
@@ -71,6 +75,13 @@ function saveCart(items: CartItem[]) {
   } catch {
     // ignore storage errors
   }
+}
+
+function getCartProductQuantity(items: CartItem[], productId: string) {
+  return items.reduce((sum, item) => {
+    if (getCartItemProductId(item.id) !== productId) return sum;
+    return sum + Math.max(1, item.quantity || 1);
+  }, 0);
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -101,13 +112,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [items, hydrated]);
 
-  const itemIdsKey = useMemo(
-    () => items.map((item) => item.id.split("-")[0]).sort().join("|"),
-    [items]
-  );
-
   useEffect(() => {
-    if (!hydrated || itemIdsKey.length === 0) return;
+    if (!hydrated || items.length === 0) return;
 
     let cancelled = false;
 
@@ -119,7 +125,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          productIds: currentItems.map((item) => item.id.split("-")[0]),
+          productIds: [...new Set(currentItems.map((item) => getCartItemProductId(item.id)))],
           cartKey: getReservationKey(),
         }),
       })
@@ -131,6 +137,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
             productId: string;
             available: boolean;
             blockedByOrder?: boolean;
+            ownedReservation?: boolean;
+            reservedElsewhere?: boolean;
             maxStock?: number;
             productType?: "fashion" | "perfume" | "clothing" | "shoes";
             originPictures?: {
@@ -156,25 +164,32 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
           setItems((currentItems) => {
             const nextItems = currentItems.flatMap((item) => {
-              const availability = availabilityMap.get(item.id.split("-")[0]);
+              const productId = getCartItemProductId(item.id);
+              const availability = availabilityMap.get(productId);
               const maxStock = Math.max(1, availability?.maxStock ?? item.maxStock ?? 1);
-              const isUnavailable = availability ? !availability.available : Boolean(item.isUnavailable);
-              const soldOut = Boolean(availability?.blockedByOrder || (availability && !availability.available));
+              const ownedReservation = Boolean(availability?.ownedReservation);
+              const reservedElsewhere = Boolean(availability?.reservedElsewhere);
+              const isUnavailable = availability
+                ? (!availability.available && !ownedReservation) || Boolean(item.isUnavailable)
+                : Boolean(item.isUnavailable);
+              const soldOut = Boolean(availability?.blockedByOrder || !availability?.available);
 
               if (soldOut) {
-                removedProductIds.add(item.id.split("-")[0]);
+                removedProductIds.add(productId);
                 return [];
               }
 
-              const unavailableReason = isUnavailable
-                ? "This product is currently unavailable."
+              const unavailableReason = reservedElsewhere && !ownedReservation
+                ? "This product is reserved elsewhere."
+                : isUnavailable
+                  ? "This product is currently unavailable."
                 : null;
 
               return {
                 ...item,
                 image: availability?.image || item.image,
                 originPictures: availability?.originPictures || item.originPictures,
-                reservationExpiresAt: availability?.reservationExpiresAt ?? null,
+                reservationExpiresAt: ownedReservation ? availability?.reservationExpiresAt ?? item.reservationExpiresAt ?? null : item.reservationExpiresAt ?? null,
                 maxStock,
                 quantity: Math.min(item.quantity, maxStock),
                 productType: availability?.productType ?? item.productType,
@@ -206,7 +221,56 @@ export function CartProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [hydrated, itemIdsKey]);
+  }, [hydrated, items]);
+
+  useEffect(() => {
+    if (!hydrated || items.length === 0) return;
+
+    const quantitiesByProduct = new Map<string, number>();
+    items.forEach((item) => {
+      const productId = getCartItemProductId(item.id);
+      quantitiesByProduct.set(productId, (quantitiesByProduct.get(productId) || 0) + Math.max(1, item.quantity || 1));
+    });
+
+    quantitiesByProduct.forEach((quantity, productId) => {
+      void reserveProduct(productId, quantity).catch(() => {});
+    });
+  }, [hydrated, items]);
+
+  useEffect(() => {
+    if (!hydrated || items.length === 0) return;
+
+    let cancelled = false;
+
+    const sweepExpiredReservations = () => {
+      if (cancelled) return;
+
+      const now = Date.now();
+      const expiredProductIds = new Set(
+        itemsRef.current
+          .filter((item) => {
+            if (!item.reservationExpiresAt) return false;
+            return new Date(item.reservationExpiresAt).getTime() <= now;
+          })
+          .map((item) => getCartItemProductId(item.id))
+      );
+
+      if (expiredProductIds.size === 0) return;
+
+      setItems((current) => current.filter((item) => !expiredProductIds.has(getCartItemProductId(item.id))));
+      expiredProductIds.forEach((productId) => {
+        void releaseProductReservation(productId);
+      });
+    };
+
+    sweepExpiredReservations();
+    const interval = window.setInterval(sweepExpiredReservations, 1000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [hydrated, items]);
 
   const openCart = useCallback(() => setIsOpen(true), []);
   const closeCart = useCallback(() => setIsOpen(false), []);
@@ -214,34 +278,44 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const addItem = useCallback(
     (newItem: Omit<CartItem, "quantity"> & { quantity?: number }, options?: { openCart?: boolean }) => {
-    setItems((prev) => {
-      const existing = prev.find((item) => item.id === newItem.id);
+      const nextId = buildCartItemId(newItem.id, newItem.size, newItem.color);
+      const productId = getCartItemProductId(nextId);
       const nextQuantity = Math.max(1, newItem.quantity ?? 1);
-      if (existing) {
-        return prev.map((item) =>
-          item.id === newItem.id
-            ? (() => {
-                const nextMaxStock = Math.max(newItem.maxStock ?? item.maxStock, 1);
-                return {
-                  ...item,
-                  name: newItem.name || item.name,
-                  brand: newItem.brand || item.brand,
-                  image: newItem.image || item.image,
-                  categories: newItem.categories ?? item.categories,
-                  size: newItem.size ?? item.size,
-                  color: newItem.color ?? item.color,
-                  productType: newItem.productType ?? item.productType,
-                  originPictures: newItem.originPictures ?? item.originPictures,
-                  maxStock: nextMaxStock,
-                  quantity: Math.min(item.quantity + nextQuantity, nextMaxStock),
-                  reservationExpiresAt: newItem.reservationExpiresAt ?? item.reservationExpiresAt ?? null,
-                };
-              })()
-            : item
-        );
-      }
-      return [...prev, { ...newItem, quantity: Math.min(nextQuantity, Math.max(newItem.maxStock, 1)) }];
-    });
+      let nextItemsSnapshot: CartItem[] = [];
+
+      setItems((prev) => {
+        const existing = prev.find((item) => item.id === nextId);
+        if (existing) {
+          const nextItems = prev.map((item) =>
+            item.id === nextId
+              ? (() => {
+                  const nextMaxStock = Math.max(newItem.maxStock ?? item.maxStock, 1);
+                  return {
+                    ...item,
+                    name: newItem.name || item.name,
+                    brand: newItem.brand || item.brand,
+                    image: newItem.image || item.image,
+                    categories: newItem.categories ?? item.categories,
+                    size: newItem.size ?? item.size,
+                    color: newItem.color ?? item.color,
+                    productType: newItem.productType ?? item.productType,
+                    originPictures: newItem.originPictures ?? item.originPictures,
+                    maxStock: nextMaxStock,
+                    quantity: Math.min(item.quantity + nextQuantity, nextMaxStock),
+                    reservationExpiresAt: newItem.reservationExpiresAt ?? item.reservationExpiresAt ?? null,
+                  };
+                })()
+              : item
+          );
+          nextItemsSnapshot = nextItems;
+          return nextItems;
+        }
+        const nextItems = [...prev, { ...newItem, id: nextId, quantity: Math.min(nextQuantity, Math.max(newItem.maxStock, 1)) }];
+        nextItemsSnapshot = nextItems;
+        return nextItems;
+      });
+
+      void reserveProduct(productId, getCartProductQuantity(nextItemsSnapshot, productId)).catch(() => {});
       if (options?.openCart !== false) {
         setIsOpen(true); // Open cart when adding
       }
@@ -250,26 +324,53 @@ export function CartProvider({ children }: { children: ReactNode }) {
   );
 
   const removeItem = useCallback((id: string) => {
-    setItems((prev) => prev.filter((item) => item.id !== id));
+    const productId = getCartItemProductId(id);
+    let nextItemsSnapshot: CartItem[] = [];
+    setItems((prev) => {
+      const nextItems = prev.filter((item) => item.id !== id);
+      nextItemsSnapshot = nextItems;
+      return nextItems;
+    });
+    const nextQuantity = getCartProductQuantity(nextItemsSnapshot, productId);
+    if (nextQuantity > 0) {
+      void reserveProduct(productId, nextQuantity).catch(() => {});
+    } else {
+      void releaseProductReservation(productId);
+    }
   }, []);
 
   const updateQuantity = useCallback((id: string, quantity: number) => {
+    const productId = getCartItemProductId(id);
+    let nextItemsSnapshot: CartItem[] = [];
     if (quantity <= 0) {
-      setItems((prev) => prev.filter((item) => item.id !== id));
+      setItems((prev) => {
+        const nextItems = prev.filter((item) => item.id !== id);
+        nextItemsSnapshot = nextItems;
+        return nextItems;
+      });
+      const nextQuantity = getCartProductQuantity(nextItemsSnapshot, productId);
+      if (nextQuantity > 0) {
+        void reserveProduct(productId, nextQuantity).catch(() => {});
+      } else {
+        void releaseProductReservation(productId);
+      }
       return;
     }
-    setItems((prev) =>
-      prev.map((item) =>
+    setItems((prev) => {
+      const nextItems = prev.map((item) =>
         item.id === id
           ? { ...item, quantity: Math.min(quantity, item.maxStock) }
           : item
-      )
-    );
+      );
+      nextItemsSnapshot = nextItems;
+      return nextItems;
+    });
+    void reserveProduct(productId, getCartProductQuantity(nextItemsSnapshot, productId)).catch(() => {});
   }, []);
 
   const clearCart = useCallback(() => {
-    itemsRef.current.forEach((item) => {
-      void releaseProductReservation(item.id.split("-")[0]);
+    [...new Set(itemsRef.current.map((item) => getCartItemProductId(item.id)))].forEach((productId) => {
+      void releaseProductReservation(productId);
     });
     setItems([]);
   }, []);

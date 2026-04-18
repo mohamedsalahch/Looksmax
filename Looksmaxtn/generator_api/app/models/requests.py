@@ -77,3 +77,8 @@ class OutfitRequest(BaseModel):
     bottom_size: str
     shoe_size: str
     body_zones: BodyZones
+
+
+class ValidatePhotoRequest(BaseModel):
+    """Request for profile photo validation."""
+    image: str  # base64 encoded image

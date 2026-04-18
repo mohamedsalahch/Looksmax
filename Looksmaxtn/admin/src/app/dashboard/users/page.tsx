@@ -140,7 +140,9 @@ export default function UsersPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold tracking-wide mb-6">Users</h1>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-xl font-semibold tracking-wide">Users</h1>
+      </div>
 
       <div className="mb-6 grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_180px]">
         <input
@@ -182,8 +184,8 @@ export default function UsersPage() {
           </p>
         </div>
       ) : (
-        <div className="border border-border rounded overflow-hidden">
-          <table className="w-full text-left">
+        <div className="overflow-x-auto border border-border rounded">
+          <table className="min-w-[920px] w-full text-left">
             <thead className="bg-bg-secondary">
               <tr className="text-[10px] text-text-secondary uppercase tracking-wider">
                 <th className="px-4 py-3">

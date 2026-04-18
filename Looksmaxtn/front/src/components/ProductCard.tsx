@@ -4,10 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
-import {
-  reserveProduct,
-  subscribeToReservationChanges,
-} from "@/lib/reservations";
+import { reserveProduct, subscribeToReservationChanges } from "@/lib/reservations";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { getConditionColor, getConditionLabel, getConditionPercent } from "@/lib/productCondition";
 import { queueStudioAssignment } from "@/lib/studioAssignment";
@@ -23,6 +20,9 @@ interface ProductCardProps {
   image?: string;
   stock?: number;
   cartCount?: number;
+  reservedElsewhere?: boolean;
+  ownedReservation?: boolean;
+  blockedByOrder?: boolean;
   conditionScore?: number | null;
   conditionStatus?: string | null;
   productType?: ProductType;
@@ -51,7 +51,9 @@ export default function ProductCard({
   tag,
   image,
   stock = 1,
-  cartCount: initialCartCount = 0,
+  reservedElsewhere: initialReservedElsewhere = false,
+  ownedReservation: initialOwnedReservation = false,
+  blockedByOrder: initialBlockedByOrder = false,
   conditionScore = 7,
   conditionStatus = "used",
   productType = "fashion",
@@ -62,13 +64,15 @@ export default function ProductCard({
   cloneSourceName = "",
   cloneSourceImage = "",
 }: ProductCardProps) {
-  const { addItem, items } = useCart();
+  const { addItem } = useCart();
   const router = useRouter();
   const availableSizes = (sizes?.length ? sizes : size ? [size] : []).filter((entry) => Boolean(entry.trim()));
   const [selectedSize, setSelectedSize] = useState(availableSizes[0] || "");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [cartCount, setCartCount] = useState(initialCartCount);
+  const [addedToCart, setAddedToCart] = useState(false);
   const [clonePreview, setClonePreview] = useState({ visible: false, x: 0, y: 0 });
+  const [reservedElsewhere, setReservedElsewhere] = useState(false);
+  const [blockedByOrder, setBlockedByOrder] = useState(initialBlockedByOrder);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const isPerfume = productType === "perfume";
   const conditionPercent = getConditionPercent(conditionScore ?? 7);
@@ -77,8 +81,9 @@ export default function ProductCard({
   const showNewBadge = !isPerfume && (conditionScore ?? 0) >= 10;
   const isSoldOut = stock < 1;
   const hasSizes = !isPerfume && availableSizes.length > 0;
-  const isInLocalCart = items.some((item) => item.id.split("-")[0] === id);
-  const showReservedElsewhere = cartCount > (isInLocalCart ? 1 : 0);
+  const showReservedElsewhere = reservedElsewhere;
+  const isBlocked = isSoldOut || blockedByOrder;
+  const isReserved = isBlocked;
 
   useEffect(() => {
     if (availableSizes.length === 0) {
@@ -90,26 +95,69 @@ export default function ProductCard({
   }, [availableSizes.join("|")]);
 
   useEffect(() => {
-    setCartCount(initialCartCount);
-  }, [initialCartCount]);
+    setBlockedByOrder(initialBlockedByOrder);
+  }, [initialBlockedByOrder]);
 
   useEffect(() => {
-    return subscribeToReservationChanges(({ productId, cartCount: nextCartCount }) => {
-      if (productId !== id) return;
-      if (typeof nextCartCount === "number") {
-        setCartCount(nextCartCount);
-      }
+    if (!id) return;
+
+    let cancelled = false;
+
+    const refreshAvailability = () => {
+      fetch(`/api/products/${id}`)
+        .then((response) => response.json())
+        .then((data) => {
+          if (cancelled || !data.product) return;
+          setReservedElsewhere(Boolean(data.product.reservedElsewhere));
+          setBlockedByOrder(Boolean(data.product.blockedByOrder));
+        })
+        .catch(() => {});
+    };
+
+    const interval = window.setInterval(refreshAvailability, 5000);
+    refreshAvailability();
+
+    const handleFocus = () => {
+      refreshAvailability();
+    };
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+
+    const refreshAvailability = () => {
+      fetch(`/api/products/${id}`)
+        .then((response) => response.json())
+        .then((data) => {
+          if (!data.product) return;
+          setReservedElsewhere(Boolean(data.product.reservedElsewhere));
+          setBlockedByOrder(Boolean(data.product.blockedByOrder));
+        })
+        .catch(() => {});
+    };
+
+    const unsubscribe = subscribeToReservationChanges((payload) => {
+      if (payload.productId !== id) return;
+      refreshAvailability();
     });
+
+    return unsubscribe;
   }, [id]);
 
   const handleQuickAdd = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (isSoldOut) return;
+    if (isBlocked) return;
 
     try {
-      const reservation = await reserveProduct(id);
-      setCartCount(reservation.cartCount ?? cartCount + 1);
+      const reservation = await reserveProduct(id, 1);
       addItem({
         id,
         name,
@@ -124,7 +172,9 @@ export default function ProductCard({
         originPictures,
         reservationExpiresAt: reservation.reservationExpiresAt,
         cartCount: reservation.cartCount,
-      });
+      }, { openCart: false });
+      setAddedToCart(true);
+      window.setTimeout(() => setAddedToCart(false), 2000);
       setIsDropdownOpen(false);
     } catch {
       setIsDropdownOpen(false);
@@ -134,11 +184,10 @@ export default function ProductCard({
   const handleAddToTryOn = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (isSoldOut || isPerfume) return;
+    if (isBlocked || isPerfume) return;
 
     try {
-      const reservation = await reserveProduct(id);
-      setCartCount(reservation.cartCount ?? cartCount + 1);
+      const reservation = await reserveProduct(id, 1);
       addItem({
         id,
         name,
@@ -246,6 +295,8 @@ export default function ProductCard({
             src={cloneSourceImage}
             alt={cloneSourceName || "Original fragrance"}
             className="w-full h-full object-contain"
+            loading="lazy"
+            decoding="async"
           />
         </div>
       )}
@@ -262,7 +313,13 @@ export default function ProductCard({
         onMouseLeave={() => setClonePreview({ visible: false, x: 0, y: 0 })}
       >
         {image ? (
-          <img src={image} alt={name} className="absolute inset-0 w-full h-full object-cover" />
+          <img
+            src={image}
+            alt={name}
+            className="absolute inset-0 w-full h-full object-cover"
+            loading="lazy"
+            decoding="async"
+          />
         ) : (
           <>
             <div className="absolute inset-0 placeholder-img" />
@@ -282,6 +339,10 @@ export default function ProductCard({
             {isSoldOut ? (
               <span className="bg-foreground text-background text-[10px] px-2 py-0.5 font-medium tracking-wide">
                 SOLD
+              </span>
+            ) : initialBlockedByOrder ? (
+              <span className="bg-foreground text-background text-[10px] px-2 py-0.5 font-medium tracking-wide">
+                Reserved for confirmation
               </span>
             ) : showReservedElsewhere ? (
               <span className="bg-foreground text-background text-[10px] px-2 py-0.5 font-medium tracking-wide">
@@ -308,14 +369,14 @@ export default function ProductCard({
           <div className="absolute bottom-0 left-0 right-0 z-30 translate-y-full transition-transform duration-300 ease-out group-hover:translate-y-0">
             <button
               onClick={handleQuickAdd}
-              disabled={isSoldOut}
+              disabled={isBlocked}
               className={`w-full h-10 text-[10px] uppercase font-bold tracking-widest transition-colors ${
-                isSoldOut
+                isBlocked
                   ? "bg-border-color text-text-secondary cursor-not-allowed"
                   : "bg-foreground text-background hover:bg-black"
               }`}
             >
-              Add Cart
+              {isSoldOut ? "Sold Out" : initialBlockedByOrder ? "Reserved for confirmation" : "Add Cart"}
             </button>
           </div>
         ) : (
@@ -371,28 +432,36 @@ export default function ProductCard({
                 )}
               </div>
 
-              <button
-                onClick={handleQuickAdd}
-                disabled={isSoldOut}
-                className={`w-[31%] h-full text-[10px] uppercase font-bold tracking-widest transition-colors ${
-                  isSoldOut
-                    ? "bg-border-color text-text-secondary cursor-not-allowed"
-                    : "bg-foreground text-background hover:bg-black"
-                }`}
-              >
-                Cart
+              {isBlocked ? (
+                <button
+                  type="button"
+                  disabled
+                  className="w-full h-full px-2 py-3 text-[10px] font-medium uppercase tracking-wide bg-border-color text-text-secondary cursor-not-allowed"
+                >
+                {isSoldOut ? "Sold Out" : "Reserved for confirmation"}
               </button>
-              <button
-                onClick={handleAddToTryOn}
-                disabled={isSoldOut}
-                className={`w-[31%] h-full text-[10px] uppercase font-bold tracking-widest border-l border-border-color transition-colors ${
-                  isSoldOut
-                    ? "bg-border-color text-text-secondary cursor-not-allowed"
-                    : "bg-background text-foreground hover:bg-hover"
-                }`}
-              >
-                TRY
-              </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleQuickAdd}
+                    className={`w-[49.5%] h-full px-2 py-3 text-[10px] font-medium uppercase tracking-wide transition-all duration-300 ${
+                      addedToCart
+                        ? "bg-[#5C6A47] text-white"
+                        : "bg-foreground text-background hover:bg-accent"
+                    }`}
+                  >
+                    {addedToCart ? "✓ ADDED" : "ADD"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAddToTryOn}
+                    className="w-[49.5%] h-full text-[10px] uppercase font-bold tracking-widest border-l border-border-color transition-colors bg-background text-foreground hover:bg-hover"
+                  >
+                    TRY
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}

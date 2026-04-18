@@ -30,3 +30,9 @@ class WebhookPayload(BaseModel):
     view: str  # "front" or "back"
     image: str  # base64 encoded image
     error: str | None = None  # error message if generation failed
+
+
+class ValidatePhotoResponse(BaseModel):
+    """Response from photo validation endpoint."""
+    valid: bool
+    reason: str | None = None

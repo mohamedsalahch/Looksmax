@@ -142,10 +142,12 @@ export default function OrdersPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold tracking-wide mb-6">Orders</h1>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-xl font-semibold tracking-wide">Orders</h1>
+      </div>
 
       {/* Filters */}
-      <div className="flex gap-2 mb-6 overflow-x-auto">
+      <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
         {["all", "processing", "confirmed", "canceled", "shipping", "delivered", "returned"].map((f) => (
           <button key={f} onClick={() => setFilter(f)}
             className={`text-[10px] px-3 py-1.5 uppercase tracking-wider font-medium transition-colors cursor-pointer ${
@@ -186,8 +188,8 @@ export default function OrdersPage() {
           </p>
         </div>
       ) : (
-        <div className="border border-border rounded overflow-hidden">
-          <table className="w-full text-left">
+        <div className="overflow-x-auto border border-border rounded">
+          <table className="min-w-[860px] w-full text-left">
             <thead className="bg-bg-secondary">
               <tr className="text-[10px] text-text-secondary uppercase tracking-wider">
                 <th className="px-4 py-3">

@@ -3,6 +3,7 @@ import dbConnect from "@/store/lib/mongodb";
 import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
 import { getSession } from "@/store/lib/auth";
+import { getActiveOrderHoldMapByProductIds } from "@/lib/productInventory";
 
 function normalizeProductType(value?: string) {
   return value === "perfume" ? "perfume" : "fashion";
@@ -31,50 +32,60 @@ export async function POST(req: NextRequest) {
         product: { $in: ids },
         reservedUntil: { $gt: now },
       })
-        .select("product reservationKey reservedUntil")
+        .select("product reservationKey reservedUntil quantity")
         .lean(),
     ]);
+    const activeOrderHoldMap = await getActiveOrderHoldMapByProductIds(ids, session?.userId || null);
 
     const productsMap = new Map(products.map((product) => [product._id.toString(), product]));
 
-    const reservationMap = new Map(
-      reservations.map((reservation) => [
-        reservation.product.toString(),
-        {
-          reservationKey: reservation.reservationKey,
-          reservationExpiresAt: reservation.reservedUntil.toISOString(),
-        },
-      ])
-    );
-    const cartCountMap = reservations.reduce((map, reservation) => {
+    const reservationsMap = reservations.reduce((map, reservation) => {
       const productId = reservation.product.toString();
-      map.set(productId, (map.get(productId) || 0) + 1);
+      const current = map.get(productId) || [];
+      current.push({
+        reservationKey: reservation.reservationKey,
+        reservationExpiresAt: reservation.reservedUntil.toISOString(),
+        quantity: Math.max(1, Number(reservation.quantity) || 1),
+      });
+      map.set(productId, current);
       return map;
-    }, new Map<string, number>());
+    }, new Map<string, Array<{ reservationKey: string; reservationExpiresAt: string; quantity: number }>>());
 
     return NextResponse.json({
       items: ids.map((productId) => {
         const product = productsMap.get(productId);
-        const reservation = reservationMap.get(productId);
-        const ownedReservation = key ? reservation?.reservationKey === key : Boolean(reservation);
+        const productReservations = reservationsMap.get(productId) || [];
+        const ownedReservation = key
+          ? productReservations.find((reservation) => reservation.reservationKey === key) || null
+          : null;
+        const activeOrderHold = activeOrderHoldMap.get(productId);
         const mainImage =
           product?.images?.find((image: { url: string; isMain: boolean }) => image.isMain)?.url ||
           product?.images?.[0]?.url ||
           "";
         const remainingStock = Math.max(product?.stock ?? 0, 0);
-        const blockedByOrder = remainingStock <= 0;
+        const blockedByOrder = Boolean(activeOrderHold) && remainingStock <= 0;
+        const reservedByOthers = productReservations.reduce((sum, reservation) => {
+          if (reservation.reservationKey === key) return sum;
+          return sum + reservation.quantity;
+        }, 0);
+        const reservedElsewhere = reservedByOthers > 0 && reservedByOthers >= remainingStock;
+        const available = product?.isActive !== false && remainingStock > 0 && !blockedByOrder;
+        const maxStock = Math.max(remainingStock, 1);
 
         return {
           productId,
-          available: product?.isActive !== false && remainingStock > 0,
+          available,
           blockedByOrder,
-          maxStock: remainingStock,
+          maxStock,
           productType: normalizeProductType(product?.productType),
           fashionSubtype: product?.fashionSubtype || "clothes",
           originPictures: product?.originPictures || { front: "", back: "", left: "", right: "" },
           image: mainImage,
-          cartCount: cartCountMap.get(productId) || 0,
-          reservationExpiresAt: ownedReservation ? reservation?.reservationExpiresAt ?? null : null,
+          cartCount: productReservations.reduce((sum, reservation) => sum + reservation.quantity, 0),
+          reservedElsewhere,
+          ownedReservation: Boolean(ownedReservation) || Boolean(activeOrderHold?.ownedReservation),
+          reservationExpiresAt: ownedReservation ? ownedReservation.reservationExpiresAt : null,
         };
       }),
     });

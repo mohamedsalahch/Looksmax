@@ -24,6 +24,7 @@ export interface IProduct extends Document {
   sizes: string[];
   colors: string[];
   stock: number;
+  fullStock?: number;
   images: IProductImage[];
   tag?: string;
   brand: string;
@@ -68,6 +69,7 @@ const productSchema = new Schema<IProduct>(
     sizes: [{ type: String }],
     colors: [{ type: String }],
     stock: { type: Number, default: 1, min: 0 },
+    fullStock: { type: Number, default: 1, min: 0 },
     images: [productImageSchema],
     tag: { type: String, default: "" },
     brand: { type: String, default: "LOOKSMAX" },

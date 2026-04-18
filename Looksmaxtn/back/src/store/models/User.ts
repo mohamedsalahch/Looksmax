@@ -21,6 +21,7 @@ export interface IBodyProfile {
   gender: string;
   imageEnhancing: boolean;
   profileImageRequiresGeneration: boolean;
+  profileImageValidationError: string;
 }
 
 export interface IUser extends Document {
@@ -68,6 +69,7 @@ const bodyProfileSchema = new Schema<IBodyProfile>(
     gender: { type: String, default: "" },
     imageEnhancing: { type: Boolean, default: false },
     profileImageRequiresGeneration: { type: Boolean, default: false },
+    profileImageValidationError: { type: String, default: "" },
   },
   { _id: false }
 );

@@ -19,6 +19,10 @@ export default function AddressSettingsPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    void refreshUser();
+  }, [refreshUser]);
+
+  useEffect(() => {
     setAddress({
       street: user?.address?.street || "",
       city: user?.address?.city || "",

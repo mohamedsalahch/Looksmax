@@ -6,6 +6,7 @@ import { deleteProductImage, saveProductImages } from "@/admin/lib/productUpload
 import { getConditionStatusFromScore } from "@/admin/lib/productCondition";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
+import { getSoldQuantityByProductIds } from "@/lib/productInventory";
 
 function getAvailabilityStatus(params: {
   productType?: string;
@@ -43,6 +44,16 @@ function normalizeOriginPictures(
   };
 }
 
+function getInventorySnapshot(product: { stock?: number; fullStock?: number }, soldQuantity: number) {
+  const availableStock = Math.max(product.stock ?? 0, 0);
+  const fullStock =
+    typeof product.fullStock === "number"
+      ? Math.max(product.fullStock, 0)
+      : Math.max(availableStock + soldQuantity, 0);
+
+  return { availableStock, fullStock, soldQuantity };
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getSession();
@@ -51,16 +62,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const { id } = await params;
     const product = await Product.findById(id).lean();
     if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    const computedStock = Math.max(product.stock ?? 0, 0);
+    const soldQuantityMap = await getSoldQuantityByProductIds([id]);
+    const soldQuantity = soldQuantityMap.get(id) || 0;
+    const inventory = getInventorySnapshot(product, soldQuantity);
 
     return NextResponse.json({
       product: {
         ...product,
-        stock: computedStock,
+        stock: inventory.availableStock,
+        availableStock: inventory.availableStock,
+        soldQuantity: inventory.soldQuantity,
+        fullStock: inventory.fullStock,
         visibilityStatus: product.isActive === false ? "inactive" : "active",
         availabilityStatus: getAvailabilityStatus({
           productType: product.productType,
-          stock: computedStock,
+          stock: inventory.availableStock,
         }),
       },
     });
@@ -77,6 +93,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const auditActor = await getAuditActorFromSession(session);
     const existingProduct = await Product.findById(id).lean();
     if (!existingProduct) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const soldQuantityMap = await getSoldQuantityByProductIds([id]);
+    const soldQuantity = soldQuantityMap.get(id) || 0;
 
     const contentType = req.headers.get("content-type") || "";
     if (contentType.includes("application/json")) {
@@ -86,11 +104,42 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       if (typeof body.isActive === "boolean") {
         update.isActive = body.isActive;
       }
+      const submittedFullStock =
+        typeof body.fullStock !== "undefined" ? body.fullStock : body.stock;
+      if (typeof submittedFullStock !== "undefined") {
+        const rawStock = String(submittedFullStock).trim();
+        if (rawStock.length === 0) {
+          return NextResponse.json({ error: "Please enter a full stock value." }, { status: 400 });
+        }
+        const nextFullStock = Number(rawStock);
+        if (!Number.isNaN(nextFullStock)) {
+          const normalizedFullStock = Math.max(0, nextFullStock);
+          update.fullStock = normalizedFullStock;
+          update.stock = Math.max(0, normalizedFullStock - soldQuantity);
+          if (normalizedFullStock - soldQuantity > 0) {
+            update.isActive = true;
+          }
+        }
+      }
       update.updatedBy = auditActor;
 
       const product = await Product.findByIdAndUpdate(id, update, { new: true }).lean();
       if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 });
-      return NextResponse.json({ product });
+      const inventory = getInventorySnapshot(product, soldQuantity);
+      return NextResponse.json({
+        product: {
+          ...product,
+          stock: inventory.availableStock,
+          availableStock: inventory.availableStock,
+          soldQuantity: inventory.soldQuantity,
+          fullStock: inventory.fullStock,
+          visibilityStatus: product.isActive === false ? "inactive" : "active",
+          availabilityStatus: getAvailabilityStatus({
+            productType: product.productType,
+            stock: inventory.availableStock,
+          }),
+        },
+      });
     }
 
     const formData = await req.formData();
@@ -135,6 +184,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       productType === "fashion" ? String(formData.get("fashionSubtype") || "clothes") : null;
     const conditionScore =
       productType === "perfume" ? null : Number(formData.get("conditionScore") || 7);
+    const rawFullStock = String(formData.get("fullStock") ?? formData.get("stock") ?? "").trim();
+    if (rawFullStock.length === 0) {
+      return NextResponse.json({ error: "Please enter a full stock value." }, { status: 400 });
+    }
+    const nextFullStock = Math.max(0, Number(rawFullStock));
 
     const existingImageMap = new Map(
       existingImages.map((image) => [`existing:${image.url}`, image.url])
@@ -176,13 +230,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       categories: parseStringArray(formData.get("categories")),
       description: String(formData.get("description") || ""),
       brand: String(formData.get("brand") || "LOOKSMAX"),
-      stock: Math.max(0, Number(formData.get("stock") || 0)),
       tag: String(formData.get("tag") || ""),
       productType,
       fashionSubtype,
       conditionStatus:
         conditionScore === null ? null : getConditionStatusFromScore(conditionScore),
       conditionScore,
+      fullStock: nextFullStock,
+      stock: Math.max(0, nextFullStock - soldQuantity),
       originPictures: normalizeOriginPictures(productType, fashionSubtype, newOriginPictures),
       sizes: productType === "perfume" ? [] : parseStringArray(formData.get("sizes")),
       colors: productType === "perfume" ? [] : parseStringArray(formData.get("colors")),
@@ -194,6 +249,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       images,
       updatedBy: auditActor,
     };
+
+    if (nextFullStock - soldQuantity > 0) {
+      body.isActive = true;
+    }
 
     const product = await Product.findByIdAndUpdate(id, body, { new: true }).lean();
     if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -228,7 +287,21 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       })
     );
 
-    return NextResponse.json({ product });
+    const inventory = getInventorySnapshot(product, soldQuantity);
+    return NextResponse.json({
+      product: {
+        ...product,
+        stock: inventory.availableStock,
+        availableStock: inventory.availableStock,
+        soldQuantity: inventory.soldQuantity,
+        fullStock: inventory.fullStock,
+        visibilityStatus: product.isActive === false ? "inactive" : "active",
+        availabilityStatus: getAvailabilityStatus({
+          productType: product.productType,
+          stock: inventory.availableStock,
+        }),
+      },
+    });
   } catch (error) { logRequestError("admin.products.id.put", req, error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }
 

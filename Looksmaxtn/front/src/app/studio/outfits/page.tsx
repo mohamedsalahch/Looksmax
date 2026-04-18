@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useAuth } from "@/providers/AuthContext";
 import { withAuthRequest } from "@/lib/authClient";
+import { shareOutfit } from "@/lib/share";
+import { readSavedOutfitsSession, writeSavedOutfitsSession } from "@/lib/savedOutfitsSession";
 
 interface SavedOutfitItem {
   id: string;
@@ -32,17 +35,45 @@ function getAvailableOutfitImages(images?: { front?: string; back?: string }) {
 }
 
 export default function SavedOutfitsPage() {
+  const { user, loading: authLoading } = useAuth();
   const [outfits, setOutfits] = useState<SavedOutfitItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sharingOutfitId, setSharingOutfitId] = useState("");
+  const [sharedOutfitId, setSharedOutfitId] = useState("");
+  const shareResetTimerRef = useRef<number | null>(null);
+
+  const clearShareResetTimer = () => {
+    if (shareResetTimerRef.current === null) return;
+    window.clearTimeout(shareResetTimerRef.current);
+    shareResetTimerRef.current = null;
+  };
 
   useEffect(() => {
+    if (authLoading) return;
+
     let cancelled = false;
+    const nextUserId = user?.id || "";
+    const cachedOutfits = nextUserId ? readSavedOutfitsSession(nextUserId) : null;
+
+    if (cachedOutfits) {
+      setOutfits(cachedOutfits);
+      setLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setLoading(true);
 
     fetch("/api/outfits?ts=" + Date.now(), withAuthRequest({ cache: "no-store" }))
       .then((response) => response.json())
       .then((data) => {
         if (cancelled) return;
-        setOutfits(data.outfits || []);
+        const nextOutfits = data.outfits || [];
+        setOutfits(nextOutfits);
+        if (nextUserId) {
+          writeSavedOutfitsSession(nextUserId, nextOutfits);
+        }
       })
       .catch(() => {
         if (cancelled) return;
@@ -55,7 +86,31 @@ export default function SavedOutfitsPage() {
     return () => {
       cancelled = true;
     };
+  }, [authLoading, user?.id]);
+
+  useEffect(() => {
+    return () => {
+      if (shareResetTimerRef.current !== null) {
+        window.clearTimeout(shareResetTimerRef.current);
+      }
+    };
   }, []);
+
+  const handleShareOutfit = async (id: string) => {
+    setSharingOutfitId(id);
+    try {
+      const { copied } = await shareOutfit(id);
+      clearShareResetTimer();
+      setSharedOutfitId(id);
+      shareResetTimerRef.current = window.setTimeout(() => {
+        setSharedOutfitId("");
+        shareResetTimerRef.current = null;
+      }, copied ? 1800 : 1200);
+    } catch {
+      setSharedOutfitId("");
+    }
+    setSharingOutfitId("");
+  };
 
   if (loading) {
     return (
@@ -119,12 +174,25 @@ export default function SavedOutfitsPage() {
                           Updated {new Date(outfit.updatedAt).toLocaleDateString()}
                         </p>
                       </div>
-                      <Link
-                        href={`/studio/outfits/${outfit.id}`}
-                        className="border border-[#00000012] bg-[#f7f2e8] px-2 py-1.5 text-[10px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:border-[#c9a96e] hover:text-[#c9a96e]"
-                      >
-                        Open
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <Link
+                          href={`/studio/outfits/${outfit.id}`}
+                          className="border border-[#00000012] bg-transparent px-3.5 py-2 text-[11px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:border-[#c9a96e] hover:text-[#c9a96e]"
+                        >
+                          Open
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => handleShareOutfit(outfit.id)}
+                          disabled={sharingOutfitId === outfit.id}
+                          aria-busy={sharingOutfitId === outfit.id}
+                          className={`inline-flex min-w-[84px] justify-center border border-[#00000012] bg-transparent px-3.5 py-2 text-[11px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:border-[#c9a96e] hover:text-[#c9a96e] disabled:opacity-50 ${
+                            sharedOutfitId === outfit.id ? "cursor-default" : "cursor-pointer"
+                          }`}
+                        >
+                          {sharedOutfitId === outfit.id ? "Copied" : "Share"}
+                        </button>
+                      </div>
                     </div>
 
                     {views.length > 0 && (

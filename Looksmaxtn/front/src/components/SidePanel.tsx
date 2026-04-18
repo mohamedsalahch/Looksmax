@@ -17,8 +17,6 @@ export default function SidePanel() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [expandedParents, setExpandedParents] = useState<string[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
-  const touchStartXRef = useRef<number | null>(null);
-  const touchStartYRef = useRef<number | null>(null);
   const pathname = usePathname();
 
   useEffect(() => {
@@ -47,48 +45,6 @@ export default function SidePanel() {
     setIsOpen(false);
     setExpandedParents([]);
   }, [pathname]);
-
-  useEffect(() => {
-    const handleTouchStart = (event: TouchEvent) => {
-      if (event.touches.length !== 1) return;
-
-      const touch = event.touches[0];
-      if (!isOpen && touch.clientX > 24) return;
-
-      touchStartXRef.current = touch.clientX;
-      touchStartYRef.current = touch.clientY;
-    };
-
-    const handleTouchEnd = (event: TouchEvent) => {
-      if (touchStartXRef.current === null || touchStartYRef.current === null) return;
-
-      const touch = event.changedTouches[0];
-      const deltaX = touch.clientX - touchStartXRef.current;
-      const deltaY = touch.clientY - touchStartYRef.current;
-
-      touchStartXRef.current = null;
-      touchStartYRef.current = null;
-
-      if (Math.abs(deltaY) > Math.abs(deltaX)) return;
-
-      if (!isOpen && deltaX > 70) {
-        setIsOpen(true);
-        return;
-      }
-
-      if (isOpen && deltaX < -70) {
-        setIsOpen(false);
-      }
-    };
-
-    window.addEventListener("touchstart", handleTouchStart, { passive: true });
-    window.addEventListener("touchend", handleTouchEnd, { passive: true });
-
-    return () => {
-      window.removeEventListener("touchstart", handleTouchStart);
-      window.removeEventListener("touchend", handleTouchEnd);
-    };
-  }, [isOpen]);
 
   // Close on Escape
   useEffect(() => {

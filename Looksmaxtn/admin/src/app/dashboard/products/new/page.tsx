@@ -715,7 +715,7 @@ export default function NewProductPage() {
               />
             </div>
             <div>
-              <FieldLabel>Stock</FieldLabel>
+              <FieldLabel>Full Stock</FieldLabel>
               <input
                 type="number"
                 min="0"
@@ -729,7 +729,7 @@ export default function NewProductPage() {
                 }`}
               />
               <p className="mt-1 text-[10px] text-text-secondary">
-              Set the stock quantity for this product.
+                Set the full stock when the product is created.
               </p>
             </div>
             <div className="xl:col-span-3">

@@ -4,6 +4,7 @@ import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
 import { getSession } from "@/store/lib/auth";
 import { filterAndRankProducts } from "@/store/lib/productSearch";
+import { getActiveOrderHoldMapByProductIds } from "@/lib/productInventory";
 
 function uniqueSortedValues(values: string[]) {
   return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -12,6 +13,7 @@ function uniqueSortedValues(values: string[]) {
 export async function GET(req: NextRequest) {
   try {
     await dbConnect();
+    const session = await getSession();
     const { searchParams } = new URL(req.url);
     const category = searchParams.get("category");
     const search = searchParams.get("search");
@@ -25,7 +27,7 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "24");
     const includeFacets = searchParams.get("includeFacets") === "1";
 
-    const filter: Record<string, unknown> = { isActive: true };
+    const filter: Record<string, unknown> = {};
     if (category === "new-arrivals" || category === "new") {
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
@@ -36,38 +38,66 @@ export async function GET(req: NextRequest) {
 
     const skip = (page - 1) * limit;
 
+    const products = await Product.find(filter)
+      .sort(category === "new" ? { createdAt: -1 } : { createdAt: -1 })
+      .lean();
     const now = new Date();
-
-    const [products, activeReservations] = await Promise.all([
-      Product.find(filter)
-        .sort(category === "new" ? { createdAt: -1 } : { createdAt: -1 })
-        .lean(),
-      ProductReservation.find({ reservedUntil: { $gt: now } })
-        .select("product reservedUntil")
-        .lean(),
-    ]);
-
-    const cartCountMap = activeReservations.reduce((map, reservation) => {
+    const activeReservations = await ProductReservation.find({ reservedUntil: { $gt: now } })
+      .select("product reservationKey quantity")
+      .lean();
+    const activeOrderHoldMap = await getActiveOrderHoldMapByProductIds(
+      products.map((product) => product._id.toString()),
+      session?.userId || null
+    );
+    const reservationKey = session?.userId ? `user:${session.userId}` : null;
+    const reservationMap = activeReservations.reduce((map, reservation) => {
       const productId = reservation.product.toString();
-      map.set(productId, (map.get(productId) || 0) + 1);
+      const current =
+        map.get(productId) || {
+          totalQuantity: 0,
+          ownedQuantity: 0,
+        };
+      const quantity = Math.max(1, Number(reservation.quantity) || 1);
+      current.totalQuantity += quantity;
+      if (reservationKey && reservation.reservationKey === reservationKey) {
+        current.ownedQuantity += quantity;
+      }
+      map.set(productId, current);
       return map;
-    }, new Map<string, number>());
-    const productsWithAvailability = products.map((product) => ({
-      ...product,
-      stock: Math.max(product.stock ?? 0, 0),
-      cartCount: cartCountMap.get(product._id.toString()) || 0,
-    }));
+    }, new Map<string, { totalQuantity: number; ownedQuantity: number }>());
+    const productsWithAvailability = products.map((product) => {
+      const stock = Math.max(product.stock ?? 0, 0);
+      const reservationInfo = reservationMap.get(product._id.toString()) || {
+        totalQuantity: 0,
+        ownedQuantity: 0,
+      };
+      const activeOrderHold = activeOrderHoldMap.get(product._id.toString());
+      const blockedByOrder = Boolean(activeOrderHold) && stock <= 0;
+      const reservedByOthers = reservationInfo.totalQuantity - reservationInfo.ownedQuantity;
+      const reservedElsewhere = reservedByOthers > 0 && reservedByOthers >= stock;
+      return {
+        ...product,
+        stock,
+        cartCount: reservationInfo.totalQuantity,
+        blockedByOrder,
+        reservedElsewhere,
+        ownedReservation: reservationInfo.ownedQuantity > 0,
+      };
+    });
 
     const searchMatchedProducts = search
       ? filterAndRankProducts(productsWithAvailability, search)
       : productsWithAvailability;
 
     const filteredProducts = searchMatchedProducts.filter((product) => {
+      const stock = Math.max(product.stock ?? 0, 0);
       if (brand && product.brand !== brand) return false;
       if (size && !(product.sizes || []).includes(size)) return false;
       if (color && !(product.colors || []).includes(color)) return false;
-      if (availability === "in-stock" && product.stock <= 0) return false;
-      if (availability === "out-of-stock" && product.stock > 0) return false;
+      const blockedByOrder = Boolean(product.blockedByOrder);
+      if (availability === "out-of-stock") return stock <= 0;
+      if (availability === "in-stock") return stock > 0;
+      if (stock <= 0 && !blockedByOrder) return false;
       if (Number.isFinite(priceMin) && product.price < priceMin) return false;
       if (Number.isFinite(priceMax) && priceMax > 0 && product.price > priceMax) return false;
       return true;

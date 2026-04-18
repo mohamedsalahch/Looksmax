@@ -10,10 +10,22 @@ const STUDIO_PORTRAIT_PROMPT = `Transform this image into a professional studio 
 
 Keep the subject's identity, facial features, skin tone, and proportions EXACTLY the same — no alterations, no beautification, no face reshaping.
 
+CRITICAL — PRESERVE FULL-BODY FRAMING:
+- The input image contains a standing, full-body person.
+- Keep the exact same framing and camera distance.
+- The entire body (head to feet) must remain visible in the final image.
+- Do NOT zoom in, crop, or convert to a half-body or headshot.
+
 Enhance image quality to high-end studio level:
 - clean, sharp focus
 - natural skin texture (no plastic smoothing)
 - balanced lighting
+
+BACKGROUND:
+- Minimalist studio backdrop
+- Warm off-white seamless background (#F2EFEA)
+- Floor blends seamlessly into backdrop
+- No visible horizon line, no texture
 
 Replace the background with a neutral studio backdrop (soft gray, beige, or white), evenly lit.
 
@@ -30,7 +42,7 @@ Improve details:
 
 Keep pose, expression, and framing unchanged.
 
-Final result should look like a professional DSLR studio headshot, realistic and unedited.`;
+Final result should look like a professional DSLR studio photo, realistic and unedited, with full-body composition preserved.`;
 
 function getPreferredIpv4Host() {
   if (process.env.OUTFIT_WEBHOOK_BASE_URL) {
@@ -64,6 +76,37 @@ export async function queueBodyProfileEnhancement(userId: string, imagePath: str
     const fileBuffer = await readFile(fullPath);
     const base64 = fileBuffer.toString("base64");
 
+    // Step 1: Validate the photo with LLM before enhancing
+    try {
+      const validateResponse = await fetch(`${baseUrl}api/validate-photo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: base64 }),
+      });
+
+      if (validateResponse.ok) {
+        const validateData = await validateResponse.json();
+        if (!validateData.valid) {
+          const reason = validateData.reason || "This photo is not suitable for outfit generation. Please upload a clear, full-body standing photo.";
+          console.warn(`[profile-photo] Validation failed for user ${userId}: ${reason}`);
+          await dbConnect();
+          await User.collection.updateOne(
+            { _id: new mongoose.Types.ObjectId(userId) },
+            {
+              $set: {
+                "bodyProfile.imageEnhancing": false,
+                "bodyProfile.profileImageValidationError": reason,
+              },
+            }
+          );
+          return;
+        }
+      }
+    } catch (validationError) {
+      console.error("[profile-photo] Validation request failed, continuing with enhancement:", validationError);
+    }
+
+    // Step 2: Enhance the photo
     const jobId = `enhance-${userId}`;
     const preferredWebhookBase = getPreferredIpv4Host();
     const webhookBase = preferredWebhookBase || `http://127.0.0.1:3004`;

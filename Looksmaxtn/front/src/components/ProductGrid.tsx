@@ -15,6 +15,9 @@ interface Product {
   price: number;
   stock: number;
   cartCount?: number;
+  reservedElsewhere?: boolean;
+  ownedReservation?: boolean;
+  blockedByOrder?: boolean;
   tag?: string;
   sizes?: string[];
   images?: ProductImage[];
@@ -297,6 +300,9 @@ export default function ProductGrid({
             price={product.price.toFixed(2)}
             stock={product.stock}
             cartCount={product.cartCount}
+            reservedElsewhere={product.reservedElsewhere}
+            ownedReservation={product.ownedReservation}
+            blockedByOrder={product.blockedByOrder}
             tag={product.tag}
             sizes={product.sizes}
             image={getMainImage(product.images)}

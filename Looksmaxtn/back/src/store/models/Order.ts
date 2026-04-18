@@ -25,6 +25,12 @@ export interface IOrder extends Document {
   };
   paymentMethod: string;
   orderStatus: "processing" | "confirmed" | "canceled" | "shipping" | "delivered" | "returned";
+  subtotalPrice: number;
+  shippingFee: number;
+  couponCode?: string;
+  couponDiscountType?: string;
+  couponDiscountValue?: number;
+  couponDiscountAmount?: number;
   totalPrice: number;
   createdBy?: IAuditActor | null;
   updatedBy?: IAuditActor | null;
@@ -64,6 +70,12 @@ const orderSchema = new Schema<IOrder>(
       enum: ["processing", "confirmed", "canceled", "shipping", "delivered", "returned"],
       default: "processing",
     },
+    subtotalPrice: { type: Number, required: true },
+    shippingFee: { type: Number, default: 0 },
+    couponCode: { type: String, default: "" },
+    couponDiscountType: { type: String, default: "" },
+    couponDiscountValue: { type: Number, default: 0 },
+    couponDiscountAmount: { type: Number, default: 0 },
     totalPrice: { type: Number, required: true },
     createdBy: { type: auditActorSchema, default: null },
     updatedBy: { type: auditActorSchema, default: null },

@@ -235,6 +235,9 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const [importingGeneratedImage, setImportingGeneratedImage] = useState<string | null>(null);
   const [isGeneratedImagesOpen, setIsGeneratedImagesOpen] = useState(false);
   const [generatedImagesSearch, setGeneratedImagesSearch] = useState("");
+  const [soldQuantity, setSoldQuantity] = useState(0);
+  const [restockAmount, setRestockAmount] = useState("1");
+  const [restocking, setRestocking] = useState(false);
   const allowStockEditing = true;
 
   useEffect(() => {
@@ -261,7 +264,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           price: p.price.toString(),
           description: p.description || "",
           brand: p.brand || "LOOKSMAX",
-          stock: String(p.stock ?? 1),
+          stock: String(p.fullStock ?? p.stock ?? 1),
           tag: p.tag || "",
           sizes: (p.sizes || []).join(","),
           colors: (p.colors || []).join(","),
@@ -277,6 +280,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           cloneSourceName: p.cloneSourceName || "",
           cloneSourceImage: p.cloneSourceImage || "",
         });
+        setSoldQuantity(Math.max(Number(p.soldQuantity ?? 0), 0));
         setInitialCategorySlugs(p.categories || []);
         setImages(
           (p.images || []).map((image: ProductImage) => ({
@@ -315,6 +319,44 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     form.fashionSubtype === "shoes"
       ? (["front", "back", "left", "right"] as OriginPictureKey[])
       : (["front", "back"] as OriginPictureKey[]);
+  const fullStock = Math.max(Number(form.stock || 0), 0);
+  const availableStock = Math.max(fullStock - soldQuantity, 0);
+
+  const handleAddStock = async () => {
+    setError("");
+    const amount = Math.max(0, Number(restockAmount || 0));
+    if (amount <= 0) return;
+
+    const nextStock = Math.max(0, Number(form.stock || 0)) + amount;
+    setRestocking(true);
+
+    try {
+      const response = await fetch(
+        `/api/products/${id}`,
+        withAuthRequest({
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fullStock: nextStock }),
+        })
+      );
+      const data = await response.json();
+      if (!response.ok || !data.product) {
+        setError(data.error || "Unable to add stock.");
+        return;
+      }
+
+      setForm((current) => ({
+        ...current,
+        stock: String(nextStock),
+      }));
+      setSoldQuantity(Math.max(Number(data.product.soldQuantity ?? soldQuantity), 0));
+      setRestockAmount("1");
+    } catch {
+      setError("Network error");
+    } finally {
+      setRestocking(false);
+    }
+  };
 
   const handleImageSelect = (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -624,6 +666,12 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       return;
     }
 
+    if (form.stock.trim() === "") {
+      setError("Please enter a full stock value.");
+      setLoading(false);
+      return;
+    }
+
     try {
       const productCategories = [
         selectedParentSlug,
@@ -640,7 +688,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       body.append("tag", form.tag);
       body.append("productType", form.productType);
       body.append("fashionSubtype", form.fashionSubtype);
-      body.append("stock", form.stock);
+      body.append("fullStock", form.stock);
       body.append("conditionScore", form.conditionScore);
       body.append("originPictureFront", form.originPictures.front);
       body.append("originPictureBack", form.originPictures.back);
@@ -788,19 +836,58 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               />
             </div>
             <div>
-              <FieldLabel>Stock</FieldLabel>
+              <FieldLabel>Full Stock</FieldLabel>
               <input
                 type="number"
                 min="0"
-                value={allowStockEditing ? form.stock : "1"}
-                readOnly={!allowStockEditing}
+                value={form.stock}
                 onChange={(e) => setForm({ ...form, stock: e.target.value })}
-                className={`w-full border px-4 py-3 text-sm ${
-                  allowStockEditing
-                    ? "bg-bg-secondary border-border"
-                    : "bg-bg-hover border-border text-text-secondary cursor-not-allowed"
-                }`}
+                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                placeholder="Full stock"
               />
+              <p className="mt-1 text-[10px] text-text-secondary">
+                Full stock is the total inventory you set. Sold units are shown in the stock panel.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border bg-bg-secondary p-4 space-y-3 xl:col-span-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">Stock Panel</p>
+                <p className="mt-1 text-[11px] text-text-secondary">
+                  Full stock is what you created. Available is full minus sold.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="rounded border border-border bg-bg-card p-3">
+                  <p className="text-[10px] uppercase tracking-wider text-text-secondary">Full</p>
+                  <p className="mt-1 text-lg font-semibold">{fullStock}</p>
+                </div>
+                <div className="rounded border border-border bg-bg-card p-3">
+                  <p className="text-[10px] uppercase tracking-wider text-text-secondary">Available</p>
+                  <p className="mt-1 text-lg font-semibold">{availableStock}</p>
+                </div>
+                <div className="rounded border border-border bg-bg-card p-3">
+                  <p className="text-[10px] uppercase tracking-wider text-text-secondary">Sold</p>
+                  <p className="mt-1 text-lg font-semibold">{soldQuantity}</p>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <input
+                  type="number"
+                  min="1"
+                  value={restockAmount}
+                  onChange={(e) => setRestockAmount(e.target.value)}
+                  className="w-full sm:w-32 bg-bg-secondary border border-border px-3 py-2 text-sm"
+                  placeholder="Add"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddStock}
+                  disabled={restocking}
+                  className="w-full sm:w-auto border border-foreground bg-foreground px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-background transition-colors hover:bg-accent disabled:opacity-60"
+                >
+                  {restocking ? "Saving..." : "ADD STOCK"}
+                </button>
+              </div>
             </div>
             <div className="xl:col-span-3">
               <FieldLabel>Category</FieldLabel>
