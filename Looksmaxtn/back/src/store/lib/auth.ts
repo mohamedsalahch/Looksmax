@@ -14,6 +14,7 @@ const TOKEN_TTL_SECONDS = 60 * 30;
 export interface JWTPayload {
   userId: string;
   role: string;
+  sessionVersion?: number;
 }
 
 function getBearerTokenFromHeader(authorizationHeader?: string | null) {
@@ -58,8 +59,9 @@ export async function getSession(): Promise<JWTPayload | null> {
     const payload = await verifyToken(bearerToken);
     if (!payload) return null;
     await dbConnect();
-    const user = await User.findById(payload.userId).select("_id isBlocked").lean();
+    const user = await User.findById(payload.userId).select("_id isBlocked sessionVersion").lean();
     if (!user || user.isBlocked) return null;
+    if (payload.sessionVersion !== undefined && payload.sessionVersion !== user.sessionVersion) return null;
     return payload;
   }
 
@@ -69,8 +71,9 @@ export async function getSession(): Promise<JWTPayload | null> {
   const payload = await verifyToken(token);
   if (!payload) return null;
   await dbConnect();
-  const user = await User.findById(payload.userId).select("_id isBlocked").lean();
+  const user = await User.findById(payload.userId).select("_id isBlocked sessionVersion").lean();
   if (!user || user.isBlocked) return null;
+  if (payload.sessionVersion !== undefined && payload.sessionVersion !== user.sessionVersion) return null;
   return payload;
 }
 

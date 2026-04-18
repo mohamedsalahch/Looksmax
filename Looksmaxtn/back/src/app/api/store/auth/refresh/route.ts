@@ -23,14 +23,18 @@ export async function POST() {
 
     await dbConnect();
     const user = await User.findById(session.userId)
-      .select("name email role address bodyProfile isBlocked googleId")
+      .select("name email role address bodyProfile isBlocked googleId sessionVersion")
       .lean();
 
     if (!user || user.isBlocked) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const token = await createToken({ userId: session.userId, role: session.role });
+    const token = await createToken({
+      userId: session.userId,
+      role: session.role,
+      sessionVersion: user.sessionVersion ?? 0,
+    });
     const cookieOpts = getTokenCookieOptions();
     const res = NextResponse.json({
       token,

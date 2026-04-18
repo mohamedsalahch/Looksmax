@@ -35,6 +35,7 @@ export interface IUser extends Document {
   emailVerificationTokenHash?: string | null;
   emailVerificationExpiresAt?: Date | null;
   emailVerificationSentAt?: Date | null;
+  sessionVersion?: number;
   passwordResetTokenHash?: string | null;
   passwordResetExpiresAt?: Date | null;
   passwordResetSentAt?: Date | null;
@@ -86,6 +87,7 @@ const userSchema = new Schema<IUser>(
     emailVerificationTokenHash: { type: String, default: null },
     emailVerificationExpiresAt: { type: Date, default: null },
     emailVerificationSentAt: { type: Date, default: null },
+    sessionVersion: { type: Number, default: 0 },
     passwordResetTokenHash: { type: String, default: null },
     passwordResetExpiresAt: { type: Date, default: null },
     passwordResetSentAt: { type: Date, default: null },

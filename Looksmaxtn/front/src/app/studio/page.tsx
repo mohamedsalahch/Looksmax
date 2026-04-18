@@ -7,6 +7,7 @@ import {useAuth} from "@/providers/AuthContext";
 import { useCart } from "@/providers/CartContext";
 import ProductCard from "@/components/ProductCard";
 import { consumeStudioAssignments, inferStudioAssignmentZone, StudioAssignmentItem, StudioZoneId } from "@/lib/studioAssignment";
+import { getCartItemProductId } from "@/lib/cartItem";
 import {formatTndPrice} from "@/lib/formatPrice";
 import { withAuthRequest } from "@/lib/authClient";
 import { shareOutfit } from "@/lib/share";
@@ -904,7 +905,7 @@ export default function OutfitStudioPage() {
             });
 
             const nextItem: OutfitSlotItem = {
-                id: cartItem.id,
+                id: getCartItemProductId(cartItem.id),
                 name: cartItem.name,
                 image: cartItem.image,
                 fashionSubtype: cartItem.fashionSubtype,
