@@ -398,7 +398,7 @@ export default function ProductCard({
                   ? "Sold Out"
                   : addedToCart
                     ? "✓ ADDED"
-                    : "ADDche"}
+                    : "ADD"}
               </button>
               <button
                 type="button"

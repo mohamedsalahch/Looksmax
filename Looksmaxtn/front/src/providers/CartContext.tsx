@@ -208,6 +208,41 @@ export function CartProvider({ children }: { children: ReactNode }) {
     };
   }, [hydrated, itemIdsKey]);
 
+  useEffect(() => {
+    if (!hydrated || items.length === 0) return;
+
+    let cancelled = false;
+
+    const sweepExpiredReservations = () => {
+      if (cancelled) return;
+
+      const now = Date.now();
+      const expiredProductIds = new Set(
+        itemsRef.current
+          .filter((item) => {
+            if (!item.reservationExpiresAt) return false;
+            return new Date(item.reservationExpiresAt).getTime() <= now;
+          })
+          .map((item) => item.id.split("-")[0])
+      );
+
+      if (expiredProductIds.size === 0) return;
+
+      setItems((current) => current.filter((item) => !expiredProductIds.has(item.id.split("-")[0])));
+      expiredProductIds.forEach((productId) => {
+        void releaseProductReservation(productId);
+      });
+    };
+
+    sweepExpiredReservations();
+    const interval = window.setInterval(sweepExpiredReservations, 1000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [hydrated, itemIdsKey]);
+
   const openCart = useCallback(() => setIsOpen(true), []);
   const closeCart = useCallback(() => setIsOpen(false), []);
   const toggleCart = useCallback(() => setIsOpen((prev) => !prev), []);

@@ -1104,19 +1104,6 @@ export default function OutfitStudioPage() {
             setGeneratingOutfit(false);
             if (user?.id) {
                 writeStoredGenerationState(user.id, null);
-                upsertSavedOutfitSession(user.id, {
-                    id: String(data.outfit?.id || ""),
-                    name: String(data.outfit?.name || outfitNameDraft.trim() || "Outfit"),
-                    images: {
-                        front: String(data.outfit?.images?.front || generatedOutfitImages[0] || ""),
-                        back: String(data.outfit?.images?.back || generatedOutfitImages[1] || ""),
-                    },
-                    outfitSnapshot: data.outfit?.outfitSnapshot || undefined,
-                    isPublic: Boolean(data.outfit?.isPublic),
-                    shareToken: String(data.outfit?.shareToken || ""),
-                    createdAt: String(data.outfit?.createdAt || ""),
-                    updatedAt: String(data.outfit?.updatedAt || new Date().toISOString()),
-                });
             }
         }
     };

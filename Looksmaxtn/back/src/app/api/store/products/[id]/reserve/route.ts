@@ -5,7 +5,7 @@ import ProductReservation from "@/store/models/ProductReservation";
 import { getSession } from "@/store/lib/auth";
 import mongoose from "mongoose";
 
-const CART_PRESENCE_DURATION_MS = 30 * 60 * 1000;
+const CART_PRESENCE_DURATION_MS = 60 * 1000;
 
 export async function POST(
   req: NextRequest,
