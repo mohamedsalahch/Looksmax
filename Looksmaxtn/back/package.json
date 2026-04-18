@@ -6,7 +6,8 @@
     "dev": "next dev --port 3002",
     "build": "next build",
     "start": "sh -c 'set -a && [ -f ./.env ] && . ./.env && set +a && node ../scripts/start-standalone.mjs back 3002'",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:unit": "node --test \"tests/unit/*.test.cjs\""
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",
