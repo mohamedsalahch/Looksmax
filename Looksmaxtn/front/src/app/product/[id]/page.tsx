@@ -3,6 +3,7 @@ import ProductInfo from "@/components/ProductInfo";
 import RelatedProducts from "@/components/RelatedProducts";
 import { getSession } from "@/lib/auth";
 import dbConnect from "@/lib/mongodb";
+import Order from "@/models/Order";
 import Product from "@/models/Product";
 import ProductReservation from "@/models/ProductReservation";
 import Link from "next/link";
@@ -24,6 +25,8 @@ const defaultProduct: {
     reservationExpiresAt: string | null;
     cartCount?: number;
     reservedElsewhere?: boolean;
+    ownedReservation?: boolean;
+    blockedByOrder?: boolean;
     conditionScore?: number | null;
     conditionStatus?: string | null;
   productType: "fashion" | "perfume" | "clothing" | "shoes";
@@ -74,20 +77,54 @@ export default async function ProductDetailPage({
 
   try {
     await dbConnect();
-    const now = new Date();
     const session = await getSession();
-    const reservationKey = session?.userId ? `user:${session.userId}` : null;
-    const [dbProduct, activeCartPresences] = await Promise.all([
+    const currentUserId = session?.userId || null;
+    const reservationKey = currentUserId ? `user:${currentUserId}` : null;
+    const now = new Date();
+    const [dbProduct, activeOrders, activeReservations] = await Promise.all([
       Product.findById(id).lean(),
+      Order.find({
+        orderStatus: { $in: ["processing", "confirmed", "shipping"] },
+        "items.product": id,
+      })
+        .select("user items.product")
+        .lean(),
       ProductReservation.find({ product: id, reservedUntil: { $gt: now } })
-        .select("product reservationKey reservedUntil")
+        .select("reservationKey quantity")
         .lean(),
     ]);
-    const cartCount = activeCartPresences.length;
-    const reservedElsewhere = activeCartPresences.some(
-      (reservation) => reservation.reservationKey !== reservationKey
+    const ownedReservationQuantity = activeReservations
+      .filter((reservation) => reservation.reservationKey === reservationKey)
+      .reduce((sum, reservation) => sum + Math.max(1, Number(reservation.quantity) || 1), 0);
+    const reservedByOthersQuantity = activeReservations
+      .filter((reservation) => reservation.reservationKey !== reservationKey)
+      .reduce((sum, reservation) => sum + Math.max(1, Number(reservation.quantity) || 1), 0);
+    const activeOrderReservation = activeOrders.reduce(
+      (state, order) => {
+        const orderUserId = String(order.user || "");
+        const isOwnedByCurrentUser = currentUserId ? orderUserId === currentUserId : false;
+        for (const item of order.items || []) {
+          if (item.product?.toString?.() !== id) continue;
+          if (isOwnedByCurrentUser) state.ownedReservation = true;
+          else state.reservedElsewhere = true;
+        }
+        return state;
+      },
+      { reservedElsewhere: false, ownedReservation: false }
     );
-    if (dbProduct && dbProduct.isActive === false) {
+    const stock = Math.max(dbProduct?.stock ?? 0, 0);
+    const cartReservedElsewhere = reservedByOthersQuantity > 0 && reservedByOthersQuantity >= stock;
+    const blockedByOrder =
+      stock <= 0 && (activeOrderReservation.reservedElsewhere || activeOrderReservation.ownedReservation);
+    const ownedReservation = activeOrderReservation.ownedReservation;
+    const productReservedElsewhere = cartReservedElsewhere;
+    if (
+      dbProduct &&
+      stock <= 0 &&
+      !blockedByOrder &&
+      !productReservedElsewhere &&
+      !ownedReservation
+    ) {
       notFound();
     }
     if (dbProduct) {
@@ -98,12 +135,14 @@ export default async function ProductDetailPage({
         brand: dbProduct.brand || "LOOKSMAX",
         image: dbProduct.images?.find((image) => image.isMain)?.url || dbProduct.images?.[0]?.url || "",
         sizes: dbProduct.sizes || [],
-        stock: Math.max(dbProduct.stock ?? 0, 0),
+        stock,
         description: dbProduct.description || "",
         images: dbProduct.images || [],
         reservationExpiresAt: null,
-        cartCount,
-        reservedElsewhere,
+        cartCount: activeReservations.reduce((sum, reservation) => sum + Math.max(1, Number(reservation.quantity) || 1), 0),
+        reservedElsewhere: productReservedElsewhere,
+        ownedReservation,
+        blockedByOrder,
         conditionScore: dbProduct.conditionScore ?? null,
         conditionStatus: dbProduct.conditionStatus || null,
         productType: dbProduct.productType || "fashion",

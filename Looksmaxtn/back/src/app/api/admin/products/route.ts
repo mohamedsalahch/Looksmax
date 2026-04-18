@@ -64,7 +64,7 @@ function getProductPayload(
   const productType = normalizeProductType(String(formData.get("productType") || "fashion"));
   const fashionSubtype =
     productType === "fashion" ? String(formData.get("fashionSubtype") || "clothes") : null;
-  const rawStockValue = String(formData.get("stock") ?? "").trim();
+  const rawStockValue = String(formData.get("fullStock") ?? formData.get("stock") ?? "").trim();
   const rawStock = rawStockValue.length > 0 ? Number(rawStockValue) : NaN;
   const conditionScore =
     productType === "perfume" ? null : Number(formData.get("conditionScore") || 7);
@@ -195,7 +195,7 @@ export async function POST(req: NextRequest) {
       cloneSourceImagePath,
       originPictures
     );
-    const rawFullStock = String(formData.get("stock") ?? "").trim();
+    const rawFullStock = String(formData.get("fullStock") ?? formData.get("stock") ?? "").trim();
     if (rawFullStock.length === 0) {
       return NextResponse.json({ error: "Please enter a full stock value." }, { status: 400 });
     }

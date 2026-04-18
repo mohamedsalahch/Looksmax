@@ -16,6 +16,7 @@ type Product = {
   stock: number;
   cartCount?: number;
   reservedElsewhere?: boolean;
+  ownedReservation?: boolean;
   brand?: string;
   categories?: string[];
   sizes?: string[];
@@ -360,6 +361,7 @@ function SearchContent() {
                     stock={product.stock}
                     cartCount={product.cartCount}
                     reservedElsewhere={product.reservedElsewhere}
+                    ownedReservation={product.ownedReservation}
                     tag={product.tag}
                     sizes={product.sizes}
                     image={getMainImage(product.images)}

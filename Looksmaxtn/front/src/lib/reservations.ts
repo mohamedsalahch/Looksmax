@@ -32,13 +32,13 @@ export function getReservationKey() {
   return next;
 }
 
-export async function reserveProduct(productId: string) {
+export async function reserveProduct(productId: string, quantity = 1) {
   const reservationKey = getReservationKey();
 
   const response = await fetch(`/api/products/${productId}/reserve`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ reservationKey }),
+    body: JSON.stringify({ reservationKey, quantity }),
   });
 
   const data = await response.json();

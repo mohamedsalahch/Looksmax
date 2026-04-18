@@ -335,7 +335,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         withAuthRequest({
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ stock: nextStock }),
+          body: JSON.stringify({ fullStock: nextStock }),
         })
       );
       const data = await response.json();
@@ -686,7 +686,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       body.append("tag", form.tag);
       body.append("productType", form.productType);
       body.append("fashionSubtype", form.fashionSubtype);
-      body.append("stock", form.stock);
+      body.append("fullStock", form.stock);
       body.append("conditionScore", form.conditionScore);
       body.append("originPictureFront", form.originPictures.front);
       body.append("originPictureBack", form.originPictures.back);

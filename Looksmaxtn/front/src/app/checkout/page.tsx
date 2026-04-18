@@ -190,12 +190,10 @@ export default function CheckoutPage() {
     return (
       <div className="pt-[72px] min-h-screen flex items-center justify-center">
         <div className="text-center max-w-md mx-auto px-4">
-          <div className="border border-[#d8c9b8] bg-[#f1ede8] px-6 py-5 mb-6">
-            <div className="inline-flex h-10 w-10 items-center justify-center border border-[#d8c9b8] bg-[#faf7f2]">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6b6055" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            </div>
+          <div className="inline-flex h-10 w-10 items-center justify-center border border-[#d8c9b8] bg-[#faf7f2] mb-6">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6b6055" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
           </div>
           <h1 className="text-xl font-semibold tracking-wide uppercase mb-3">Order Placed!</h1>
           <p className="text-sm text-text-secondary mb-2">
@@ -398,48 +396,6 @@ export default function CheckoutPage() {
                 Order Summary
               </h2>
               <div className="border border-border-color divide-y divide-border-color">
-                <div className="p-4">
-                  <label className="block text-xs text-text-secondary uppercase tracking-wider mb-2">
-                    Coupon Code
-                  </label>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <input
-                      type="text"
-                      value={couponCode}
-                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                      placeholder="Enter coupon code"
-                      className="flex-1 border border-border-color bg-transparent px-4 py-3 text-sm focus:border-foreground transition-colors uppercase"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => void validateCoupon(couponCode)}
-                      disabled={couponLoading}
-                      className="border border-foreground px-5 py-3 text-xs font-medium uppercase tracking-wide hover:bg-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {couponLoading ? "Checking..." : appliedCoupon ? "Recheck" : "Apply"}
-                    </button>
-                  </div>
-                  {couponError && <p className="mt-2 text-xs text-[#430C05]">{couponError}</p>}
-                  {appliedCoupon && !couponError && (
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[#6b6055]">
-                      <span className="uppercase tracking-wider">
-                        Applied {appliedCoupon.code}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAppliedCoupon(null);
-                          setCouponCode("");
-                          setCouponError("");
-                        }}
-                        className="uppercase tracking-wider text-foreground hover:text-accent transition-colors"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  )}
-                </div>
-
                 {items.map((item) => (
                   <div
                     key={item.id}
@@ -548,6 +504,47 @@ export default function CheckoutPage() {
                     <span>Total</span>
                     <span>{formatTndPrice(grandTotal)}</span>
                   </div>
+                </div>
+                <div className="p-4">
+                  <label className="block text-xs text-text-secondary uppercase tracking-wider mb-2">
+                    Coupon Code
+                  </label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                      placeholder="Enter coupon code"
+                      className="flex-1 border border-border-color bg-transparent px-4 py-3 text-sm focus:border-foreground transition-colors uppercase"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void validateCoupon(couponCode)}
+                      disabled={couponLoading}
+                      className="border border-foreground px-5 py-3 text-xs font-medium uppercase tracking-wide hover:bg-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {couponLoading ? "Checking..." : appliedCoupon ? "Recheck" : "Apply"}
+                    </button>
+                  </div>
+                  {couponError && <p className="mt-2 text-xs text-[#430C05]">{couponError}</p>}
+                  {appliedCoupon && !couponError && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[#6b6055]">
+                      <span className="uppercase tracking-wider">
+                        Applied {appliedCoupon.code}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAppliedCoupon(null);
+                          setCouponCode("");
+                          setCouponError("");
+                        }}
+                        className="uppercase tracking-wider text-foreground hover:text-accent transition-colors"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 

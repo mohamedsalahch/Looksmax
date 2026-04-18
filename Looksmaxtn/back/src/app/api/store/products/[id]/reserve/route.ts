@@ -3,6 +3,7 @@ import dbConnect, { cleanupProductReservationIndexes } from "@/store/lib/mongodb
 import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
 import { getSession } from "@/store/lib/auth";
+import { getActiveOrderHoldMapByProductIds } from "@/lib/productInventory";
 import mongoose from "mongoose";
 
 const CART_PRESENCE_DURATION_MS = 30 * 60 * 1000;
@@ -15,9 +16,10 @@ export async function POST(
     await dbConnect();
 
     const { id } = await params;
-    const { reservationKey, cartKey } = await req.json();
+    const { reservationKey, cartKey, quantity } = await req.json();
     const session = await getSession();
     const key = session?.userId ? `user:${session.userId}` : cartKey || reservationKey;
+    const requestedQuantity = Math.max(1, Number(quantity) || 1);
 
     if (!key) {
       return NextResponse.json({ error: "Missing cart key" }, { status: 400 });
@@ -25,13 +27,26 @@ export async function POST(
 
     const now = new Date();
     const reservedUntil = new Date(now.getTime() + CART_PRESENCE_DURATION_MS);
+    const activeOrderHoldMap = await getActiveOrderHoldMapByProductIds([id], session?.userId || null);
+    const activeOrderHold = activeOrderHoldMap.get(id);
 
     await ProductReservation.deleteMany({ reservedUntil: { $lte: now } });
 
-    const product = await Product.findById(id).lean();
+    const [product, activeReservations] = await Promise.all([
+      Product.findById(id).lean(),
+      ProductReservation.find({ product: id, reservedUntil: { $gt: now } })
+        .select("reservationKey quantity")
+        .lean(),
+    ]);
 
-    if (!product || product.isActive === false) {
+    if (!product || Math.max(product.stock ?? 0, 0) <= 0) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
+    }
+    if (activeOrderHold && Math.max(product.stock ?? 0, 0) <= 0) {
+      return NextResponse.json(
+        { error: "This product is already reserved in an active order." },
+        { status: 409 }
+      );
     }
 
     let cartPresence: { reservedUntil?: Date } | null = null;
@@ -41,6 +56,7 @@ export async function POST(
         {
           product: id,
           reservationKey: key,
+          quantity: requestedQuantity,
           reservedUntil,
         },
         { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
@@ -63,20 +79,31 @@ export async function POST(
         {
           product: id,
           reservationKey: key,
+          quantity: requestedQuantity,
           reservedUntil,
         },
         { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
       ).lean();
     }
 
-    const cartCount = await ProductReservation.countDocuments({
-      product: id,
-      reservedUntil: { $gt: now },
-    });
+    const cartCount = await ProductReservation.aggregate<{ _id: null; cartCount: number }>([
+      {
+        $match: {
+          product: new mongoose.Types.ObjectId(id),
+          reservedUntil: { $gt: now },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          cartCount: { $sum: { $ifNull: ["$quantity", 1] } },
+        },
+      },
+    ]);
 
     return NextResponse.json({
       success: true,
-      cartCount,
+      cartCount: cartCount[0]?.cartCount || 0,
       reservationExpiresAt: cartPresence?.reservedUntil?.toISOString(),
     });
   } catch (error: unknown) {
@@ -103,12 +130,22 @@ export async function DELETE(
 
     await ProductReservation.deleteOne({ product: id, reservationKey: key });
 
-    const cartCount = await ProductReservation.countDocuments({
-      product: id,
-      reservedUntil: { $gt: new Date() },
-    });
+    const cartCount = await ProductReservation.aggregate<{ _id: null; cartCount: number }>([
+      {
+        $match: {
+          product: new mongoose.Types.ObjectId(id),
+          reservedUntil: { $gt: new Date() },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          cartCount: { $sum: { $ifNull: ["$quantity", 1] } },
+        },
+      },
+    ]);
 
-    return NextResponse.json({ success: true, cartCount });
+    return NextResponse.json({ success: true, cartCount: cartCount[0]?.cartCount || 0 });
   } catch (error: unknown) {
     console.error("Release cart presence error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

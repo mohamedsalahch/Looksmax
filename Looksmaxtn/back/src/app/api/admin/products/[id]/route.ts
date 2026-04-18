@@ -104,8 +104,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       if (typeof body.isActive === "boolean") {
         update.isActive = body.isActive;
       }
-      if (typeof body.stock !== "undefined") {
-        const rawStock = String(body.stock).trim();
+      const submittedFullStock =
+        typeof body.fullStock !== "undefined" ? body.fullStock : body.stock;
+      if (typeof submittedFullStock !== "undefined") {
+        const rawStock = String(submittedFullStock).trim();
         if (rawStock.length === 0) {
           return NextResponse.json({ error: "Please enter a full stock value." }, { status: 400 });
         }
@@ -114,6 +116,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           const normalizedFullStock = Math.max(0, nextFullStock);
           update.fullStock = normalizedFullStock;
           update.stock = Math.max(0, normalizedFullStock - soldQuantity);
+          if (normalizedFullStock - soldQuantity > 0) {
+            update.isActive = true;
+          }
         }
       }
       update.updatedBy = auditActor;
@@ -179,7 +184,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       productType === "fashion" ? String(formData.get("fashionSubtype") || "clothes") : null;
     const conditionScore =
       productType === "perfume" ? null : Number(formData.get("conditionScore") || 7);
-    const rawFullStock = String(formData.get("stock") ?? "").trim();
+    const rawFullStock = String(formData.get("fullStock") ?? formData.get("stock") ?? "").trim();
     if (rawFullStock.length === 0) {
       return NextResponse.json({ error: "Please enter a full stock value." }, { status: 400 });
     }
@@ -244,6 +249,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       images,
       updatedBy: auditActor,
     };
+
+    if (nextFullStock - soldQuantity > 0) {
+      body.isActive = true;
+    }
 
     const product = await Product.findByIdAndUpdate(id, body, { new: true }).lean();
     if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 });
