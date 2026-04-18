@@ -161,12 +161,13 @@ export async function GET(req: NextRequest) {
           soldQuantity: inventory.soldQuantity,
           fullStock: inventory.fullStock,
           sizeStock: sizeStockData,
-        availabilityStatus: getAvailabilityStatus({
-          productType: product.productType,
-          stock: Math.max(product.stock ?? 0, 0),
-        }),
-        visibilityStatus: product.isActive === false ? "inactive" : "active",
-      })),
+          availabilityStatus: getAvailabilityStatus({
+            productType: product.productType,
+            stock: Math.max(product.stock ?? 0, 0),
+          }),
+          visibilityStatus: product.isActive === false ? "inactive" : "active",
+        };
+      }),
     });
   } catch (error) { console.error(error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }
