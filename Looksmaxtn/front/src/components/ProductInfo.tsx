@@ -24,6 +24,7 @@ export default function ProductInfo({
     size?: string;
     sizes?: string[];
     stock: number;
+    sizeAvailability?: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null;
     description: string;
     reservationExpiresAt?: string | null;
     cartCount?: number;
@@ -67,6 +68,8 @@ export default function ProductInfo({
     : "";
   const cartItemQuantity = items.find((item) => item.id === cartItemId)?.quantity || 0;
 
+  const [sizeAvailability, setSizeAvailability] = useState<Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null>(() => product.sizeAvailability || null);
+
   const refreshAvailability = () => {
     if (!product.id) return;
 
@@ -78,6 +81,9 @@ export default function ProductInfo({
         setReservedElsewhere(Boolean(data.product.reservedElsewhere));
         setOwnedReservation(Boolean(data.product.ownedReservation));
         setBlockedByOrder(Boolean(data.product.blockedByOrder));
+        if (data.product.sizeAvailability) {
+          setSizeAvailability(data.product.sizeAvailability);
+        }
       })
       .catch(() => {});
   };
@@ -159,7 +165,7 @@ export default function ProductInfo({
     }
 
     try {
-      const reservation = await reserveProduct(product.id || "unknown", 1);
+      const reservation = await reserveProduct(product.id || "unknown", 1, isPerfume ? undefined : selectedSize);
       addItem({
         id: product.id || "unknown",
         name: product.name,
@@ -187,7 +193,7 @@ export default function ProductInfo({
     if (isBlocked || isPerfume) return;
 
     try {
-      const reservation = await reserveProduct(product.id || "unknown", selectedQuantity);
+      const reservation = await reserveProduct(product.id || "unknown", selectedQuantity, isPerfume ? undefined : selectedSize);
       addItem({
         id: product.id || "unknown",
         name: product.name,
@@ -296,20 +302,28 @@ export default function ProductInfo({
             <p className="text-xs text-text-secondary uppercase tracking-wider">Sizes</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {availableSizes.map((sizeOption) => (
-              <button
-                key={sizeOption}
-                type="button"
-                onClick={() => setSelectedSize(sizeOption)}
-                className={`min-w-10 border px-3 py-2 text-sm font-medium transition-colors ${
-                  selectedSize === sizeOption
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-border-color text-foreground hover:bg-hover"
-                }`}
-              >
-                {sizeOption}
-              </button>
-            ))}
+            {availableSizes.map((sizeOption) => {
+              const sizeInfo = sizeAvailability?.[sizeOption];
+              const sizeAvailable = sizeInfo ? sizeInfo.available : currentStock > 0;
+              const sizeStock = sizeInfo?.stock ?? currentStock;
+              return (
+                <button
+                  key={sizeOption}
+                  type="button"
+                  onClick={() => sizeAvailable && setSelectedSize(sizeOption)}
+                  disabled={!sizeAvailable}
+                  className={`min-w-10 border px-3 py-2 text-sm font-medium transition-colors ${
+                    !sizeAvailable
+                      ? "border-border-color text-text-secondary bg-surface cursor-not-allowed line-through opacity-50"
+                      : selectedSize === sizeOption
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-border-color text-foreground hover:bg-hover cursor-pointer"
+                  }`}
+                >
+                  {sizeOption}{sizeInfo ? ` (${sizeStock})` : ""}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

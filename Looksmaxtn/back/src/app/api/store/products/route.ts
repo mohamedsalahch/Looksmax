@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
       .lean();
     const now = new Date();
     const activeReservations = await ProductReservation.find({ reservedUntil: { $gt: now } })
-      .select("product reservationKey quantity")
+      .select("product reservationKey quantity size")
       .lean();
     const activeOrderHoldMap = await getActiveOrderHoldMapByProductIds(
       products.map((product) => product._id.toString()),
@@ -65,6 +65,21 @@ export async function GET(req: NextRequest) {
       map.set(productId, current);
       return map;
     }, new Map<string, { totalQuantity: number; ownedQuantity: number }>());
+
+    const reservationsByProductAndSize = activeReservations.reduce((map, reservation) => {
+      const productId = reservation.product.toString();
+      const reservationSize = reservation.size || "";
+      const key = `${productId}:${reservationSize}`;
+      const current = map.get(key) || { totalQuantity: 0, ownedQuantity: 0 };
+      const quantity = Math.max(1, Number(reservation.quantity) || 1);
+      current.totalQuantity += quantity;
+      if (reservationKey && reservation.reservationKey === reservationKey) {
+        current.ownedQuantity += quantity;
+      }
+      map.set(key, current);
+      return map;
+    }, new Map<string, { totalQuantity: number; ownedQuantity: number }>());
+
     const productsWithAvailability = products.map((product) => {
       const stock = Math.max(product.stock ?? 0, 0);
       const reservationInfo = reservationMap.get(product._id.toString()) || {
@@ -75,6 +90,25 @@ export async function GET(req: NextRequest) {
       const blockedByOrder = Boolean(activeOrderHold) && stock <= 0;
       const reservedByOthers = reservationInfo.totalQuantity - reservationInfo.ownedQuantity;
       const reservedElsewhere = reservedByOthers > 0 && reservedByOthers >= stock;
+
+      let sizeAvailability: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null = null;
+      const hasSizeStock = product.sizeStock && product.sizeStock instanceof Map && product.sizeStock.size > 0;
+      if (hasSizeStock) {
+        sizeAvailability = {};
+        const sizeMap = product.sizeStock as Map<string, { fullStock: number; stock: number }>;
+        for (const [sz, entry] of sizeMap) {
+          const sizeResKey = `${product._id.toString()}:${sz}`;
+          const sizeResInfo = reservationsByProductAndSize.get(sizeResKey) || { totalQuantity: 0, ownedQuantity: 0 };
+          const sizeStock = Math.max(entry.stock ?? 0, 0);
+          const sizeReservedByOthers = sizeResInfo.totalQuantity - sizeResInfo.ownedQuantity;
+          sizeAvailability[sz] = {
+            stock: sizeStock,
+            available: product.isActive !== false && sizeStock > 0,
+            reservedElsewhere: sizeReservedByOthers > 0 && sizeReservedByOthers >= sizeStock,
+          };
+        }
+      }
+
       return {
         ...product,
         stock,
@@ -82,6 +116,7 @@ export async function GET(req: NextRequest) {
         blockedByOrder,
         reservedElsewhere,
         ownedReservation: reservationInfo.ownedQuantity > 0,
+        sizeAvailability,
       };
     });
 

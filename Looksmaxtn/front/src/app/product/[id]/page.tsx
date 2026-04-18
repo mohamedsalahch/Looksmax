@@ -20,6 +20,7 @@ const defaultProduct: {
     size?: string;
     sizes?: string[];
     stock: number;
+    sizeAvailability?: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null;
     description: string;
     images: { url: string; isMain: boolean }[];
     reservationExpiresAt: string | null;
@@ -136,6 +137,7 @@ export default async function ProductDetailPage({
         image: dbProduct.images?.find((image) => image.isMain)?.url || dbProduct.images?.[0]?.url || "",
         sizes: dbProduct.sizes || [],
         stock,
+        sizeAvailability: dbProduct.sizeAvailability || null,
         description: dbProduct.description || "",
         images: dbProduct.images || [],
         reservationExpiresAt: null,

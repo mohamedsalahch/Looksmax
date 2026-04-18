@@ -6,7 +6,7 @@ import { deleteProductImage, saveProductImages } from "@/admin/lib/productUpload
 import { getConditionStatusFromScore } from "@/admin/lib/productCondition";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
-import { getSoldQuantityByProductIds } from "@/lib/productInventory";
+import { getSoldQuantityByProductAndSize, getSoldQuantityByProductIds } from "@/lib/productInventory";
 
 function getAvailabilityStatus(params: {
   productType?: string;
@@ -64,7 +64,22 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const soldQuantityMap = await getSoldQuantityByProductIds([id]);
     const soldQuantity = soldQuantityMap.get(id) || 0;
+    const soldBySizeMap = await getSoldQuantityByProductAndSize([id]);
+    const soldBySize = soldBySizeMap.get(id) || new Map<string, number>();
     const inventory = getInventorySnapshot(product, soldQuantity);
+
+    let sizeStockData: Record<string, { fullStock: number; stock: number; soldQuantity: number }> | null = null;
+    if (product.sizeStock && product.sizeStock instanceof Map && product.sizeStock.size > 0) {
+      sizeStockData = {};
+      for (const [size, entry] of product.sizeStock) {
+        const sizeSold = soldBySize.get(size) || 0;
+        sizeStockData[size] = {
+          fullStock: entry.fullStock,
+          stock: entry.stock,
+          soldQuantity: sizeSold,
+        };
+      }
+    }
 
     return NextResponse.json({
       product: {
@@ -73,6 +88,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         availableStock: inventory.availableStock,
         soldQuantity: inventory.soldQuantity,
         fullStock: inventory.fullStock,
+        sizeStock: sizeStockData,
         visibilityStatus: product.isActive === false ? "inactive" : "active",
         availabilityStatus: getAvailabilityStatus({
           productType: product.productType,
@@ -95,6 +111,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!existingProduct) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const soldQuantityMap = await getSoldQuantityByProductIds([id]);
     const soldQuantity = soldQuantityMap.get(id) || 0;
+    const soldBySizeMap = await getSoldQuantityByProductAndSize([id]);
+    const soldBySize = soldBySizeMap.get(id) || new Map<string, number>();
 
     const contentType = req.headers.get("content-type") || "";
     if (contentType.includes("application/json")) {
@@ -104,20 +122,37 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       if (typeof body.isActive === "boolean") {
         update.isActive = body.isActive;
       }
-      const submittedFullStock =
-        typeof body.fullStock !== "undefined" ? body.fullStock : body.stock;
-      if (typeof submittedFullStock !== "undefined") {
-        const rawStock = String(submittedFullStock).trim();
-        if (rawStock.length === 0) {
-          return NextResponse.json({ error: "Please enter a full stock value." }, { status: 400 });
+
+      if (body.sizeStock && typeof body.sizeStock === "object") {
+        const sizeStockMap = new Map<string, { fullStock: number; stock: number }>();
+        let totalStock = 0;
+        for (const [size, qty] of Object.entries(body.sizeStock as Record<string, number>)) {
+          const fullStockForSize = Math.max(0, Number(qty) || 0);
+          const sizeSold = soldBySize.get(size) || 0;
+          const availableForSize = Math.max(0, fullStockForSize - sizeSold);
+          sizeStockMap.set(size, { fullStock: fullStockForSize, stock: availableForSize });
+          totalStock += availableForSize;
         }
-        const nextFullStock = Number(rawStock);
-        if (!Number.isNaN(nextFullStock)) {
-          const normalizedFullStock = Math.max(0, nextFullStock);
-          update.fullStock = normalizedFullStock;
-          update.stock = Math.max(0, normalizedFullStock - soldQuantity);
-          if (normalizedFullStock - soldQuantity > 0) {
-            update.isActive = true;
+        update.sizeStock = sizeStockMap;
+        update.stock = totalStock;
+        update.fullStock = Array.from(sizeStockMap.values()).reduce((sum, e) => sum + e.fullStock, 0);
+        if (totalStock > 0) update.isActive = true;
+      } else {
+        const submittedFullStock =
+          typeof body.fullStock !== "undefined" ? body.fullStock : body.stock;
+        if (typeof submittedFullStock !== "undefined") {
+          const rawStock = String(submittedFullStock).trim();
+          if (rawStock.length === 0) {
+            return NextResponse.json({ error: "Please enter a full stock value." }, { status: 400 });
+          }
+          const nextFullStock = Number(rawStock);
+          if (!Number.isNaN(nextFullStock)) {
+            const normalizedFullStock = Math.max(0, nextFullStock);
+            update.fullStock = normalizedFullStock;
+            update.stock = Math.max(0, normalizedFullStock - soldQuantity);
+            if (normalizedFullStock - soldQuantity > 0) {
+              update.isActive = true;
+            }
           }
         }
       }
@@ -126,6 +161,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       const product = await Product.findByIdAndUpdate(id, update, { new: true }).lean();
       if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 });
       const inventory = getInventorySnapshot(product, soldQuantity);
+
+      let sizeStockData: Record<string, { fullStock: number; stock: number; soldQuantity: number }> | null = null;
+      if (product.sizeStock && product.sizeStock instanceof Map && product.sizeStock.size > 0) {
+        sizeStockData = {};
+        for (const [size, entry] of product.sizeStock) {
+          sizeStockData[size] = {
+            fullStock: entry.fullStock,
+            stock: entry.stock,
+            soldQuantity: soldBySize.get(size) || 0,
+          };
+        }
+      }
+
       return NextResponse.json({
         product: {
           ...product,
@@ -133,6 +181,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           availableStock: inventory.availableStock,
           soldQuantity: inventory.soldQuantity,
           fullStock: inventory.fullStock,
+          sizeStock: sizeStockData,
           visibilityStatus: product.isActive === false ? "inactive" : "active",
           availabilityStatus: getAvailabilityStatus({
             productType: product.productType,
@@ -221,6 +270,36 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       .map((image) => image.url)
       .filter((url) => !existingImages.some((image) => image.url === url));
 
+    const sizes = productType === "perfume" ? [] : parseStringArray(formData.get("sizes"));
+    const rawSizeStock = String(formData.get("sizeStock") || "").trim();
+    let sizeStockMap: Map<string, { fullStock: number; stock: number }> | null = null;
+    let computedStock: number;
+    let computedFullStock: number;
+
+    if (productType !== "perfume" && rawSizeStock && rawSizeStock !== "{}") {
+      try {
+        const parsed = JSON.parse(rawSizeStock) as Record<string, number>;
+        sizeStockMap = new Map();
+        computedStock = 0;
+        computedFullStock = 0;
+        for (const [size, qty] of Object.entries(parsed)) {
+          const fullStockForSize = Math.max(0, Number(qty) || 0);
+          const sizeSold = soldBySize.get(size) || 0;
+          const availableForSize = Math.max(0, fullStockForSize - sizeSold);
+          sizeStockMap.set(size, { fullStock: fullStockForSize, stock: availableForSize });
+          computedStock += availableForSize;
+          computedFullStock += fullStockForSize;
+        }
+      } catch {
+        sizeStockMap = null;
+        computedStock = Math.max(0, nextFullStock - soldQuantity);
+        computedFullStock = nextFullStock;
+      }
+    } else {
+      computedStock = Math.max(0, nextFullStock - soldQuantity);
+      computedFullStock = nextFullStock;
+    }
+
     const body = {
       name: String(formData.get("name") || ""),
       price: Number(formData.get("price") || 0),
@@ -236,10 +315,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       conditionStatus:
         conditionScore === null ? null : getConditionStatusFromScore(conditionScore),
       conditionScore,
-      fullStock: nextFullStock,
-      stock: Math.max(0, nextFullStock - soldQuantity),
+      fullStock: computedFullStock,
+      stock: computedStock,
+      sizeStock: sizeStockMap,
       originPictures: normalizeOriginPictures(productType, fashionSubtype, newOriginPictures),
-      sizes: productType === "perfume" ? [] : parseStringArray(formData.get("sizes")),
+      sizes,
       colors: productType === "perfume" ? [] : parseStringArray(formData.get("colors")),
       cloneSourceName: productType === "perfume" ? String(formData.get("cloneSourceName") || "") : "",
       cloneSourceImage:
@@ -250,7 +330,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       updatedBy: auditActor,
     };
 
-    if (nextFullStock - soldQuantity > 0) {
+    if (computedStock > 0) {
       body.isActive = true;
     }
 
@@ -288,6 +368,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     );
 
     const inventory = getInventorySnapshot(product, soldQuantity);
+
+    let sizeStockData: Record<string, { fullStock: number; stock: number; soldQuantity: number }> | null = null;
+    if (product.sizeStock && product.sizeStock instanceof Map && product.sizeStock.size > 0) {
+      sizeStockData = {};
+      for (const [size, entry] of product.sizeStock) {
+        sizeStockData[size] = {
+          fullStock: entry.fullStock,
+          stock: entry.stock,
+          soldQuantity: soldBySize.get(size) || 0,
+        };
+      }
+    }
+
     return NextResponse.json({
       product: {
         ...product,
@@ -295,6 +388,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         availableStock: inventory.availableStock,
         soldQuantity: inventory.soldQuantity,
         fullStock: inventory.fullStock,
+        sizeStock: sizeStockData,
         visibilityStatus: product.isActive === false ? "inactive" : "active",
         availabilityStatus: getAvailabilityStatus({
           productType: product.productType,

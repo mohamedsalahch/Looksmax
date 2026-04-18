@@ -32,13 +32,13 @@ export function getReservationKey() {
   return next;
 }
 
-export async function reserveProduct(productId: string, quantity = 1) {
+export async function reserveProduct(productId: string, quantity = 1, size?: string) {
   const reservationKey = getReservationKey();
 
   const response = await fetch(`/api/products/${productId}/reserve`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ reservationKey, quantity }),
+    body: JSON.stringify({ reservationKey, quantity, size }),
   });
 
   const data = await response.json();
@@ -51,13 +51,13 @@ export async function reserveProduct(productId: string, quantity = 1) {
   return data as { reservationExpiresAt: string; cartCount?: number };
 }
 
-export async function releaseProductReservation(productId: string) {
+export async function releaseProductReservation(productId: string, size?: string) {
   const reservationKey = getReservationKey();
 
   const response = await fetch(`/api/products/${productId}/reserve`, {
     method: "DELETE",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ reservationKey }),
+    body: JSON.stringify({ reservationKey, size }),
   });
 
   const data = await response.json().catch(() => ({}));

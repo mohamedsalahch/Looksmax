@@ -44,7 +44,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const stockAdjustments: Array<{ productId: string; quantity: number }> = [];
+  const stockAdjustments: Array<{ productId: string; quantity: number; size: string }> = [];
   let couponClaimed: { couponId: string; usageIncremented: boolean } | null = null;
 
   try {
@@ -100,27 +100,54 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      if ((product.stock ?? 0) < quantityToDeduct) {
-        return NextResponse.json(
-          { error: `${product.name} is already sold. Please remove it from your cart.` },
-          { status: 409 }
-        );
+      const itemSize = item.size || "";
+      const hasSizeStock = product.sizeStock && product.sizeStock instanceof Map && product.sizeStock.size > 0;
+
+      if (hasSizeStock && itemSize) {
+        const sizeEntry = (product.sizeStock as Map<string, { fullStock: number; stock: number }>).get(itemSize);
+        if (!sizeEntry || sizeEntry.stock < quantityToDeduct) {
+          return NextResponse.json(
+            { error: `${product.name} (size ${itemSize}) is already sold. Please remove it from your cart.` },
+            { status: 409 }
+          );
+        }
+
+        const sizeStockKey = `sizeStock.${itemSize}.stock`;
+        const updatedProduct = await Product.findOneAndUpdate(
+          { _id: product._id, [sizeStockKey]: { $gte: quantityToDeduct } },
+          { $inc: { [sizeStockKey]: -quantityToDeduct, stock: -quantityToDeduct } },
+          { returnDocument: "after" }
+        ).lean();
+
+        if (!updatedProduct) {
+          return NextResponse.json(
+            { error: `${product.name} (size ${itemSize}) is already sold. Please remove it from your cart.` },
+            { status: 409 }
+          );
+        }
+      } else {
+        if ((product.stock ?? 0) < quantityToDeduct) {
+          return NextResponse.json(
+            { error: `${product.name} is already sold. Please remove it from your cart.` },
+            { status: 409 }
+          );
+        }
+
+        const updatedProduct = await Product.findOneAndUpdate(
+          { _id: product._id, stock: { $gte: quantityToDeduct } },
+          { $inc: { stock: -quantityToDeduct } },
+          { returnDocument: "after" }
+        ).lean();
+
+        if (!updatedProduct) {
+          return NextResponse.json(
+            { error: `${product.name} is already sold. Please remove it from your cart.` },
+            { status: 409 }
+          );
+        }
       }
 
-      const updatedProduct = await Product.findOneAndUpdate(
-        { _id: product._id, stock: { $gte: quantityToDeduct } },
-        { $inc: { stock: -quantityToDeduct } },
-        { returnDocument: "after" }
-      ).lean();
-
-      if (!updatedProduct) {
-        return NextResponse.json(
-          { error: `${product.name} is already sold. Please remove it from your cart.` },
-          { status: 409 }
-        );
-      }
-
-      stockAdjustments.push({ productId: productId, quantity: quantityToDeduct });
+      stockAdjustments.push({ productId: productId, quantity: quantityToDeduct, size: itemSize });
       seenProductIds.add(productId);
 
       const itemTotal = product.price * item.quantity;
@@ -234,9 +261,14 @@ export async function POST(req: NextRequest) {
 
     try {
       for (const adjustment of stockAdjustments) {
+        const sizeStockKey = adjustment.size ? `sizeStock.${adjustment.size}.stock` : null;
+        const update: Record<string, unknown> = { $inc: { stock: adjustment.quantity } };
+        if (sizeStockKey) {
+          (update.$inc as Record<string, number>)[sizeStockKey] = adjustment.quantity;
+        }
         await Product.updateOne(
           { _id: adjustment.productId },
-          { $inc: { stock: adjustment.quantity } }
+          update
         );
       }
     } catch {

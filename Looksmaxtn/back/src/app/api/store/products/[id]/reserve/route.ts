@@ -8,6 +8,14 @@ import mongoose from "mongoose";
 
 const CART_PRESENCE_DURATION_MS = 30 * 60 * 1000;
 
+function getSizeStock(product: { stock?: number; sizeStock?: Map<string, { fullStock: number; stock: number }> | null }, size?: string) {
+  if (size && product.sizeStock && product.sizeStock instanceof Map) {
+    const entry = product.sizeStock.get(size);
+    if (entry) return Math.max(entry.stock ?? 0, 0);
+  }
+  return Math.max(product.stock ?? 0, 0);
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -16,10 +24,11 @@ export async function POST(
     await dbConnect();
 
     const { id } = await params;
-    const { reservationKey, cartKey, quantity } = await req.json();
+    const { reservationKey, cartKey, quantity, size } = await req.json();
     const session = await getSession();
     const key = session?.userId ? `user:${session.userId}` : cartKey || reservationKey;
     const requestedQuantity = Math.max(1, Number(quantity) || 1);
+    const normalizedSize = size || "";
 
     if (!key) {
       return NextResponse.json({ error: "Missing cart key" }, { status: 400 });
@@ -34,28 +43,44 @@ export async function POST(
 
     const [product, activeReservations] = await Promise.all([
       Product.findById(id).lean(),
-      ProductReservation.find({ product: id, reservedUntil: { $gt: now } })
-        .select("reservationKey quantity")
+      ProductReservation.find({
+        product: id,
+        reservedUntil: { $gt: now },
+        ...(normalizedSize ? { size: normalizedSize } : {}),
+      })
+        .select("reservationKey quantity size")
         .lean(),
     ]);
 
-    if (!product || Math.max(product.stock ?? 0, 0) <= 0) {
+    if (!product) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
-    if (activeOrderHold && Math.max(product.stock ?? 0, 0) <= 0) {
-      return NextResponse.json(
-        { error: "This product is already reserved in an active order." },
-        { status: 409 }
-      );
+
+    const sizeStock = getSizeStock(product, normalizedSize);
+    const hasSizeStock = product.sizeStock && product.sizeStock instanceof Map && product.sizeStock.size > 0;
+
+    if (hasSizeStock && normalizedSize) {
+      if (sizeStock <= 0) {
+        return NextResponse.json({ error: "This size is no longer available." }, { status: 404 });
+      }
+      if (activeOrderHold && sizeStock <= 0) {
+        return NextResponse.json(
+          { error: "This product is already reserved in an active order." },
+          { status: 409 }
+        );
+      }
+    } else if (Math.max(product.stock ?? 0, 0) <= 0) {
+      return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
 
     let cartPresence: { reservedUntil?: Date } | null = null;
     try {
       cartPresence = await ProductReservation.findOneAndUpdate(
-        { product: id, reservationKey: key },
+        { product: id, reservationKey: key, size: normalizedSize },
         {
           product: id,
           reservationKey: key,
+          size: normalizedSize,
           quantity: requestedQuantity,
           reservedUntil,
         },
@@ -75,10 +100,11 @@ export async function POST(
       await cleanupProductReservationIndexes(mongoose);
 
       cartPresence = await ProductReservation.findOneAndUpdate(
-        { product: id, reservationKey: key },
+        { product: id, reservationKey: key, size: normalizedSize },
         {
           product: id,
           reservationKey: key,
+          size: normalizedSize,
           quantity: requestedQuantity,
           reservedUntil,
         },
@@ -120,15 +146,16 @@ export async function DELETE(
     await dbConnect();
 
     const { id } = await params;
-    const { reservationKey, cartKey } = await req.json();
+    const { reservationKey, cartKey, size } = await req.json();
     const session = await getSession();
     const key = session?.userId ? `user:${session.userId}` : cartKey || reservationKey;
+    const normalizedSize = size || "";
 
     if (!key) {
       return NextResponse.json({ error: "Missing cart key" }, { status: 400 });
     }
 
-    await ProductReservation.deleteOne({ product: id, reservationKey: key });
+    await ProductReservation.deleteOne({ product: id, reservationKey: key, size: normalizedSize });
 
     const cartCount = await ProductReservation.aggregate<{ _id: null; cartCount: number }>([
       {

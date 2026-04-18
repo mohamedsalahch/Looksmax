@@ -122,9 +122,15 @@ export async function PUT(
       for (const item of existingOrder.items) {
         const quantityToRestore = item.quantity || 0;
         if (quantityToRestore > 0) {
+          const itemSize = item.size || "";
+          const sizeStockKey = itemSize ? `sizeStock.${itemSize}.stock` : null;
+          const update: Record<string, unknown> = { $inc: { stock: quantityToRestore } };
+          if (sizeStockKey) {
+            (update.$inc as Record<string, number>)[sizeStockKey] = quantityToRestore;
+          }
           await Product.updateOne(
             { _id: item.product },
-            { $inc: { stock: quantityToRestore } }
+            update
           );
         }
       }

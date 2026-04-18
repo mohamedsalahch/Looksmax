@@ -18,7 +18,7 @@ export async function GET(
     const [product, activeReservations] = await Promise.all([
       Product.findById(id).lean(),
       ProductReservation.find({ product: id, reservedUntil: { $gt: now } })
-        .select("reservationKey quantity")
+        .select("reservationKey quantity size")
         .lean(),
     ]);
     const activeOrderHoldMap = await getActiveOrderHoldMapByProductIds([id], session?.userId || null);
@@ -35,11 +35,35 @@ export async function GET(
     const stock = Math.max(product.stock ?? 0, 0);
     const cartReservedElsewhere = reservedByOthersQuantity > 0 && reservedByOthersQuantity >= stock;
     const blockedByOrder = Boolean(activeOrderHold) && stock <= 0;
-    if (stock <= 0 && !blockedByOrder) {
+
+    const hasSizeStock = product.sizeStock && product.sizeStock instanceof Map && product.sizeStock.size > 0;
+    const anySizeAvailable = hasSizeStock
+      ? Array.from((product.sizeStock as Map<string, { stock: number }>).values()).some((e) => Math.max(e.stock ?? 0, 0) > 0)
+      : stock > 0;
+
+    if (!anySizeAvailable && !blockedByOrder) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
     const reservedElsewhere = cartReservedElsewhere;
     const ownedReservation = ownedReservationQuantity > 0;
+
+    let sizeAvailability: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null = null;
+    if (hasSizeStock) {
+      sizeAvailability = {};
+      const sizeMap = product.sizeStock as Map<string, { fullStock: number; stock: number }>;
+      for (const [sz, entry] of sizeMap) {
+        const sizeReservations = activeReservations.filter((r) => (r.size || "") === sz);
+        const sizeReservedByOthers = sizeReservations
+          .filter((r) => r.reservationKey !== reservationKey)
+          .reduce((sum, r) => sum + Math.max(1, Number(r.quantity) || 1), 0);
+        const sizeStock = Math.max(entry.stock ?? 0, 0);
+        sizeAvailability[sz] = {
+          stock: sizeStock,
+          available: product.isActive !== false && sizeStock > 0,
+          reservedElsewhere: sizeReservedByOthers > 0 && sizeReservedByOthers >= sizeStock,
+        };
+      }
+    }
 
     return NextResponse.json({
       product: {
@@ -50,6 +74,7 @@ export async function GET(
         reservedElsewhere,
         ownedReservation,
         reservationExpiresAt: null,
+        sizeAvailability,
       },
     });
   } catch (error: unknown) {

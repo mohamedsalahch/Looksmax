@@ -96,9 +96,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
         const quantityToRestore = item.quantity || 0;
         if (quantityToRestore > 0) {
+          const itemSize = (item as { size?: string }).size || "";
+          const sizeStockKey = itemSize ? `sizeStock.${itemSize}.stock` : null;
+          const update: Record<string, unknown> = { $inc: { stock: quantityToRestore } };
+          if (sizeStockKey) {
+            (update.$inc as Record<string, number>)[sizeStockKey] = quantityToRestore;
+          }
           await Product.updateOne(
             { _id: item.product },
-            { $inc: { stock: quantityToRestore } }
+            update
           );
         }
       }
@@ -199,9 +205,15 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 
         const quantityToRestore = item.quantity || 0;
         if (quantityToRestore > 0) {
+          const itemSize = (item as { size?: string }).size || "";
+          const sizeStockKey = itemSize ? `sizeStock.${itemSize}.stock` : null;
+          const update: Record<string, unknown> = { $inc: { stock: quantityToRestore } };
+          if (sizeStockKey) {
+            (update.$inc as Record<string, number>)[sizeStockKey] = quantityToRestore;
+          }
           await Product.updateOne(
             { _id: item.product },
-            { $inc: { stock: quantityToRestore } }
+            update
           );
         }
       }

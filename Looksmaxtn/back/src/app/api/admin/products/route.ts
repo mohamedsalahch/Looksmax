@@ -6,7 +6,7 @@ import { saveProductImages } from "@/admin/lib/productUploads";
 import { getConditionStatusFromScore } from "@/admin/lib/productCondition";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
-import { getSoldQuantityByProductIds } from "@/lib/productInventory";
+import { getSoldQuantityByProductAndSize, getSoldQuantityByProductIds } from "@/lib/productInventory";
 
 function getAvailabilityStatus(params: {
   productType?: string;
@@ -71,6 +71,22 @@ function getProductPayload(
   const sizes = productType === "perfume" ? [] : parseStringArray(formData.get("sizes"));
   const colors = productType === "perfume" ? [] : parseStringArray(formData.get("colors"));
 
+  const rawSizeStock = String(formData.get("sizeStock") || "").trim();
+  let sizeStockMap: Map<string, { fullStock: number; stock: number }> | null = null;
+  if (productType !== "perfume" && rawSizeStock && rawSizeStock !== "{}") {
+    try {
+      const parsed = JSON.parse(rawSizeStock) as Record<string, number>;
+      sizeStockMap = new Map(
+        Object.entries(parsed).map(([size, qty]) => [
+          size,
+          { fullStock: Math.max(0, Number(qty) || 0), stock: Math.max(0, Number(qty) || 0) },
+        ])
+      );
+    } catch {
+      sizeStockMap = null;
+    }
+  }
+
   return {
     name: String(formData.get("name") || ""),
     price: Number(formData.get("price") || 0),
@@ -79,6 +95,7 @@ function getProductPayload(
     description: String(formData.get("description") || ""),
     brand: String(formData.get("brand") || "LOOKSMAX"),
     stock: Number.isNaN(rawStock) ? 0 : Math.max(0, rawStock),
+    sizeStock: sizeStockMap,
     tag: String(formData.get("tag") || ""),
     productType,
     fashionSubtype,
@@ -113,23 +130,37 @@ export async function GET(req: NextRequest) {
     if (search) filter.name = { $regex: search, $options: "i" };
 
     const products = await Product.find(filter).sort({ createdAt: -1 }).lean();
-    const soldQuantityMap = await getSoldQuantityByProductIds(
-      products.map((product) => product._id.toString())
-    );
+    const productIds = products.map((product) => product._id.toString());
+    const soldQuantityMap = await getSoldQuantityByProductIds(productIds);
+    const soldBySizeMap = await getSoldQuantityByProductAndSize(productIds);
 
     return NextResponse.json({
-      products: products.map((product) => ({
-        ...product,
-        ...(() => {
-          const soldQuantity = soldQuantityMap.get(product._id.toString()) || 0;
-          const inventory = getInventorySnapshot(product, soldQuantity);
-          return {
-            stock: inventory.availableStock,
-            availableStock: inventory.availableStock,
-            soldQuantity: inventory.soldQuantity,
-            fullStock: inventory.fullStock,
-          };
-        })(),
+      products: products.map((product) => {
+        const productId = product._id.toString();
+        const soldQuantity = soldQuantityMap.get(productId) || 0;
+        const soldBySize = soldBySizeMap.get(productId) || new Map<string, number>();
+        const inventory = getInventorySnapshot(product, soldQuantity);
+
+        let sizeStockData: Record<string, { fullStock: number; stock: number; soldQuantity: number }> | null = null;
+        if (product.sizeStock && product.sizeStock instanceof Map && product.sizeStock.size > 0) {
+          sizeStockData = {};
+          for (const [size, entry] of product.sizeStock) {
+            const sizeSold = soldBySize.get(size) || 0;
+            sizeStockData[size] = {
+              fullStock: entry.fullStock,
+              stock: entry.stock,
+              soldQuantity: sizeSold,
+            };
+          }
+        }
+
+        return {
+          ...product,
+          stock: inventory.availableStock,
+          availableStock: inventory.availableStock,
+          soldQuantity: inventory.soldQuantity,
+          fullStock: inventory.fullStock,
+          sizeStock: sizeStockData,
         availabilityStatus: getAvailabilityStatus({
           productType: product.productType,
           stock: Math.max(product.stock ?? 0, 0),
@@ -201,10 +232,21 @@ export async function POST(req: NextRequest) {
     }
     const fullStock = Math.max(0, Number(rawFullStock));
 
+    let stock = fullStock;
+    if (body.sizeStock && body.sizeStock instanceof Map && body.sizeStock.size > 0) {
+      stock = 0;
+      for (const entry of body.sizeStock.values()) {
+        stock += entry.stock;
+      }
+      body.fullStock = stock;
+    } else {
+      body.sizeStock = null;
+      body.fullStock = fullStock;
+    }
+
     const product = await Product.create({
       ...body,
-      stock: fullStock,
-      fullStock,
+      stock,
       createdBy: auditActor,
       updatedBy: auditActor,
     });

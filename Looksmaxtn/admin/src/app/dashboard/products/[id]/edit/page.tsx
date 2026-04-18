@@ -70,6 +70,7 @@ const initialForm = {
   conditionScore: "7",
   productType: "fashion" as ProductType,
   fashionSubtype: "clothes" as FashionSubtype,
+  sizeStock: {} as Record<string, string>,
   originPictures: {
     front: "",
     back: "",
@@ -259,6 +260,12 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         if (!d.product) return;
 
         const p = d.product;
+        const sizeStockData: Record<string, string> = {};
+        if (p.sizeStock && typeof p.sizeStock === "object") {
+          for (const [size, entry] of Object.entries(p.sizeStock as Record<string, { fullStock: number; stock: number; soldQuantity: number }>)) {
+            sizeStockData[size] = String(entry.fullStock ?? 0);
+          }
+        }
         setForm({
           name: p.name,
           price: p.price.toString(),
@@ -271,6 +278,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           conditionScore: String(p.conditionScore ?? 7),
           productType: p.productType === "perfume" ? "perfume" : "fashion",
           fashionSubtype: p.fashionSubtype || "clothes",
+          sizeStock: sizeStockData,
           originPictures: {
             front: p.originPictures?.front || "",
             back: p.originPictures?.back || "",
@@ -689,6 +697,19 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       body.append("productType", form.productType);
       body.append("fashionSubtype", form.fashionSubtype);
       body.append("fullStock", form.stock);
+      const sizes = form.productType === "perfume"
+        ? []
+        : form.sizes.split(",").map((s) => s.trim()).filter(Boolean);
+      if (sizes.length > 0 && Object.keys(form.sizeStock).length > 0) {
+        const sizeStockPayload: Record<string, number> = {};
+        for (const size of sizes) {
+          const qty = Number(form.sizeStock[size] || 0);
+          if (qty > 0) sizeStockPayload[size] = qty;
+        }
+        if (Object.keys(sizeStockPayload).length > 0) {
+          body.append("sizeStock", JSON.stringify(sizeStockPayload));
+        }
+      }
       body.append("conditionScore", form.conditionScore);
       body.append("originPictureFront", form.originPictures.front);
       body.append("originPictureBack", form.originPictures.back);
@@ -836,18 +857,46 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               />
             </div>
             <div>
-              <FieldLabel>Full Stock</FieldLabel>
-              <input
-                type="number"
-                min="0"
-                value={form.stock}
-                onChange={(e) => setForm({ ...form, stock: e.target.value })}
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-                placeholder="Full stock"
-              />
-              <p className="mt-1 text-[10px] text-text-secondary">
-                Full stock is the total inventory you set. Sold units are shown in the stock panel.
-              </p>
+              <FieldLabel>Stock</FieldLabel>
+              {form.productType !== "perfume" && form.sizes.trim() ? (
+                <div className="space-y-2">
+                  {form.sizes.split(",").map((s) => s.trim()).filter(Boolean).map((size) => (
+                    <div key={size} className="flex items-center gap-2">
+                      <span className="text-xs text-text-secondary w-12 text-right">{size}</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={form.sizeStock[size] || "0"}
+                        onChange={(e) =>
+                          setForm({
+                            ...form,
+                            sizeStock: { ...form.sizeStock, [size]: e.target.value },
+                          })
+                        }
+                        className="flex-1 bg-bg-secondary border border-border px-3 py-2 text-sm focus:border-accent transition-colors"
+                        placeholder={`Stock for ${size}`}
+                      />
+                    </div>
+                  ))}
+                  <p className="text-[10px] text-text-secondary">
+                    Set stock per size. Total stock is computed automatically.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.stock}
+                    onChange={(e) => setForm({ ...form, stock: e.target.value })}
+                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                    placeholder="Full stock"
+                  />
+                  <p className="mt-1 text-[10px] text-text-secondary">
+                    Full stock is the total inventory you set. Sold units are shown in the stock panel.
+                  </p>
+                </>
+              )}
             </div>
             <div className="rounded-2xl border border-border bg-bg-secondary p-4 space-y-3 xl:col-span-3">
               <div>
