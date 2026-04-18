@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import mongoose from "mongoose";
 import dbConnect from "@/store/lib/mongodb";
 import User from "@/store/models/User";
 import { createToken, getSession, getTokenCookieOptions } from "@/store/lib/auth";
@@ -22,9 +23,10 @@ export async function POST() {
     }
 
     await dbConnect();
-    const user = await User.findById(session.userId)
-      .select("name email role address bodyProfile isBlocked googleId sessionVersion")
-      .lean();
+    const user = await User.collection.findOne(
+      { _id: new mongoose.Types.ObjectId(session.userId) },
+      { projection: { name: 1, email: 1, role: 1, address: 1, bodyProfile: 1, isBlocked: 1, googleId: 1, sessionVersion: 1 } }
+    );
 
     if (!user || user.isBlocked) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -33,7 +35,7 @@ export async function POST() {
     const token = await createToken({
       userId: session.userId,
       role: session.role,
-      sessionVersion: user.sessionVersion ?? 0,
+      sessionVersion: Number(user.sessionVersion ?? 0),
     });
     const cookieOpts = getTokenCookieOptions();
     const res = NextResponse.json({

@@ -79,6 +79,7 @@ const userSchema = new Schema<IUser>(
     passwordResetTokenHash: { type: String, default: null },
     passwordResetExpiresAt: { type: Date, default: null },
     passwordResetSentAt: { type: Date, default: null },
+    sessionVersion: { type: Number, default: 0 },
     address: { type: addressSchema, default: () => ({}) },
     bodyProfile: { type: bodyProfileSchema, default: () => ({}) },
   },

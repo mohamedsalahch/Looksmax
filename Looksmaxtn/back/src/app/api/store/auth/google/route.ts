@@ -142,9 +142,9 @@ export async function POST(req: NextRequest) {
       await user.save();
     }
 
-    await User.updateOne({ _id: user._id }, { $inc: { sessionVersion: 1 } });
-    const updatedUser = await User.findById(user._id).select("sessionVersion").lean();
-    const sessionVersion = updatedUser?.sessionVersion ?? 0;
+    await User.collection.updateOne({ _id: user._id }, { $inc: { sessionVersion: 1 } });
+    const updatedUser = await User.collection.findOne({ _id: user._id }, { projection: { sessionVersion: 1 } });
+    const sessionVersion = Number(updatedUser?.sessionVersion ?? 0);
 
     const token = await createToken({ userId: user._id.toString(), role: user.role, sessionVersion });
     const cookieOpts = getTokenCookieOptions();

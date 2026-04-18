@@ -59,9 +59,13 @@ export async function getSession(): Promise<JWTPayload | null> {
     const payload = await verifyToken(bearerToken);
     if (!payload) return null;
     await dbConnect();
-    const user = await User.findById(payload.userId).select("_id isBlocked sessionVersion").lean();
+    const user = await User.collection.findOne(
+      { _id: new mongoose.Types.ObjectId(payload.userId) },
+      { projection: { isBlocked: 1, sessionVersion: 1 } }
+    );
     if (!user || user.isBlocked) return null;
-    if (payload.sessionVersion !== undefined && payload.sessionVersion !== user.sessionVersion) return null;
+    const dbVersion = Number(user.sessionVersion ?? 0);
+    if (payload.sessionVersion !== undefined && payload.sessionVersion !== dbVersion) return null;
     return payload;
   }
 
@@ -71,9 +75,13 @@ export async function getSession(): Promise<JWTPayload | null> {
   const payload = await verifyToken(token);
   if (!payload) return null;
   await dbConnect();
-  const user = await User.findById(payload.userId).select("_id isBlocked sessionVersion").lean();
+  const user = await User.collection.findOne(
+    { _id: new mongoose.Types.ObjectId(payload.userId) },
+    { projection: { isBlocked: 1, sessionVersion: 1 } }
+  );
   if (!user || user.isBlocked) return null;
-  if (payload.sessionVersion !== undefined && payload.sessionVersion !== user.sessionVersion) return null;
+  const dbVersion = Number(user.sessionVersion ?? 0);
+  if (payload.sessionVersion !== undefined && payload.sessionVersion !== dbVersion) return null;
   return payload;
 }
 
