@@ -12,6 +12,8 @@ function uniqueSortedValues(values: string[]) {
 export async function GET(req: NextRequest) {
   try {
     await dbConnect();
+    const session = await getSession();
+    const reservationKey = session?.userId ? `user:${session.userId}` : null;
     const { searchParams } = new URL(req.url);
     const category = searchParams.get("category");
     const search = searchParams.get("search");
@@ -43,19 +45,32 @@ export async function GET(req: NextRequest) {
         .sort(category === "new" ? { createdAt: -1 } : { createdAt: -1 })
         .lean(),
       ProductReservation.find({ reservedUntil: { $gt: now } })
-        .select("product reservedUntil")
+        .select("product reservationKey reservedUntil")
         .lean(),
     ]);
 
-    const cartCountMap = activeReservations.reduce((map, reservation) => {
+    const reservationsByProduct = activeReservations.reduce((map, reservation) => {
       const productId = reservation.product.toString();
-      map.set(productId, (map.get(productId) || 0) + 1);
+      const current = map.get(productId) || [];
+      current.push({
+        reservationKey: reservation.reservationKey,
+        reservedUntil: reservation.reservedUntil,
+      });
+      map.set(productId, current);
       return map;
-    }, new Map<string, number>());
+    }, new Map<string, Array<{ reservationKey: string; reservedUntil: Date }>>());
     const productsWithAvailability = products.map((product) => ({
       ...product,
       stock: Math.max(product.stock ?? 0, 0),
-      cartCount: cartCountMap.get(product._id.toString()) || 0,
+      cartCount: (reservationsByProduct.get(product._id.toString()) || []).length,
+      reservedElsewhere: (reservationsByProduct.get(product._id.toString()) || []).some(
+        (reservation) => reservation.reservationKey !== reservationKey
+      ),
+      ownedReservation: reservationKey
+        ? (reservationsByProduct.get(product._id.toString()) || []).some(
+            (reservation) => reservation.reservationKey === reservationKey
+          )
+        : false,
     }));
 
     const searchMatchedProducts = search

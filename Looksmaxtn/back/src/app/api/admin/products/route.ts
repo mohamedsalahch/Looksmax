@@ -6,6 +6,7 @@ import { saveProductImages } from "@/admin/lib/productUploads";
 import { getConditionStatusFromScore } from "@/admin/lib/productCondition";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
+import { getSoldQuantityByProductIds } from "@/lib/productInventory";
 
 function getAvailabilityStatus(params: {
   productType?: string;
@@ -43,6 +44,16 @@ function normalizeOriginPictures(
   };
 }
 
+function getInventorySnapshot(product: { stock?: number; fullStock?: number }, soldQuantity: number) {
+  const availableStock = Math.max(product.stock ?? 0, 0);
+  const fullStock =
+    typeof product.fullStock === "number"
+      ? Math.max(product.fullStock, 0)
+      : Math.max(availableStock + soldQuantity, 0);
+
+  return { availableStock, fullStock, soldQuantity };
+}
+
 function getProductPayload(
   formData: FormData,
   imagePaths: string[],
@@ -53,7 +64,8 @@ function getProductPayload(
   const productType = normalizeProductType(String(formData.get("productType") || "fashion"));
   const fashionSubtype =
     productType === "fashion" ? String(formData.get("fashionSubtype") || "clothes") : null;
-  const rawStock = Number(formData.get("stock") || 0);
+  const rawStockValue = String(formData.get("stock") ?? "").trim();
+  const rawStock = rawStockValue.length > 0 ? Number(rawStockValue) : NaN;
   const conditionScore =
     productType === "perfume" ? null : Number(formData.get("conditionScore") || 7);
   const sizes = productType === "perfume" ? [] : parseStringArray(formData.get("sizes"));
@@ -66,7 +78,7 @@ function getProductPayload(
     categories: parseStringArray(formData.get("categories")),
     description: String(formData.get("description") || ""),
     brand: String(formData.get("brand") || "LOOKSMAX"),
-    stock: Math.max(0, rawStock),
+    stock: Number.isNaN(rawStock) ? 0 : Math.max(0, rawStock),
     tag: String(formData.get("tag") || ""),
     productType,
     fashionSubtype,
@@ -101,11 +113,23 @@ export async function GET(req: NextRequest) {
     if (search) filter.name = { $regex: search, $options: "i" };
 
     const products = await Product.find(filter).sort({ createdAt: -1 }).lean();
+    const soldQuantityMap = await getSoldQuantityByProductIds(
+      products.map((product) => product._id.toString())
+    );
 
     return NextResponse.json({
       products: products.map((product) => ({
         ...product,
-        stock: Math.max(product.stock ?? 0, 0),
+        ...(() => {
+          const soldQuantity = soldQuantityMap.get(product._id.toString()) || 0;
+          const inventory = getInventorySnapshot(product, soldQuantity);
+          return {
+            stock: inventory.availableStock,
+            availableStock: inventory.availableStock,
+            soldQuantity: inventory.soldQuantity,
+            fullStock: inventory.fullStock,
+          };
+        })(),
         availabilityStatus: getAvailabilityStatus({
           productType: product.productType,
           stock: Math.max(product.stock ?? 0, 0),
@@ -171,9 +195,16 @@ export async function POST(req: NextRequest) {
       cloneSourceImagePath,
       originPictures
     );
+    const rawFullStock = String(formData.get("stock") ?? "").trim();
+    if (rawFullStock.length === 0) {
+      return NextResponse.json({ error: "Please enter a full stock value." }, { status: 400 });
+    }
+    const fullStock = Math.max(0, Number(rawFullStock));
 
     const product = await Product.create({
       ...body,
+      stock: fullStock,
+      fullStock,
       createdBy: auditActor,
       updatedBy: auditActor,
     });

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
 import { getCartItemProductId } from "@/lib/cartItem";
-import { reserveProduct, subscribeToReservationChanges } from "@/lib/reservations";
+import { reserveProduct } from "@/lib/reservations";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { getConditionColor, getConditionLabel, getConditionPercent } from "@/lib/productCondition";
 import { queueStudioAssignment } from "@/lib/studioAssignment";
@@ -27,6 +27,7 @@ export default function ProductInfo({
     description: string;
     reservationExpiresAt?: string | null;
     cartCount?: number;
+    reservedElsewhere?: boolean;
     conditionScore?: number | null;
     conditionStatus?: string | null;
     productType?: ProductType;
@@ -44,7 +45,7 @@ export default function ProductInfo({
   const [addedToCart, setAddedToCart] = useState(false);
   const [currentStock, setCurrentStock] = useState(() => product.stock);
   const [reservationError, setReservationError] = useState("");
-  const [cartCount, setCartCount] = useState(() => product.cartCount || 0);
+  const [reservedElsewhere, setReservedElsewhere] = useState(() => Boolean(product.reservedElsewhere));
   const [selectedQuantity, setSelectedQuantity] = useState(1);
   const availableSizes = (product.sizes?.length ? product.sizes : product.size ? [product.size] : []).filter(
     (entry) => Boolean(entry.trim())
@@ -55,7 +56,7 @@ export default function ProductInfo({
   const isPerfume = product.productType === "perfume";
   const isSoldOut = currentStock < 1;
   const isInLocalCart = product.id ? items.some((item) => getCartItemProductId(item.id) === product.id) : false;
-  const showReservedElsewhere = cartCount > (isInLocalCart ? 1 : 0);
+  const showReservedElsewhere = reservedElsewhere && !isInLocalCart;
 
   useEffect(() => {
     if (!product.id) return;
@@ -68,7 +69,7 @@ export default function ProductInfo({
         .then((data) => {
           if (cancelled || !data.product) return;
           setCurrentStock(data.product.stock ?? 0);
-          setCartCount(data.product.cartCount ?? 0);
+          setReservedElsewhere(Boolean(data.product.reservedElsewhere));
         })
         .catch(() => {});
     };
@@ -95,15 +96,8 @@ export default function ProductInfo({
   }, [availableSizes.join("|")]);
 
   useEffect(() => {
-    if (!product.id) return;
-
-    return subscribeToReservationChanges(({ productId, cartCount: nextCartCount }) => {
-      if (productId !== product.id) return;
-      if (typeof nextCartCount === "number") {
-        setCartCount(nextCartCount);
-      }
-    });
-  }, [product.id]);
+    setReservedElsewhere(Boolean(product.reservedElsewhere));
+  }, [product.reservedElsewhere]);
 
   const handleAddToCart = async () => {
     setReservationError("");
@@ -111,7 +105,6 @@ export default function ProductInfo({
 
     try {
       const reservation = await reserveProduct(product.id || "unknown");
-      setCartCount(reservation.cartCount ?? cartCount + 1);
       addItem({
         id: product.id || "unknown",
         name: product.name,
@@ -140,7 +133,6 @@ export default function ProductInfo({
 
     try {
       const reservation = await reserveProduct(product.id || "unknown");
-      setCartCount(reservation.cartCount ?? cartCount + 1);
       addItem({
         id: product.id || "unknown",
         name: product.name,

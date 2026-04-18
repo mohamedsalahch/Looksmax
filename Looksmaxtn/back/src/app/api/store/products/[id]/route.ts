@@ -12,22 +12,32 @@ export async function GET(
     await dbConnect();
     const { id } = await params;
     const now = new Date();
+    const session = await getSession();
+    const reservationKey = session?.userId ? `user:${session.userId}` : null;
     const [product, activeCartPresences] = await Promise.all([
       Product.findById(id).lean(),
       ProductReservation.find({ product: id, reservedUntil: { $gt: now } })
-        .select("product reservedUntil")
+        .select("product reservationKey reservedUntil")
         .lean(),
     ]);
     if (!product || product.isActive === false) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
     const cartCount = activeCartPresences.length;
+    const reservedElsewhere = activeCartPresences.some(
+      (reservation) => reservation.reservationKey !== reservationKey
+    );
+    const ownedReservation = reservationKey
+      ? activeCartPresences.some((reservation) => reservation.reservationKey === reservationKey)
+      : false;
 
     return NextResponse.json({
       product: {
         ...product,
         stock: Math.max(product.stock ?? 0, 0),
         cartCount,
+        reservedElsewhere,
+        ownedReservation,
         reservationExpiresAt: null,
       },
     });

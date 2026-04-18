@@ -1,6 +1,7 @@
 import ProductImageGallery from "@/components/ProductImageGallery";
 import ProductInfo from "@/components/ProductInfo";
 import RelatedProducts from "@/components/RelatedProducts";
+import { getSession } from "@/lib/auth";
 import dbConnect from "@/lib/mongodb";
 import Product from "@/models/Product";
 import ProductReservation from "@/models/ProductReservation";
@@ -15,15 +16,16 @@ const defaultProduct: {
   price: string;
   brand: string;
   image?: string;
-  size?: string;
-  sizes?: string[];
-  stock: number;
-  description: string;
+    size?: string;
+    sizes?: string[];
+    stock: number;
+    description: string;
     images: { url: string; isMain: boolean }[];
     reservationExpiresAt: string | null;
     cartCount?: number;
+    reservedElsewhere?: boolean;
     conditionScore?: number | null;
-  conditionStatus?: string | null;
+    conditionStatus?: string | null;
   productType: "fashion" | "perfume" | "clothing" | "shoes";
   fashionSubtype?: "clothes" | "shoes" | null;
   originPictures?: {
@@ -73,13 +75,18 @@ export default async function ProductDetailPage({
   try {
     await dbConnect();
     const now = new Date();
+    const session = await getSession();
+    const reservationKey = session?.userId ? `user:${session.userId}` : null;
     const [dbProduct, activeCartPresences] = await Promise.all([
       Product.findById(id).lean(),
       ProductReservation.find({ product: id, reservedUntil: { $gt: now } })
-        .select("product reservedUntil")
+        .select("product reservationKey reservedUntil")
         .lean(),
     ]);
     const cartCount = activeCartPresences.length;
+    const reservedElsewhere = activeCartPresences.some(
+      (reservation) => reservation.reservationKey !== reservationKey
+    );
     if (dbProduct && dbProduct.isActive === false) {
       notFound();
     }
@@ -96,6 +103,7 @@ export default async function ProductDetailPage({
         images: dbProduct.images || [],
         reservationExpiresAt: null,
         cartCount,
+        reservedElsewhere,
         conditionScore: dbProduct.conditionScore ?? null,
         conditionStatus: dbProduct.conditionStatus || null,
         productType: dbProduct.productType || "fashion",

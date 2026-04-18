@@ -5,10 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
 import { getCartItemProductId } from "@/lib/cartItem";
-import {
-  reserveProduct,
-  subscribeToReservationChanges,
-} from "@/lib/reservations";
+import { reserveProduct } from "@/lib/reservations";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { getConditionColor, getConditionLabel, getConditionPercent } from "@/lib/productCondition";
 import { queueStudioAssignment } from "@/lib/studioAssignment";
@@ -24,6 +21,7 @@ interface ProductCardProps {
   image?: string;
   stock?: number;
   cartCount?: number;
+  reservedElsewhere?: boolean;
   conditionScore?: number | null;
   conditionStatus?: string | null;
   productType?: ProductType;
@@ -52,7 +50,7 @@ export default function ProductCard({
   tag,
   image,
   stock = 1,
-  cartCount: initialCartCount = 0,
+  reservedElsewhere: initialReservedElsewhere = false,
   conditionScore = 7,
   conditionStatus = "used",
   productType = "fashion",
@@ -68,7 +66,6 @@ export default function ProductCard({
   const availableSizes = (sizes?.length ? sizes : size ? [size] : []).filter((entry) => Boolean(entry.trim()));
   const [selectedSize, setSelectedSize] = useState(availableSizes[0] || "");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [cartCount, setCartCount] = useState(initialCartCount);
   const [addedToCart, setAddedToCart] = useState(false);
   const [clonePreview, setClonePreview] = useState({ visible: false, x: 0, y: 0 });
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -80,7 +77,7 @@ export default function ProductCard({
   const isSoldOut = stock < 1;
   const hasSizes = !isPerfume && availableSizes.length > 0;
   const isInLocalCart = items.some((item) => getCartItemProductId(item.id) === id);
-  const showReservedElsewhere = cartCount > (isInLocalCart ? 1 : 0);
+  const showReservedElsewhere = initialReservedElsewhere && !isInLocalCart;
 
   useEffect(() => {
     if (availableSizes.length === 0) {
@@ -91,19 +88,6 @@ export default function ProductCard({
     setSelectedSize((current) => (availableSizes.includes(current) ? current : availableSizes[0]));
   }, [availableSizes.join("|")]);
 
-  useEffect(() => {
-    setCartCount(initialCartCount);
-  }, [initialCartCount]);
-
-  useEffect(() => {
-    return subscribeToReservationChanges(({ productId, cartCount: nextCartCount }) => {
-      if (productId !== id) return;
-      if (typeof nextCartCount === "number") {
-        setCartCount(nextCartCount);
-      }
-    });
-  }, [id]);
-
   const handleQuickAdd = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -111,7 +95,6 @@ export default function ProductCard({
 
     try {
       const reservation = await reserveProduct(id);
-      setCartCount(reservation.cartCount ?? cartCount + 1);
       addItem({
         id,
         name,
@@ -142,7 +125,6 @@ export default function ProductCard({
 
     try {
       const reservation = await reserveProduct(id);
-      setCartCount(reservation.cartCount ?? cartCount + 1);
       addItem({
         id,
         name,

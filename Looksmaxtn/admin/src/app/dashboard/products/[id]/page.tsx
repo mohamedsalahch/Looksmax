@@ -26,6 +26,9 @@ interface ProductDetail {
   sizes?: string[];
   colors?: string[];
   stock: number;
+  availableStock?: number;
+  soldQuantity?: number;
+  fullStock?: number;
   images?: ProductImage[];
   tag?: string;
   brand: string;
@@ -73,8 +76,17 @@ function getProductStatus(product: ProductDetail) {
 }
 
 function formatStockLabel(product: ProductDetail) {
-  const unitLabel = product.productType === "perfume" ? "bottle" : "unit";
-  return `${product.stock} ${unitLabel}${product.stock === 1 ? "" : "s"}`;
+  const available = Math.max(product.availableStock ?? product.stock ?? 0, 0);
+  const sold = Math.max(product.soldQuantity ?? 0, 0);
+  const full = Math.max(product.fullStock ?? available + sold, 0);
+  return `Available: ${available} · Sold: ${sold} · Full: ${full}`;
+}
+
+function getInventorySummary(product: ProductDetail) {
+  const available = Math.max(product.availableStock ?? product.stock ?? 0, 0);
+  const sold = Math.max(product.soldQuantity ?? 0, 0);
+  const full = Math.max(product.fullStock ?? available + sold, 0);
+  return { available, sold, full };
 }
 
 export default function ProductViewPage({ params }: { params: Promise<{ id: string }> }) {
@@ -109,6 +121,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
   if (!product) return <p className="text-sm text-text-secondary">Product not found.</p>;
 
   const status = getProductStatus(product);
+  const inventory = getInventorySummary(product);
 
   return (
     <div className="space-y-6">
@@ -196,7 +209,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
                 </span>
               )}
               <span className="text-[10px] bg-bg-secondary text-text-secondary px-2 py-1 font-medium uppercase tracking-wider">
-                Stock {formatStockLabel(product)}
+                {formatStockLabel(product)}
               </span>
               <span className={`text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${status.className}`}>
                 {status.label}
@@ -229,6 +242,29 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
                 </ul>
               </div>
             )}
+          </div>
+
+          <div className="bg-bg-card border border-border rounded p-4 space-y-4">
+            <div>
+              <p className="text-xs text-text-secondary uppercase tracking-wider">Stock Panel</p>
+              <p className="mt-1 text-xs text-text-secondary">
+                Full stock is the total inventory you set. Available is full minus sold.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="border border-border rounded bg-bg-secondary p-3">
+                <p className="text-[10px] uppercase tracking-wider text-text-secondary">Full</p>
+                <p className="mt-2 text-xl font-semibold">{inventory.full}</p>
+              </div>
+              <div className="border border-border rounded bg-bg-secondary p-3">
+                <p className="text-[10px] uppercase tracking-wider text-text-secondary">Available</p>
+                <p className="mt-2 text-xl font-semibold">{inventory.available}</p>
+              </div>
+              <div className="border border-border rounded bg-bg-secondary p-3">
+                <p className="text-[10px] uppercase tracking-wider text-text-secondary">Sold</p>
+                <p className="mt-2 text-xl font-semibold">{inventory.sold}</p>
+              </div>
+            </div>
           </div>
 
           <div className="bg-bg-card border border-border rounded p-4">

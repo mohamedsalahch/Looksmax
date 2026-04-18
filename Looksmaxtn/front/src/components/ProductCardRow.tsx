@@ -15,6 +15,7 @@ interface Product {
   price: number;
   stock: number;
   cartCount?: number;
+  reservedElsewhere?: boolean;
   tag?: string;
   sizes?: string[];
   images?: ProductImage[];
@@ -84,6 +85,7 @@ export default function ProductCardRow({ title = "Featured selection" }: { title
             price={product.price.toFixed(2)}
             stock={product.stock}
             cartCount={product.cartCount}
+            reservedElsewhere={product.reservedElsewhere}
             tag={product.tag}
             sizes={product.sizes}
             image={getMainImage(product.images)}
