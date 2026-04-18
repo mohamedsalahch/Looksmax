@@ -184,7 +184,7 @@ export default function CouponsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-wide">Coupons</h1>
           <p className="text-xs text-text-secondary mt-1">Create and activate discount codes for checkout.</p>
@@ -321,8 +321,8 @@ export default function CouponsPage() {
           <p className="text-sm text-text-secondary">No coupons created yet.</p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded border border-border bg-bg-card">
-          <table className="w-full text-left">
+        <div className="overflow-x-auto rounded border border-border bg-bg-card">
+          <table className="min-w-[900px] w-full text-left">
             <thead className="bg-bg-secondary">
               <tr className="text-[10px] uppercase tracking-wider text-text-secondary">
                 <th className="px-4 py-3">Code</th>

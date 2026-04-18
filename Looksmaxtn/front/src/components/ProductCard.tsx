@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
+import { getCartItemProductId } from "@/lib/cartItem";
 import {
   reserveProduct,
   subscribeToReservationChanges,
@@ -78,7 +79,7 @@ export default function ProductCard({
   const showNewBadge = !isPerfume && (conditionScore ?? 0) >= 10;
   const isSoldOut = stock < 1;
   const hasSizes = !isPerfume && availableSizes.length > 0;
-  const isInLocalCart = items.some((item) => item.id.split("-")[0] === id);
+  const isInLocalCart = items.some((item) => getCartItemProductId(item.id) === id);
   const showReservedElsewhere = cartCount > (isInLocalCart ? 1 : 0);
 
   useEffect(() => {

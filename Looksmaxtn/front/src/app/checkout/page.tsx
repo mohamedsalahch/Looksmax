@@ -5,9 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
 import { useAuth } from "@/providers/AuthContext";
-import { getReservationKey, releaseProductReservation } from "@/lib/reservations";
+import { getReservationKey } from "@/lib/reservations";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { withAuthRequest } from "@/lib/authClient";
+import { getCartItemProductId } from "@/lib/cartItem";
 
 interface AppliedCoupon {
   code: string;
@@ -48,8 +49,6 @@ export default function CheckoutPage() {
   const hasUnavailableItems = unavailableItems.length > 0;
 
   const handleRemoveItem = async (itemId: string) => {
-    const productId = itemId.split("-")[0];
-    await releaseProductReservation(productId).catch(() => {});
     removeItem(itemId);
   };
 
@@ -238,7 +237,7 @@ export default function CheckoutPage() {
 
     try {
       const orderItems = items.map((item) => ({
-        productId: item.id.split("-")[0],
+        productId: getCartItemProductId(item.id),
         name: item.name,
         size: item.size,
         color: item.color,
@@ -265,9 +264,6 @@ export default function CheckoutPage() {
         return;
       }
 
-      await Promise.all(
-        items.map((item) => releaseProductReservation(item.id.split("-")[0]).catch(() => {}))
-      );
       clearCart();
       setCouponCode("");
       setAppliedCoupon(null);

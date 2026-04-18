@@ -196,9 +196,9 @@ export default function ProductsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-xl font-semibold tracking-wide">Products</h1>
-        <Link href="/dashboard/products/new" className="bg-accent text-bg-primary px-4 py-2 text-xs font-semibold tracking-wide uppercase hover:bg-accent-hover transition-colors">
+        <Link href="/dashboard/products/new" className="inline-flex w-full justify-center bg-accent text-bg-primary px-4 py-2 text-xs font-semibold tracking-wide uppercase hover:bg-accent-hover transition-colors sm:w-auto">
           + Add Product
         </Link>
       </div>
@@ -238,8 +238,8 @@ export default function ProductsPage() {
           <p className="text-sm text-text-secondary">No products found</p>
         </div>
       ) : (
-        <div className="border border-border rounded overflow-hidden">
-          <table className="w-full text-left">
+        <div className="overflow-x-auto border border-border rounded">
+          <table className="min-w-[760px] w-full text-left">
             <thead className="bg-bg-secondary">
               <tr className="text-[10px] text-text-secondary uppercase tracking-wider">
                 <th className="px-4 py-3">

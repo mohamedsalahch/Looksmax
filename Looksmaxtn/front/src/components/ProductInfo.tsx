@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
+import { getCartItemProductId } from "@/lib/cartItem";
 import { reserveProduct, subscribeToReservationChanges } from "@/lib/reservations";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { getConditionColor, getConditionLabel, getConditionPercent } from "@/lib/productCondition";
@@ -53,7 +54,7 @@ export default function ProductInfo({
   const router = useRouter();
   const isPerfume = product.productType === "perfume";
   const isSoldOut = currentStock < 1;
-  const isInLocalCart = product.id ? items.some((item) => item.id.split("-")[0] === product.id) : false;
+  const isInLocalCart = product.id ? items.some((item) => getCartItemProductId(item.id) === product.id) : false;
   const showReservedElsewhere = cartCount > (isInLocalCart ? 1 : 0);
 
   useEffect(() => {

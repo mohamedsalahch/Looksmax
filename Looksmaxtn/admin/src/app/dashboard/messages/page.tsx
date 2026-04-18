@@ -59,9 +59,9 @@ export default function MessagesPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-xl font-semibold tracking-wide">Messages</h1>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {unreadCount > 0 && (
             <span className="text-xs text-warning bg-warning/10 px-3 py-1 rounded font-medium">
               {unreadCount} unread
@@ -101,10 +101,10 @@ export default function MessagesPage() {
               }`}
             >
               <div
-                className="flex items-center justify-between px-4 py-3 cursor-pointer"
+                className="flex items-start justify-between gap-3 px-4 py-3 cursor-pointer"
                 onClick={() => setExpanded(expanded === msg._id ? null : msg._id)}
               >
-                <div className="flex items-center gap-3 min-w-0">
+                <div className="flex items-start gap-3 min-w-0">
                   {!msg.isRead && <span className="w-2 h-2 rounded-full bg-accent shrink-0" />}
                   <div className="min-w-0">
                     <p className="text-xs font-medium truncate">{msg.subject}</p>

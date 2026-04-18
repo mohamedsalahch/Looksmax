@@ -4,8 +4,9 @@ import { useCart } from "@/providers/CartContext";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { formatRemainingTime, releaseProductReservation } from "@/lib/reservations";
+import { formatRemainingTime } from "@/lib/reservations";
 import { formatTndPrice } from "@/lib/formatPrice";
+import { getCartItemProductId } from "@/lib/cartItem";
 
 export default function CartPanel() {
   const { items, isOpen, openCart, closeCart, removeItem, updateQuantity, totalItems, totalPrice } =
@@ -128,7 +129,7 @@ export default function CartPanel() {
                             {item.brand}
                           </p>
                           <Link
-                            href={`/product/${item.id.split("-")[0]}`}
+                            href={`/product/${getCartItemProductId(item.id)}`}
                             onClick={closeCart}
                             className="text-sm font-medium hover:text-text-secondary transition-colors line-clamp-1"
                           >
@@ -142,7 +143,6 @@ export default function CartPanel() {
                         </div>
                         <button
                           onClick={() => {
-                            void releaseProductReservation(item.id.split("-")[0]);
                             removeItem(item.id);
                           }}
                           className="text-text-secondary hover:text-foreground transition-colors cursor-pointer shrink-0 mt-0.5"
@@ -182,7 +182,8 @@ export default function CartPanel() {
                           <button
                             onClick={() => {
                               if (item.quantity === 1) {
-                                void releaseProductReservation(item.id.split("-")[0]);
+                                updateQuantity(item.id, 0);
+                                return;
                               }
                               updateQuantity(item.id, item.quantity - 1);
                             }}
