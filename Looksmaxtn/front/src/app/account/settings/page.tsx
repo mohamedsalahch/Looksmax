@@ -47,6 +47,7 @@ export default function SettingsPage() {
     const wasEnhancing = imageEnhancing;
     const nextEnhancing = Boolean(user?.bodyProfile?.imageEnhancing);
     const nextEnhancedImage = user?.bodyProfile?.profileImageEnhanced || "";
+    const validationError = user?.bodyProfile?.profileImageValidationError || "";
 
     setBodyProfile({
       heightCm: user?.bodyProfile?.heightCm || "",
@@ -63,8 +64,10 @@ export default function SettingsPage() {
     setImageEnhancing(nextEnhancing);
     setEnhancedImage(nextEnhancedImage);
 
-    // Detect enhancement failure: was enhancing, now stopped, but no enhanced image
-    if (wasEnhancing && !nextEnhancing && !nextEnhancedImage) {
+    // Show validation error from LLM if present
+    if (validationError) {
+      setEnhanceError(validationError);
+    } else if (wasEnhancing && !nextEnhancing && !nextEnhancedImage) {
       setEnhanceError("Photo enhancement failed. Please try uploading again.");
     }
   }, [user]);
@@ -273,6 +276,11 @@ export default function SettingsPage() {
         <h2 className="text-xs font-semibold uppercase tracking-wider mb-6 text-text-secondary">
           Outfit Studio Profile
         </h2>
+        {enhanceError && (
+          <div className="mb-4 text-xs text-[#8B3A2F]">
+            {enhanceError}
+          </div>
+        )}
         <form onSubmit={handleBodyProfileUpdate} className="max-w-3xl space-y-4">
           {bodyError && (
             <div className="border border-[#430C05] bg-[#faf3f2] px-4 py-3 text-xs text-[#430C05]">
@@ -453,12 +461,6 @@ export default function SettingsPage() {
                   ? `${remainingGenerations} generation${remainingGenerations === 1 ? "" : "s"} left`
                   : "Generation limit reached"}
               </p>
-
-              {enhanceError && (
-                <p className="text-[10px] uppercase tracking-[0.18em] text-[#430C05] text-center">
-                  {enhanceError}
-                </p>
-              )}
 
             </div>
 
