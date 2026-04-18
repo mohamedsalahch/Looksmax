@@ -239,15 +239,14 @@ export async function POST(req: NextRequest) {
       for (const entry of body.sizeStock.values()) {
         stock += entry.stock;
       }
-      body.fullStock = stock;
     } else {
       body.sizeStock = null;
-      body.fullStock = fullStock;
     }
 
     const product = await Product.create({
       ...body,
       stock,
+      fullStock: body.sizeStock ? stock : fullStock,
       createdBy: auditActor,
       updatedBy: auditActor,
     });

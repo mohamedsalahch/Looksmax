@@ -47,6 +47,7 @@ export default function ProductInfo({
   }) {
   const [addedToCart, setAddedToCart] = useState(false);
   const [currentStock, setCurrentStock] = useState(() => product.stock);
+  const [sizeAvailability, setSizeAvailability] = useState<Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null>(() => product.sizeAvailability || null);
   const [reservationError, setReservationError] = useState("");
   const [reservedElsewhere, setReservedElsewhere] = useState(false);
   const [ownedReservation, setOwnedReservation] = useState(() => Boolean(product.ownedReservation));
@@ -59,16 +60,28 @@ export default function ProductInfo({
   const { addItem, items, updateQuantity } = useCart();
   const router = useRouter();
   const isPerfume = product.productType === "perfume";
-  const isSoldOut = currentStock < 1;
-  const showReservedElsewhere = reservedElsewhere;
+
+  const selectedSizeStock = (() => {
+    if (!isPerfume && selectedSize && sizeAvailability?.[selectedSize]) {
+      return sizeAvailability[selectedSize].stock;
+    }
+    return currentStock;
+  })();
+  const selectedSizeReservedElsewhere = (() => {
+    if (!isPerfume && selectedSize && sizeAvailability?.[selectedSize]) {
+      return sizeAvailability[selectedSize].reservedElsewhere;
+    }
+    return reservedElsewhere;
+  })();
+
+  const isSoldOut = selectedSizeStock < 1;
+  const showReservedElsewhere = selectedSizeReservedElsewhere;
   const isBlocked = isSoldOut || blockedByOrder;
   const isReserved = isBlocked;
   const cartItemId = product.id
     ? buildCartItemId(product.id, isPerfume ? undefined : selectedSize)
     : "";
   const cartItemQuantity = items.find((item) => item.id === cartItemId)?.quantity || 0;
-
-  const [sizeAvailability, setSizeAvailability] = useState<Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null>(() => product.sizeAvailability || null);
 
   const refreshAvailability = () => {
     if (!product.id) return;
@@ -109,18 +122,18 @@ export default function ProductInfo({
   }, [product.id]);
 
   useEffect(() => {
-    setSelectedQuantity((current) => Math.min(Math.max(1, current), Math.max(1, currentStock)));
-  }, [currentStock]);
+    setSelectedQuantity((current) => Math.min(Math.max(1, current), Math.max(1, selectedSizeStock)));
+  }, [selectedSizeStock]);
 
   useEffect(() => {
     if (!product.id) return;
 
     const nextQuantity = cartItemQuantity > 0 ? cartItemQuantity : 1;
-    setSelectedQuantity(Math.min(Math.max(1, nextQuantity), Math.max(1, currentStock)));
-  }, [product.id, cartItemQuantity, currentStock, selectedSize, isPerfume]);
+    setSelectedQuantity(Math.min(Math.max(1, nextQuantity), Math.max(1, selectedSizeStock)));
+  }, [product.id, cartItemQuantity, selectedSizeStock, selectedSize, isPerfume]);
 
   const syncQuantity = (nextQuantity: number) => {
-    const boundedQuantity = Math.min(Math.max(1, nextQuantity), Math.max(1, currentStock));
+    const boundedQuantity = Math.min(Math.max(1, nextQuantity), Math.max(1, selectedSizeStock));
     setSelectedQuantity(boundedQuantity);
     if (cartItemQuantity > 0 && cartItemId) {
       updateQuantity(cartItemId, boundedQuantity);
@@ -174,7 +187,7 @@ export default function ProductInfo({
         image: product.image,
         categories: product.categories,
         size: isPerfume ? undefined : selectedSize,
-        maxStock: Math.max(1, currentStock),
+        maxStock: Math.max(1, selectedSizeStock),
         productType: product.productType,
         fashionSubtype: product.fashionSubtype,
         originPictures: product.originPictures,
@@ -202,7 +215,7 @@ export default function ProductInfo({
         image: product.image,
         categories: product.categories,
         size: isPerfume ? undefined : selectedSize,
-        maxStock: Math.max(1, currentStock),
+        maxStock: Math.max(1, selectedSizeStock),
         productType: product.productType,
         fashionSubtype: product.fashionSubtype,
         originPictures: product.originPictures,
@@ -218,7 +231,7 @@ export default function ProductInfo({
         price: product.price,
         brand: product.brand,
         quantity: 1,
-        maxStock: Math.max(1, currentStock),
+        maxStock: Math.max(1, selectedSizeStock),
         productType: product.productType,
         fashionSubtype: product.fashionSubtype,
         originPictures: product.originPictures,
@@ -333,9 +346,11 @@ export default function ProductInfo({
         <span className="text-xs text-text-secondary">
           {isPerfume
             ? `${currentStock} bottle${currentStock !== 1 ? "s" : ""} available`
-            : currentStock === 1
-              ? "Last one — only 1 in stock"
-              : `${currentStock} in stock`}
+            : selectedSize && sizeAvailability?.[selectedSize]
+              ? `${sizeAvailability[selectedSize].stock} in stock (${selectedSize})`
+              : currentStock === 1
+                ? "Last one — only 1 in stock"
+                : `${currentStock} in stock`}
         </span>
       </div>
 
@@ -376,9 +391,9 @@ export default function ProductInfo({
           <button
             type="button"
             onClick={() => syncQuantity(selectedQuantity + 1)}
-            disabled={isBlocked || selectedQuantity >= currentStock}
+            disabled={isBlocked || selectedQuantity >= selectedSizeStock}
             className={`w-8 h-8 flex items-center justify-center text-sm transition-colors cursor-pointer ${
-              isBlocked || selectedQuantity >= currentStock ? "text-border-color cursor-not-allowed" : "hover:bg-hover"
+              isBlocked || selectedQuantity >= selectedSizeStock ? "text-border-color cursor-not-allowed" : "hover:bg-hover"
             }`}
             aria-label="Increase quantity"
           >

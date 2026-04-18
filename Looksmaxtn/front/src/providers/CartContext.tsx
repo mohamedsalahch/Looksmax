@@ -151,6 +151,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
             image?: string;
             reservationExpiresAt?: string | null;
             cartCount?: number;
+            sizeAvailability?: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null;
           };
 
           const availabilityMap = new Map(
@@ -165,13 +166,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
             const nextItems = currentItems.flatMap((item) => {
               const productId = getCartItemProductId(item.id);
               const availability = availabilityMap.get(productId);
-              const maxStock = Math.max(1, availability?.maxStock ?? item.maxStock ?? 1);
+              const sizeInfo = item.size && (availability as { sizeAvailability?: Record<string, { stock: number }> } | null)?.sizeAvailability?.[item.size];
+              const maxStock = Math.max(1, sizeInfo?.stock ?? availability?.maxStock ?? item.maxStock ?? 1);
               const ownedReservation = Boolean(availability?.ownedReservation);
               const reservedElsewhere = Boolean(availability?.reservedElsewhere);
+
+              const isSizeSoldOut = sizeInfo !== undefined && sizeInfo !== null && sizeInfo.stock <= 0;
+              const isProductSoldOut = Boolean(availability?.blockedByOrder || !availability?.available);
               const isUnavailable = availability
                 ? (!availability.available && !ownedReservation) || Boolean(item.isUnavailable)
                 : Boolean(item.isUnavailable);
-              const soldOut = Boolean(availability?.blockedByOrder || !availability?.available);
+              const soldOut = isSizeSoldOut || isProductSoldOut;
 
               if (soldOut) {
                 removedItems.push(item);

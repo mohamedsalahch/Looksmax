@@ -99,8 +99,8 @@ export async function POST(req: NextRequest) {
         }, 0);
         const reservedElsewhere = reservedByOthers > 0 && reservedByOthers >= remainingStock;
 
-        const ownedReservation = key
-          ? productReservations.some((reservation) => reservation.reservationKey === key) || null
+        const ownedReservationEntry = key
+          ? productReservations.find((reservation) => reservation.reservationKey === key) || null
           : null;
 
         const available = hasSizeStock
@@ -118,8 +118,8 @@ export async function POST(req: NextRequest) {
           image: mainImage,
           cartCount: productReservations.reduce((sum, reservation) => sum + reservation.quantity, 0),
           reservedElsewhere,
-          ownedReservation: Boolean(ownedReservation) || Boolean(activeOrderHold?.ownedReservation),
-          reservationExpiresAt: ownedReservation ? ownedReservation.reservationExpiresAt : null,
+          ownedReservation: Boolean(ownedReservationEntry) || Boolean(activeOrderHold?.ownedReservation),
+          reservationExpiresAt: ownedReservationEntry ? ownedReservationEntry.reservationExpiresAt : null,
           sizeAvailability,
         };
       }),

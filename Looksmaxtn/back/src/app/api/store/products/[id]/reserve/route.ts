@@ -60,8 +60,22 @@ export async function POST(
     const hasSizeStock = product.sizeStock && product.sizeStock instanceof Map && product.sizeStock.size > 0;
 
     if (hasSizeStock && normalizedSize) {
-      if (sizeStock <= 0) {
-        return NextResponse.json({ error: "This size is no longer available." }, { status: 404 });
+      const otherReservationsQty = activeReservations
+        .filter((r) => r.reservationKey !== key)
+        .reduce((sum, r) => sum + Math.max(1, Number(r.quantity) || 1), 0);
+      const availableForThisSize = Math.max(0, sizeStock - otherReservationsQty);
+
+      if (availableForThisSize <= 0) {
+        return NextResponse.json(
+          { error: "This size is no longer available." },
+          { status: 409 }
+        );
+      }
+      if (requestedQuantity > availableForThisSize) {
+        return NextResponse.json(
+          { error: `Only ${availableForThisSize} left for size ${normalizedSize}.` },
+          { status: 409 }
+        );
       }
       if (activeOrderHold && sizeStock <= 0) {
         return NextResponse.json(
