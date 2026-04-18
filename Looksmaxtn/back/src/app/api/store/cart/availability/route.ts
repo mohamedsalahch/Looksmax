@@ -37,44 +37,46 @@ export async function POST(req: NextRequest) {
 
     const productsMap = new Map(products.map((product) => [product._id.toString(), product]));
 
-    const reservationMap = new Map(
-      reservations.map((reservation) => [
-        reservation.product.toString(),
-        {
-          reservationKey: reservation.reservationKey,
-          reservationExpiresAt: reservation.reservedUntil.toISOString(),
-        },
-      ])
-    );
-    const cartCountMap = reservations.reduce((map, reservation) => {
+    const reservationsMap = reservations.reduce((map, reservation) => {
       const productId = reservation.product.toString();
-      map.set(productId, (map.get(productId) || 0) + 1);
+      const current = map.get(productId) || [];
+      current.push({
+        reservationKey: reservation.reservationKey,
+        reservationExpiresAt: reservation.reservedUntil.toISOString(),
+      });
+      map.set(productId, current);
       return map;
-    }, new Map<string, number>());
+    }, new Map<string, Array<{ reservationKey: string; reservationExpiresAt: string }>>());
 
     return NextResponse.json({
       items: ids.map((productId) => {
         const product = productsMap.get(productId);
-        const reservation = reservationMap.get(productId);
-        const ownedReservation = key ? reservation?.reservationKey === key : Boolean(reservation);
+        const productReservations = reservationsMap.get(productId) || [];
+        const ownedReservation = key
+          ? productReservations.find((reservation) => reservation.reservationKey === key) || null
+          : null;
+        const reservedElsewhere = productReservations.some((reservation) => reservation.reservationKey !== key);
         const mainImage =
           product?.images?.find((image: { url: string; isMain: boolean }) => image.isMain)?.url ||
           product?.images?.[0]?.url ||
           "";
         const remainingStock = Math.max(product?.stock ?? 0, 0);
         const blockedByOrder = remainingStock <= 0;
+        const available = product?.isActive !== false && remainingStock > 0 && !reservedElsewhere;
 
         return {
           productId,
-          available: product?.isActive !== false && remainingStock > 0,
+          available,
           blockedByOrder,
           maxStock: remainingStock,
           productType: normalizeProductType(product?.productType),
           fashionSubtype: product?.fashionSubtype || "clothes",
           originPictures: product?.originPictures || { front: "", back: "", left: "", right: "" },
           image: mainImage,
-          cartCount: cartCountMap.get(productId) || 0,
-          reservationExpiresAt: ownedReservation ? reservation?.reservationExpiresAt ?? null : null,
+          cartCount: productReservations.length,
+          reservedElsewhere,
+          ownedReservation: Boolean(ownedReservation),
+          reservationExpiresAt: ownedReservation ? ownedReservation.reservationExpiresAt : null,
         };
       }),
     });

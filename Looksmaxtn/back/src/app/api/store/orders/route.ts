@@ -4,9 +4,15 @@ import Order from "@/store/models/Order";
 import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
 import User from "@/store/models/User";
+import Coupon from "@/store/models/Coupon";
 import { getSession } from "@/store/lib/auth";
 import { getAuditActorFromSession } from "@/store/lib/auditRoute";
 import { sendOrderStatusEmail } from "@/store/lib/mailer";
+import {
+  buildCouponValidationResult,
+  getCouponValidationError,
+  normalizeCouponCode,
+} from "@/lib/coupons";
 import mongoose from "mongoose";
 
 export async function GET() {
@@ -39,6 +45,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const stockAdjustments: Array<{ productId: string; quantity: number }> = [];
+  let couponClaimed: { couponId: string; usageIncremented: boolean } | null = null;
 
   try {
     const session = await getSession();
@@ -48,7 +55,7 @@ export async function POST(req: NextRequest) {
 
     await dbConnect();
     const auditActor = await getAuditActorFromSession(session);
-    const { items, shippingAddress } = await req.json();
+    const { items, shippingAddress, couponCode } = await req.json();
 
     if (!items || items.length === 0) {
       return NextResponse.json({ error: "No items in order" }, { status: 400 });
@@ -58,7 +65,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Complete shipping address is required" }, { status: 400 });
     }
 
-    let totalPrice = 0;
+    let subtotalPrice = 0;
     const orderItems = [];
     const seenProductIds = new Set<string>();
     for (const item of items) {
@@ -117,7 +124,7 @@ export async function POST(req: NextRequest) {
       seenProductIds.add(productId);
 
       const itemTotal = product.price * item.quantity;
-      totalPrice += itemTotal;
+      subtotalPrice += itemTotal;
 
       orderItems.push({
         product: product._id,
@@ -129,6 +136,48 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    const normalizedCouponCode = normalizeCouponCode(couponCode || "");
+    let couponDoc = null;
+    let couponDiscountAmount = 0;
+    if (normalizedCouponCode) {
+      couponDoc = await Coupon.findOne({ code: normalizedCouponCode });
+      if (!couponDoc) {
+        return NextResponse.json({ error: "Coupon not found" }, { status: 404 });
+      }
+
+      const validationError = getCouponValidationError(couponDoc, subtotalPrice);
+      if (validationError) {
+        return NextResponse.json({ error: validationError }, { status: 400 });
+      }
+
+      const usageFilter: Record<string, unknown> = {
+        _id: couponDoc._id,
+        isActive: true,
+      };
+
+      const now = new Date();
+      if (couponDoc.startsAt) {
+        usageFilter.startsAt = { $lte: now };
+      }
+      if (couponDoc.endsAt) {
+        usageFilter.endsAt = { $gte: now };
+      }
+      if (typeof couponDoc.maxUses === "number") {
+        usageFilter.usageCount = { $lt: couponDoc.maxUses };
+      }
+
+      const claimResult = await Coupon.updateOne(usageFilter, { $inc: { usageCount: 1 } });
+      if (claimResult.modifiedCount === 0) {
+        return NextResponse.json({ error: "This coupon is no longer available" }, { status: 409 });
+      }
+
+      couponClaimed = { couponId: couponDoc._id.toString(), usageIncremented: true };
+      couponDiscountAmount = buildCouponValidationResult(couponDoc, subtotalPrice).discountAmount;
+    }
+
+    const shippingFee = 0;
+    const totalPrice = Math.max(0, subtotalPrice - couponDiscountAmount + shippingFee);
+
     const order = await Order.create({
       user: session.userId,
       items: orderItems,
@@ -136,6 +185,12 @@ export async function POST(req: NextRequest) {
       shippingAddress,
       paymentMethod: "cod",
       orderStatus: "processing",
+      subtotalPrice,
+      shippingFee,
+      couponCode: couponDoc?.code || "",
+      couponDiscountType: couponDoc?.discountType || "",
+      couponDiscountValue: couponDoc?.discountValue || 0,
+      couponDiscountAmount,
       totalPrice,
       createdBy: auditActor,
       updatedBy: auditActor,
@@ -169,6 +224,14 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ order }, { status: 201 });
   } catch (error: unknown) {
+    if (couponClaimed?.usageIncremented) {
+      try {
+        await Coupon.updateOne({ _id: couponClaimed.couponId }, { $inc: { usageCount: -1 } });
+      } catch {
+        // Ignore rollback failures and surface the original error.
+      }
+    }
+
     try {
       for (const adjustment of stockAdjustments) {
         await Product.updateOne(

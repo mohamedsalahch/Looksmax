@@ -20,6 +20,10 @@ interface OrderDetail {
   createdBy?: AuditActor | null;
   updatedBy?: AuditActor | null;
   shippingAddress: { fullName: string; street: string; city: string; state: string; zip: string; phone: string; };
+  subtotalPrice?: number;
+  shippingFee?: number;
+  couponCode?: string;
+  couponDiscountAmount?: number;
   items: { productId: string; name: string; price: number; size: string; color: string; quantity: number; }[];
 }
 
@@ -188,6 +192,16 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
 
         <div className="flex justify-end text-sm">
           <div className="min-w-56 border border-black p-4">
+            <div className="flex items-center justify-between">
+              <span>Subtotal</span>
+              <span>{(order.subtotalPrice ?? order.totalPrice).toFixed(2)} TND</span>
+            </div>
+            {!!order.couponCode && (
+              <div className="flex items-center justify-between mt-2">
+                <span>Coupon {order.couponCode}</span>
+                <span>-{(order.couponDiscountAmount ?? 0).toFixed(2)} TND</span>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <span>Total</span>
               <span>{order.totalPrice.toFixed(2)} TND</span>

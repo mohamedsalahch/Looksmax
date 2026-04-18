@@ -131,6 +131,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
             productId: string;
             available: boolean;
             blockedByOrder?: boolean;
+            ownedReservation?: boolean;
+            reservedElsewhere?: boolean;
             maxStock?: number;
             productType?: "fashion" | "perfume" | "clothing" | "shoes";
             originPictures?: {
@@ -158,23 +160,29 @@ export function CartProvider({ children }: { children: ReactNode }) {
             const nextItems = currentItems.flatMap((item) => {
               const availability = availabilityMap.get(item.id.split("-")[0]);
               const maxStock = Math.max(1, availability?.maxStock ?? item.maxStock ?? 1);
-              const isUnavailable = availability ? !availability.available : Boolean(item.isUnavailable);
-              const soldOut = Boolean(availability?.blockedByOrder || (availability && !availability.available));
+              const ownedReservation = Boolean(availability?.ownedReservation);
+              const reservedElsewhere = Boolean(availability?.reservedElsewhere);
+              const isUnavailable = availability
+                ? (!availability.available && !ownedReservation) || Boolean(item.isUnavailable)
+                : Boolean(item.isUnavailable);
+              const soldOut = Boolean(availability?.blockedByOrder || (!ownedReservation && reservedElsewhere && !availability?.available));
 
               if (soldOut) {
                 removedProductIds.add(item.id.split("-")[0]);
                 return [];
               }
 
-              const unavailableReason = isUnavailable
-                ? "This product is currently unavailable."
+              const unavailableReason = reservedElsewhere && !ownedReservation
+                ? "This product is reserved elsewhere."
+                : isUnavailable
+                  ? "This product is currently unavailable."
                 : null;
 
               return {
                 ...item,
                 image: availability?.image || item.image,
                 originPictures: availability?.originPictures || item.originPictures,
-                reservationExpiresAt: availability?.reservationExpiresAt ?? null,
+                reservationExpiresAt: ownedReservation ? availability?.reservationExpiresAt ?? item.reservationExpiresAt ?? null : item.reservationExpiresAt ?? null,
                 maxStock,
                 quantity: Math.min(item.quantity, maxStock),
                 productType: availability?.productType ?? item.productType,

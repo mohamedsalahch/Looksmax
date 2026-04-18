@@ -48,6 +48,7 @@ const navItems = [
   { name: "Generate Images", href: "/dashboard/generate-images", icon: "🖼️" },
   { name: "Products", href: "/dashboard/products", icon: "📦" },
   { name: "Orders", href: "/dashboard/orders", icon: "🛒" },
+  { name: "Coupons", href: "/dashboard/coupons", icon: "🏷️" },
   { name: "Users", href: "/dashboard/users", icon: "👥" },
   { name: "Newsletter", href: "/dashboard/newsletter", icon: "📧" },
   { name: "Messages", href: "/dashboard/messages", icon: "💬" },

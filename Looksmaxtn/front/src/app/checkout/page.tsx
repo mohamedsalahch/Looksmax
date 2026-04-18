@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
@@ -9,12 +9,29 @@ import { getReservationKey, releaseProductReservation } from "@/lib/reservations
 import { formatTndPrice } from "@/lib/formatPrice";
 import { withAuthRequest } from "@/lib/authClient";
 
+interface AppliedCoupon {
+  code: string;
+  description: string;
+  discountType: "percentage" | "fixed";
+  discountValue: number;
+  minimumOrderAmount: number;
+  maxUses: number | null;
+  usageCount: number;
+  discountAmount: number;
+  totalAfterDiscount: number;
+}
+
 export default function CheckoutPage() {
   const router = useRouter();
   const { items, totalPrice, clearCart, removeItem, updateQuantity } = useCart();
   const { user, loading: authLoading } = useAuth();
   const shippingFee = 0;
-  const grandTotal = totalPrice + shippingFee;
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState("");
+  const discountAmount = appliedCoupon?.discountAmount || 0;
+  const grandTotal = Math.max(0, totalPrice + shippingFee - discountAmount);
 
   const [address, setAddress] = useState({
     fullName: user?.name || "",
@@ -39,6 +56,85 @@ export default function CheckoutPage() {
   const handleUpdateQuantity = (itemId: string, quantity: number) => {
     updateQuantity(itemId, quantity);
   };
+
+  const validateCoupon = async (code: string) => {
+    const normalizedCode = code.trim();
+    if (!normalizedCode) {
+      setCouponError("Enter a coupon code.");
+      setAppliedCoupon(null);
+      return;
+    }
+
+    setCouponLoading(true);
+    setCouponError("");
+
+    try {
+      const res = await fetch(
+        "/api/coupons/validate",
+        withAuthRequest({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: normalizedCode, subtotal: totalPrice }),
+        })
+      );
+      const data = (await res.json()) as { coupon?: AppliedCoupon; error?: string };
+
+      if (!res.ok || !data.coupon) {
+        setAppliedCoupon(null);
+        setCouponError(data.error || "Invalid coupon.");
+        return;
+      }
+
+      setAppliedCoupon(data.coupon);
+      setCouponCode(data.coupon.code);
+    } catch {
+      setAppliedCoupon(null);
+      setCouponError("Failed to validate coupon. Please try again.");
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!appliedCoupon?.code) return;
+
+    let active = true;
+    const timeout = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await fetch(
+            "/api/coupons/validate",
+            withAuthRequest({
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ code: appliedCoupon.code, subtotal: totalPrice }),
+            })
+          );
+          const data = (await res.json()) as { coupon?: AppliedCoupon; error?: string };
+
+          if (!active) return;
+
+          if (!res.ok || !data.coupon) {
+            setAppliedCoupon(null);
+            setCouponError(data.error || "Coupon is no longer valid.");
+            return;
+          }
+
+          setAppliedCoupon(data.coupon);
+          setCouponError("");
+        } catch {
+          if (!active) return;
+          setAppliedCoupon(null);
+          setCouponError("Coupon could not be refreshed.");
+        }
+      })();
+    }, 250);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+    };
+  }, [appliedCoupon?.code, totalPrice]);
 
   useEffect(() => {
     if (!orderPlaced) return;
@@ -131,7 +227,7 @@ export default function CheckoutPage() {
     );
   }
 
-  const handlePlaceOrder = async (e: React.FormEvent) => {
+  const handlePlaceOrder = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
     if (hasUnavailableItems) {
@@ -153,7 +249,12 @@ export default function CheckoutPage() {
         ...withAuthRequest({
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ items: orderItems, shippingAddress: address, cartKey: getReservationKey() }),
+          body: JSON.stringify({
+            items: orderItems,
+            shippingAddress: address,
+            cartKey: getReservationKey(),
+            couponCode: appliedCoupon?.code || couponCode.trim() || "",
+          }),
         }),
       });
 
@@ -168,6 +269,9 @@ export default function CheckoutPage() {
         items.map((item) => releaseProductReservation(item.id.split("-")[0]).catch(() => {}))
       );
       clearCart();
+      setCouponCode("");
+      setAppliedCoupon(null);
+      setCouponError("");
       setOrderPlaced(data.order._id);
     } catch {
       setError("Network error. Please try again.");
@@ -298,6 +402,48 @@ export default function CheckoutPage() {
                 Order Summary
               </h2>
               <div className="border border-border-color divide-y divide-border-color">
+                <div className="p-4">
+                  <label className="block text-xs text-text-secondary uppercase tracking-wider mb-2">
+                    Coupon Code
+                  </label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                      placeholder="Enter coupon code"
+                      className="flex-1 border border-border-color bg-transparent px-4 py-3 text-sm focus:border-foreground transition-colors uppercase"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void validateCoupon(couponCode)}
+                      disabled={couponLoading}
+                      className="border border-foreground px-5 py-3 text-xs font-medium uppercase tracking-wide hover:bg-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {couponLoading ? "Checking..." : appliedCoupon ? "Recheck" : "Apply"}
+                    </button>
+                  </div>
+                  {couponError && <p className="mt-2 text-xs text-[#430C05]">{couponError}</p>}
+                  {appliedCoupon && !couponError && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[#6b6055]">
+                      <span className="uppercase tracking-wider">
+                        Applied {appliedCoupon.code}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAppliedCoupon(null);
+                          setCouponCode("");
+                          setCouponError("");
+                        }}
+                        className="uppercase tracking-wider text-foreground hover:text-accent transition-colors"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 {items.map((item) => (
                   <div
                     key={item.id}
@@ -392,6 +538,12 @@ export default function CheckoutPage() {
                     <span>Subtotal</span>
                     <span>{formatTndPrice(totalPrice)}</span>
                   </div>
+                  {discountAmount > 0 && (
+                    <div className="flex justify-between text-xs text-text-secondary">
+                      <span>Coupon</span>
+                      <span>- {formatTndPrice(discountAmount)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-xs text-text-secondary">
                     <span>Shipping</span>
                     <span>Free</span>
