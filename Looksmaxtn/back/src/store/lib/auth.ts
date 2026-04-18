@@ -1,5 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
+import mongoose from "mongoose";
 import { cookies, headers } from "next/headers";
 import dbConnect from "@/store/lib/mongodb";
 import User from "@/store/models/User";
