@@ -243,7 +243,8 @@ export default function SettingsPage() {
             data.user?.bodyProfile?.profileImageRequiresGeneration
           ),
         });
-        router.push("/studio");
+        await refreshUser();
+        router.replace("/studio");
       }
     } catch {
       setBodyError("Network error");

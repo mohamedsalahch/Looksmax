@@ -11,6 +11,36 @@ import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
+function getSizeStockEntries(
+  sizeStock: unknown
+): Array<[string, { fullStock?: number; stock?: number }]> {
+  if (sizeStock instanceof Map) {
+    return Array.from(sizeStock.entries());
+  }
+
+  if (!sizeStock || typeof sizeStock !== "object") return [];
+
+  return Object.entries(sizeStock as Record<string, { fullStock?: number; stock?: number }>);
+}
+
+function buildSizeAvailability(
+  sizeStock: unknown
+): Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null {
+  const entries = getSizeStockEntries(sizeStock);
+  if (entries.length === 0) return null;
+
+  return Object.fromEntries(
+    entries.map(([size, entry]) => [
+      size,
+      {
+        stock: Math.max(entry.stock ?? 0, 0),
+        available: Math.max(entry.stock ?? 0, 0) > 0,
+        reservedElsewhere: false,
+      },
+    ])
+  );
+}
+
 const defaultProduct: {
   name: string;
   categories?: string[];
@@ -129,6 +159,7 @@ export default async function ProductDetailPage({
       notFound();
     }
     if (dbProduct) {
+      const sizeAvailability = buildSizeAvailability((dbProduct as { sizeStock?: unknown }).sizeStock);
       product = {
         name: dbProduct.name,
         categories: dbProduct.categories || [],
@@ -137,7 +168,7 @@ export default async function ProductDetailPage({
         image: dbProduct.images?.find((image) => image.isMain)?.url || dbProduct.images?.[0]?.url || "",
         sizes: dbProduct.sizes || [],
         stock,
-        sizeAvailability: dbProduct.sizeAvailability || null,
+        sizeAvailability,
         description: dbProduct.description || "",
         images: dbProduct.images || [],
         reservationExpiresAt: null,

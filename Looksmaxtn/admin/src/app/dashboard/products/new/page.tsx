@@ -595,15 +595,11 @@ export default function NewProductPage() {
       const sizes = form.productType === "perfume"
         ? []
         : form.sizes.split(",").map((s) => s.trim()).filter(Boolean);
-      if (sizes.length > 0 && Object.keys(form.sizeStock).length > 0) {
-        const sizeStockPayload: Record<string, number> = {};
-        for (const size of sizes) {
-          const qty = Number(form.sizeStock[size] || 0);
-          if (qty > 0) sizeStockPayload[size] = qty;
-        }
-        if (Object.keys(sizeStockPayload).length > 0) {
-          body.append("sizeStock", JSON.stringify(sizeStockPayload));
-        }
+      if (sizes.length > 0) {
+        const sizeStockPayload = Object.fromEntries(
+          sizes.map((size) => [size, Math.max(0, Number(form.sizeStock[size] || 0))])
+        );
+        body.append("sizeStock", JSON.stringify(sizeStockPayload));
       }
       body.append("conditionScore", form.conditionScore);
       body.append("originPictureFront", form.originPictures.front);
@@ -620,14 +616,7 @@ export default function NewProductPage() {
       body.append("categories", JSON.stringify(productCategories));
       body.append(
         "sizes",
-        JSON.stringify(
-          form.productType === "perfume"
-            ? []
-            : form.sizes
-                .split(",")
-                .map((size) => size.trim())
-                .filter(Boolean)
-        )
+        JSON.stringify(sizes)
       );
       body.append(
         "colors",

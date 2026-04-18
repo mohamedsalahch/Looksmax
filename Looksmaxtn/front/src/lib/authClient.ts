@@ -1,4 +1,5 @@
 const AUTH_TOKEN_STORAGE_KEY = "looksmax-token";
+const AUTH_USER_STORAGE_KEY = "looksmax-user";
 
 export function getStoredAuthToken() {
   if (typeof window === "undefined") return null;
@@ -13,6 +14,36 @@ export function storeAuthToken(token: string) {
 export function clearAuthToken() {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+}
+
+export function getStoredAuthUser<T = unknown>() {
+  if (typeof window === "undefined") return null;
+  try {
+    const stored = window.localStorage.getItem(AUTH_USER_STORAGE_KEY);
+    if (!stored) return null;
+    return JSON.parse(stored) as T;
+  } catch {
+    return null;
+  }
+}
+
+export function storeAuthUser(user: unknown) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(user));
+}
+
+export function clearAuthUser() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+}
+
+export function redirectToLogin(nextPath?: string) {
+  if (typeof window === "undefined") return;
+
+  const currentPath = nextPath || `${window.location.pathname}${window.location.search}`;
+  const target = currentPath ? `/login?next=${encodeURIComponent(currentPath)}` : "/login";
+
+  window.location.assign(target);
 }
 
 export function getTokenExpiryMs(token: string) {

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { shareOutfit } from "@/lib/share";
+import { redirectToLogin } from "@/lib/authClient";
 
 interface SavedOutfitDetail {
   id: string;
@@ -30,8 +31,17 @@ export default function SavedOutfitDetailPage({
   useEffect(() => {
     params.then(({ id }) => {
       fetch(`/api/outfits/${id}`)
-        .then((response) => response.json())
-        .then((data) => setOutfit(data.outfit || null))
+        .then((response) => {
+          if (response.status === 401) {
+            redirectToLogin(`/studio/outfits/${id}`);
+            return null;
+          }
+          return response.json();
+        })
+        .then((data) => {
+          if (!data) return;
+          setOutfit(data.outfit || null);
+        })
         .catch(() => setOutfit(null))
         .finally(() => setLoading(false));
     });

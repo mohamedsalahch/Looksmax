@@ -97,6 +97,31 @@ const emptyOriginPictureFiles: OriginPictureFiles = {
   right: null,
 };
 
+function normalizeSizeList(value: string) {
+  return value
+    .split(",")
+    .map((size) => size.trim())
+    .filter(Boolean);
+}
+
+function buildSizeStockRecord(
+  sizes: string[],
+  sizeStock?: Record<string, { fullStock: number; stock: number; soldQuantity: number }> | null
+) {
+  return Object.fromEntries(
+    sizes.map((size) => [size, String(Math.max(Number(sizeStock?.[size]?.fullStock ?? 0), 0))])
+  ) as Record<string, string>;
+}
+
+function buildSoldQuantityRecord(
+  sizes: string[],
+  sizeStock?: Record<string, { fullStock: number; stock: number; soldQuantity: number }> | null
+) {
+  return Object.fromEntries(
+    sizes.map((size) => [size, Math.max(Number(sizeStock?.[size]?.soldQuantity ?? 0), 0)])
+  ) as Record<string, number>;
+}
+
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
     <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-text-secondary mb-1.5">
@@ -237,9 +262,31 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const [isGeneratedImagesOpen, setIsGeneratedImagesOpen] = useState(false);
   const [generatedImagesSearch, setGeneratedImagesSearch] = useState("");
   const [soldQuantity, setSoldQuantity] = useState(0);
-  const [restockAmount, setRestockAmount] = useState("1");
+  const [soldQuantityBySize, setSoldQuantityBySize] = useState<Record<string, number>>({});
+  const [restockAmounts, setRestockAmounts] = useState<Record<string, string>>({});
+  const [selectedStockSize, setSelectedStockSize] = useState("");
+  const [savingSizeStockFor, setSavingSizeStockFor] = useState<string>("");
+  const [restockAmount, setRestockAmount] = useState("0");
   const [restocking, setRestocking] = useState(false);
   const allowStockEditing = true;
+  const sizeList = useMemo(
+    () =>
+      form.productType !== "perfume"
+        ? normalizeSizeList(form.sizes)
+        : [],
+    [form.productType, form.sizes]
+  );
+
+  useEffect(() => {
+    if (sizeList.length === 0) {
+      setSelectedStockSize("");
+      return;
+    }
+
+    if (!selectedStockSize || !sizeList.includes(selectedStockSize)) {
+      setSelectedStockSize(sizeList[0]);
+    }
+  }, [selectedStockSize, sizeList]);
 
   useEffect(() => {
     fetch("/api/categories", withAuthRequest())
@@ -260,12 +307,18 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         if (!d.product) return;
 
         const p = d.product;
-        const sizeStockData: Record<string, string> = {};
-        if (p.sizeStock && typeof p.sizeStock === "object") {
-          for (const [size, entry] of Object.entries(p.sizeStock as Record<string, { fullStock: number; stock: number; soldQuantity: number }>)) {
-            sizeStockData[size] = String(entry.fullStock ?? 0);
-          }
-        }
+        const nextSizeStockEntries =
+          p.sizeStock && typeof p.sizeStock === "object"
+            ? (p.sizeStock as Record<string, { fullStock: number; stock: number; soldQuantity: number }>)
+            : null;
+        const nextSizes = Array.from(
+          new Set([
+            ...normalizeSizeList((p.sizes || []).join(",")),
+            ...(nextSizeStockEntries ? Object.keys(nextSizeStockEntries) : []),
+          ])
+        );
+        const nextSizeStock = buildSizeStockRecord(nextSizes, nextSizeStockEntries);
+        const nextSoldQuantityBySize = buildSoldQuantityRecord(nextSizes, nextSizeStockEntries);
         setForm({
           name: p.name,
           price: p.price.toString(),
@@ -278,7 +331,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           conditionScore: String(p.conditionScore ?? 7),
           productType: p.productType === "perfume" ? "perfume" : "fashion",
           fashionSubtype: p.fashionSubtype || "clothes",
-          sizeStock: sizeStockData,
+          sizeStock: nextSizeStock,
           originPictures: {
             front: p.originPictures?.front || "",
             back: p.originPictures?.back || "",
@@ -289,6 +342,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           cloneSourceImage: p.cloneSourceImage || "",
         });
         setSoldQuantity(Math.max(Number(p.soldQuantity ?? 0), 0));
+        setSoldQuantityBySize(nextSoldQuantityBySize);
+        setRestockAmounts(Object.fromEntries(nextSizes.map((size) => [size, "0"])));
         setInitialCategorySlugs(p.categories || []);
         setImages(
           (p.images || []).map((image: ProductImage) => ({
@@ -329,6 +384,91 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       : (["front", "back"] as OriginPictureKey[]);
   const fullStock = Math.max(Number(form.stock || 0), 0);
   const availableStock = Math.max(fullStock - soldQuantity, 0);
+  const normalizedSizeStock = useMemo(
+    () =>
+      Object.fromEntries(
+        sizeList.map((size) => [size, Math.max(0, Number(form.sizeStock[size] || 0))])
+      ) as Record<string, number>,
+    [form.sizeStock, sizeList]
+  );
+
+  const syncInventoryState = (product: {
+    stock?: number;
+    fullStock?: number;
+    soldQuantity?: number;
+    sizeStock?: Record<string, { fullStock: number; stock: number; soldQuantity: number }> | null;
+  }) => {
+    if (typeof product.fullStock === "number" || typeof product.stock === "number") {
+      const nextFullStock = Math.max(Number(product.fullStock ?? product.stock ?? 0), 0);
+      setForm((current) => ({
+        ...current,
+        stock: String(nextFullStock),
+      }));
+    }
+
+    if (typeof product.soldQuantity === "number") {
+      setSoldQuantity(Math.max(product.soldQuantity, 0));
+    }
+
+    if (product.sizeStock && typeof product.sizeStock === "object") {
+      const nextSizeStock: Record<string, string> = {};
+      const nextSoldBySize: Record<string, number> = {};
+
+      for (const [size, entry] of Object.entries(product.sizeStock)) {
+        nextSizeStock[size] = String(entry.fullStock ?? 0);
+        nextSoldBySize[size] = Math.max(Number(entry.soldQuantity ?? 0), 0);
+      }
+
+      setForm((current) => ({
+        ...current,
+        sizeStock: nextSizeStock,
+      }));
+      setSoldQuantityBySize(nextSoldBySize);
+      setRestockAmounts(Object.fromEntries(Object.keys(nextSizeStock).map((size) => [size, "0"])));
+      setSelectedStockSize((current) => {
+        const nextSizeKeys = Object.keys(nextSizeStock);
+        if (nextSizeKeys.length === 0) return "";
+        return current && nextSizeKeys.includes(current) ? current : nextSizeKeys[0];
+      });
+    }
+  };
+
+  const handleSubmitSelectedSizeStock = async () => {
+    if (!selectedStockSize) return;
+
+    const amount = Math.max(0, Number(restockAmounts[selectedStockSize] || 0));
+    if (amount <= 0) return;
+    const isNewSize = form.sizeStock[selectedStockSize] === undefined;
+
+    setError("");
+    setSavingSizeStockFor(selectedStockSize);
+
+    try {
+      const response = await fetch(
+        `/api/products/${id}`,
+        withAuthRequest({
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sizes: sizeList,
+            sizeStock: { [selectedStockSize]: amount },
+            sizeStockMode: isNewSize ? "full" : "restock",
+          }),
+        })
+      );
+      const data = await response.json();
+      if (!response.ok || !data.product) {
+        setError(data.error || "Unable to save size stock.");
+        return;
+      }
+
+      syncInventoryState(data.product);
+    } catch {
+      setError("Network error");
+    } finally {
+      setSavingSizeStockFor("");
+    }
+  };
 
   const handleAddStock = async () => {
     setError("");
@@ -358,7 +498,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         stock: String(nextStock),
       }));
       setSoldQuantity(Math.max(Number(data.product.soldQuantity ?? soldQuantity), 0));
-      setRestockAmount("1");
+      setRestockAmount("0");
     } catch {
       setError("Network error");
     } finally {
@@ -697,18 +837,12 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       body.append("productType", form.productType);
       body.append("fashionSubtype", form.fashionSubtype);
       body.append("fullStock", form.stock);
-      const sizes = form.productType === "perfume"
-        ? []
-        : form.sizes.split(",").map((s) => s.trim()).filter(Boolean);
-      if (sizes.length > 0 && Object.keys(form.sizeStock).length > 0) {
-        const sizeStockPayload: Record<string, number> = {};
-        for (const size of sizes) {
-          const qty = Number(form.sizeStock[size] || 0);
-          if (qty > 0) sizeStockPayload[size] = qty;
-        }
-        if (Object.keys(sizeStockPayload).length > 0) {
-          body.append("sizeStock", JSON.stringify(sizeStockPayload));
-        }
+      const sizes = sizeList;
+      if (sizes.length > 0) {
+        const sizeStockPayload = Object.fromEntries(
+          sizes.map((size) => [size, Math.max(0, Number(form.sizeStock[size] || 0))])
+        );
+        body.append("sizeStock", JSON.stringify(sizeStockPayload));
       }
       body.append("conditionScore", form.conditionScore);
       body.append("originPictureFront", form.originPictures.front);
@@ -725,14 +859,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       body.append("categories", JSON.stringify(productCategories));
       body.append(
         "sizes",
-        JSON.stringify(
-          form.productType === "perfume"
-            ? []
-            : form.sizes
-                .split(",")
-                .map((size) => size.trim())
-                .filter(Boolean)
-        )
+        JSON.stringify(sizeList)
       );
       body.append(
         "colors",
@@ -858,28 +985,24 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
             </div>
             <div>
               <FieldLabel>Stock</FieldLabel>
-              {form.productType !== "perfume" && form.sizes.trim() ? (
-                <div className="space-y-2">
-                  {form.sizes.split(",").map((s) => s.trim()).filter(Boolean).map((size) => (
-                    <div key={size} className="flex items-center gap-2">
-                      <span className="text-xs text-text-secondary w-12 text-right">{size}</span>
-                      <input
-                        type="number"
-                        min="0"
-                        value={form.sizeStock[size] || "0"}
-                        onChange={(e) =>
-                          setForm({
-                            ...form,
-                            sizeStock: { ...form.sizeStock, [size]: e.target.value },
-                          })
-                        }
-                        className="flex-1 bg-bg-secondary border border-border px-3 py-2 text-sm focus:border-accent transition-colors"
-                        placeholder={`Stock for ${size}`}
-                      />
+              {form.productType !== "perfume" && sizeList.length > 0 ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <div className="rounded border border-border bg-bg-secondary p-3">
+                      <p className="text-[10px] uppercase tracking-wider text-text-secondary">Full</p>
+                      <p className="mt-1 text-lg font-semibold">{fullStock}</p>
                     </div>
-                  ))}
+                    <div className="rounded border border-border bg-bg-secondary p-3">
+                      <p className="text-[10px] uppercase tracking-wider text-text-secondary">Available</p>
+                      <p className="mt-1 text-lg font-semibold">{availableStock}</p>
+                    </div>
+                    <div className="rounded border border-border bg-bg-secondary p-3">
+                      <p className="text-[10px] uppercase tracking-wider text-text-secondary">Sold</p>
+                      <p className="mt-1 text-lg font-semibold">{soldQuantity}</p>
+                    </div>
+                  </div>
                   <p className="text-[10px] text-text-secondary">
-                    Set stock per size. Total stock is computed automatically.
+                    Use the stock panel below to restock each size. Full stock is fixed after creation.
                   </p>
                 </div>
               ) : (
@@ -902,41 +1025,124 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               <div>
                 <p className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">Stock Panel</p>
                 <p className="mt-1 text-[11px] text-text-secondary">
-                  Full stock is what you created. Available is full minus sold.
+                  Select a size. New sizes can receive an initial full stock once, existing sizes can be restocked.
                 </p>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <div className="rounded border border-border bg-bg-card p-3">
-                  <p className="text-[10px] uppercase tracking-wider text-text-secondary">Full</p>
-                  <p className="mt-1 text-lg font-semibold">{fullStock}</p>
+              {sizeList.length > 0 ? (
+                <div className="space-y-3">
+                  <div>
+                    <FieldLabel>Size</FieldLabel>
+                    <select
+                      value={selectedStockSize}
+                      onChange={(e) => setSelectedStockSize(e.target.value)}
+                      className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                    >
+                      {sizeList.map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {selectedStockSize ? (() => {
+                    const sizeFull = Math.max(Number(normalizedSizeStock[selectedStockSize] || 0), 0);
+                    const sizeSold = Math.max(Number(soldQuantityBySize[selectedStockSize] || 0), 0);
+                    const sizeAvailable = Math.max(sizeFull - sizeSold, 0);
+                    const restockValue = restockAmounts[selectedStockSize] || "0";
+                    const isSaving = savingSizeStockFor === selectedStockSize;
+                    const isNewSize = form.sizeStock[selectedStockSize] === undefined;
+
+                    return (
+                      <div className="grid grid-cols-1 gap-3 rounded border border-border bg-bg-card p-3 lg:grid-cols-[68px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(220px,1.1fr)] lg:items-stretch">
+                        <div className="flex items-center justify-between gap-3 rounded border border-border bg-bg-secondary px-3 py-2 lg:justify-center">
+                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-primary">{selectedStockSize}</p>
+                          <p className="text-[10px] text-text-secondary lg:hidden">Initial full / restock / available / sold</p>
+                        </div>
+
+                        <div className="rounded border border-border bg-bg-secondary px-3 py-2 h-full">
+                          <FieldLabel>Full Stock</FieldLabel>
+                          <div className="flex h-[calc(100%-22px)] items-center">
+                            <p className="text-sm font-semibold text-text-primary">{sizeFull}</p>
+                          </div>
+                        </div>
+
+                        <div className="rounded border border-border bg-bg-secondary px-3 py-2 h-full">
+                          <FieldLabel>Available</FieldLabel>
+                          <div className="flex h-[calc(100%-22px)] items-center">
+                            <p className="text-sm font-semibold text-text-primary">{sizeAvailable}</p>
+                          </div>
+                        </div>
+
+                        <div className="rounded border border-border bg-bg-secondary px-3 py-2 h-full">
+                          <FieldLabel>Sold</FieldLabel>
+                          <div className="flex h-[calc(100%-22px)] items-center">
+                            <p className="text-sm font-semibold text-text-primary">{sizeSold}</p>
+                          </div>
+                        </div>
+
+                        <div className="rounded border border-border bg-bg-secondary px-3 py-2 h-full">
+                          <FieldLabel>{isNewSize ? "Initial Stock" : "Restock"}</FieldLabel>
+                          <div className="flex flex-row items-end gap-2">
+                            <input
+                              type="number"
+                              min="0"
+                              value={restockValue}
+                              onChange={(e) =>
+                                setRestockAmounts((current) => ({
+                                  ...current,
+                                  [selectedStockSize]: e.target.value,
+                                }))
+                              }
+                              className="w-full min-w-0 flex-1 bg-bg-card border border-border px-3 py-2 text-sm focus:border-accent transition-colors"
+                              placeholder={isNewSize ? "Initial stock" : "Restock"}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => void handleSubmitSelectedSizeStock()}
+                              disabled={isSaving}
+                              className="shrink-0 border border-border px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-text-primary transition-colors hover:border-accent hover:text-accent disabled:opacity-60"
+                            >
+                              {isSaving ? "Saving..." : isNewSize ? "Create Stock" : "Restock"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })() : null}
                 </div>
-                <div className="rounded border border-border bg-bg-card p-3">
-                  <p className="text-[10px] uppercase tracking-wider text-text-secondary">Available</p>
-                  <p className="mt-1 text-lg font-semibold">{availableStock}</p>
-                </div>
-                <div className="rounded border border-border bg-bg-card p-3">
-                  <p className="text-[10px] uppercase tracking-wider text-text-secondary">Sold</p>
-                  <p className="mt-1 text-lg font-semibold">{soldQuantity}</p>
-                </div>
-              </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <input
-                  type="number"
-                  min="1"
-                  value={restockAmount}
-                  onChange={(e) => setRestockAmount(e.target.value)}
-                  className="w-full sm:w-32 bg-bg-secondary border border-border px-3 py-2 text-sm"
-                  placeholder="Add"
-                />
-                <button
-                  type="button"
-                  onClick={handleAddStock}
-                  disabled={restocking}
-                  className="w-full sm:w-auto border border-foreground bg-foreground px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-background transition-colors hover:bg-accent disabled:opacity-60"
-                >
-                  {restocking ? "Saving..." : "ADD STOCK"}
-                </button>
-              </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className="rounded border border-border bg-bg-card p-3">
+                      <p className="text-[10px] uppercase tracking-wider text-text-secondary">Full</p>
+                      <p className="mt-1 text-lg font-semibold">{fullStock}</p>
+                    </div>
+                    <div className="rounded border border-border bg-bg-card p-3">
+                      <p className="text-[10px] uppercase tracking-wider text-text-secondary">Available</p>
+                      <p className="mt-1 text-lg font-semibold">{availableStock}</p>
+                    </div>
+                    <div className="rounded border border-border bg-bg-card p-3">
+                      <p className="text-[10px] uppercase tracking-wider text-text-secondary">Sold</p>
+                      <p className="mt-1 text-lg font-semibold">{soldQuantity}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <div className="w-full sm:w-32 rounded border border-border bg-bg-secondary px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-[0.16em] text-text-secondary">Full</p>
+                      <p className="mt-1 text-sm font-semibold text-text-primary">{form.stock}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddStock}
+                      disabled={restocking}
+                      className="w-full sm:w-auto border border-foreground bg-foreground px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-background transition-colors hover:bg-accent disabled:opacity-60"
+                    >
+                      {restocking ? "Saving..." : "ADD STOCK"}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
             <div className="xl:col-span-3">
               <FieldLabel>Category</FieldLabel>

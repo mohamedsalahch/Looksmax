@@ -8,9 +8,21 @@ import mongoose from "mongoose";
 
 const CART_PRESENCE_DURATION_MS = 30 * 60 * 1000;
 
-function getSizeStock(product: { stock?: number; sizeStock?: Map<string, { fullStock: number; stock: number }> | null }, size?: string) {
-  if (size && product.sizeStock && product.sizeStock instanceof Map) {
-    const entry = product.sizeStock.get(size);
+function getSizeStockEntries(
+  sizeStock: unknown
+): Array<[string, { fullStock?: number; stock?: number }]> {
+  if (sizeStock instanceof Map) {
+    return Array.from(sizeStock.entries());
+  }
+
+  if (!sizeStock || typeof sizeStock !== "object") return [];
+
+  return Object.entries(sizeStock as Record<string, { fullStock?: number; stock?: number }>);
+}
+
+function getSizeStock(product: { stock?: number; sizeStock?: unknown }, size?: string) {
+  if (size && product.sizeStock) {
+    const entry = getSizeStockEntries(product.sizeStock).find(([entrySize]) => entrySize === size)?.[1];
     if (entry) return Math.max(entry.stock ?? 0, 0);
   }
   return Math.max(product.stock ?? 0, 0);
@@ -56,8 +68,9 @@ export async function POST(
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
 
+    const sizeStockEntries = getSizeStockEntries(product.sizeStock);
     const sizeStock = getSizeStock(product, normalizedSize);
-    const hasSizeStock = product.sizeStock && product.sizeStock instanceof Map && product.sizeStock.size > 0;
+    const hasSizeStock = sizeStockEntries.length > 0;
 
     if (hasSizeStock && normalizedSize) {
       const otherReservationsQty = activeReservations

@@ -15,6 +15,18 @@ import {
 } from "@/lib/coupons";
 import mongoose from "mongoose";
 
+function getSizeStockEntries(
+  sizeStock: unknown
+): Array<[string, { fullStock?: number; stock?: number }]> {
+  if (sizeStock instanceof Map) {
+    return Array.from(sizeStock.entries());
+  }
+
+  if (!sizeStock || typeof sizeStock !== "object") return [];
+
+  return Object.entries(sizeStock as Record<string, { fullStock?: number; stock?: number }>);
+}
+
 export async function GET() {
   try {
     const session = await getSession();
@@ -101,11 +113,12 @@ export async function POST(req: NextRequest) {
       }
 
       const itemSize = item.size || "";
-      const hasSizeStock = product.sizeStock && product.sizeStock instanceof Map && product.sizeStock.size > 0;
+      const sizeStockEntries = getSizeStockEntries(product.sizeStock);
+      const hasSizeStock = sizeStockEntries.length > 0;
 
       if (hasSizeStock && itemSize) {
-        const sizeEntry = (product.sizeStock as Map<string, { fullStock: number; stock: number }>).get(itemSize);
-        if (!sizeEntry || sizeEntry.stock < quantityToDeduct) {
+        const sizeEntry = sizeStockEntries.find(([size]) => size === itemSize)?.[1];
+        if (!sizeEntry || Math.max(sizeEntry.stock ?? 0, 0) < quantityToDeduct) {
           return NextResponse.json(
             { error: `${product.name} (size ${itemSize}) is already sold. Please remove it from your cart.` },
             { status: 409 }

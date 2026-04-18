@@ -9,9 +9,21 @@ function normalizeProductType(value?: string) {
   return value === "perfume" ? "perfume" : "fashion";
 }
 
-function getSizeStock(product: { stock?: number; sizeStock?: Map<string, { fullStock: number; stock: number }> | null }, size?: string) {
-  if (size && product.sizeStock && product.sizeStock instanceof Map) {
-    const entry = product.sizeStock.get(size);
+function getSizeStockEntries(
+  sizeStock: unknown
+): Array<[string, { fullStock?: number; stock?: number }]> {
+  if (sizeStock instanceof Map) {
+    return Array.from(sizeStock.entries());
+  }
+
+  if (!sizeStock || typeof sizeStock !== "object") return [];
+
+  return Object.entries(sizeStock as Record<string, { fullStock?: number; stock?: number }>);
+}
+
+function getSizeStock(product: { stock?: number; sizeStock?: unknown }, size?: string) {
+  if (size && product.sizeStock) {
+    const entry = getSizeStockEntries(product.sizeStock).find(([entrySize]) => entrySize === size)?.[1];
     if (entry) return Math.max(entry.stock ?? 0, 0);
   }
   return Math.max(product.stock ?? 0, 0);
@@ -70,13 +82,13 @@ export async function POST(req: NextRequest) {
           product?.images?.[0]?.url ||
           "";
 
-        const hasSizeStock = product?.sizeStock && product.sizeStock instanceof Map && product.sizeStock.size > 0;
+        const sizeStockEntries = getSizeStockEntries(product?.sizeStock);
+        const hasSizeStock = sizeStockEntries.length > 0;
 
         let sizeAvailability: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null = null;
         if (hasSizeStock && product) {
           sizeAvailability = {};
-          const sizeMap = product.sizeStock as Map<string, { fullStock: number; stock: number }>;
-          for (const [size, entry] of sizeMap) {
+          for (const [size, entry] of sizeStockEntries) {
             const sizeReservations = productReservations.filter((r) => r.size === size);
             const reservedByOthers = sizeReservations.reduce((sum, r) => {
               if (r.reservationKey === key) return sum;

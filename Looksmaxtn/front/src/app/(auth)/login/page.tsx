@@ -6,6 +6,28 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/providers/AuthContext";
 
+interface GoogleIdentityServices {
+  accounts?: {
+    id?: {
+      initialize: (config: {
+        client_id: string;
+        callback: (response: { credential?: string }) => void | Promise<void>;
+      }) => void;
+      renderButton: (
+        element: HTMLElement,
+        options: {
+          theme: string;
+          size: string;
+          width: number;
+          shape: string;
+          text: string;
+          logo_alignment: string;
+        }
+      ) => void;
+    };
+  };
+}
+
 function LoginPageContent() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -39,7 +61,7 @@ function LoginPageContent() {
     const maxAttempts = 80;
 
     const syncGoogleReady = () => {
-      const google = (window as Window & { google?: any }).google;
+      const google = (window as Window & { google?: GoogleIdentityServices }).google;
       if (google?.accounts?.id) {
         setGoogleReady(true);
         return true;
@@ -62,7 +84,7 @@ function LoginPageContent() {
   useEffect(() => {
     if (!googleReady || !googleConfigured || !googleButtonRef.current) return;
 
-    const google = (window as Window & { google?: any }).google;
+    const google = (window as Window & { google?: GoogleIdentityServices }).google;
     if (!google?.accounts?.id) return;
 
       google.accounts.id.initialize({
@@ -267,9 +289,32 @@ function LoginPageContent() {
   );
 }
 
+function LoginPageFallback() {
+  return (
+    <div className="w-full max-w-sm animate-pulse">
+      <div className="text-center mb-10">
+        <div className="mx-auto h-5 w-36 rounded bg-border-color/60" />
+        <div className="mx-auto mt-3 h-3 w-48 rounded bg-border-color/40" />
+      </div>
+
+      <div className="space-y-4">
+        <div className="h-12 rounded border border-border-color bg-border-color/30" />
+        <div className="h-12 rounded border border-border-color bg-border-color/30" />
+        <div className="h-12 rounded bg-foreground/80" />
+      </div>
+
+      <div className="mt-6 space-y-4">
+        <div className="h-12 rounded border border-border-color bg-border-color/20" />
+        <div className="mx-auto h-3 w-56 rounded bg-border-color/30" />
+        <div className="mx-auto h-3 w-44 rounded bg-border-color/20" />
+      </div>
+    </div>
+  );
+}
+
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="w-full max-w-sm" />}>
+    <Suspense fallback={<LoginPageFallback />}>
       <LoginPageContent />
     </Suspense>
   );

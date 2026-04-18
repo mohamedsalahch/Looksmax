@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { CartProvider } from "@/providers/CartContext";
-import { AuthProvider } from "@/providers/AuthContext";
-import SiteChrome from "@/components/SiteChrome";
+import AppShell from "@/components/AppShell";
 
 export const metadata: Metadata = {
   title: "LOOKSMAX — Premium Menswear",
@@ -17,11 +15,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full flex flex-col font-sans bg-background text-foreground">
-        <AuthProvider>
-          <CartProvider>
-            <SiteChrome>{children}</SiteChrome>
-          </CartProvider>
-        </AuthProvider>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

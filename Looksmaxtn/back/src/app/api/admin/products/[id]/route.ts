@@ -54,6 +54,62 @@ function getInventorySnapshot(product: { stock?: number; fullStock?: number }, s
   return { availableStock, fullStock, soldQuantity };
 }
 
+function getDeclaredSizes(productSizes: unknown, bodySizes?: unknown) {
+  const sizes = new Set<string>();
+  for (const source of [productSizes, bodySizes]) {
+    if (!Array.isArray(source)) continue;
+    for (const size of source) {
+      if (typeof size !== "string") continue;
+      const normalized = size.trim();
+      if (normalized) sizes.add(normalized);
+    }
+  }
+  return Array.from(sizes);
+}
+
+function getSizeStockEntries(
+  sizeStock: unknown
+): Array<[string, { fullStock?: number; stock?: number }]> {
+  if (sizeStock instanceof Map) {
+    return Array.from(sizeStock.entries());
+  }
+
+  if (!sizeStock || typeof sizeStock !== "object") return [];
+
+  return Object.entries(sizeStock as Record<string, { fullStock?: number; stock?: number }>);
+}
+
+function buildSizeStockSnapshot(params: {
+  sizeStock?: unknown;
+  sizes: string[];
+  soldBySize: Map<string, number>;
+}) {
+  const { sizeStock, sizes, soldBySize } = params;
+  if (!sizeStock && sizes.length === 0) return null;
+
+  const snapshot: Record<string, { fullStock: number; stock: number; soldQuantity: number }> = {};
+  const sizeStockEntries = new Map(getSizeStockEntries(sizeStock));
+  const orderedSizes = Array.from(
+    new Set([
+      ...sizes,
+      ...Array.from(sizeStockEntries.keys()),
+    ])
+  );
+
+  if (orderedSizes.length === 0) return null;
+
+  for (const size of orderedSizes) {
+    const entry = sizeStockEntries.get(size);
+    snapshot[size] = {
+      fullStock: Math.max(entry?.fullStock ?? 0, 0),
+      stock: Math.max(entry?.stock ?? 0, 0),
+      soldQuantity: Math.max(soldBySize.get(size) || 0, 0),
+    };
+  }
+
+  return snapshot;
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getSession();
@@ -68,18 +124,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const soldBySize = soldBySizeMap.get(id) || new Map<string, number>();
     const inventory = getInventorySnapshot(product, soldQuantity);
 
-    let sizeStockData: Record<string, { fullStock: number; stock: number; soldQuantity: number }> | null = null;
-    if (product.sizeStock && product.sizeStock instanceof Map && product.sizeStock.size > 0) {
-      sizeStockData = {};
-      for (const [size, entry] of product.sizeStock) {
-        const sizeSold = soldBySize.get(size) || 0;
-        sizeStockData[size] = {
-          fullStock: entry.fullStock,
-          stock: entry.stock,
-          soldQuantity: sizeSold,
-        };
-      }
-    }
+    const sizeStockData = buildSizeStockSnapshot({
+      sizeStock: product.sizeStock,
+      sizes: getDeclaredSizes(product.sizes),
+      soldBySize,
+    });
 
     return NextResponse.json({
       product: {
@@ -118,6 +167,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (contentType.includes("application/json")) {
       const body = await req.json();
       const update: Record<string, unknown> = {};
+      const sizeStockMode = body.sizeStockMode === "restock" ? "restock" : "full";
+      const declaredSizes = getDeclaredSizes(existingProduct.sizes, body.sizes);
 
       if (typeof body.isActive === "boolean") {
         update.isActive = body.isActive;
@@ -125,17 +176,41 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
       if (body.sizeStock && typeof body.sizeStock === "object") {
         const sizeStockMap = new Map<string, { fullStock: number; stock: number }>();
-        let totalStock = 0;
+        for (const size of declaredSizes) {
+          sizeStockMap.set(size, { fullStock: 0, stock: 0 });
+        }
+
+        for (const [size, entry] of getSizeStockEntries(existingProduct.sizeStock)) {
+          sizeStockMap.set(size, {
+            fullStock: Math.max(entry.fullStock ?? 0, 0),
+            stock: Math.max(entry.stock ?? 0, 0),
+          });
+        }
+
         for (const [size, qty] of Object.entries(body.sizeStock as Record<string, number>)) {
-          const fullStockForSize = Math.max(0, Number(qty) || 0);
+          const nextValue = Math.max(0, Number(qty) || 0);
+          const currentEntry = sizeStockMap.get(size) || { fullStock: 0, stock: 0 };
+          const currentFullStock = Math.max(currentEntry.fullStock ?? currentEntry.stock ?? 0, 0);
+          const fullStockForSize = sizeStockMode === "restock" ? currentFullStock + nextValue : nextValue;
           const sizeSold = soldBySize.get(size) || 0;
           const availableForSize = Math.max(0, fullStockForSize - sizeSold);
           sizeStockMap.set(size, { fullStock: fullStockForSize, stock: availableForSize });
-          totalStock += availableForSize;
         }
-        update.sizeStock = sizeStockMap;
+
+        const sizeFilter = declaredSizes.length > 0 ? new Set(declaredSizes) : null;
+        const entries = sizeFilter
+          ? Array.from(sizeStockMap.entries()).filter(([size]) => sizeFilter.has(size))
+          : Array.from(sizeStockMap.entries());
+        const nextSizeStockMap = new Map(entries);
+        let totalStock = 0;
+        let totalFullStock = 0;
+        for (const entry of nextSizeStockMap.values()) {
+          totalStock += Math.max(entry.stock ?? 0, 0);
+          totalFullStock += Math.max(entry.fullStock ?? 0, 0);
+        }
+        update.sizeStock = nextSizeStockMap;
         update.stock = totalStock;
-        update.fullStock = Array.from(sizeStockMap.values()).reduce((sum, e) => sum + e.fullStock, 0);
+        update.fullStock = totalFullStock;
         if (totalStock > 0) update.isActive = true;
       } else {
         const submittedFullStock =
@@ -161,18 +236,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       const product = await Product.findByIdAndUpdate(id, update, { new: true }).lean();
       if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 });
       const inventory = getInventorySnapshot(product, soldQuantity);
-
-      let sizeStockData: Record<string, { fullStock: number; stock: number; soldQuantity: number }> | null = null;
-      if (product.sizeStock && product.sizeStock instanceof Map && product.sizeStock.size > 0) {
-        sizeStockData = {};
-        for (const [size, entry] of product.sizeStock) {
-          sizeStockData[size] = {
-            fullStock: entry.fullStock,
-            stock: entry.stock,
-            soldQuantity: soldBySize.get(size) || 0,
-          };
-        }
-      }
+      const sizeStockData = buildSizeStockSnapshot({
+        sizeStock: product.sizeStock,
+        sizes: getDeclaredSizes(product.sizes),
+        soldBySize,
+      });
 
       return NextResponse.json({
         product: {

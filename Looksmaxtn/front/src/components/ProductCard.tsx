@@ -29,6 +29,7 @@ interface ProductCardProps {
   fashionSubtype?: "clothes" | "shoes" | null;
   sizes?: string[];
   size?: string;
+  sizeAvailability?: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null;
   originPictures?: {
     front?: string;
     back?: string;
@@ -60,6 +61,7 @@ export default function ProductCard({
   fashionSubtype = "clothes",
   sizes,
   size,
+  sizeAvailability,
   originPictures,
   cloneSourceName = "",
   cloneSourceImage = "",
@@ -79,8 +81,14 @@ export default function ProductCard({
   const conditionLabel = getConditionLabel(conditionScore ?? 7, conditionStatus ?? undefined);
   const conditionColor = getConditionColor(conditionScore ?? 7);
   const showNewBadge = !isPerfume && (conditionScore ?? 0) >= 10;
-  const isSoldOut = stock < 1;
   const hasSizes = !isPerfume && availableSizes.length > 0;
+  const selectedSizeStock = (() => {
+    if (!isPerfume && selectedSize && sizeAvailability?.[selectedSize]) {
+      return sizeAvailability[selectedSize].stock;
+    }
+    return stock;
+  })();
+  const isSoldOut = selectedSizeStock < 1;
   const showReservedElsewhere = reservedElsewhere;
   const isBlocked = isSoldOut || blockedByOrder;
   const isReserved = isBlocked;
@@ -164,7 +172,7 @@ export default function ProductCard({
         price,
         brand: "LOOKSMAX",
         size: isPerfume ? undefined : selectedSize,
-        maxStock: Math.max(1, stock),
+        maxStock: Math.max(1, selectedSizeStock),
         image,
         categories,
         productType,
@@ -195,7 +203,7 @@ export default function ProductCard({
         price,
         brand: "LOOKSMAX",
         size: isPerfume ? undefined : selectedSize,
-        maxStock: Math.max(1, stock),
+        maxStock: Math.max(1, selectedSizeStock),
         image,
         productType,
         fashionSubtype,
@@ -211,7 +219,7 @@ export default function ProductCard({
         price,
         brand: "LOOKSMAX",
         quantity: 1,
-        maxStock: Math.max(1, stock),
+        maxStock: Math.max(1, selectedSizeStock),
         productType,
         fashionSubtype,
         originPictures,
@@ -285,7 +293,13 @@ export default function ProductCard({
   };
 
   return (
-    <Link href={`/product/${id}`} className="group cursor-pointer block relative">
+    <Link
+      href={{
+        pathname: `/product/${id}`,
+        query: !isPerfume && selectedSize ? { size: selectedSize } : undefined,
+      }}
+      className="group cursor-pointer block relative"
+    >
       {isPerfume && cloneSourceImage && clonePreview.visible && (
         <div
           className="fixed z-[70] pointer-events-none h-[15rem] w-[11.5rem] overflow-hidden rounded border border-white/40 bg-background/95 p-3 shadow-2xl backdrop-blur-sm transition-opacity duration-150"

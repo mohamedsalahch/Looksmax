@@ -29,6 +29,7 @@ interface ProductDetail {
   availableStock?: number;
   soldQuantity?: number;
   fullStock?: number;
+  sizeStock?: Record<string, { fullStock: number; stock: number; soldQuantity: number }> | null;
   images?: ProductImage[];
   tag?: string;
   brand: string;
@@ -122,6 +123,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
 
   const status = getProductStatus(product);
   const inventory = getInventorySummary(product);
+  const sizeEntries = Object.entries(product.sizeStock || {});
 
   return (
     <div className="space-y-6">
@@ -222,8 +224,34 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
                   }`}
                 >
                 {product.isActive === false || product.visibilityStatus === "inactive" ? "Inactive" : "Active"}
-              </span>
+                </span>
             </div>
+            {sizeEntries.length > 0 && (
+              <div className="border border-border rounded p-4 space-y-3">
+                <div>
+                  <p className="text-xs text-text-secondary uppercase tracking-wider">Size Inventory</p>
+                  <p className="mt-1 text-[11px] text-text-secondary">
+                    Full stock is the total set for each size. Sold stock is derived from orders.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  {sizeEntries.map(([size, entry]) => (
+                    <div key={size} className="flex items-center justify-between gap-3 border border-border bg-bg-secondary px-3 py-2">
+                      <div>
+                        <p className="text-xs font-medium uppercase tracking-wider">{size}</p>
+                        <p className="text-[10px] text-text-secondary">
+                          Full {Math.max(entry.fullStock ?? 0, 0)} · Sold {Math.max(entry.soldQuantity ?? 0, 0)} · Available {Math.max(entry.stock ?? 0, 0)}
+                        </p>
+                      </div>
+                      <div className="text-right text-[10px] uppercase tracking-wider text-text-secondary">
+                        <p>Available: {Math.max(entry.stock ?? 0, 0)}</p>
+                        <p>Sold: {Math.max(entry.soldQuantity ?? 0, 0)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {product.productType === "perfume" && product.cloneSourceName && (
               <p className="text-xs text-text-secondary">
                 Clones <span className="text-text-primary">{product.cloneSourceName}</span>

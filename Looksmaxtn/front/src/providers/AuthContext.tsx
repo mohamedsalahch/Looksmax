@@ -1,11 +1,13 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import {
   clearAuthToken,
   getStoredAuthToken,
   getTokenExpiryMs,
   refreshStoreAuthToken,
+  redirectToLogin,
   storeAuthToken,
   withAuthRequest,
 } from "@/lib/authClient";
@@ -71,6 +73,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const refreshTimerRef = useRef<number | null>(null);
   const logoutInProgressRef = useRef(false);
+  const pathname = usePathname();
+
+  const isProtectedPath = useCallback((path: string) => {
+    return (
+      path === "/checkout" ||
+      path.startsWith("/account") ||
+      path.startsWith("/studio")
+    );
+  }, []);
 
   const clearRefreshTimer = useCallback(() => {
     if (refreshTimerRef.current === null) return;
@@ -109,6 +120,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [clearRefreshTimer]);
 
   const refreshUser = useCallback(async () => {
+    if (!isProtectedPath(pathname)) {
+      clearRefreshTimer();
+      if (!logoutInProgressRef.current) {
+        setLoading(false);
+      }
+      return;
+    }
+
     if (logoutInProgressRef.current) {
       setLoading(false);
       return;
@@ -116,6 +135,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const res = await fetch(`/api/auth/me?ts=${Date.now()}`, withAuthRequest({ cache: "no-store" }));
       if (!res.ok) {
+        if (res.status === 401) {
+          clearAuthToken();
+          redirectToLogin(pathname);
+        }
         setUser(null);
         return;
       }
@@ -127,7 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [scheduleTokenRefresh]);
+  }, [clearRefreshTimer, isProtectedPath, pathname, scheduleTokenRefresh]);
 
   useEffect(() => {
     refreshUser();

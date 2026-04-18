@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
 import { reserveProduct, subscribeToReservationChanges } from "@/lib/reservations";
 import { formatTndPrice } from "@/lib/formatPrice";
@@ -53,10 +53,14 @@ export default function ProductInfo({
   const [ownedReservation, setOwnedReservation] = useState(() => Boolean(product.ownedReservation));
   const [blockedByOrder, setBlockedByOrder] = useState(() => Boolean(product.blockedByOrder));
   const [selectedQuantity, setSelectedQuantity] = useState(1);
+  const searchParams = useSearchParams();
+  const requestedSize = searchParams.get("size") || "";
   const availableSizes = (product.sizes?.length ? product.sizes : product.size ? [product.size] : []).filter(
     (entry) => Boolean(entry.trim())
   );
-  const [selectedSize, setSelectedSize] = useState(() => availableSizes[0] || "");
+  const [selectedSize, setSelectedSize] = useState(() => {
+    return availableSizes.includes(requestedSize) ? requestedSize : availableSizes[0] || "";
+  });
   const { addItem, items, updateQuantity } = useCart();
   const router = useRouter();
   const isPerfume = product.productType === "perfume";
@@ -146,8 +150,12 @@ export default function ProductInfo({
       return;
     }
 
-    setSelectedSize((current) => (availableSizes.includes(current) ? current : availableSizes[0]));
-  }, [availableSizes.join("|")]);
+    setSelectedSize((current) => {
+      if (availableSizes.includes(current)) return current;
+      if (availableSizes.includes(requestedSize)) return requestedSize;
+      return availableSizes[0];
+    });
+  }, [availableSizes.join("|"), requestedSize]);
 
   useEffect(() => {
     setOwnedReservation(Boolean(product.ownedReservation));
@@ -178,7 +186,11 @@ export default function ProductInfo({
     }
 
     try {
-      const reservation = await reserveProduct(product.id || "unknown", 1, isPerfume ? undefined : selectedSize);
+      const reservation = await reserveProduct(
+        product.id || "unknown",
+        selectedQuantity,
+        isPerfume ? undefined : selectedSize
+      );
       addItem({
         id: product.id || "unknown",
         name: product.name,
@@ -193,7 +205,7 @@ export default function ProductInfo({
         originPictures: product.originPictures,
         reservationExpiresAt: reservation.reservationExpiresAt,
         cartCount: reservation.cartCount,
-        quantity: 1,
+        quantity: selectedQuantity,
       }, { openCart: false });
       setAddedToCart(true);
       setTimeout(() => setAddedToCart(false), 2000);
@@ -318,7 +330,6 @@ export default function ProductInfo({
             {availableSizes.map((sizeOption) => {
               const sizeInfo = sizeAvailability?.[sizeOption];
               const sizeAvailable = sizeInfo ? sizeInfo.available : currentStock > 0;
-              const sizeStock = sizeInfo?.stock ?? currentStock;
               return (
                 <button
                   key={sizeOption}
@@ -333,7 +344,7 @@ export default function ProductInfo({
                         : "border-border-color text-foreground hover:bg-hover cursor-pointer"
                   }`}
                 >
-                  {sizeOption}{sizeInfo ? ` (${sizeStock})` : ""}
+                  {sizeOption}
                 </button>
               );
             })}
@@ -347,10 +358,12 @@ export default function ProductInfo({
           {isPerfume
             ? `${currentStock} bottle${currentStock !== 1 ? "s" : ""} available`
             : selectedSize && sizeAvailability?.[selectedSize]
-              ? `${sizeAvailability[selectedSize].stock} in stock (${selectedSize})`
+              ? sizeAvailability[selectedSize].stock === 1
+                ? `Last one — ${selectedSize}`
+                : `Selected size: ${selectedSize}`
               : currentStock === 1
-                ? "Last one — only 1 in stock"
-                : `${currentStock} in stock`}
+                ? "Last one"
+                : "Size selected"}
         </span>
       </div>
 

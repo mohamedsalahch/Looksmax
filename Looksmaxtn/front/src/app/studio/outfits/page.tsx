@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/providers/AuthContext";
-import { withAuthRequest } from "@/lib/authClient";
+import { redirectToLogin, withAuthRequest } from "@/lib/authClient";
 import { shareOutfit } from "@/lib/share";
 import { readSavedOutfitsSession, writeSavedOutfitsSession } from "@/lib/savedOutfitsSession";
 
@@ -56,18 +56,31 @@ export default function SavedOutfitsPage() {
     const cachedOutfits = nextUserId ? readSavedOutfitsSession(nextUserId) : null;
 
     if (cachedOutfits) {
-      setOutfits(cachedOutfits);
-      setLoading(false);
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setOutfits(cachedOutfits);
+        setLoading(false);
+      });
       return () => {
         cancelled = true;
       };
     }
 
-    setLoading(true);
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setLoading(true);
+    });
 
     fetch("/api/outfits?ts=" + Date.now(), withAuthRequest({ cache: "no-store" }))
-      .then((response) => response.json())
+      .then((response) => {
+        if (response.status === 401) {
+          redirectToLogin("/studio/outfits");
+          return null;
+        }
+        return response.json();
+      })
       .then((data) => {
+        if (!data) return;
         if (cancelled) return;
         const nextOutfits = data.outfits || [];
         setOutfits(nextOutfits);

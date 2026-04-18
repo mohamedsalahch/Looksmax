@@ -6,6 +6,18 @@ import { getSession } from "@/store/lib/auth";
 import { filterAndRankProducts } from "@/store/lib/productSearch";
 import { getActiveOrderHoldMapByProductIds } from "@/lib/productInventory";
 
+function getSizeStockEntries(
+  sizeStock: unknown
+): Array<[string, { fullStock?: number; stock?: number }]> {
+  if (sizeStock instanceof Map) {
+    return Array.from(sizeStock.entries());
+  }
+
+  if (!sizeStock || typeof sizeStock !== "object") return [];
+
+  return Object.entries(sizeStock as Record<string, { fullStock?: number; stock?: number }>);
+}
+
 function uniqueSortedValues(values: string[]) {
   return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
 }
@@ -92,11 +104,10 @@ export async function GET(req: NextRequest) {
       const reservedElsewhere = reservedByOthers > 0 && reservedByOthers >= stock;
 
       let sizeAvailability: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null = null;
-      const hasSizeStock = product.sizeStock && product.sizeStock instanceof Map && product.sizeStock.size > 0;
-      if (hasSizeStock) {
+      const sizeStockEntries = getSizeStockEntries(product.sizeStock);
+      if (sizeStockEntries.length > 0) {
         sizeAvailability = {};
-        const sizeMap = product.sizeStock as Map<string, { fullStock: number; stock: number }>;
-        for (const [sz, entry] of sizeMap) {
+        for (const [sz, entry] of sizeStockEntries) {
           const sizeResKey = `${product._id.toString()}:${sz}`;
           const sizeResInfo = reservationsByProductAndSize.get(sizeResKey) || { totalQuantity: 0, ownedQuantity: 0 };
           const sizeStock = Math.max(entry.stock ?? 0, 0);

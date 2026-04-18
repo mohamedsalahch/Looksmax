@@ -14,6 +14,7 @@ interface Product {
   categories?: string[];
   price: number;
   stock: number;
+  sizeAvailability?: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null;
   cartCount?: number;
   reservedElsewhere?: boolean;
   ownedReservation?: boolean;
@@ -85,6 +86,7 @@ export default function ProductCardRow({ title = "Featured selection" }: { title
             categories={product.categories}
             price={product.price.toFixed(2)}
             stock={product.stock}
+            sizeAvailability={product.sizeAvailability}
             cartCount={product.cartCount}
             reservedElsewhere={product.reservedElsewhere}
             ownedReservation={product.ownedReservation}

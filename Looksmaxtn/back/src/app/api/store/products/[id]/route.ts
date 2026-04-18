@@ -5,6 +5,18 @@ import ProductReservation from "@/store/models/ProductReservation";
 import { getSession } from "@/store/lib/auth";
 import { getActiveOrderHoldMapByProductIds } from "@/lib/productInventory";
 
+function getSizeStockEntries(
+  sizeStock: unknown
+): Array<[string, { fullStock?: number; stock?: number }]> {
+  if (sizeStock instanceof Map) {
+    return Array.from(sizeStock.entries());
+  }
+
+  if (!sizeStock || typeof sizeStock !== "object") return [];
+
+  return Object.entries(sizeStock as Record<string, { fullStock?: number; stock?: number }>);
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -36,9 +48,10 @@ export async function GET(
     const cartReservedElsewhere = reservedByOthersQuantity > 0 && reservedByOthersQuantity >= stock;
     const blockedByOrder = Boolean(activeOrderHold) && stock <= 0;
 
-    const hasSizeStock = product.sizeStock && product.sizeStock instanceof Map && product.sizeStock.size > 0;
+    const sizeStockEntries = getSizeStockEntries(product.sizeStock);
+    const hasSizeStock = sizeStockEntries.length > 0;
     const anySizeAvailable = hasSizeStock
-      ? Array.from((product.sizeStock as Map<string, { stock: number }>).values()).some((e) => Math.max(e.stock ?? 0, 0) > 0)
+      ? sizeStockEntries.some(([, entry]) => Math.max(entry.stock ?? 0, 0) > 0)
       : stock > 0;
 
     if (!anySizeAvailable && !blockedByOrder) {
@@ -50,8 +63,7 @@ export async function GET(
     let sizeAvailability: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null = null;
     if (hasSizeStock) {
       sizeAvailability = {};
-      const sizeMap = product.sizeStock as Map<string, { fullStock: number; stock: number }>;
-      for (const [sz, entry] of sizeMap) {
+      for (const [sz, entry] of sizeStockEntries) {
         const sizeReservations = activeReservations.filter((r) => (r.size || "") === sz);
         const sizeReservedByOthers = sizeReservations
           .filter((r) => r.reservationKey !== reservationKey)
