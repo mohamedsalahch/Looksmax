@@ -54,6 +54,7 @@ export async function GET() {
                 profileImageRequiresGeneration: Boolean(
                   user.bodyProfile.profileImageRequiresGeneration
                 ),
+                profileImageValidationError: user.bodyProfile.profileImageValidationError || "",
               }
             : user.bodyProfile,
         },

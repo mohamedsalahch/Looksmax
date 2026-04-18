@@ -29,6 +29,7 @@ class ClothesRequest(BaseModel):
     webhook_url: str | None = None
     model_pictures: ModelPictures
     product_pictures: ProductPictures
+    garment_zone: str = "top"
 
 
 class ShoesRequest(BaseModel):
@@ -76,3 +77,8 @@ class OutfitRequest(BaseModel):
     bottom_size: str
     shoe_size: str
     body_zones: BodyZones
+
+
+class ValidatePhotoRequest(BaseModel):
+    """Request for profile photo validation."""
+    image: str  # base64 encoded image

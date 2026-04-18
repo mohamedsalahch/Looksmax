@@ -10,7 +10,7 @@ load_dotenv()
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
-from app.api import clothes, outfit, proxy, shoes
+from app.api import clothes, outfit, proxy, shoes, validation
 from app.services.generator import ImageGenerator
 
 # Configure logging
@@ -38,6 +38,7 @@ clothes.set_generator(generator)
 shoes.set_generator(generator)
 outfit.set_generator(generator)
 proxy.set_generator(generator)
+validation.set_generator(generator)
 
 
 # Include routers
@@ -45,6 +46,7 @@ app.include_router(clothes.router)
 app.include_router(shoes.router)
 app.include_router(outfit.router)
 app.include_router(proxy.router)
+app.include_router(validation.router)
 
 
 @app.get("/health")
@@ -65,6 +67,7 @@ async def root():
             "shoes": "/api/generate-shoes",
             "outfit": "/api/generate_outfit",
             "proxy": "/api/proxy",
+            "validate-photo": "/api/validate-photo",
         }
     }
 

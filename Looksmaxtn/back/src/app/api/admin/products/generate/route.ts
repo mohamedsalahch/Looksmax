@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
     const modelId = String(formData.get("modelId") || "");
     const type = String(formData.get("type") || "fashion");
     const fashionSubtype = String(formData.get("fashionSubtype") || "clothes");
+    const garmentZone = String(formData.get("garmentZone") || "top");
     const normalizedType = normalizeType(type, fashionSubtype);
     const model =
       normalizedType === "clothes" ? await ModelAsset.findById(modelId).lean() : null;
@@ -91,6 +92,7 @@ export async function POST(req: NextRequest) {
       status: "processing",
       productType: type,
       fashionSubtype,
+      garmentZone,
     });
 
     const payload =
@@ -118,6 +120,7 @@ export async function POST(req: NextRequest) {
               front: await fileToBase64(front as File),
               back: await fileToBase64(back as File),
             },
+            garment_zone: garmentZone,
           };
 
     const normalizedBaseUrl = baseUrl.replace(/\/$/, "");

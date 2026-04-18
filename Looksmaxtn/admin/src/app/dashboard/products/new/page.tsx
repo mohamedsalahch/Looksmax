@@ -222,6 +222,7 @@ export default function NewProductPage() {
   const [cloneSourceImageFile, setCloneSourceImageFile] = useState<File | null>(null);
   const [draggedImageId, setDraggedImageId] = useState<string | null>(null);
   const [selectedModelId, setSelectedModelId] = useState("");
+  const [garmentZone, setGarmentZone] = useState<"top" | "bottom">("top");
   const [generationInputs, setGenerationInputs] = useState<GenerationInputs>(initialGenerationInputs);
   const [importingGeneratedImage, setImportingGeneratedImage] = useState<string | null>(null);
   const [isGeneratedImagesOpen, setIsGeneratedImagesOpen] = useState(false);
@@ -481,6 +482,7 @@ export default function NewProductPage() {
       body.append("modelId", selectedModelId);
       body.append("type", form.productType);
       body.append("fashionSubtype", form.fashionSubtype);
+      if (form.fashionSubtype === "clothes") body.append("garmentZone", garmentZone);
       body.append("front", generationInputs.front.file);
       body.append("back", generationInputs.back.file);
       if (generationInputs.left.file) body.append("left", generationInputs.left.file);
@@ -1124,6 +1126,35 @@ export default function NewProductPage() {
                       </option>
                     ))}
                   </select>
+                </div>
+                <div className="flex items-center gap-3">
+                  <label className="block min-w-10 text-[10px] text-text-secondary uppercase tracking-wider">
+                    Zone
+                  </label>
+                  <div className="flex gap-0">
+                    <button
+                      type="button"
+                      onClick={() => setGarmentZone("top")}
+                      className={`px-4 py-2 text-[10px] uppercase tracking-wider border ${
+                        garmentZone === "top"
+                          ? "border-accent text-accent bg-accent/5"
+                          : "border-border text-text-secondary hover:bg-bg-hover"
+                      }`}
+                    >
+                      Top
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setGarmentZone("bottom")}
+                      className={`px-4 py-2 text-[10px] uppercase tracking-wider border border-l-0 ${
+                        garmentZone === "bottom"
+                          ? "border-accent text-accent bg-accent/5"
+                          : "border-border text-text-secondary hover:bg-bg-hover"
+                      }`}
+                    >
+                      Bottom
+                    </button>
+                  </div>
                 </div>
                 <div className="grid grid-cols-4 gap-4">
                   <div className="space-y-2">
