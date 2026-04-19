@@ -114,7 +114,7 @@ export default function SavedOutfitDetailPage({
               disabled={sharing}
               aria-busy={sharing}
               className={`inline-flex min-w-[84px] justify-center border border-border-color px-4 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:text-foreground disabled:opacity-50 ${
-                shared ? "cursor-default" : "cursor-pointer"
+                sharedMode ? "cursor-default" : "cursor-pointer"
               }`}
             >
               {sharedMode ? (sharedMode === "shared" ? "Shared" : "Copied") : "Share"}
