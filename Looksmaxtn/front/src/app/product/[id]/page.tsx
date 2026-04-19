@@ -122,7 +122,7 @@ export default async function ProductDetailPage({
             <li>
               <Link
                 href="/category/all"
-                className="hover:text-foreground transition-colors"
+                className="hidden md:inline hover:text-foreground transition-colors"
               >
                 Collection
               </Link>

@@ -25,7 +25,7 @@ export default function SavedOutfitDetailPage({
   const [outfit, setOutfit] = useState<SavedOutfitDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [sharing, setSharing] = useState(false);
-  const [sharedMode, setSharedMode] = useState<"copied" | "shared" | "">("");
+  const [sharedMode, setSharedMode] = useState<"copied" | "">("");
   const sharedResetTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -60,12 +60,12 @@ export default function SavedOutfitDetailPage({
 
     setSharing(true);
     try {
-      const { copied, shared } = await shareOutfit(outfit.id);
-      if (!copied && !shared) {
+      const { copied } = await shareOutfit(outfit.id);
+      if (!copied) {
         setSharedMode("");
         return;
       }
-      setSharedMode(shared ? "shared" : "copied");
+      setSharedMode("copied");
       if (sharedResetTimerRef.current !== null) {
         window.clearTimeout(sharedResetTimerRef.current);
       }
@@ -117,7 +117,7 @@ export default function SavedOutfitDetailPage({
                 sharedMode ? "cursor-default" : "cursor-pointer"
               }`}
             >
-              {sharedMode ? (sharedMode === "shared" ? "Shared" : "Copied") : "Share"}
+              {sharedMode ? "Copied" : "Share"}
             </button>
             <Link
               href="/studio/outfits"

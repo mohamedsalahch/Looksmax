@@ -590,7 +590,7 @@ export default function OutfitStudioPage() {
     const [savingOutfit, setSavingOutfit] = useState(false);
     const [sharingOutfit, setSharingOutfit] = useState(false);
     const [sharedOutfit, setSharedOutfit] = useState(false);
-    const [sharedOutfitMode, setSharedOutfitMode] = useState<"copied" | "shared" | "">("");
+    const [sharedOutfitMode, setSharedOutfitMode] = useState<"copied" | "">("");
     const [generationError, setGenerationError] = useState("");
     const [generationStateHydrated, setGenerationStateHydrated] = useState(false);
     const [studioStateHydrated, setStudioStateHydrated] = useState(false);
@@ -1197,14 +1197,14 @@ export default function OutfitStudioPage() {
             const outfitId = await persistGeneratedOutfit();
             if (!outfitId) return;
 
-            const { copied, shared } = await shareOutfit(outfitId);
-            if (!copied && !shared) {
+            const { copied } = await shareOutfit(outfitId);
+            if (!copied) {
                 setSharedOutfit(false);
                 setSharedOutfitMode("");
                 return;
             }
             setSharedOutfit(true);
-            setSharedOutfitMode(shared ? "shared" : "copied");
+            setSharedOutfitMode("copied");
             if (sharedResetTimerRef.current !== null) {
                 window.clearTimeout(sharedResetTimerRef.current);
             }
@@ -1551,7 +1551,7 @@ export default function OutfitStudioPage() {
                                                 aria-busy={sharingOutfit}
                                                 className="inline-flex min-w-[84px] justify-center rounded-none border border-[#00000012] bg-transparent px-3.5 py-2 text-[11px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:border-[#c9a96e] hover:text-[#c9a96e] disabled:opacity-50"
                                             >
-                                                {sharedOutfit ? (sharedOutfitMode === "shared" ? "Shared" : "Copied") : "Share"}
+                                                {sharedOutfit ? "Copied" : "Share"}
                                             </button>
                                         </div>
                                     ) : null}

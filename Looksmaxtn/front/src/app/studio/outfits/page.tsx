@@ -40,7 +40,7 @@ export default function SavedOutfitsPage() {
   const [loading, setLoading] = useState(true);
   const [sharingOutfitId, setSharingOutfitId] = useState("");
   const [sharedOutfitId, setSharedOutfitId] = useState("");
-  const [sharedOutfitMode, setSharedOutfitMode] = useState<"copied" | "shared" | "">("");
+  const [sharedOutfitMode, setSharedOutfitMode] = useState<"copied" | "">("");
   const shareResetTimerRef = useRef<number | null>(null);
 
   const clearShareResetTimer = () => {
@@ -113,15 +113,15 @@ export default function SavedOutfitsPage() {
   const handleShareOutfit = async (id: string) => {
     setSharingOutfitId(id);
     try {
-      const { copied, shared } = await shareOutfit(id);
-      if (!copied && !shared) {
+      const { copied } = await shareOutfit(id);
+      if (!copied) {
         setSharedOutfitId("");
         setSharedOutfitMode("");
         return;
       }
       clearShareResetTimer();
       setSharedOutfitId(id);
-      setSharedOutfitMode(shared ? "shared" : "copied");
+      setSharedOutfitMode("copied");
       shareResetTimerRef.current = window.setTimeout(() => {
         setSharedOutfitId("");
         setSharedOutfitMode("");
@@ -212,7 +212,7 @@ export default function SavedOutfitsPage() {
                             sharedOutfitId === outfit.id ? "cursor-default" : "cursor-pointer"
                           }`}
                         >
-                          {sharedOutfitId === outfit.id ? (sharedOutfitMode === "shared" ? "Shared" : "Copied") : "Share"}
+                          {sharedOutfitId === outfit.id ? "Copied" : "Share"}
                         </button>
                       </div>
                     </div>

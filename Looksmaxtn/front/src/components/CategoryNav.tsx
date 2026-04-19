@@ -114,22 +114,22 @@ export default function CategoryNav({
   };
 
   return (
-    <nav className="sticky top-[57px] z-30 bg-background/95 backdrop-blur-sm border-b border-border-color">
+    <nav className="hidden md:block sticky top-[57px] z-30 bg-background/95 backdrop-blur-sm border-b border-border-color">
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex items-center gap-6 overflow-x-auto py-3 scrollbar-hide">
-          <Link href="/" className={`text-xs whitespace-nowrap transition-colors py-1 px-1 ${activeSlug === "home" ? "text-foreground font-medium border-b border-foreground" : "text-text-secondary hover:text-foreground"}`}>
+          <Link href="/" className={`hidden text-xs whitespace-nowrap transition-colors py-1 px-1 md:inline-block ${activeSlug === "home" ? "text-foreground font-medium border-b border-foreground" : "text-text-secondary hover:text-foreground"}`}>
             Home
           </Link>
-          <Link href="/category/new-arrivals" className={`text-xs whitespace-nowrap transition-colors py-1 px-1 ${activeSlug === "new-arrivals" ? "text-foreground font-medium border-b border-foreground" : "text-text-secondary hover:text-foreground"}`}>
+          <Link href="/category/new-arrivals" className={`hidden text-xs whitespace-nowrap transition-colors py-1 px-1 md:inline-block ${activeSlug === "new-arrivals" ? "text-foreground font-medium border-b border-foreground" : "text-text-secondary hover:text-foreground"}`}>
             New Arrivals
           </Link>
-          <Link href="/category/all" className={`text-xs whitespace-nowrap transition-colors py-1 px-1 ${activeSlug === "all-categories" ? "text-foreground font-medium border-b border-foreground" : "text-text-secondary hover:text-foreground"}`}>
+          <Link href="/category/all" className={`hidden text-xs whitespace-nowrap transition-colors py-1 px-1 md:inline-block ${activeSlug === "all-categories" ? "text-foreground font-medium border-b border-foreground" : "text-text-secondary hover:text-foreground"}`}>
             All Categories
           </Link>
           {categoriesLoaded && categories.map((item) => (
             <div
               key={item._id}
-              className="flex items-center gap-1 whitespace-nowrap"
+              className="hidden items-center gap-1 whitespace-nowrap md:flex"
               onClick={() => {
                 if (!item.children || item.children.length === 0) return;
                 setExpandedParent((current) => {

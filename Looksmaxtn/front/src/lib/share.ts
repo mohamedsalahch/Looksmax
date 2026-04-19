@@ -5,7 +5,6 @@ import { withAuthRequest } from "@/lib/authClient";
 export interface ShareResult {
   shareUrl: string;
   copied: boolean;
-  shared: boolean;
 }
 
 export async function copyShareLink(text: string) {
@@ -48,21 +47,6 @@ export async function copyShareLink(text: string) {
   return false;
 }
 
-async function shareViaNativeShare(shareUrl: string) {
-  if (typeof navigator === "undefined" || !navigator.share) return false;
-
-  try {
-    await navigator.share({
-      title: "Saved Outfit",
-      text: "View this outfit",
-      url: shareUrl,
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export async function shareOutfit(id: string): Promise<ShareResult> {
   const response = await fetch(`/api/outfits/${id}/share`, withAuthRequest({ method: "POST" }));
   const data = await response.json();
@@ -73,10 +57,5 @@ export async function shareOutfit(id: string): Promise<ShareResult> {
 
   const shareUrl = String(data.shareUrl || "");
   const copied = await copyShareLink(shareUrl);
-  if (copied) {
-    return { shareUrl, copied: true, shared: false };
-  }
-
-  const shared = await shareViaNativeShare(shareUrl);
-  return { shareUrl, copied: false, shared };
+  return { shareUrl, copied };
 }
