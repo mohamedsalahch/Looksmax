@@ -15,6 +15,13 @@ export default function PasswordSettingsPage() {
   const [loading, setLoading] = useState(false);
   const isGoogleAccount = Boolean(user?.googleId);
 
+  const blurActiveElement = () => {
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement) {
+      activeElement.blur();
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -50,6 +57,7 @@ export default function PasswordSettingsPage() {
       setError("Network error");
     }
     setLoading(false);
+    blurActiveElement();
   };
 
   return (

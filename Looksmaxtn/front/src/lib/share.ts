@@ -2,6 +2,12 @@
 
 import { withAuthRequest } from "@/lib/authClient";
 
+export interface ShareResult {
+  shareUrl: string;
+  copied: boolean;
+  shared: boolean;
+}
+
 export async function copyShareLink(text: string) {
   if (!text) return false;
 
@@ -16,26 +22,48 @@ export async function copyShareLink(text: string) {
 
   if (typeof document === "undefined") return false;
 
-  const input = document.createElement("input");
-  input.value = text;
-  input.setAttribute("readonly", "true");
-  input.style.position = "fixed";
-  input.style.left = "-9999px";
-  document.body.appendChild(input);
-  input.select();
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.setAttribute("aria-hidden", "true");
+  textarea.style.position = "fixed";
+  textarea.style.top = "0";
+  textarea.style.left = "0";
+  textarea.style.opacity = "0";
+  textarea.style.pointerEvents = "none";
+  textarea.style.fontSize = "16px";
+  document.body.appendChild(textarea);
+  textarea.focus({ preventScroll: true });
+  textarea.select();
+  textarea.setSelectionRange(0, textarea.value.length);
 
   try {
     const copied = document.execCommand("copy");
-    document.body.removeChild(input);
+    document.body.removeChild(textarea);
     if (copied) return true;
   } catch {
-    document.body.removeChild(input);
+    document.body.removeChild(textarea);
   }
 
   return false;
 }
 
-export async function shareOutfit(id: string) {
+async function shareViaNativeShare(shareUrl: string) {
+  if (typeof navigator === "undefined" || !navigator.share) return false;
+
+  try {
+    await navigator.share({
+      title: "Saved Outfit",
+      text: "View this outfit",
+      url: shareUrl,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function shareOutfit(id: string): Promise<ShareResult> {
   const response = await fetch(`/api/outfits/${id}/share`, withAuthRequest({ method: "POST" }));
   const data = await response.json();
 
@@ -45,5 +73,10 @@ export async function shareOutfit(id: string) {
 
   const shareUrl = String(data.shareUrl || "");
   const copied = await copyShareLink(shareUrl);
-  return { shareUrl, copied };
+  if (copied) {
+    return { shareUrl, copied: true, shared: false };
+  }
+
+  const shared = await shareViaNativeShare(shareUrl);
+  return { shareUrl, copied: false, shared };
 }

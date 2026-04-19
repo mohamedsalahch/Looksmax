@@ -99,6 +99,14 @@ textarea {
   border-radius: 0;
 }
 
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 /* Transition utilities */
 .transition-panel {
   transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;

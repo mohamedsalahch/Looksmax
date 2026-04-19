@@ -590,6 +590,7 @@ export default function OutfitStudioPage() {
     const [savingOutfit, setSavingOutfit] = useState(false);
     const [sharingOutfit, setSharingOutfit] = useState(false);
     const [sharedOutfit, setSharedOutfit] = useState(false);
+    const [sharedOutfitMode, setSharedOutfitMode] = useState<"copied" | "shared" | "">("");
     const [generationError, setGenerationError] = useState("");
     const [generationStateHydrated, setGenerationStateHydrated] = useState(false);
     const [studioStateHydrated, setStudioStateHydrated] = useState(false);
@@ -802,7 +803,7 @@ export default function OutfitStudioPage() {
             .catch(() => setSuggestedProducts([]));
     }, [genderCollectionSlug, user?.bodyProfile?.gender]);
 
-    const activeZoneIdForSelection = showAllSelectedItems ? "" : selectedZoneId;
+    const activeZoneIdForSelection = selectedZoneId;
     const selectedZoneMeta = showAllSelectedItems
         ? {
             title: "All cart items",
@@ -816,6 +817,7 @@ export default function OutfitStudioPage() {
     const allSelectedOutfitItems: OutfitViewItem[] = cartItems.flatMap((cartItem) => {
         if (cartItem.productType === "perfume") return [];
 
+        const productId = getCartItemProductId(cartItem.id);
         const zoneId = inferStudioAssignmentZone({
             categories: cartItem.categories,
             name: cartItem.name,
@@ -823,7 +825,7 @@ export default function OutfitStudioPage() {
         });
 
         return [{
-            id: cartItem.id,
+            id: productId,
             name: cartItem.name,
             image: cartItem.image,
             price: cartItem.price,
@@ -942,19 +944,29 @@ export default function OutfitStudioPage() {
     }, [cartItems, isWomen, zoneOverrides, studioStateHydrated]);
 
     useEffect(() => {
-        const pendingAssignments = consumeStudioAssignments();
-        if (pendingAssignments.length === 0) return;
+        const syncPendingAssignments = () => {
+            const pendingAssignments = consumeStudioAssignments();
+            if (pendingAssignments.length === 0) return;
 
-        let lastZoneId: StudioZoneId | null = null;
-        for (const item of pendingAssignments) {
-            const zoneId = item.preferredZoneId || inferStudioAssignmentZone(item);
-            applyAssignmentToZone(zoneId, item);
-            lastZoneId = zoneId;
-        }
+            let lastZoneId: StudioZoneId | null = null;
+            for (const item of pendingAssignments) {
+                const zoneId = item.preferredZoneId || inferStudioAssignmentZone(item);
+                applyAssignmentToZone(zoneId, item);
+                lastZoneId = zoneId;
+            }
 
-        if (lastZoneId) {
-            setSelectedZoneId(lastZoneId);
-        }
+            if (lastZoneId) {
+                setSelectedZoneId(lastZoneId);
+                setShowAllSelectedItems(false);
+            }
+        };
+
+        syncPendingAssignments();
+        window.addEventListener("looksmax:studio-assignment-change", syncPendingAssignments as EventListener);
+
+        return () => {
+            window.removeEventListener("looksmax:studio-assignment-change", syncPendingAssignments as EventListener);
+        };
     }, [isWomen]);
 
     const handleSelectZone = (zoneId: (typeof BODY_ZONES)[number]["id"]) => {
@@ -977,9 +989,11 @@ export default function OutfitStudioPage() {
         item: OutfitViewItem,
         keepAllView = false
     ) => {
+        const normalizedItemId = getCartItemProductId(item.id);
         setShowAllSelectedItems(keepAllView);
+        setSelectedZoneId(zoneId);
         setOutfit((current) => {
-            if (current[zoneId]?.id === item.id) {
+            if (current[zoneId]?.id === normalizedItemId) {
                 setZoneOverrides((currentOverrides) => ({
                     ...currentOverrides,
                     [zoneId]: null,
@@ -993,7 +1007,7 @@ export default function OutfitStudioPage() {
             setZoneOverrides((currentOverrides) => ({
                 ...currentOverrides,
                 [zoneId]: {
-                    id: item.id,
+                    id: normalizedItemId,
                     name: item.name,
                     image: item.image,
                     price: item.price,
@@ -1005,7 +1019,7 @@ export default function OutfitStudioPage() {
             return {
                 ...current,
                 [zoneId]: {
-                    id: item.id,
+                    id: normalizedItemId,
                     name: item.name,
                     image: item.image,
                     price: item.price,
@@ -1014,8 +1028,6 @@ export default function OutfitStudioPage() {
                 },
             };
         });
-
-        setSelectedZoneId(keepAllView ? "" : zoneId);
     };
 
     const handleGenerateOutfit = async () => {
@@ -1185,18 +1197,26 @@ export default function OutfitStudioPage() {
             const outfitId = await persistGeneratedOutfit();
             if (!outfitId) return;
 
-            await shareOutfit(outfitId);
+            const { copied, shared } = await shareOutfit(outfitId);
+            if (!copied && !shared) {
+                setSharedOutfit(false);
+                setSharedOutfitMode("");
+                return;
+            }
             setSharedOutfit(true);
+            setSharedOutfitMode(shared ? "shared" : "copied");
             if (sharedResetTimerRef.current !== null) {
                 window.clearTimeout(sharedResetTimerRef.current);
             }
             sharedResetTimerRef.current = window.setTimeout(() => {
                 setSharedOutfit(false);
+                setSharedOutfitMode("");
                 sharedResetTimerRef.current = null;
             }, 1800);
         } catch {
             setGenerationError("Unable to share outfit.");
             setSharedOutfit(false);
+            setSharedOutfitMode("");
         }
         setSharingOutfit(false);
     };
@@ -1531,7 +1551,7 @@ export default function OutfitStudioPage() {
                                                 aria-busy={sharingOutfit}
                                                 className="inline-flex min-w-[84px] justify-center rounded-none border border-[#00000012] bg-transparent px-3.5 py-2 text-[11px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:border-[#c9a96e] hover:text-[#c9a96e] disabled:opacity-50"
                                             >
-                                                {sharedOutfit ? "Copied" : "Share"}
+                                                {sharedOutfit ? (sharedOutfitMode === "shared" ? "Shared" : "Copied") : "Share"}
                                             </button>
                                         </div>
                                     ) : null}

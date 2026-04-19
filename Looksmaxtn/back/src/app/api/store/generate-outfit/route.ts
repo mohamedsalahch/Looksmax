@@ -52,6 +52,14 @@ function extractImagesFromResponse(data: unknown) {
   return [];
 }
 
+function normalizeProductId(value: string) {
+  return value.split("__")[0] || value;
+}
+
+function hasAnyImage(value: { front: string; back: string; left: string; right: string }) {
+  return Boolean(value.front || value.back || value.left || value.right);
+}
+
 async function publicPathToBase64(imagePath: string) {
   if (!imagePath) return "";
   if (imagePath.startsWith("data:")) return imagePath.split(",")[1] || "";
@@ -139,10 +147,10 @@ export async function POST(req: NextRequest) {
       Object.values(bodyZones)
         .map((value) => value?.productId)
         .filter((productId): productId is string => typeof productId === "string" && productId.length > 0)
-    )];
+    )].map((productId) => normalizeProductId(productId));
     const selectedProducts = selectedProductIds.length > 0
       ? await Product.find({ _id: { $in: selectedProductIds } })
-          .select("_id originPictures fashionSubtype")
+          .select("_id originPictures fashionSubtype images")
           .lean()
       : [];
     const productMap = new Map(
@@ -152,11 +160,25 @@ export async function POST(req: NextRequest) {
       Object.entries(bodyZones).map(async ([zone, value]) => {
         const status = Boolean(value?.status);
         const product = value?.productId ? productMap.get(value.productId) : null;
+        const fallbackImage =
+          Array.isArray(product?.images) && product.images.length > 0
+            ? (product.images.find((image) => Boolean(image?.isMain)) || product.images[0] || null)?.url || ""
+            : "";
         const originPictures = {
-          front: product?.originPictures?.front || value?.originPictures?.front || "",
-          back: product?.originPictures?.back || value?.originPictures?.back || "",
-          left: product?.originPictures?.left || value?.originPictures?.left || "",
-          right: product?.originPictures?.right || value?.originPictures?.right || "",
+          front:
+            product?.originPictures?.front ||
+            value?.originPictures?.front ||
+            product?.originPictures?.left ||
+            value?.originPictures?.left ||
+            fallbackImage,
+          back:
+            product?.originPictures?.back ||
+            value?.originPictures?.back ||
+            product?.originPictures?.right ||
+            value?.originPictures?.right ||
+            fallbackImage,
+          left: product?.originPictures?.left || value?.originPictures?.left || fallbackImage,
+          right: product?.originPictures?.right || value?.originPictures?.right || fallbackImage,
         };
         const fashionSubtype = product?.fashionSubtype || value?.fashionSubtype || "";
         const isShoes = fashionSubtype === "shoes";
@@ -206,8 +228,8 @@ export async function POST(req: NextRequest) {
 
     const activeZonesWithNoImages = Object.entries(payload.body_zones)
       .filter(([, value]) => {
-        const z = value as { status: boolean; front: string; back: string };
-        return z.status && !z.front && !z.back;
+        const z = value as { status: boolean; front: string; back: string; left: string; right: string };
+        return z.status && !hasAnyImage(z);
       })
       .map(([zone]) => zone);
 

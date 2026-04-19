@@ -18,6 +18,13 @@ export default function AddressSettingsPage() {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const blurActiveElement = () => {
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement) {
+      activeElement.blur();
+    }
+  };
+
   useEffect(() => {
     void refreshUser();
   }, [refreshUser]);
@@ -58,6 +65,7 @@ export default function AddressSettingsPage() {
     }
 
     setLoading(false);
+    blurActiveElement();
   };
 
   return (
