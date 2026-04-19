@@ -4,18 +4,11 @@ import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
 import { getSession } from "@/store/lib/auth";
 import { getActiveOrderHoldMapByProductIds } from "@/lib/productInventory";
-
-function getSizeStockEntries(
-  sizeStock: unknown
-): Array<[string, { fullStock?: number; stock?: number }]> {
-  if (sizeStock instanceof Map) {
-    return Array.from(sizeStock.entries());
-  }
-
-  if (!sizeStock || typeof sizeStock !== "object") return [];
-
-  return Object.entries(sizeStock as Record<string, { fullStock?: number; stock?: number }>);
-}
+import {
+  buildSizeAvailability,
+  getDisplayStock,
+  getSizeStockEntries,
+} from "@/lib/sizeAvailability";
 
 export async function GET(
   req: NextRequest,
@@ -45,42 +38,31 @@ export async function GET(
       .filter((reservation) => reservation.reservationKey !== reservationKey)
       .reduce((sum, reservation) => sum + Math.max(1, Number(reservation.quantity) || 1), 0);
     const stock = Math.max(product.stock ?? 0, 0);
-    const cartReservedElsewhere = reservedByOthersQuantity > 0 && reservedByOthersQuantity >= stock;
-    const blockedByOrder = Boolean(activeOrderHold) && stock <= 0;
-
     const sizeStockEntries = getSizeStockEntries(product.sizeStock);
     const hasSizeStock = sizeStockEntries.length > 0;
+    const sizeAvailability = hasSizeStock
+      ? buildSizeAvailability(product.sizeStock, activeReservations, reservationKey)
+      : null;
+    const displayStock = hasSizeStock ? getDisplayStock(stock, sizeAvailability) : Math.max(stock - reservedByOthersQuantity, 0);
+    const ownedReservation = ownedReservationQuantity > 0;
     const anySizeAvailable = hasSizeStock
-      ? sizeStockEntries.some(([, entry]) => Math.max(entry.stock ?? 0, 0) > 0)
-      : stock > 0;
+      ? Object.values(sizeAvailability || {}).some((sizeInfo) => sizeInfo.available)
+      : displayStock > 0;
+    const blockedByOrder = hasSizeStock
+      ? Boolean(activeOrderHold) && !anySizeAvailable
+      : Boolean(activeOrderHold) && displayStock <= 0;
 
-    if (!anySizeAvailable && !blockedByOrder) {
+    if (product.isActive === false && !anySizeAvailable && !blockedByOrder && reservedByOthersQuantity <= 0 && !ownedReservation) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
-    const reservedElsewhere = cartReservedElsewhere;
-    const ownedReservation = ownedReservationQuantity > 0;
-
-    let sizeAvailability: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null = null;
-    if (hasSizeStock) {
-      sizeAvailability = {};
-      for (const [sz, entry] of sizeStockEntries) {
-        const sizeReservations = activeReservations.filter((r) => (r.size || "") === sz);
-        const sizeReservedByOthers = sizeReservations
-          .filter((r) => r.reservationKey !== reservationKey)
-          .reduce((sum, r) => sum + Math.max(1, Number(r.quantity) || 1), 0);
-        const sizeStock = Math.max(entry.stock ?? 0, 0);
-        sizeAvailability[sz] = {
-          stock: sizeStock,
-          available: product.isActive !== false && sizeStock > 0,
-          reservedElsewhere: sizeReservedByOthers > 0 && sizeReservedByOthers >= sizeStock,
-        };
-      }
-    }
+    const reservedElsewhere = hasSizeStock
+      ? Object.values(sizeAvailability || {}).some((size) => size.reservedElsewhere)
+      : reservedByOthersQuantity > 0;
 
     return NextResponse.json({
       product: {
         ...product,
-        stock,
+        stock: displayStock,
         cartCount: 0,
         blockedByOrder,
         reservedElsewhere,

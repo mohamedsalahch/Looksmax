@@ -4,6 +4,7 @@ export interface StudioSessionZoneItem {
   id: string;
   name: string;
   image?: string;
+  price?: string;
   fashionSubtype?: "clothes" | "shoes" | null;
   originPictures?: {
     front?: string;

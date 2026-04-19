@@ -1,7 +1,14 @@
 "use client";
 
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode, useRef } from "react";
-import { getReservationKey, releaseProductReservation, reserveProduct } from "@/lib/reservations";
+import {
+  clearReservationKey,
+  getReservationKey,
+  getStoredReservationKey,
+  releaseAllReservations,
+  releaseProductReservation,
+  reserveProduct,
+} from "@/lib/reservations";
 import { buildCartItemId, getCartItemProductId } from "@/lib/cartItem";
 
 export interface CartItem {
@@ -84,6 +91,14 @@ function getCartProductQuantity(items: CartItem[], productId: string) {
   }, 0);
 }
 
+function getCartVariantQuantity(items: CartItem[], productId: string, size?: string) {
+  return items.reduce((sum, item) => {
+    if (getCartItemProductId(item.id) !== productId) return sum;
+    if ((item.size || "") !== (size || "")) return sum;
+    return sum + Math.max(1, item.quantity || 1);
+  }, 0);
+}
+
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: ReactNode }) {
@@ -91,6 +106,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const itemsRef = useRef<CartItem[]>([]);
+  const emptiedReservationKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     itemsRef.current = items;
@@ -111,6 +127,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
       saveCart(items);
     }
   }, [items, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+
+    if (items.length > 0) {
+      emptiedReservationKeyRef.current = null;
+      return;
+    }
+
+    const storedReservationKey = getStoredReservationKey();
+    if (!storedReservationKey || emptiedReservationKeyRef.current === storedReservationKey) {
+      return;
+    }
+
+    emptiedReservationKeyRef.current = storedReservationKey;
+    void releaseAllReservations().catch(() => {});
+  }, [hydrated, items.length]);
 
   useEffect(() => {
     if (!hydrated || items.length === 0) return;
@@ -169,7 +202,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
               const sizeInfo = item.size && (availability as { sizeAvailability?: Record<string, { stock: number }> } | null)?.sizeAvailability?.[item.size];
               const maxStock = Math.max(1, sizeInfo?.stock ?? availability?.maxStock ?? item.maxStock ?? 1);
               const ownedReservation = Boolean(availability?.ownedReservation);
-              const reservedElsewhere = Boolean(availability?.reservedElsewhere);
 
               const isSizeSoldOut = sizeInfo !== undefined && sizeInfo !== null && sizeInfo.stock <= 0;
               const isProductSoldOut = Boolean(availability?.blockedByOrder || !availability?.available);
@@ -183,10 +215,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
                 return [];
               }
 
-              const unavailableReason = reservedElsewhere && !ownedReservation
-                ? "This product is reserved elsewhere."
-                : isUnavailable
-                  ? "This product is currently unavailable."
+              const unavailableReason = isUnavailable
+                ? "This product is currently unavailable."
                 : null;
 
               return {
@@ -319,7 +349,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return nextItems;
       });
 
-      void reserveProduct(productId, getCartProductQuantity(nextItemsSnapshot, productId), newItem.size).catch(() => {});
+      void reserveProduct(
+        productId,
+        getCartVariantQuantity(nextItemsSnapshot, productId, newItem.size),
+        newItem.size
+      ).catch(() => {});
       if (options?.openCart !== false) {
         setIsOpen(true); // Open cart when adding
       }
@@ -337,7 +371,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       removedItem = prev.find((item) => item.id === id);
       return nextItems;
     });
-    const nextQuantity = getCartProductQuantity(nextItemsSnapshot, productId);
+    const nextQuantity = getCartVariantQuantity(nextItemsSnapshot, productId, removedItem?.size);
     if (nextQuantity > 0) {
       void reserveProduct(productId, nextQuantity, removedItem?.size).catch(() => {});
     } else {
@@ -356,7 +390,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         currentItem = prev.find((item) => item.id === id);
         return nextItems;
       });
-      const nextQuantity = getCartProductQuantity(nextItemsSnapshot, productId);
+      const nextQuantity = getCartVariantQuantity(nextItemsSnapshot, productId, currentItem?.size);
       if (nextQuantity > 0) {
         void reserveProduct(productId, nextQuantity, currentItem?.size).catch(() => {});
       } else {
@@ -375,7 +409,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
       nextItemsSnapshot = nextItems;
       return nextItems;
     });
-    void reserveProduct(productId, getCartProductQuantity(nextItemsSnapshot, productId), currentItem?.size).catch(() => {});
+    void reserveProduct(
+      productId,
+      getCartVariantQuantity(nextItemsSnapshot, productId, currentItem?.size),
+      currentItem?.size
+    ).catch(() => {});
   }, []);
 
   const clearCart = useCallback(() => {
@@ -383,8 +421,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
       const productId = getCartItemProductId(item.id);
       void releaseProductReservation(productId, item.size);
     });
+    clearReservationKey();
     setItems([]);
   }, []);
+
+  useEffect(() => {
+    const handleAuthLogout = () => {
+      clearCart();
+    };
+
+    window.addEventListener("looksmax-auth-logout", handleAuthLogout as EventListener);
+    return () => window.removeEventListener("looksmax-auth-logout", handleAuthLogout as EventListener);
+  }, [clearCart]);
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = items.reduce(

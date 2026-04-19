@@ -159,20 +159,27 @@ export async function PUT(
     }
 
     if (orderStatus === "confirmed" && existingOrder.orderStatus !== "confirmed") {
-      const productIds = existingOrder.items.map((item) => item.product);
+      const productVariantKeys = existingOrder.items.map((item) => `${item.product?.toString?.() || String(item.product || "")}:${item.size || ""}`);
       const conflictingOrders = await Order.find({
         _id: { $ne: id },
         orderStatus: { $in: BLOCKING_ORDER_STATUSES },
-        "items.product": { $in: productIds },
       }).lean();
 
-      if (conflictingOrders.length > 0) {
-        const products = await Product.find({ _id: { $in: productIds } })
-          .select("name")
-          .lean();
-        const productNames = products.map((product) => product.name).join(", ");
+      const conflictingProductNames = new Set<string>();
+      for (const order of conflictingOrders) {
+        for (const item of order.items || []) {
+          const key = `${item.product?.toString?.() || String(item.product || "")}:${item.size || ""}`;
+          if (productVariantKeys.includes(key)) {
+            const product = await Product.findById(item.product).select("name").lean();
+            if (product?.name) conflictingProductNames.add(`${product.name}${item.size ? ` (size ${item.size})` : ""}`);
+          }
+        }
+      }
+
+      if (conflictingProductNames.size > 0) {
+        const productNames = Array.from(conflictingProductNames).join(", ");
         return NextResponse.json(
-          { error: `These unique products are already confirmed in another order: ${productNames}` },
+          { error: `These product sizes are already confirmed in another order: ${productNames}` },
           { status: 409 }
         );
       }

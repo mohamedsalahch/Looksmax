@@ -68,12 +68,21 @@ export default function ProductCard({
 }: ProductCardProps) {
   const { addItem } = useCart();
   const router = useRouter();
-  const availableSizes = (sizes?.length ? sizes : size ? [size] : []).filter((entry) => Boolean(entry.trim()));
-  const [selectedSize, setSelectedSize] = useState(availableSizes[0] || "");
+  const [isMounted, setIsMounted] = useState(false);
+  const [hasHydratedAvailability, setHasHydratedAvailability] = useState(false);
+  const [sizeAvailabilityState, setSizeAvailabilityState] = useState(sizeAvailability || null);
+  const availableSizes = (
+    sizes?.length
+      ? sizes
+      : Object.keys(sizeAvailabilityState || {}).length > 0
+        ? Object.keys(sizeAvailabilityState || {})
+        : size
+          ? [size]
+          : []
+  ).filter((entry) => Boolean(entry.trim()));
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
   const [clonePreview, setClonePreview] = useState({ visible: false, x: 0, y: 0 });
-  const [reservedElsewhere, setReservedElsewhere] = useState(false);
   const [blockedByOrder, setBlockedByOrder] = useState(initialBlockedByOrder);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const isPerfume = productType === "perfume";
@@ -82,16 +91,36 @@ export default function ProductCard({
   const conditionColor = getConditionColor(conditionScore ?? 7);
   const showNewBadge = !isPerfume && (conditionScore ?? 0) >= 10;
   const hasSizes = !isPerfume && availableSizes.length > 0;
+  const defaultSelectableSize = availableSizes.find((sizeOption) => (sizeAvailabilityState?.[sizeOption]?.stock ?? 0) > 0) || availableSizes[0] || "";
+  const [selectedSize, setSelectedSize] = useState(defaultSelectableSize);
+  const selectedSizeAvailability = !isPerfume && selectedSize ? sizeAvailabilityState?.[selectedSize] : null;
+  const getSizeOptionState = (sizeOption: string) => sizeAvailabilityState?.[sizeOption] || null;
   const selectedSizeStock = (() => {
-    if (!isPerfume && selectedSize && sizeAvailability?.[selectedSize]) {
-      return sizeAvailability[selectedSize].stock;
+    if (!isPerfume && selectedSizeAvailability) {
+      return selectedSizeAvailability.stock;
     }
     return stock;
   })();
-  const isSoldOut = selectedSizeStock < 1;
-  const showReservedElsewhere = reservedElsewhere;
-  const isBlocked = isSoldOut || blockedByOrder;
-  const isReserved = isBlocked;
+  const isSoldOut = !isPerfume && selectedSizeAvailability
+    ? selectedSizeAvailability.stock <= 0 && !selectedSizeAvailability.reservedElsewhere
+    : false;
+  const showReservedElsewhere = !isPerfume && hasHydratedAvailability
+    ? selectedSizeAvailability?.reservedElsewhere || (!hasSizes && initialReservedElsewhere)
+    : false;
+  const isBlocked = !isPerfume && selectedSizeStock <= 0;
+  const statusLabel = showReservedElsewhere
+    ? "Reserved elsewhere"
+    : "Sold Out";
+  const cardHref = !isPerfume && isMounted && selectedSize
+    ? {
+        pathname: `/product/${id}`,
+        query: { size: selectedSize },
+      }
+    : `/product/${id}`;
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     if (availableSizes.length === 0) {
@@ -99,8 +128,18 @@ export default function ProductCard({
       return;
     }
 
-    setSelectedSize((current) => (availableSizes.includes(current) ? current : availableSizes[0]));
-  }, [availableSizes.join("|")]);
+    setSelectedSize((current) => {
+      if (current && availableSizes.includes(current) && (sizeAvailabilityState?.[current]?.stock ?? 0) > 0) {
+        return current;
+      }
+
+      return defaultSelectableSize;
+    });
+  }, [availableSizes.join("|"), defaultSelectableSize, sizeAvailabilityState]);
+
+  useEffect(() => {
+    setSizeAvailabilityState(sizeAvailability || null);
+  }, [sizeAvailability]);
 
   useEffect(() => {
     setBlockedByOrder(initialBlockedByOrder);
@@ -112,12 +151,13 @@ export default function ProductCard({
     let cancelled = false;
 
     const refreshAvailability = () => {
-      fetch(`/api/products/${id}`)
+      fetch(`/api/products/${id}`, { cache: "no-store" })
         .then((response) => response.json())
         .then((data) => {
           if (cancelled || !data.product) return;
-          setReservedElsewhere(Boolean(data.product.reservedElsewhere));
+          setSizeAvailabilityState(data.product.sizeAvailability || null);
           setBlockedByOrder(Boolean(data.product.blockedByOrder));
+          setHasHydratedAvailability(true);
         })
         .catch(() => {});
     };
@@ -141,12 +181,13 @@ export default function ProductCard({
     if (!id) return;
 
     const refreshAvailability = () => {
-      fetch(`/api/products/${id}`)
+      fetch(`/api/products/${id}`, { cache: "no-store" })
         .then((response) => response.json())
         .then((data) => {
           if (!data.product) return;
-          setReservedElsewhere(Boolean(data.product.reservedElsewhere));
+          setSizeAvailabilityState(data.product.sizeAvailability || null);
           setBlockedByOrder(Boolean(data.product.blockedByOrder));
+          setHasHydratedAvailability(true);
         })
         .catch(() => {});
     };
@@ -165,7 +206,7 @@ export default function ProductCard({
     if (isBlocked) return;
 
     try {
-      const reservation = await reserveProduct(id, 1);
+      const reservation = await reserveProduct(id, 1, isPerfume ? undefined : selectedSize);
       addItem({
         id,
         name,
@@ -195,7 +236,7 @@ export default function ProductCard({
     if (isBlocked || isPerfume) return;
 
     try {
-      const reservation = await reserveProduct(id, 1);
+      const reservation = await reserveProduct(id, 1, isPerfume ? undefined : selectedSize);
       addItem({
         id,
         name,
@@ -294,10 +335,7 @@ export default function ProductCard({
 
   return (
     <Link
-      href={{
-        pathname: `/product/${id}`,
-        query: !isPerfume && selectedSize ? { size: selectedSize } : undefined,
-      }}
+      href={cardHref}
       className="group cursor-pointer block relative"
     >
       {isPerfume && cloneSourceImage && clonePreview.visible && (
@@ -390,7 +428,7 @@ export default function ProductCard({
                   : "bg-foreground text-background hover:bg-black"
               }`}
             >
-              {isSoldOut ? "Sold Out" : initialBlockedByOrder ? "Reserved for confirmation" : "Add Cart"}
+              {isBlocked ? statusLabel : "Add Cart"}
             </button>
           </div>
         ) : (
@@ -437,9 +475,14 @@ export default function ProductCard({
                       <div
                         key={sizeOption}
                         onClick={(e) => handleSizeSelect(e, sizeOption)}
-                        className="px-3 py-2.5 text-[10px] text-foreground font-medium hover:bg-surface transition-colors cursor-pointer"
+                        className="px-3 py-2.5 text-[10px] text-foreground font-medium hover:bg-surface transition-colors cursor-pointer flex items-center justify-between gap-2"
                       >
-                        {sizeOption}
+                        <span>{sizeOption}</span>
+                        {(getSizeOptionState(sizeOption)?.stock ?? 0) === 0 ? (
+                          <span className="text-[9px] uppercase tracking-wide text-text-secondary">Sold out</span>
+                        ) : hasHydratedAvailability && getSizeOptionState(sizeOption)?.reservedElsewhere ? (
+                          <span className="text-[9px] uppercase tracking-wide text-text-secondary">Reserved elsewhere</span>
+                        ) : null}
                       </div>
                     ))}
                   </div>
@@ -452,8 +495,8 @@ export default function ProductCard({
                   disabled
                   className="w-full h-full px-2 py-3 text-[10px] font-medium uppercase tracking-wide bg-border-color text-text-secondary cursor-not-allowed"
                 >
-                {isSoldOut ? "Sold Out" : "Reserved for confirmation"}
-              </button>
+                  {statusLabel}
+                </button>
               ) : (
                 <>
                   <button

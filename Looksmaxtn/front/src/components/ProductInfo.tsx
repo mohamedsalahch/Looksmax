@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
 import { reserveProduct, subscribeToReservationChanges } from "@/lib/reservations";
 import { formatTndPrice } from "@/lib/formatPrice";
@@ -11,63 +11,70 @@ import { queueStudioAssignment } from "@/lib/studioAssignment";
 
 type ProductType = "fashion" | "perfume" | "clothing" | "shoes";
 
-export default function ProductInfo({
-  product,
-}: {
-  product: {
-    id?: string;
-    name: string;
-    categories?: string[];
-    price: string;
-    brand: string;
-    image?: string;
-    size?: string;
-    sizes?: string[];
-    stock: number;
-    sizeAvailability?: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null;
-    description: string;
-    reservationExpiresAt?: string | null;
-    cartCount?: number;
-    reservedElsewhere?: boolean;
-    ownedReservation?: boolean;
-    blockedByOrder?: boolean;
-    conditionScore?: number | null;
-    conditionStatus?: string | null;
-    productType?: ProductType;
-    fashionSubtype?: "clothes" | "shoes" | null;
-    originPictures?: {
-      front?: string;
-      back?: string;
-      left?: string;
-      right?: string;
-    };
-    cloneSourceName?: string;
-    cloneSourceImage?: string;
+type ProductInfoProduct = {
+  id?: string;
+  name: string;
+  categories?: string[];
+  price: string;
+  brand: string;
+  image?: string;
+  size?: string;
+  sizes?: string[];
+  stock: number;
+  sizeAvailability?: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null;
+  initialSelectedSize?: string;
+  initialSelectedSizeStock?: number;
+  description: string;
+  reservationExpiresAt?: string | null;
+  cartCount?: number;
+  reservedElsewhere?: boolean;
+  ownedReservation?: boolean;
+  blockedByOrder?: boolean;
+  conditionScore?: number | null;
+  conditionStatus?: string | null;
+  productType?: ProductType;
+  fashionSubtype?: "clothes" | "shoes" | null;
+  originPictures?: {
+    front?: string;
+    back?: string;
+    left?: string;
+    right?: string;
   };
-  }) {
+  cloneSourceName?: string;
+  cloneSourceImage?: string;
+};
+
+export default function ProductInfo({ product }: { product: ProductInfoProduct }) {
   const [addedToCart, setAddedToCart] = useState(false);
   const [currentStock, setCurrentStock] = useState(() => product.stock);
   const [sizeAvailability, setSizeAvailability] = useState<Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null>(() => product.sizeAvailability || null);
   const [reservationError, setReservationError] = useState("");
+  const [hasHydratedAvailability, setHasHydratedAvailability] = useState(false);
   const [reservedElsewhere, setReservedElsewhere] = useState(false);
   const [ownedReservation, setOwnedReservation] = useState(() => Boolean(product.ownedReservation));
   const [blockedByOrder, setBlockedByOrder] = useState(() => Boolean(product.blockedByOrder));
   const [selectedQuantity, setSelectedQuantity] = useState(1);
-  const searchParams = useSearchParams();
-  const requestedSize = searchParams.get("size") || "";
   const availableSizes = (product.sizes?.length ? product.sizes : product.size ? [product.size] : []).filter(
     (entry) => Boolean(entry.trim())
   );
-  const [selectedSize, setSelectedSize] = useState(() => {
-    return availableSizes.includes(requestedSize) ? requestedSize : availableSizes[0] || "";
-  });
+  const initialSelectedSize = product.initialSelectedSize || availableSizes[0] || "";
+  const defaultSelectedSize = initialSelectedSize || availableSizes[0] || "";
+  const initialSelectedSizeStock = product.initialSelectedSizeStock ?? currentStock;
+  const [selectedSize, setSelectedSize] = useState(defaultSelectedSize);
   const { addItem, items, updateQuantity } = useCart();
   const router = useRouter();
   const isPerfume = product.productType === "perfume";
+  const getDefaultSelectableSize = (
+    sizesList: string[],
+    availability: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null
+  ) => sizesList.find((sizeOption) => availability?.[sizeOption]?.available) || sizesList[0] || "";
 
   const selectedSizeStock = (() => {
     if (!isPerfume && selectedSize && sizeAvailability?.[selectedSize]) {
       return sizeAvailability[selectedSize].stock;
+    }
+    if (!isPerfume && selectedSize && initialSelectedSize === selectedSize) {
+      return initialSelectedSizeStock;
     }
     return currentStock;
   })();
@@ -75,13 +82,22 @@ export default function ProductInfo({
     if (!isPerfume && selectedSize && sizeAvailability?.[selectedSize]) {
       return sizeAvailability[selectedSize].reservedElsewhere;
     }
+    if (!isPerfume && selectedSize && initialSelectedSize === selectedSize) {
+      return false;
+    }
     return reservedElsewhere;
   })();
+  const displaySelectedSize = selectedSize || initialSelectedSize;
+  const displaySelectedSizeStock = selectedSize ? selectedSizeStock : initialSelectedSizeStock;
 
-  const isSoldOut = selectedSizeStock < 1;
-  const showReservedElsewhere = selectedSizeReservedElsewhere;
-  const isBlocked = isSoldOut || blockedByOrder;
-  const isReserved = isBlocked;
+  const showReservedElsewhere = hasHydratedAvailability
+    ? selectedSizeReservedElsewhere || (!availableSizes.length && reservedElsewhere)
+    : false;
+  const isSoldOut = selectedSizeStock < 1 && !showReservedElsewhere;
+  const isBlocked = selectedSizeStock < 1;
+  const statusLabel = showReservedElsewhere
+    ? "Reserved elsewhere"
+    : "Sold Out";
   const cartItemId = product.id
     ? buildCartItemId(product.id, isPerfume ? undefined : selectedSize)
     : "";
@@ -90,7 +106,7 @@ export default function ProductInfo({
   const refreshAvailability = () => {
     if (!product.id) return;
 
-    fetch(`/api/products/${product.id}`)
+    fetch(`/api/products/${product.id}`, { cache: "no-store" })
       .then((response) => response.json())
       .then((data) => {
         if (!data.product) return;
@@ -101,6 +117,7 @@ export default function ProductInfo({
         if (data.product.sizeAvailability) {
           setSizeAvailability(data.product.sizeAvailability);
         }
+        setHasHydratedAvailability(true);
       })
       .catch(() => {});
   };
@@ -151,11 +168,14 @@ export default function ProductInfo({
     }
 
     setSelectedSize((current) => {
-      if (availableSizes.includes(current)) return current;
-      if (availableSizes.includes(requestedSize)) return requestedSize;
-      return availableSizes[0];
+      const currentInfo = current ? sizeAvailability?.[current] : null;
+      if (current && availableSizes.includes(current) && (currentInfo?.stock ?? 0) > 0) return current;
+      if (defaultSelectedSize && availableSizes.includes(defaultSelectedSize)) {
+        return defaultSelectedSize;
+      }
+      return getDefaultSelectableSize(availableSizes, sizeAvailability);
     });
-  }, [availableSizes.join("|"), requestedSize]);
+  }, [availableSizes.join("|"), defaultSelectedSize, sizeAvailability]);
 
   useEffect(() => {
     setOwnedReservation(Boolean(product.ownedReservation));
@@ -329,14 +349,15 @@ export default function ProductInfo({
           <div className="flex flex-wrap gap-2">
             {availableSizes.map((sizeOption) => {
               const sizeInfo = sizeAvailability?.[sizeOption];
-              const sizeAvailable = sizeInfo ? sizeInfo.available : currentStock > 0;
+              const sizeAvailable = sizeInfo ? sizeInfo.stock > 0 : currentStock > 0;
+              const reservedElsewhereForSize = Boolean(sizeInfo?.reservedElsewhere);
               return (
                 <button
                   key={sizeOption}
                   type="button"
                   onClick={() => sizeAvailable && setSelectedSize(sizeOption)}
                   disabled={!sizeAvailable}
-                  className={`min-w-10 border px-3 py-2 text-sm font-medium transition-colors ${
+                  className={`min-w-10 border px-3 py-2 text-sm font-medium transition-colors flex flex-col items-center gap-0.5 ${
                     !sizeAvailable
                       ? "border-border-color text-text-secondary bg-surface cursor-not-allowed line-through opacity-50"
                       : selectedSize === sizeOption
@@ -344,7 +365,12 @@ export default function ProductInfo({
                         : "border-border-color text-foreground hover:bg-hover cursor-pointer"
                   }`}
                 >
-                  {sizeOption}
+                  <span>{sizeOption}</span>
+                  {sizeInfo?.stock === 0 ? (
+                    <span className="text-[9px] uppercase tracking-wide text-text-secondary">Sold out</span>
+                  ) : hasHydratedAvailability && reservedElsewhereForSize ? (
+                    <span className="text-[9px] uppercase tracking-wide text-text-secondary">Reserved elsewhere</span>
+                  ) : null}
                 </button>
               );
             })}
@@ -357,10 +383,10 @@ export default function ProductInfo({
         <span className="text-xs text-text-secondary">
           {isPerfume
             ? `${currentStock} bottle${currentStock !== 1 ? "s" : ""} available`
-            : selectedSize && sizeAvailability?.[selectedSize]
-              ? sizeAvailability[selectedSize].stock === 1
-                ? `Last one — ${selectedSize}`
-                : `Selected size: ${selectedSize}`
+            : displaySelectedSize
+              ? displaySelectedSizeStock === 1
+                ? `Last one — ${displaySelectedSize}`
+                : `Selected size: ${displaySelectedSize}`
               : currentStock === 1
                 ? "Last one"
                 : "Size selected"}
@@ -421,7 +447,7 @@ export default function ProductInfo({
           disabled
           className="w-full py-3.5 text-sm font-medium tracking-wide uppercase bg-border-color text-text-secondary cursor-not-allowed"
         >
-          {isSoldOut ? "Sold Out" : "Reserved for confirmation"}
+          {statusLabel}
         </button>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

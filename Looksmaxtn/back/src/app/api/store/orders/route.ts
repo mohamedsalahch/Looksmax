@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
 
     let subtotalPrice = 0;
     const orderItems = [];
-    const seenProductIds = new Set<string>();
+    const seenVariantKeys = new Set<string>();
     for (const item of items) {
       if (!mongoose.Types.ObjectId.isValid(item.productId)) {
         return NextResponse.json(
@@ -97,9 +97,11 @@ export async function POST(req: NextRequest) {
       }
 
       const productId = product._id.toString();
-      if (seenProductIds.has(productId)) {
+      const itemSize = item.size || "";
+      const variantKey = `${productId}:${itemSize}`;
+      if (seenVariantKeys.has(variantKey)) {
         return NextResponse.json(
-          { error: `${product.name} can only appear once in an order.` },
+          { error: `${product.name}${itemSize ? ` (size ${itemSize})` : ""} can only appear once in an order.` },
           { status: 400 }
         );
       }
@@ -112,7 +114,6 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const itemSize = item.size || "";
       const sizeStockEntries = getSizeStockEntries(product.sizeStock);
       const hasSizeStock = sizeStockEntries.length > 0;
 
@@ -161,7 +162,7 @@ export async function POST(req: NextRequest) {
       }
 
       stockAdjustments.push({ productId: productId, quantity: quantityToDeduct, size: itemSize });
-      seenProductIds.add(productId);
+      seenVariantKeys.add(variantKey);
 
       const itemTotal = product.price * item.quantity;
       subtotalPrice += itemTotal;

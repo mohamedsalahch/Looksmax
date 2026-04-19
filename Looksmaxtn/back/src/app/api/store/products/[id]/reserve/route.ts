@@ -4,29 +4,10 @@ import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
 import { getSession } from "@/store/lib/auth";
 import { getActiveOrderHoldMapByProductIds } from "@/lib/productInventory";
+import { getSizeStockEntries } from "@/lib/sizeAvailability";
 import mongoose from "mongoose";
 
 const CART_PRESENCE_DURATION_MS = 30 * 60 * 1000;
-
-function getSizeStockEntries(
-  sizeStock: unknown
-): Array<[string, { fullStock?: number; stock?: number }]> {
-  if (sizeStock instanceof Map) {
-    return Array.from(sizeStock.entries());
-  }
-
-  if (!sizeStock || typeof sizeStock !== "object") return [];
-
-  return Object.entries(sizeStock as Record<string, { fullStock?: number; stock?: number }>);
-}
-
-function getSizeStock(product: { stock?: number; sizeStock?: unknown }, size?: string) {
-  if (size && product.sizeStock) {
-    const entry = getSizeStockEntries(product.sizeStock).find(([entrySize]) => entrySize === size)?.[1];
-    if (entry) return Math.max(entry.stock ?? 0, 0);
-  }
-  return Math.max(product.stock ?? 0, 0);
-}
 
 export async function POST(
   req: NextRequest,
@@ -47,7 +28,6 @@ export async function POST(
     }
 
     const now = new Date();
-    const reservedUntil = new Date(now.getTime() + CART_PRESENCE_DURATION_MS);
     const activeOrderHoldMap = await getActiveOrderHoldMapByProductIds([id], session?.userId || null);
     const activeOrderHold = activeOrderHoldMap.get(id);
 
@@ -69,36 +49,49 @@ export async function POST(
     }
 
     const sizeStockEntries = getSizeStockEntries(product.sizeStock);
-    const sizeStock = getSizeStock(product, normalizedSize);
     const hasSizeStock = sizeStockEntries.length > 0;
 
     if (hasSizeStock && normalizedSize) {
-      const otherReservationsQty = activeReservations
-        .filter((r) => r.reservationKey !== key)
-        .reduce((sum, r) => sum + Math.max(1, Number(r.quantity) || 1), 0);
-      const availableForThisSize = Math.max(0, sizeStock - otherReservationsQty);
-
-      if (availableForThisSize <= 0) {
+      const sizeStock = Math.max(
+        sizeStockEntries.find(([entrySize]) => entrySize === normalizedSize)?.[1]?.stock ?? 0,
+        0
+      );
+      if (sizeStock <= 0) {
         return NextResponse.json(
           { error: "This size is no longer available." },
           { status: 409 }
         );
       }
-      if (requestedQuantity > availableForThisSize) {
+      if (requestedQuantity > sizeStock) {
         return NextResponse.json(
-          { error: `Only ${availableForThisSize} left for size ${normalizedSize}.` },
+          { error: `Only ${sizeStock} left for size ${normalizedSize}.` },
           { status: 409 }
         );
       }
-      if (activeOrderHold && sizeStock <= 0) {
+    } else {
+      const availableStock = Math.max(product.stock ?? 0, 0);
+      if (availableStock <= 0) {
+        return NextResponse.json({ error: "Product not found" }, { status: 404 });
+      }
+      if (requestedQuantity > availableStock) {
         return NextResponse.json(
-          { error: "This product is already reserved in an active order." },
+          { error: `Only ${availableStock} left for this product.` },
           { status: 409 }
         );
       }
-    } else if (Math.max(product.stock ?? 0, 0) <= 0) {
-      return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
+
+    const existingReservation = await ProductReservation.findOne({
+      product: id,
+      reservationKey: key,
+      size: normalizedSize,
+      reservedUntil: { $gt: now },
+    })
+      .select("reservedUntil")
+      .lean();
+
+    const reservedUntil =
+      existingReservation?.reservedUntil || new Date(now.getTime() + CART_PRESENCE_DURATION_MS);
 
     let cartPresence: { reservedUntil?: Date } | null = null;
     try {

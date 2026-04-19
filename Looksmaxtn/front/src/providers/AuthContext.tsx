@@ -4,10 +4,13 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, Re
 import { usePathname } from "next/navigation";
 import {
   clearAuthToken,
+  clearAuthUser,
   getStoredAuthToken,
+  getStoredAuthUser,
   getTokenExpiryMs,
   refreshStoreAuthToken,
   redirectToLogin,
+  storeAuthUser,
   storeAuthToken,
   withAuthRequest,
 } from "@/lib/authClient";
@@ -120,13 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [clearRefreshTimer]);
 
   const refreshUser = useCallback(async () => {
-    if (!isProtectedPath(pathname)) {
-      clearRefreshTimer();
-      if (!logoutInProgressRef.current) {
-        setLoading(false);
-      }
-      return;
-    }
+    if (!isProtectedPath(pathname)) return;
 
     if (logoutInProgressRef.current) {
       setLoading(false);
@@ -137,13 +134,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!res.ok) {
         if (res.status === 401) {
           clearAuthToken();
+          clearAuthUser();
           redirectToLogin(pathname);
         }
         setUser(null);
         return;
       }
       const data = await res.json();
-      setUser(data.user || null);
+      const nextUser = data.user || null;
+      setUser(nextUser);
+      if (nextUser) {
+        storeAuthUser(nextUser);
+      } else {
+        clearAuthUser();
+      }
       scheduleTokenRefresh();
     } catch {
       setUser(null);
@@ -153,9 +157,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [clearRefreshTimer, isProtectedPath, pathname, scheduleTokenRefresh]);
 
   useEffect(() => {
-    refreshUser();
+    const storedUser = getStoredAuthUser<User>();
+    if (storedUser) {
+      setUser(storedUser);
+    }
+
+    const storedToken = getStoredAuthToken();
+    if (storedToken) {
+      scheduleTokenRefresh(storedToken);
+    }
+
+    if (isProtectedPath(pathname)) {
+      void refreshUser();
+    } else {
+      setLoading(false);
+    }
+
     return () => clearRefreshTimer();
-  }, [clearRefreshTimer, refreshUser]);
+  }, [clearRefreshTimer, isProtectedPath, pathname, refreshUser, scheduleTokenRefresh]);
 
   const login = async (email: string, password: string) => {
     logoutInProgressRef.current = false;
@@ -173,6 +192,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         scheduleTokenRefresh(data.token);
       }
       setUser(data.user);
+      if (data.user) {
+        storeAuthUser(data.user);
+      }
       return {};
     } catch {
       return { error: "Network error" };
@@ -195,6 +217,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         scheduleTokenRefresh(data.token);
       }
       setUser(data.user);
+      if (data.user) {
+        storeAuthUser(data.user);
+      }
       return {};
     } catch {
       return { error: "Network error" };
@@ -272,7 +297,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logoutInProgressRef.current = true;
     clearRefreshTimer();
     clearAuthToken();
+    clearAuthUser();
     setUser(null);
+    window.dispatchEvent(new Event("looksmax-auth-logout"));
     try {
       await fetch("/api/auth/logout", { method: "POST", credentials: "include", cache: "no-store" });
     } finally {

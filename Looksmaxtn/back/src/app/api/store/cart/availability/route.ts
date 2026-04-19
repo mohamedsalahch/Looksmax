@@ -4,29 +4,10 @@ import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
 import { getSession } from "@/store/lib/auth";
 import { getActiveOrderHoldMapByProductIds } from "@/lib/productInventory";
+import { buildSizeAvailability, getSizeStockEntries } from "@/lib/sizeAvailability";
 
 function normalizeProductType(value?: string) {
   return value === "perfume" ? "perfume" : "fashion";
-}
-
-function getSizeStockEntries(
-  sizeStock: unknown
-): Array<[string, { fullStock?: number; stock?: number }]> {
-  if (sizeStock instanceof Map) {
-    return Array.from(sizeStock.entries());
-  }
-
-  if (!sizeStock || typeof sizeStock !== "object") return [];
-
-  return Object.entries(sizeStock as Record<string, { fullStock?: number; stock?: number }>);
-}
-
-function getSizeStock(product: { stock?: number; sizeStock?: unknown }, size?: string) {
-  if (size && product.sizeStock) {
-    const entry = getSizeStockEntries(product.sizeStock).find(([entrySize]) => entrySize === size)?.[1];
-    if (entry) return Math.max(entry.stock ?? 0, 0);
-  }
-  return Math.max(product.stock ?? 0, 0);
 }
 
 export async function POST(req: NextRequest) {
@@ -85,45 +66,35 @@ export async function POST(req: NextRequest) {
         const sizeStockEntries = getSizeStockEntries(product?.sizeStock);
         const hasSizeStock = sizeStockEntries.length > 0;
 
-        let sizeAvailability: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null = null;
-        if (hasSizeStock && product) {
-          sizeAvailability = {};
-          for (const [size, entry] of sizeStockEntries) {
-            const sizeReservations = productReservations.filter((r) => r.size === size);
-            const reservedByOthers = sizeReservations.reduce((sum, r) => {
-              if (r.reservationKey === key) return sum;
-              return sum + r.quantity;
-            }, 0);
-            const sizeStock = Math.max(entry.stock ?? 0, 0);
-            sizeAvailability[size] = {
-              stock: sizeStock,
-              available: product.isActive !== false && sizeStock > 0,
-              reservedElsewhere: reservedByOthers > 0 && reservedByOthers >= sizeStock,
-            };
-          }
-        }
+        const sizeAvailability = hasSizeStock && product
+          ? buildSizeAvailability(product.sizeStock, productReservations, key)
+          : null;
 
         const remainingStock = Math.max(product?.stock ?? 0, 0);
-        const blockedByOrder = Boolean(activeOrderHold) && remainingStock <= 0;
         const reservedByOthers = productReservations.reduce((sum, reservation) => {
           if (reservation.reservationKey === key) return sum;
           return sum + reservation.quantity;
         }, 0);
-        const reservedElsewhere = reservedByOthers > 0 && reservedByOthers >= remainingStock;
+        const hasSelectableSize = hasSizeStock
+          ? Object.values(sizeAvailability || {}).some((sizeInfo) => sizeInfo.available)
+          : remainingStock > 0;
+        const reservedElsewhere = hasSizeStock
+          ? Object.values(sizeAvailability || {}).some((sizeInfo) => sizeInfo.reservedElsewhere)
+          : reservedByOthers > 0 && reservedByOthers >= remainingStock;
 
         const ownedReservationEntry = key
           ? productReservations.find((reservation) => reservation.reservationKey === key) || null
           : null;
 
         const available = hasSizeStock
-          ? product?.isActive !== false && Object.values(sizeAvailability || {}).some((s) => s.stock > 0)
-          : product?.isActive !== false && remainingStock > 0 && !blockedByOrder;
+          ? hasSelectableSize
+          : remainingStock > 0;
 
         return {
           productId,
           available,
-          blockedByOrder,
-          maxStock: Math.max(remainingStock, 1),
+          blockedByOrder: false,
+          maxStock: Math.max(hasSizeStock ? remainingStock : remainingStock, 1),
           productType: normalizeProductType(product?.productType),
           fashionSubtype: product?.fashionSubtype || "clothes",
           originPictures: product?.originPictures || { front: "", back: "", left: "", right: "" },
@@ -138,6 +109,27 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: unknown) {
     console.error("Cart availability error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    await dbConnect();
+
+    const { reservationKey, cartKey } = await req.json();
+    const session = await getSession();
+    const key = session?.userId ? `user:${session.userId}` : cartKey || reservationKey;
+
+    if (!key) {
+      return NextResponse.json({ error: "Missing cart key" }, { status: 400 });
+    }
+
+    await ProductReservation.deleteMany({ reservationKey: key });
+
+    return NextResponse.json({ success: true, cartCount: 0 });
+  } catch (error: unknown) {
+    console.error("Release cart availability error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

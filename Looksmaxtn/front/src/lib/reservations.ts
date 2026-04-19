@@ -32,6 +32,16 @@ export function getReservationKey() {
   return next;
 }
 
+export function getStoredReservationKey() {
+  if (typeof window === "undefined") return "";
+  return window.localStorage.getItem(RESERVATION_KEY_STORAGE) || "";
+}
+
+export function clearReservationKey() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(RESERVATION_KEY_STORAGE);
+}
+
 export async function reserveProduct(productId: string, quantity = 1, size?: string) {
   const reservationKey = getReservationKey();
 
@@ -62,6 +72,22 @@ export async function releaseProductReservation(productId: string, size?: string
 
   const data = await response.json().catch(() => ({}));
   emitReservationChange(productId, null, typeof data.cartCount === "number" ? data.cartCount : null);
+}
+
+export async function releaseAllReservations() {
+  const reservationKey = getStoredReservationKey();
+  if (!reservationKey) return;
+
+  try {
+    await fetch("/api/cart/availability", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reservationKey }),
+      keepalive: true,
+    });
+  } finally {
+    clearReservationKey();
+  }
 }
 
 export function subscribeToReservationChanges(

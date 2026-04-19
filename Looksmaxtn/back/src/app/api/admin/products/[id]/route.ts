@@ -8,14 +8,34 @@ import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
 import { getSoldQuantityByProductAndSize, getSoldQuantityByProductIds } from "@/lib/productInventory";
 
+function getSizeStockEntries(
+  sizeStock: unknown
+): Array<[string, { fullStock?: number; stock?: number }]> {
+  if (sizeStock instanceof Map) {
+    return Array.from(sizeStock.entries());
+  }
+
+  if (!sizeStock || typeof sizeStock !== "object") return [];
+
+  return Object.entries(sizeStock as Record<string, { fullStock?: number; stock?: number }>);
+}
+
 function getAvailabilityStatus(params: {
   productType?: string;
   stock: number;
+  sizeStock?: unknown;
 }) {
-  const { productType, stock } = params;
+  const { productType, stock, sizeStock } = params;
+  const sizeStockEntries = getSizeStockEntries(sizeStock);
+  const hasSelectableSize = sizeStockEntries.length > 0
+    ? sizeStockEntries.some(([, entry]) => Math.max(entry.stock ?? 0, 0) > 0)
+    : stock > 0;
+  const effectiveStock = sizeStockEntries.length > 0
+    ? sizeStockEntries.reduce((sum, [, entry]) => sum + Math.max(entry.stock ?? 0, 0), 0)
+    : stock;
 
-  if (stock <= 0) return "out-of-stock";
-  if (productType === "perfume" && stock <= 3) return "low-stock";
+  if (!hasSelectableSize) return "out-of-stock";
+  if (productType === "perfume" && effectiveStock <= 3) return "low-stock";
   return productType === "perfume" ? "in-stock" : "available";
 }
 
@@ -44,10 +64,18 @@ function normalizeOriginPictures(
   };
 }
 
-function getInventorySnapshot(product: { stock?: number; fullStock?: number }, soldQuantity: number) {
-  const availableStock = Math.max(product.stock ?? 0, 0);
-  const fullStock =
-    typeof product.fullStock === "number"
+function getInventorySnapshot(
+  product: { stock?: number; fullStock?: number; sizeStock?: unknown },
+  soldQuantity: number
+) {
+  const sizeStockEntries = getSizeStockEntries(product.sizeStock);
+  const hasSizeStock = sizeStockEntries.length > 0;
+  const availableStock = hasSizeStock
+    ? sizeStockEntries.reduce((sum, [, entry]) => sum + Math.max(entry.stock ?? 0, 0), 0)
+    : Math.max(product.stock ?? 0, 0);
+  const fullStock = hasSizeStock
+    ? sizeStockEntries.reduce((sum, [, entry]) => sum + Math.max(entry.fullStock ?? entry.stock ?? 0, 0), 0)
+    : typeof product.fullStock === "number"
       ? Math.max(product.fullStock, 0)
       : Math.max(availableStock + soldQuantity, 0);
 
@@ -65,18 +93,6 @@ function getDeclaredSizes(productSizes: unknown, bodySizes?: unknown) {
     }
   }
   return Array.from(sizes);
-}
-
-function getSizeStockEntries(
-  sizeStock: unknown
-): Array<[string, { fullStock?: number; stock?: number }]> {
-  if (sizeStock instanceof Map) {
-    return Array.from(sizeStock.entries());
-  }
-
-  if (!sizeStock || typeof sizeStock !== "object") return [];
-
-  return Object.entries(sizeStock as Record<string, { fullStock?: number; stock?: number }>);
 }
 
 function buildSizeStockSnapshot(params: {
@@ -142,6 +158,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         availabilityStatus: getAvailabilityStatus({
           productType: product.productType,
           stock: inventory.availableStock,
+          sizeStock: product.sizeStock,
         }),
       },
     });
@@ -254,6 +271,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           availabilityStatus: getAvailabilityStatus({
             productType: product.productType,
             stock: inventory.availableStock,
+            sizeStock: product.sizeStock,
           }),
         },
       });
@@ -438,9 +456,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const inventory = getInventorySnapshot(product, soldQuantity);
 
     let sizeStockData: Record<string, { fullStock: number; stock: number; soldQuantity: number }> | null = null;
-    if (product.sizeStock && product.sizeStock instanceof Map && product.sizeStock.size > 0) {
+    if (product.sizeStock) {
       sizeStockData = {};
-      for (const [size, entry] of product.sizeStock) {
+      for (const [size, entry] of getSizeStockEntries(product.sizeStock)) {
         sizeStockData[size] = {
           fullStock: entry.fullStock,
           stock: entry.stock,
@@ -461,6 +479,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         availabilityStatus: getAvailabilityStatus({
           productType: product.productType,
           stock: inventory.availableStock,
+          sizeStock: product.sizeStock,
         }),
       },
     });

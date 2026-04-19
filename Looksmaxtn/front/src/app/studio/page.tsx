@@ -55,6 +55,7 @@ interface OutfitSlotItem {
     id: string;
     name: string;
     image?: string;
+    price?: string;
     fashionSubtype?: "clothes" | "shoes" | null;
     originPictures?: {
         front?: string;
@@ -778,7 +779,7 @@ export default function OutfitStudioPage() {
         if (searchTerm.trim()) params.set("search", searchTerm.trim());
         params.set("limit", "40");
 
-        fetch(`/api/products?${params}`)
+        fetch(`/api/products?${params}`, { cache: "no-store" })
             .then((response) => response.json())
             .then((data) => setProducts(data.products || []))
             .catch(() => setProducts([]));
@@ -791,7 +792,7 @@ export default function OutfitStudioPage() {
         params.set("category", genderCollectionSlug);
         params.set("limit", "8");
 
-        fetch(`/api/products?${params}`)
+        fetch(`/api/products?${params}`, { cache: "no-store" })
             .then((response) => response.json())
             .then((data) =>
                 setSuggestedProducts(
@@ -801,15 +802,12 @@ export default function OutfitStudioPage() {
             .catch(() => setSuggestedProducts([]));
     }, [genderCollectionSlug, user?.bodyProfile?.gender]);
 
-    const filteredProducts = useMemo(() => {
-        return products.filter((product) => product.productType !== "perfume");
-    }, [products]);
     const activeZoneIdForSelection = showAllSelectedItems ? "" : selectedZoneId;
     const selectedZoneMeta = showAllSelectedItems
         ? {
-            title: "All selected items",
-            type: "All zones",
-            fit: "Complete outfit",
+            title: "All cart items",
+            type: "Current cart",
+            fit: "Cart items",
             season: "Current cart",
             care: "Tap a card to focus its zone",
         }
@@ -828,6 +826,7 @@ export default function OutfitStudioPage() {
             id: cartItem.id,
             name: cartItem.name,
             image: cartItem.image,
+            price: cartItem.price,
             fashionSubtype: cartItem.fashionSubtype,
             originPictures: cartItem.originPictures,
             zoneId,
@@ -835,10 +834,7 @@ export default function OutfitStudioPage() {
     });
     const selectedZoneHistory: OutfitViewItem[] = showAllSelectedItems
         ? allSelectedOutfitItems
-        : (zoneHistory[selectedZoneId as StudioZoneId] || []).map((item) => ({
-            ...item,
-            zoneId: selectedZoneId as StudioZoneId,
-        }));
+        : allSelectedOutfitItems.filter((item) => item.zoneId === selectedZoneId);
     const hasSelectedOutfitItems = BODY_ZONES.some((zone) => Boolean(outfit[zone.id]));
     const generationLimit = 100;
     const generationRequestsUsed = Math.min(Number(user?.bodyProfile?.outfitGenerationCount || 0), generationLimit);
@@ -852,6 +848,7 @@ export default function OutfitStudioPage() {
             id: item.id,
             name: item.name,
             image: item.image,
+            price: item.price,
             fashionSubtype: item.fashionSubtype,
             originPictures: item.originPictures,
         };
@@ -905,12 +902,13 @@ export default function OutfitStudioPage() {
             });
 
             const nextItem: OutfitSlotItem = {
-                id: getCartItemProductId(cartItem.id),
-                name: cartItem.name,
-                image: cartItem.image,
-                fashionSubtype: cartItem.fashionSubtype,
-                originPictures: cartItem.originPictures,
-            };
+                    id: getCartItemProductId(cartItem.id),
+                    name: cartItem.name,
+                    image: cartItem.image,
+                    price: cartItem.price,
+                    fashionSubtype: cartItem.fashionSubtype,
+                    originPictures: cartItem.originPictures,
+                };
 
             nextOutfit[zoneId] = nextItem;
             nextHistory[zoneId] = [
@@ -928,6 +926,7 @@ export default function OutfitStudioPage() {
                     id: override.id,
                     name: override.name,
                     image: override.image,
+                    price: override.price,
                     fashionSubtype: override.fashionSubtype,
                     originPictures: override.originPictures,
                 }
@@ -963,12 +962,22 @@ export default function OutfitStudioPage() {
         setSelectedZoneId(zoneId);
     };
 
+    const handleSelectAllItems = () => {
+        setShowAllSelectedItems(true);
+        setSelectedZoneId("");
+    };
+
     const handleBuilderZoneClick = (zoneId: (typeof BODY_ZONES)[number]["id"]) => {
         setShowAllSelectedItems(false);
         handleSelectZone(zoneId);
     };
 
-    const handleSelectedZoneItemClick = (zoneId: StudioZoneId, item: OutfitViewItem) => {
+    const handleSelectedZoneItemClick = (
+        zoneId: StudioZoneId,
+        item: OutfitViewItem,
+        keepAllView = false
+    ) => {
+        setShowAllSelectedItems(keepAllView);
         setOutfit((current) => {
             if (current[zoneId]?.id === item.id) {
                 setZoneOverrides((currentOverrides) => ({
@@ -987,6 +996,7 @@ export default function OutfitStudioPage() {
                     id: item.id,
                     name: item.name,
                     image: item.image,
+                    price: item.price,
                     fashionSubtype: item.fashionSubtype,
                     originPictures: item.originPictures,
                 },
@@ -998,15 +1008,14 @@ export default function OutfitStudioPage() {
                     id: item.id,
                     name: item.name,
                     image: item.image,
+                    price: item.price,
                     fashionSubtype: item.fashionSubtype,
                     originPictures: item.originPictures,
                 },
             };
         });
 
-        if (!showAllSelectedItems) {
-            setSelectedZoneId(zoneId);
-        }
+        setSelectedZoneId(keepAllView ? "" : zoneId);
     };
 
     const handleGenerateOutfit = async () => {
@@ -1340,7 +1349,7 @@ export default function OutfitStudioPage() {
                             <div className="flex flex-wrap gap-1.5">
                                 <button
                                     type="button"
-                                    onClick={() => setShowAllSelectedItems(true)}
+                                    onClick={handleSelectAllItems}
                                     className={`px-0 py-1 text-[11px] uppercase tracking-[0.15em] transition-all ${
                                         showAllSelectedItems
                                             ? "font-bold text-[#1a1a1a] underline underline-offset-[6px] decoration-[1px]"
@@ -1368,7 +1377,7 @@ export default function OutfitStudioPage() {
                             {selectedZoneHistory.length > 0 && (
                                 <div className="border border-[#00000012] bg-[#f6f1e7] px-4 py-3">
                                     <p className="text-[11px] uppercase tracking-[0.18em] text-[#666]">
-                                        {showAllSelectedItems ? "All selected items" : "Selected zone items"}
+                                        {showAllSelectedItems ? "All cart items" : "Zone items"}
                                     </p>
                                     <div className="mt-3 space-y-2">
                                         {selectedZoneHistory.map((item) => {
@@ -1380,7 +1389,7 @@ export default function OutfitStudioPage() {
                                             <button
                                                 key={`${item.zoneId}-${item.id}`}
                                                 type="button"
-                                                onClick={() => handleSelectedZoneItemClick(item.zoneId, item)}
+                                                onClick={() => handleSelectedZoneItemClick(item.zoneId, item, showAllSelectedItems)}
                                                 className={`flex w-full items-center gap-3 rounded-none p-2 text-left transition-colors ${
                                                     isSelectedHistoryItem
                                                         ? "bg-[#ede1ce]"
@@ -1402,9 +1411,9 @@ export default function OutfitStudioPage() {
                                                     <div className="truncate text-[12px] leading-5 text-[#1a1a1a]">
                                                         {item.name}
                                                     </div>
-                                                <div className="text-[10px] uppercase tracking-[0.16em] text-[#666]">
-                                                    {getZoneButtonLabel(item.zoneId, isWomen)}
-                                                </div>
+                                                    <div className="text-[10px] uppercase tracking-[0.16em] text-[#666]">
+                                                        {item.price ? formatTndPrice(item.price) : ""}
+                                                    </div>
                                             </div>
                                             </button>
                                             );

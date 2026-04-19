@@ -178,8 +178,8 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               </tr>
             </thead>
             <tbody>
-              {order.items.map((item) => (
-                <tr key={`${item.productId}-${item.name}`}>
+              {order.items.map((item, index) => (
+                <tr key={`${item.productId}-${item.size || ""}-${item.color || ""}-${index}`}>
                   <td className="px-3 py-2 border-b border-black text-xs">{item.name}</td>
                   <td className="px-3 py-2 border-b border-black text-xs">{item.size}</td>
                   <td className="px-3 py-2 border-b border-black text-xs">{item.quantity}</td>

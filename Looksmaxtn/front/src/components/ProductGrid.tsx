@@ -88,7 +88,7 @@ export default function ProductGrid({
       if (appliedPriceMax) params.set("priceMax", appliedPriceMax);
       params.set("includeFacets", "1");
 
-      fetch(`/api/products?${params}`)
+      fetch(`/api/products?${params}`, { cache: "no-store" })
         .then((r) => r.json())
         .then((data) => {
           if (cancelled) return;

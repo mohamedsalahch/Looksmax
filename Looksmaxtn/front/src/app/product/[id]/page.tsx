@@ -1,199 +1,111 @@
 import ProductImageGallery from "@/components/ProductImageGallery";
 import ProductInfo from "@/components/ProductInfo";
 import RelatedProducts from "@/components/RelatedProducts";
-import { getSession } from "@/lib/auth";
-import dbConnect from "@/lib/mongodb";
-import Order from "@/models/Order";
-import Product from "@/models/Product";
-import ProductReservation from "@/models/ProductReservation";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getDefaultSelectableSize, getSelectedSizeStock } from "@/lib/sizeAvailability";
 
 export const dynamic = "force-dynamic";
 
-function getSizeStockEntries(
-  sizeStock: unknown
-): Array<[string, { fullStock?: number; stock?: number }]> {
-  if (sizeStock instanceof Map) {
-    return Array.from(sizeStock.entries());
-  }
-
-  if (!sizeStock || typeof sizeStock !== "object") return [];
-
-  return Object.entries(sizeStock as Record<string, { fullStock?: number; stock?: number }>);
-}
-
-function buildSizeAvailability(
-  sizeStock: unknown
-): Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null {
-  const entries = getSizeStockEntries(sizeStock);
-  if (entries.length === 0) return null;
-
-  return Object.fromEntries(
-    entries.map(([size, entry]) => [
-      size,
-      {
-        stock: Math.max(entry.stock ?? 0, 0),
-        available: Math.max(entry.stock ?? 0, 0) > 0,
-        reservedElsewhere: false,
-      },
-    ])
-  );
-}
-
-const defaultProduct: {
-  name: string;
-  categories?: string[];
-  price: string;
-  brand: string;
-  image?: string;
-    size?: string;
+type ProductResponse = {
+  product?: {
+    _id?: string;
+    name: string;
+    categories?: string[];
+    price: number;
+    brand: string;
+    images?: { url: string; isMain: boolean }[];
     sizes?: string[];
-    stock: number;
     sizeAvailability?: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null;
+    stock: number;
     description: string;
-    images: { url: string; isMain: boolean }[];
-    reservationExpiresAt: string | null;
+    reservationExpiresAt?: string | null;
     cartCount?: number;
     reservedElsewhere?: boolean;
     ownedReservation?: boolean;
     blockedByOrder?: boolean;
     conditionScore?: number | null;
     conditionStatus?: string | null;
-  productType: "fashion" | "perfume" | "clothing" | "shoes";
-  fashionSubtype?: "clothes" | "shoes" | null;
-  originPictures?: {
-    front?: string;
-    back?: string;
-    left?: string;
-    right?: string;
+    productType?: "fashion" | "perfume" | "clothing" | "shoes";
+    fashionSubtype?: "clothes" | "shoes" | null;
+    originPictures?: {
+      front?: string;
+      back?: string;
+      left?: string;
+      right?: string;
+    };
+    cloneSourceName?: string;
+    cloneSourceImage?: string;
   };
-  cloneSourceName?: string;
-  cloneSourceImage?: string;
-} = {
-  name: "Vintage Thrift Find",
-  categories: [],
-  price: "29.99",
-  brand: "Unknown",
-  image: "",
-  sizes: [],
-  stock: 1,
-  description:
-    "A unique thrift find in great condition. One-of-a-kind piece curated for the LOOKSMAX collection.",
-  images: [{ url: "", isMain: true }],
-  reservationExpiresAt: null,
-  conditionScore: 7,
-  conditionStatus: "used",
-  productType: "fashion",
-  fashionSubtype: "clothes",
-  originPictures: {
-    front: "",
-    back: "",
-    left: "",
-    right: "",
-  },
-  cloneSourceName: "",
-  cloneSourceImage: "",
 };
+
+async function loadProduct(id: string) {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+  const response = await fetch(`${baseUrl}/api/products/${id}`, { cache: "no-store" });
+  if (!response.ok) return null;
+
+  const data = (await response.json()) as ProductResponse;
+  return data.product || null;
+}
 
 export default async function ProductDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ size?: string }>;
 }) {
   const { id } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const requestedSize = resolvedSearchParams?.size || "";
 
-  let product = defaultProduct;
-  let productId = id;
-
-  try {
-    await dbConnect();
-    const session = await getSession();
-    const currentUserId = session?.userId || null;
-    const reservationKey = currentUserId ? `user:${currentUserId}` : null;
-    const now = new Date();
-    const [dbProduct, activeOrders, activeReservations] = await Promise.all([
-      Product.findById(id).lean(),
-      Order.find({
-        orderStatus: { $in: ["processing", "confirmed", "shipping"] },
-        "items.product": id,
-      })
-        .select("user items.product")
-        .lean(),
-      ProductReservation.find({ product: id, reservedUntil: { $gt: now } })
-        .select("reservationKey quantity")
-        .lean(),
-    ]);
-    const ownedReservationQuantity = activeReservations
-      .filter((reservation) => reservation.reservationKey === reservationKey)
-      .reduce((sum, reservation) => sum + Math.max(1, Number(reservation.quantity) || 1), 0);
-    const reservedByOthersQuantity = activeReservations
-      .filter((reservation) => reservation.reservationKey !== reservationKey)
-      .reduce((sum, reservation) => sum + Math.max(1, Number(reservation.quantity) || 1), 0);
-    const activeOrderReservation = activeOrders.reduce(
-      (state, order) => {
-        const orderUserId = String(order.user || "");
-        const isOwnedByCurrentUser = currentUserId ? orderUserId === currentUserId : false;
-        for (const item of order.items || []) {
-          if (item.product?.toString?.() !== id) continue;
-          if (isOwnedByCurrentUser) state.ownedReservation = true;
-          else state.reservedElsewhere = true;
-        }
-        return state;
-      },
-      { reservedElsewhere: false, ownedReservation: false }
-    );
-    const stock = Math.max(dbProduct?.stock ?? 0, 0);
-    const cartReservedElsewhere = reservedByOthersQuantity > 0 && reservedByOthersQuantity >= stock;
-    const blockedByOrder =
-      stock <= 0 && (activeOrderReservation.reservedElsewhere || activeOrderReservation.ownedReservation);
-    const ownedReservation = activeOrderReservation.ownedReservation;
-    const productReservedElsewhere = cartReservedElsewhere;
-    if (
-      dbProduct &&
-      stock <= 0 &&
-      !blockedByOrder &&
-      !productReservedElsewhere &&
-      !ownedReservation
-    ) {
-      notFound();
-    }
-    if (dbProduct) {
-      const sizeAvailability = buildSizeAvailability((dbProduct as { sizeStock?: unknown }).sizeStock);
-      product = {
-        name: dbProduct.name,
-        categories: dbProduct.categories || [],
-        price: dbProduct.price.toFixed(2),
-        brand: dbProduct.brand || "LOOKSMAX",
-        image: dbProduct.images?.find((image) => image.isMain)?.url || dbProduct.images?.[0]?.url || "",
-        sizes: dbProduct.sizes || [],
-        stock,
-        sizeAvailability,
-        description: dbProduct.description || "",
-        images: dbProduct.images || [],
-        reservationExpiresAt: null,
-        cartCount: activeReservations.reduce((sum, reservation) => sum + Math.max(1, Number(reservation.quantity) || 1), 0),
-        reservedElsewhere: productReservedElsewhere,
-        ownedReservation,
-        blockedByOrder,
-        conditionScore: dbProduct.conditionScore ?? null,
-        conditionStatus: dbProduct.conditionStatus || null,
-        productType: dbProduct.productType || "fashion",
-        fashionSubtype: dbProduct.fashionSubtype || "clothes",
-        originPictures: {
-          front: dbProduct.originPictures?.front || "",
-          back: dbProduct.originPictures?.back || "",
-          left: dbProduct.originPictures?.left || "",
-          right: dbProduct.originPictures?.right || "",
-        },
-        cloneSourceName: dbProduct.cloneSourceName || "",
-        cloneSourceImage: dbProduct.cloneSourceImage || "",
-      };
-      productId = dbProduct._id.toString();
-    }
-  } catch {
-    // Use default product if DB is unavailable
+  const dbProduct = await loadProduct(id);
+  if (!dbProduct) {
+    notFound();
   }
+
+  const sizes = (dbProduct.sizes?.length ? dbProduct.sizes : Object.keys(dbProduct.sizeAvailability || {})).filter((size) =>
+    Boolean(size && size.trim())
+  );
+  const sizeAvailability = dbProduct.sizeAvailability || null;
+  const stock = Math.max(dbProduct.stock ?? 0, 0);
+  const initialSelectedSize = requestedSize && sizes.includes(requestedSize)
+    ? requestedSize
+    : getDefaultSelectableSize(sizes, sizeAvailability);
+  const initialSelectedSizeStock = getSelectedSizeStock(sizeAvailability, initialSelectedSize, stock);
+
+  const product = {
+    name: dbProduct.name,
+    categories: dbProduct.categories || [],
+    price: dbProduct.price.toFixed(2),
+    brand: dbProduct.brand || "LOOKSMAX",
+    image: dbProduct.images?.find((image) => image.isMain)?.url || dbProduct.images?.[0]?.url || "",
+    sizes,
+    stock: Math.max(dbProduct.stock ?? 0, 0),
+    sizeAvailability,
+    initialSelectedSize,
+    initialSelectedSizeStock,
+    description: dbProduct.description || "",
+    images: dbProduct.images || [],
+    reservationExpiresAt: null,
+    cartCount: dbProduct.cartCount ?? 0,
+    reservedElsewhere: Boolean(dbProduct.reservedElsewhere),
+    ownedReservation: Boolean(dbProduct.ownedReservation),
+    blockedByOrder: Boolean(dbProduct.blockedByOrder),
+    conditionScore: dbProduct.conditionScore ?? null,
+    conditionStatus: dbProduct.conditionStatus || null,
+    productType: dbProduct.productType || "fashion",
+    fashionSubtype: dbProduct.fashionSubtype || "clothes",
+    originPictures: {
+      front: dbProduct.originPictures?.front || "",
+      back: dbProduct.originPictures?.back || "",
+      left: dbProduct.originPictures?.left || "",
+      right: dbProduct.originPictures?.right || "",
+    },
+    cloneSourceName: dbProduct.cloneSourceName || "",
+    cloneSourceImage: dbProduct.cloneSourceImage || "",
+  };
+  const productId = String(dbProduct._id || id);
 
   return (
     <div className="pt-[72px]">

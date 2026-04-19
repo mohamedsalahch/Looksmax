@@ -49,7 +49,7 @@ export default function ProductCardRow({ title = "Featured selection" }: { title
     let cancelled = false;
 
     const loadProducts = () => {
-      fetch("/api/products?limit=4")
+      fetch("/api/products?limit=4", { cache: "no-store" })
         .then((r) => r.json())
         .then((data) => {
           if (!cancelled) setProducts(data.products || []);

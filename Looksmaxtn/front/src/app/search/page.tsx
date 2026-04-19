@@ -112,7 +112,7 @@ function SearchContent() {
     let cancelled = false;
     setLoading(true);
 
-    fetch(`/api/products?${params}`)
+    fetch(`/api/products?${params}`, { cache: "no-store" })
       .then((response) => response.json())
       .then((data) => {
         if (cancelled) return;
