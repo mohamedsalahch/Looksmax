@@ -1,8 +1,7 @@
 {
   "scripts": {
     "dev": "concurrently \"npm run dev --prefix front\" \"npm run dev --prefix admin\" \"npm run dev --prefix back\"",
-    "test": "npm run test:unit --prefix front && npm run test:unit --prefix admin && npm run test:unit --prefix back",
-    "seed:admin": "node scripts/create-admin.mjs"
+    "test": "npm run test:unit --prefix front && npm run test:unit --prefix admin && npm run test:unit --prefix back"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

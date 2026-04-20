@@ -38,7 +38,9 @@ const mongoUri = cleanValue(
 );
 
 if (!email || !password) {
-  fail("Usage: npm run seed:admin -- --email admin@example.com --password 'secret' [--name 'Admin Name'] [--mongo-uri mongodb://localhost:27017/looksmax]");
+  fail(
+    "Usage: npm run seed:admin -- --email admin@example.com --password 'secret' [--name 'Admin Name'] [--mongo-uri mongodb://localhost:27017/looksmax]"
+  );
 }
 
 if (password.length < 6) {
