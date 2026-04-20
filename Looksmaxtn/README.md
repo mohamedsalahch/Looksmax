@@ -60,12 +60,20 @@ Recommended production routing:
 - Serve the admin dashboard on `admin.example.com`
 - Keep `back` and `generator_api` bound to `127.0.0.1` only
 - Put Nginx in front using `deploy/nginx/looksmax.conf`
+- Disable the default Nginx site so it does not override your config
 
 After copying the Nginx config, reload it and then verify:
 
 ```bash
 sudo nginx -t
 sudo systemctl reload nginx
+```
+
+If you still see the stock Nginx page, check these first:
+
+```bash
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -T | rg -n "server_name|default_server|looksmax"
 ```
 
 ## Repository Rules
