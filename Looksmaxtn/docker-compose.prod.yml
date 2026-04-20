@@ -2,7 +2,7 @@ services:
   mongodb:
     image: mongo:4.4
     container_name: looksmax-mongodb
-    restart: unless-stopped
+    restart: always
     volumes:
       - mongodb_data:/data/db
 
@@ -16,7 +16,7 @@ services:
       - "127.0.0.1:12003:3003"
     depends_on:
       - mongodb
-    restart: unless-stopped
+    restart: always
 
   back:
     build:
@@ -33,7 +33,7 @@ services:
     depends_on:
       - mongodb
       - generator_api
-    restart: unless-stopped
+    restart: always
 
   admin:
     build:
@@ -50,7 +50,7 @@ services:
       - "127.0.0.1:12001:3001"
     depends_on:
       - back
-    restart: unless-stopped
+    restart: always
 
   front:
     build:
@@ -68,7 +68,7 @@ services:
       - "127.0.0.1:12000:3000"
     depends_on:
       - back
-    restart: unless-stopped
+    restart: always
 
 volumes:
   mongodb_data:
