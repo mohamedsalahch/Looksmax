@@ -29,15 +29,9 @@ done
 echo -e "${GREEN}✓ All production environment files found${NC}"
 echo ""
 
-# Pull images
-echo -e "${GREEN}Pulling Docker images...${NC}"
-docker-compose -f docker-compose.prod.yml pull
-echo -e "${GREEN}✓ Images pulled successfully${NC}"
-echo ""
-
 # Start services
 echo -e "${GREEN}Starting services...${NC}"
-docker-compose -f docker-compose.prod.yml up -d
+docker-compose -f docker-compose.prod.yml up --build -d
 echo -e "${GREEN}✓ Services started successfully${NC}"
 echo ""
 
