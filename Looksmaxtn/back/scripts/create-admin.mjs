@@ -81,7 +81,6 @@ async function main() {
         profileImage: "",
         gender: "",
       },
-    createdAt,
     updatedAt: now,
   };
 
@@ -89,7 +88,9 @@ async function main() {
     { email },
     {
       $set: nextUser,
-      $setOnInsert: { createdAt },
+      $setOnInsert: {
+        createdAt,
+      },
     },
     { upsert: true }
   );
