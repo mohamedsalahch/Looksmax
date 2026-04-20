@@ -56,11 +56,12 @@ docker compose -f docker-compose.prod.yml up --build -d
 
 Recommended production routing:
 
-- Serve the storefront on `example.com`
-- Serve the admin dashboard on `admin.example.com`
+- Serve the storefront on `looksmaxtn.com`
+- Serve the admin dashboard on `admin.looksmaxtn.com`
 - Keep `back` and `generator_api` bound to `127.0.0.1` only
 - Put Nginx in front using `deploy/nginx/looksmax.conf`
 - Disable the default Nginx site so it does not override your config
+- Port 80 should only redirect to HTTPS or return `444` for unknown hosts
 
 After copying the Nginx config, reload it and then verify:
 
