@@ -54,6 +54,20 @@ docker compose up --build
 docker compose -f docker-compose.prod.yml up --build -d
 ```
 
+Recommended production routing:
+
+- Serve the storefront on `example.com`
+- Serve the admin dashboard on `admin.example.com`
+- Keep `back` and `generator_api` bound to `127.0.0.1` only
+- Put Nginx in front using `deploy/nginx/looksmax.conf`
+
+After copying the Nginx config, reload it and then verify:
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
 ## Repository Rules
 
 - Uploaded and generated images live under `public/uploads` and are ignored by git
