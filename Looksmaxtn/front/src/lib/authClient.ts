@@ -60,7 +60,10 @@ export function getTokenExpiryMs(token: string) {
 }
 
 export async function refreshStoreAuthToken() {
-  const response = await fetch("/api/auth/refresh", withAuthRequest({ method: "POST" }));
+  const response = await fetch(
+    "/api/auth/refresh",
+    withAuthRequest({ method: "POST", credentials: "include" })
+  );
   if (!response.ok) return null;
 
   const data = (await response.json()) as { token?: string | null };
@@ -84,7 +87,7 @@ export function withAuthHeaders(headers?: HeadersInit) {
 export function withAuthRequest(init: RequestInit = {}) {
   return {
     ...init,
-    credentials: "include" as const,
+    credentials: init.credentials || "omit",
     headers: withAuthHeaders(init.headers),
   };
 }
