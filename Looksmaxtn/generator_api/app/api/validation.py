@@ -18,22 +18,18 @@ logger = logging.getLogger(__name__)
 _generator: ImageGenerator | None = None
 _VALIDATION_MODEL = "gemini-3-flash-preview"
 
-VALIDATION_PROMPT = """You are a photo quality validator for a virtual try-on application.
+VALIDATION_PROMPT = """Analyze the image to determine if the primary subject is suitable for a virtual clothing overlay.
 
-Analyze the provided image and determine if it is suitable for virtual outfit try-on.
+CRITERIA:
+1. SUBJECT: There must be one clear primary subject in the foreground. Ignore any people in the background or distance.
+2. PROMINENCE: The primary subject must be the "main thing" in the photo (largest figure, in focus). They do NOT need to be perfectly centered.
+3. POSE: Subject must be standing or upright. 
+4. VISIBILITY: At minimum, the body from the HEAD to the KNEES must be fully visible within the frame.
+5. LIGHTING/CLARITY: Subject must be well-lit enough to see body shape and clothing details. Night shots and outdoor backgrounds are perfectly fine as long as the subject is not a dark silhouette or very blurry.
 
-The image MUST meet ALL of these criteria:
-- Shows exactly ONE person (no group photos)
-- Person is STANDING upright in a natural pose
-- Full body is visible (head to feet)
-- Face is clearly visible and not obscured
-- Good, even lighting (no heavy shadows or silhouettes)
-- Person is the main subject, centered in the frame
-- Photo is not blurry or heavily filtered
-
-Respond with ONLY valid JSON, no other text:
-{"valid": true} if ALL criteria are met
-{"valid": false, "reason": "one short sentence explaining what is wrong"} if any criteria fail"""
+Respond with ONLY valid JSON:
+{"valid": true} if the primary subject meets these standards.
+{"valid": false, "reason": "one short sentence explaining the specific issue"}"""
 
 
 def set_generator(generator: ImageGenerator | None) -> None:

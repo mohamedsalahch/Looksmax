@@ -889,35 +889,6 @@ export default function OutfitStudioPage() {
         const nextOutfit: Record<string, OutfitSlotItem | null> = Object.fromEntries(
             BODY_ZONES.map((zone) => [zone.id, null])
         );
-        const nextHistory: Record<StudioZoneId, OutfitSlotItem[]> = BODY_ZONES.reduce((acc, zone) => {
-            acc[zone.id] = [];
-            return acc;
-        }, {} as Record<StudioZoneId, OutfitSlotItem[]>);
-
-        for (const cartItem of cartItems) {
-            if (cartItem.productType === "perfume") continue;
-
-            const zoneId = inferStudioAssignmentZone({
-                categories: cartItem.categories,
-                name: cartItem.name,
-                fashionSubtype: cartItem.fashionSubtype,
-            });
-
-            const nextItem: OutfitSlotItem = {
-                    id: getCartItemProductId(cartItem.id),
-                    name: cartItem.name,
-                    image: cartItem.image,
-                    price: cartItem.price,
-                    fashionSubtype: cartItem.fashionSubtype,
-                    originPictures: cartItem.originPictures,
-                };
-
-            nextOutfit[zoneId] = nextItem;
-            nextHistory[zoneId] = [
-                nextItem,
-                ...nextHistory[zoneId].filter((entry) => entry.id !== nextItem.id),
-            ].slice(0, 5);
-        }
 
         for (const zone of BODY_ZONES) {
             if (!(zone.id in zoneOverrides)) continue;
@@ -938,12 +909,11 @@ export default function OutfitStudioPage() {
         setOutfit((current) => (
             JSON.stringify(current) === JSON.stringify(nextOutfit) ? current : nextOutfit
         ));
-        setZoneHistory((current) => (
-            JSON.stringify(current) === JSON.stringify(nextHistory) ? current : nextHistory
-        ));
-    }, [cartItems, isWomen, zoneOverrides, studioStateHydrated]);
+    }, [zoneOverrides, studioStateHydrated]);
 
     useEffect(() => {
+        if (!studioStateHydrated) return;
+
         const syncPendingAssignments = () => {
             const pendingAssignments = consumeStudioAssignments();
             if (pendingAssignments.length === 0) return;
@@ -967,7 +937,7 @@ export default function OutfitStudioPage() {
         return () => {
             window.removeEventListener("looksmax:studio-assignment-change", syncPendingAssignments as EventListener);
         };
-    }, [isWomen]);
+    }, [isWomen, studioStateHydrated]);
 
     const handleSelectZone = (zoneId: (typeof BODY_ZONES)[number]["id"]) => {
         setShowAllSelectedItems(false);
@@ -1042,6 +1012,7 @@ export default function OutfitStudioPage() {
         }
 
         setGenerationError("");
+        setGeneratedOutfitJobId("");
         setGeneratedOutfitImages([]);
         setGeneratedOutfitIndex(0);
         setGeneratingOutfit(true);
@@ -1219,6 +1190,19 @@ export default function OutfitStudioPage() {
             setSharedOutfitMode("");
         }
         setSharingOutfit(false);
+    };
+
+    const handleDiscardGeneratedOutfit = () => {
+        setGeneratedOutfitJobId("");
+        setGeneratedOutfitImages([]);
+        setGeneratedOutfitIndex(0);
+        setGenerationError("");
+        setGeneratingOutfit(false);
+        setOutfitNameDraft("Outfit");
+        setNeedsGenerationRecovery(false);
+        if (user?.id) {
+            writeStoredGenerationState(user.id, null);
+        }
     };
 
     useEffect(() => {
@@ -1535,12 +1519,12 @@ export default function OutfitStudioPage() {
                                     <p className="text-[11px] uppercase tracking-[0.18em] text-[#666]">Generated
                                         outfit</p>
                                     {activeGeneratedOutfitImage && !generatingOutfit && !isRestoringGeneration ? (
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-3">
                                             <button
                                                 type="button"
                                                 onClick={handleSaveOutfit}
                                                 disabled={savingOutfit || sharingOutfit || generatedOutfitImages.length === 0}
-                                                className="rounded-none border border-[#00000012] bg-transparent px-3.5 py-2 text-[11px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:border-[#c9a96e] hover:text-[#c9a96e] disabled:opacity-50"
+                                                className="px-0 py-1 text-[11px] uppercase tracking-[0.15em] text-[#666] hover:text-[#1a1a1a] hover:underline hover:underline-offset-[6px] hover:decoration-[1px] disabled:opacity-50 disabled:no-underline"
                                             >
                                                 {savingOutfit ? "Saving..." : "Save"}
                                             </button>
@@ -1549,9 +1533,17 @@ export default function OutfitStudioPage() {
                                                 onClick={handleShareGeneratedOutfit}
                                                 disabled={savingOutfit || sharingOutfit || generatedOutfitImages.length === 0}
                                                 aria-busy={sharingOutfit}
-                                                className="inline-flex min-w-[84px] justify-center rounded-none border border-[#00000012] bg-transparent px-3.5 py-2 text-[11px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:border-[#c9a96e] hover:text-[#c9a96e] disabled:opacity-50"
+                                                className="px-0 py-1 text-[11px] uppercase tracking-[0.15em] text-[#666] hover:text-[#1a1a1a] hover:underline hover:underline-offset-[6px] hover:decoration-[1px] disabled:opacity-50 disabled:no-underline"
                                             >
                                                 {sharedOutfit ? "Copied" : "Share"}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleDiscardGeneratedOutfit}
+                                                disabled={savingOutfit || sharingOutfit}
+                                                className="px-0 py-1 text-[11px] uppercase tracking-[0.15em] text-[#666] hover:text-[#430C05] hover:underline hover:underline-offset-[6px] hover:decoration-[1px] disabled:opacity-50 disabled:no-underline"
+                                            >
+                                                Discard
                                             </button>
                                         </div>
                                     ) : null}
