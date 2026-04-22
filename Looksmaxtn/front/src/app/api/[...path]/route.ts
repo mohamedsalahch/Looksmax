@@ -23,9 +23,26 @@ function buildTargetUrl(req: NextRequest, path: string[]) {
 
 function buildHeaders(req: NextRequest) {
   const headers = new Headers(req.headers);
-  headers.delete("host");
-  headers.delete("connection");
-  headers.delete("content-length");
+
+  for (const headerName of [
+    "host",
+    "connection",
+    "content-length",
+    "rsc",
+    "next-action",
+    "next-router-state-tree",
+    "next-router-prefetch",
+    "next-router-segment-prefetch",
+    "next-url",
+    "x-action-forwarded",
+    "x-invoke-path",
+    "x-invoke-query",
+    "x-invoke-output",
+    "x-invoke-status",
+  ]) {
+    headers.delete(headerName);
+  }
+
   return headers;
 }
 
