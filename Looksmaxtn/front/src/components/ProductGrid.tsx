@@ -112,11 +112,9 @@ export default function ProductGrid({
     };
 
     loadProducts();
-    const interval = window.setInterval(loadProducts, 5000);
 
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
     };
   }, [category, selectedSize, appliedPriceMin, appliedPriceMax]);
 

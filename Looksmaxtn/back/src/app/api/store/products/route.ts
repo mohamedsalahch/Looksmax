@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
         : displayStock > 0;
       const reservedElsewhere = sizeAvailability
         ? Object.values(sizeAvailability).some((sizeInfo) => sizeInfo.reservedElsewhere)
-        : reservedByOthers > 0;
+        : reservedByOthers > 0 && reservedByOthers >= stock;
       const blockedByOrder = sizeAvailability
         ? Boolean(activeOrderHold) && !hasSelectableSize
         : Boolean(activeOrderHold) && displayStock <= 0;
