@@ -15,6 +15,7 @@
 **/.env.test.local
 **/.env.production
 **/.env.production.local
+**/.env.prodcution
 !**/.env.example
 !**/.env.production.example
 
@@ -41,7 +42,12 @@ yarn-error.log*
 **/venv/
 **/env/
 
+# Uploads and media
+**/public/uploads/**
+!**/public/uploads/.gitkeep
+**/uploads/**
+!**/uploads/.gitkeep
+
 # Docker and local deployment artifacts
 .docker/
-
-# Uploaded media is tracked intentionally for this project.
+/.codex/
