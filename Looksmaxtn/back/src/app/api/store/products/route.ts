@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
       products.map((product) => product._id.toString()),
       session?.userId || null
     );
-    const reservationKey = session?.userId ? `user:${session.userId}` : null;
+    const reservationKey = session?.userId ? `user:${session.userId}` : (searchParams.get("rk") || null);
     const reservationMap = activeReservations.reduce((map, reservation) => {
       const productId = reservation.product.toString();
       const current =

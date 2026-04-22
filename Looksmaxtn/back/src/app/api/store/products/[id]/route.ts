@@ -19,7 +19,7 @@ export async function GET(
     const { id } = await params;
     const session = await getSession();
     const now = new Date();
-    const reservationKey = session?.userId ? `user:${session.userId}` : null;
+    const reservationKey = session?.userId ? `user:${session.userId}` : (req.nextUrl.searchParams.get("rk") || null);
     const [product, activeReservations] = await Promise.all([
       Product.findById(id).lean(),
       ProductReservation.find({ product: id, reservedUntil: { $gt: now } })

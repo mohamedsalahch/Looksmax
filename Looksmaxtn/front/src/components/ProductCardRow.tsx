@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ProductCard from "./ProductCard";
+import { getStoredReservationKey } from "@/lib/reservations";
 
 interface ProductImage {
   url: string;
@@ -48,7 +49,9 @@ export default function ProductCardRow({ title = "Featured selection" }: { title
   useEffect(() => {
     let cancelled = false;
 
-    fetch("/api/products?limit=4")
+    const rk = getStoredReservationKey();
+    const url = rk ? `/api/products?limit=4&rk=${encodeURIComponent(rk)}` : "/api/products?limit=4";
+    fetch(url)
       .then((r) => r.json())
       .then((data) => {
         if (!cancelled) setProducts(data.products || []);

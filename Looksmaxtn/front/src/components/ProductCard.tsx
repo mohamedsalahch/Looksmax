@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
-import { reserveProduct, subscribeToReservationChanges } from "@/lib/reservations";
+import { reserveProduct, subscribeToReservationChanges, getStoredReservationKey } from "@/lib/reservations";
 import { subscribeToAvailabilityStream } from "@/lib/availabilityStream";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { getConditionColor, getConditionLabel, getConditionPercent } from "@/lib/productCondition";
@@ -152,7 +152,9 @@ export default function ProductCard({
     let cancelled = false;
 
     const refresh = () => {
-      fetch(`/api/products/${id}`, { cache: "no-store" })
+      const rk = getStoredReservationKey();
+      const url = rk ? `/api/products/${id}?rk=${encodeURIComponent(rk)}` : `/api/products/${id}`;
+      fetch(url, { cache: "no-store" })
         .then((r) => r.json())
         .then((data) => {
           if (cancelled || !data.product) return;
