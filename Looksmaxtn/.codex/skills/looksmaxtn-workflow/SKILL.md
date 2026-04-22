@@ -20,7 +20,7 @@ Use this skill for any task in this repository.
 - Check whether a change affects env values, Docker, API rewrites, or shared secrets before finishing
 - Keep `JWT_SECRET` aligned across `front`, `admin`, and `back`
 - Keep `OUTFIT_WEBHOOK_SECRET` aligned across `back` and `generator_api`
-- Prefer public URLs with `http://51.75.126.19` for browser-facing production values
+- Prefer public URLs with `https://looksmaxtn.com/` for browser-facing production values
 - Prefer Docker service names like `back`, `mongodb`, and `generator_api` for container-to-container production calls
 - Always think through deployment impact before finalizing a change, especially when files, uploads, rewrites, or inter-service paths are involved
 - Treat uploaded media as persistent deployment data, not as disposable repo files
