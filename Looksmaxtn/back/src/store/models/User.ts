@@ -21,7 +21,7 @@ export interface IBodyProfile {
   gender: string;
   imageEnhancing: boolean;
   profileImageRequiresGeneration: boolean;
-  profileImageValidationError: string;
+  profileImageValidationError?: string;
 }
 
 export interface IUser extends Document {
