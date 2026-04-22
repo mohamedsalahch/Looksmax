@@ -1,5 +1,4 @@
 import nodemailer from "nodemailer";
-import { getEmailAssetUrl } from "@/store/lib/emailLinks";
 
 function cleanEnvValue(value: string | undefined, fallback = "") {
   const trimmed = String(value || "").trim();
@@ -45,21 +44,6 @@ function createTransporter() {
   };
 }
 
-function renderEmailHeader(title: string) {
-  const logoUrl = getEmailAssetUrl("email-logo.png");
-  const logoMarkup = logoUrl
-    ? `<img src="${logoUrl}" alt="LOOKSMAX" width="40" height="40" style="display:block;border-radius:10px;margin-bottom:14px" />`
-    : "";
-
-  return `
-    <div style="padding:28px 28px 20px;border-bottom:1px solid #eee3d1">
-      ${logoMarkup}
-      <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#6b6258">LOOKSMAX</div>
-      <h1 style="margin:12px 0 0;font-size:24px;line-height:1.2;font-weight:700">${title}</h1>
-    </div>
-  `;
-}
-
 export async function sendVerificationEmail({
   to,
   name,
@@ -83,8 +67,11 @@ export async function sendVerificationEmail({
 
   const html = `
     <div style="background:#f6f1e7;padding:24px">
-      <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e5dccd;border-radius:12px;overflow:hidden;font-family:Arial,sans-serif;color:#1a1a1a">
-        ${renderEmailHeader("Verify your email address")}
+      <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e5dccd;border-radius:0;overflow:hidden;font-family:Arial,sans-serif;color:#1a1a1a">
+        <div style="padding:28px 28px 20px;border-bottom:1px solid #eee3d1">
+          <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#6b6258">LOOKSMAX</div>
+          <h1 style="margin:12px 0 0;font-size:24px;line-height:1.2;font-weight:700">Verify your email address</h1>
+        </div>
 
         <div style="padding:28px">
           <p style="margin:0 0 16px;font-size:15px;line-height:1.7">Hi ${name},</p>
@@ -93,12 +80,12 @@ export async function sendVerificationEmail({
           </p>
 
           <div style="margin:28px 0">
-            <a href="${verificationUrl}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:14px 22px;border-radius:999px;font-size:13px;font-weight:700;letter-spacing:.16em;text-transform:uppercase">
+            <a href="${verificationUrl}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:14px 22px;border-radius:0;font-size:13px;font-weight:700;letter-spacing:.16em;text-transform:uppercase">
               Verify Email
             </a>
           </div>
 
-          <div style="padding:16px 18px;background:#f8f5ef;border:1px solid #eee0cc;border-radius:10px">
+          <div style="padding:16px 18px;background:#f8f5ef;border:1px solid #eee0cc;border-radius:0">
             <p style="margin:0 0 6px;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#6b6258">Link expires</p>
             <p style="margin:0;font-size:14px;line-height:1.6;color:#3a332d">This verification link is valid for 24 hours.</p>
           </div>
@@ -146,8 +133,11 @@ export async function sendPasswordResetEmail({
 
   const html = `
     <div style="background:#f6f1e7;padding:24px">
-      <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e5dccd;border-radius:12px;overflow:hidden;font-family:Arial,sans-serif;color:#1a1a1a">
-        ${renderEmailHeader("Reset your password")}
+      <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e5dccd;border-radius:0;overflow:hidden;font-family:Arial,sans-serif;color:#1a1a1a">
+        <div style="padding:28px 28px 20px;border-bottom:1px solid #eee3d1">
+          <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#6b6258">LOOKSMAX</div>
+          <h1 style="margin:12px 0 0;font-size:24px;line-height:1.2;font-weight:700">Reset your password</h1>
+        </div>
 
         <div style="padding:28px">
           <p style="margin:0 0 16px;font-size:15px;line-height:1.7">Hi ${name},</p>
@@ -156,12 +146,12 @@ export async function sendPasswordResetEmail({
           </p>
 
           <div style="margin:28px 0">
-            <a href="${resetUrl}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:14px 22px;border-radius:999px;font-size:13px;font-weight:700;letter-spacing:.16em;text-transform:uppercase">
+            <a href="${resetUrl}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:14px 22px;border-radius:0;font-size:13px;font-weight:700;letter-spacing:.16em;text-transform:uppercase">
               Reset Password
             </a>
           </div>
 
-          <div style="padding:16px 18px;background:#f8f5ef;border:1px solid #eee0cc;border-radius:10px">
+          <div style="padding:16px 18px;background:#f8f5ef;border:1px solid #eee0cc;border-radius:0">
             <p style="margin:0 0 6px;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#6b6258">Link expires</p>
             <p style="margin:0;font-size:14px;line-height:1.6;color:#3a332d">This password reset link is valid for 1 hour.</p>
           </div>
@@ -264,8 +254,11 @@ export async function sendOrderStatusEmail({
 
   const html = `
     <div style="background:#f6f1e7;padding:24px">
-      <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e5dccd;border-radius:12px;overflow:hidden;font-family:Arial,sans-serif;color:#1a1a1a">
-        ${renderEmailHeader(copy.title)}
+      <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e5dccd;border-radius:0;overflow:hidden;font-family:Arial,sans-serif;color:#1a1a1a">
+        <div style="padding:28px 28px 20px;border-bottom:1px solid #eee3d1">
+          <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#6b6258">LOOKSMAX</div>
+          <h1 style="margin:12px 0 0;font-size:24px;line-height:1.2;font-weight:700">${copy.title}</h1>
+        </div>
 
         <div style="padding:28px">
           <p style="margin:0 0 16px;font-size:15px;line-height:1.7">Hi ${name},</p>
@@ -277,12 +270,12 @@ export async function sendOrderStatusEmail({
           </p>
 
           <div style="margin:28px 0">
-            <a href="${orderUrl}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:14px 22px;border-radius:999px;font-size:13px;font-weight:700;letter-spacing:.16em;text-transform:uppercase">
+            <a href="${orderUrl}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:14px 22px;border-radius:0;font-size:13px;font-weight:700;letter-spacing:.16em;text-transform:uppercase">
               View Order
             </a>
           </div>
 
-          <div style="padding:16px 18px;background:#f8f5ef;border:1px solid #eee0cc;border-radius:10px">
+          <div style="padding:16px 18px;background:#f8f5ef;border:1px solid #eee0cc;border-radius:0">
             <p style="margin:0 0 6px;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#6b6258">Update</p>
             <p style="margin:0;font-size:14px;line-height:1.6;color:#3a332d">${copy.detail}</p>
           </div>
