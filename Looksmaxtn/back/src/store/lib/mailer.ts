@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { getEmailAssetUrl } from "@/store/lib/emailLinks";
 
 function cleanEnvValue(value: string | undefined, fallback = "") {
   const trimmed = String(value || "").trim();
@@ -44,6 +45,21 @@ function createTransporter() {
   };
 }
 
+function renderEmailHeader(title: string) {
+  const logoUrl = getEmailAssetUrl("email-logo.png");
+  const logoMarkup = logoUrl
+    ? `<img src="${logoUrl}" alt="LOOKSMAX" width="40" height="40" style="display:block;border-radius:10px;margin-bottom:14px" />`
+    : "";
+
+  return `
+    <div style="padding:28px 28px 20px;border-bottom:1px solid #eee3d1">
+      ${logoMarkup}
+      <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#6b6258">LOOKSMAX</div>
+      <h1 style="margin:12px 0 0;font-size:24px;line-height:1.2;font-weight:700">${title}</h1>
+    </div>
+  `;
+}
+
 export async function sendVerificationEmail({
   to,
   name,
@@ -68,10 +84,7 @@ export async function sendVerificationEmail({
   const html = `
     <div style="background:#f6f1e7;padding:24px">
       <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e5dccd;border-radius:12px;overflow:hidden;font-family:Arial,sans-serif;color:#1a1a1a">
-        <div style="padding:28px 28px 20px;border-bottom:1px solid #eee3d1">
-          <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#6b6258">LOOKSMAX</div>
-          <h1 style="margin:12px 0 0;font-size:24px;line-height:1.2;font-weight:700">Verify your email address</h1>
-        </div>
+        ${renderEmailHeader("Verify your email address")}
 
         <div style="padding:28px">
           <p style="margin:0 0 16px;font-size:15px;line-height:1.7">Hi ${name},</p>
@@ -134,10 +147,7 @@ export async function sendPasswordResetEmail({
   const html = `
     <div style="background:#f6f1e7;padding:24px">
       <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e5dccd;border-radius:12px;overflow:hidden;font-family:Arial,sans-serif;color:#1a1a1a">
-        <div style="padding:28px 28px 20px;border-bottom:1px solid #eee3d1">
-          <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#6b6258">LOOKSMAX</div>
-          <h1 style="margin:12px 0 0;font-size:24px;line-height:1.2;font-weight:700">Reset your password</h1>
-        </div>
+        ${renderEmailHeader("Reset your password")}
 
         <div style="padding:28px">
           <p style="margin:0 0 16px;font-size:15px;line-height:1.7">Hi ${name},</p>
@@ -255,10 +265,7 @@ export async function sendOrderStatusEmail({
   const html = `
     <div style="background:#f6f1e7;padding:24px">
       <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e5dccd;border-radius:12px;overflow:hidden;font-family:Arial,sans-serif;color:#1a1a1a">
-        <div style="padding:28px 28px 20px;border-bottom:1px solid #eee3d1">
-          <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#6b6258">LOOKSMAX</div>
-          <h1 style="margin:12px 0 0;font-size:24px;line-height:1.2;font-weight:700">${copy.title}</h1>
-        </div>
+        ${renderEmailHeader(copy.title)}
 
         <div style="padding:28px">
           <p style="margin:0 0 16px;font-size:15px;line-height:1.7">Hi ${name},</p>

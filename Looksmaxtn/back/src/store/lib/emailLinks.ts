@@ -12,3 +12,10 @@ export function getEmailBaseUrl() {
       "http://localhost:3000"
   );
 }
+
+export function getEmailAssetUrl(assetPath: string) {
+  const baseUrl = getEmailBaseUrl();
+  const cleanPath = String(assetPath || "").trim().replace(/^\/+/, "");
+  if (!baseUrl || !cleanPath) return "";
+  return `${baseUrl}/${cleanPath}`;
+}
