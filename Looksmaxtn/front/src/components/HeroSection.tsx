@@ -29,6 +29,8 @@ export default function HeroSection({
           src={image}
           alt={title}
           className="w-full h-full object-cover scale-[1.01] hero-image"
+          fetchPriority="high"
+          decoding="async"
         />
       ) : (
         <div className="w-full h-full placeholder-img">

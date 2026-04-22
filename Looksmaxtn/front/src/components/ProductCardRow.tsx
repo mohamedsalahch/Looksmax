@@ -48,28 +48,42 @@ export default function ProductCardRow({ title = "Featured selection" }: { title
   useEffect(() => {
     let cancelled = false;
 
-    const loadProducts = () => {
-      fetch("/api/products?limit=4", { cache: "no-store" })
-        .then((r) => r.json())
-        .then((data) => {
-          if (!cancelled) setProducts(data.products || []);
-        })
-        .catch(() => {})
-        .finally(() => {
-          if (!cancelled) setLoading(false);
-        });
-    };
-
-    loadProducts();
-    const interval = window.setInterval(loadProducts, 5000);
+    fetch("/api/products?limit=4")
+      .then((r) => r.json())
+      .then((data) => {
+        if (!cancelled) setProducts(data.products || []);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
 
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
     };
   }, []);
 
-  if (loading || products.length === 0) return null;
+  if (loading) {
+    return (
+      <section className="px-4 md:px-8 py-16">
+        <div className="max-w-7xl mx-auto">
+          <div className="h-4 w-44 mx-auto animate-pulse bg-border-color/50 mb-8" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="space-y-2">
+                <div className="aspect-[3/4] w-full animate-pulse bg-hover/60 border border-border-color" />
+                <div className="h-2.5 w-3/4 animate-pulse bg-border-color/50" />
+                <div className="h-2.5 w-1/2 animate-pulse bg-border-color/40" />
+                <div className="mt-1 h-1 w-full animate-pulse bg-border-color/30" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (products.length === 0) return null;
 
   return (
     <section className="px-4 md:px-8 py-16">

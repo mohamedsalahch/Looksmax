@@ -23,18 +23,25 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
     }
   }, [loading, pathname, router, user]);
 
-  if (loading) {
+  if (loading || !user) {
     return (
-      <div className="pt-[72px] min-h-screen flex items-center justify-center">
-        <p className="text-xs text-text-secondary uppercase tracking-wider">Loading...</p>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="pt-[72px] min-h-screen flex items-center justify-center">
-        <p className="text-xs text-text-secondary uppercase tracking-wider">Redirecting to login...</p>
+      <div className="pt-[72px] min-h-screen">
+        <div className="max-w-5xl mx-auto px-4 md:px-8 py-8">
+          <div className="h-5 w-36 animate-pulse bg-border-color/50 mb-1" />
+          <div className="h-3 w-52 animate-pulse bg-border-color/40 mb-8" />
+          <div className="flex flex-col md:flex-row gap-8">
+            <div className="md:w-48 shrink-0 flex md:flex-col gap-1">
+              {[80, 64, 72, 88].map((w, i) => (
+                <div key={i} className="h-8 animate-pulse bg-hover/60 border border-border-color" style={{ width: `${w}%` }} />
+              ))}
+            </div>
+            <div className="flex-1 min-w-0 space-y-3">
+              <div className="h-3.5 w-2/3 animate-pulse bg-border-color/50" />
+              <div className="h-3 w-1/2 animate-pulse bg-border-color/40" />
+              <div className="h-3 w-3/4 animate-pulse bg-border-color/40" />
+            </div>
+          </div>
+        </div>
       </div>
     );
   }

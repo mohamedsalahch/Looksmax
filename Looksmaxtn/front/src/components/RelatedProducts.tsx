@@ -48,28 +48,40 @@ export default function RelatedProducts() {
   useEffect(() => {
     let cancelled = false;
 
-    const loadProducts = () => {
-      fetch("/api/products?limit=4", { cache: "no-store" })
-        .then((r) => r.json())
-        .then((data) => {
-          if (!cancelled) setProducts(data.products || []);
-        })
-        .catch(() => {})
-        .finally(() => {
-          if (!cancelled) setLoading(false);
-        });
-    };
+    fetch("/api/products?limit=4", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data) => {
+        if (!cancelled) setProducts(data.products || []);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
 
-    loadProducts();
-    const interval = window.setInterval(loadProducts, 5000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
+    return () => { cancelled = true; };
   }, []);
 
-  if (loading || products.length === 0) return null;
+  if (loading) {
+    return (
+      <section className="border-t border-border-color mt-16 pt-10 pb-6">
+        <div className="max-w-7xl mx-auto px-4 md:px-8">
+          <div className="h-3.5 w-40 animate-pulse bg-border-color/50 mb-6" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-8">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="space-y-2">
+                <div className="aspect-[3/4] w-full animate-pulse bg-hover/60 border border-border-color" />
+                <div className="h-2.5 w-3/4 animate-pulse bg-border-color/50" />
+                <div className="h-2.5 w-1/2 animate-pulse bg-border-color/40" />
+                <div className="mt-1 h-1 w-full animate-pulse bg-border-color/30" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (products.length === 0) return null;
 
   return (
     <section className="border-t border-border-color mt-16 pt-10 pb-6">

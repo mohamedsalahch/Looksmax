@@ -1,9 +1,13 @@
-import dbConnect from "@/lib/mongodb";
-import SavedOutfit from "@/models/SavedOutfit";
 import { notFound } from "next/navigation";
 import SharedOutfitViewer from "./SharedOutfitViewer";
 
 export const dynamic = "force-dynamic";
+
+const BACKEND_URL = (
+  process.env.BACKEND_PROXY_URL ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  "http://back:3002"
+).replace(/\/$/, "");
 
 export default async function SharedOutfitPage({
   params,
@@ -12,10 +16,13 @@ export default async function SharedOutfitPage({
 }) {
   const { token } = await params;
 
-  await dbConnect();
-  const outfit = await SavedOutfit.findOne({ shareToken: token, isPublic: true }).lean();
+  const res = await fetch(`${BACKEND_URL}/api/store/outfits/shared/${token}`, {
+    cache: "no-store",
+  });
 
-  if (!outfit) notFound();
+  if (!res.ok) notFound();
+
+  const { outfit } = await res.json();
 
   const images = [outfit.images?.front || "", outfit.images?.back || ""].filter(Boolean);
 
