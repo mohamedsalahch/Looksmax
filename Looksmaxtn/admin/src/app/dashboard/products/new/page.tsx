@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getConditionStatusFromScore } from "@/lib/productCondition";
 import { generateId } from "@/lib/uuid";
@@ -204,6 +204,26 @@ async function originPictureToFile(url: string, label: OriginPictureKey) {
   });
 }
 
+function waitFor(ms: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    const timeout = window.setTimeout(resolve, ms);
+
+    if (!signal) return;
+
+    const onAbort = () => {
+      window.clearTimeout(timeout);
+      reject(new DOMException("The operation was aborted.", "AbortError"));
+    };
+
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 export default function NewProductPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -228,6 +248,7 @@ export default function NewProductPage() {
   const [importingGeneratedImage, setImportingGeneratedImage] = useState<string | null>(null);
   const [isGeneratedImagesOpen, setIsGeneratedImagesOpen] = useState(false);
   const [generatedImagesSearch, setGeneratedImagesSearch] = useState("");
+  const generationAbortRef = useRef<AbortController | null>(null);
   const allowStockEditing = true;
 
   useEffect(() => {
@@ -456,6 +477,12 @@ export default function NewProductPage() {
       ? (["front", "back", "left", "right"] as OriginPictureKey[])
       : (["front", "back"] as OriginPictureKey[]);
 
+  const handleCancelGenerate = () => {
+    generationAbortRef.current?.abort();
+    generationAbortRef.current = null;
+    setGenerating(false);
+  };
+
   const handleGenerate = async () => {
     setError("");
 
@@ -477,6 +504,10 @@ export default function NewProductPage() {
       return;
     }
 
+    const controller = new AbortController();
+    generationAbortRef.current?.abort();
+    generationAbortRef.current = controller;
+
     try {
       setGenerating(true);
       const body = new FormData();
@@ -493,12 +524,12 @@ export default function NewProductPage() {
       const triggerRes = await fetch("/api/products/generate", withAuthRequest({
         method: "POST",
         body,
+        signal: controller.signal,
       }));
       const triggerData = await triggerRes.json();
 
       if (!triggerRes.ok) {
         setError(triggerData.error || "Unable to start generation.");
-        setGenerating(false);
         return;
       }
 
@@ -509,10 +540,11 @@ export default function NewProductPage() {
       let finalImages: any = null;
 
       while (!isCompleted) {
-        // Wait 5 seconds
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+        await waitFor(5000, controller.signal);
 
-        const statusRes = await fetch(`/api/products/generate?job_id=${jobId}`, withAuthRequest());
+        const statusRes = await fetch(`/api/products/generate?job_id=${jobId}`, withAuthRequest({
+          signal: controller.signal,
+        }));
         const statusData = await statusRes.json();
 
         if (statusData.status === "completed") {
@@ -545,10 +577,15 @@ export default function NewProductPage() {
 
       setImages((current) => [...current, ...generatedImages.filter((img): img is any => !!img)]);
     } catch {
-      setError("Generation request failed.");
+      if (!controller.signal.aborted) {
+        setError("Generation request failed.");
+      }
+    } finally {
+      if (generationAbortRef.current === controller) {
+        generationAbortRef.current = null;
+      }
+      setGenerating(false);
     }
-
-    setGenerating(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1299,7 +1336,17 @@ export default function NewProductPage() {
               </div>
             )}
 
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              {generating && (
+                <button
+                  type="button"
+                  onClick={handleCancelGenerate}
+                  aria-label="Cancel generation"
+                  className="inline-flex h-9 w-9 items-center justify-center border border-border text-xs text-text-secondary hover:bg-bg-hover"
+                >
+                  ×
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleGenerate}

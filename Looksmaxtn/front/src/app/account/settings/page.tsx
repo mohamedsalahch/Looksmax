@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { KeyboardEvent } from "react";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/providers/AuthContext";
 import { withAuthRequest } from "@/lib/authClient";
@@ -41,6 +41,8 @@ export default function SettingsPage() {
   const [enhanceError, setEnhanceError] = useState("");
   const [zoomedImage, setZoomedImage] = useState<{ src: string; alt: string } | null>(null);
   const [deletingPhoto, setDeletingPhoto] = useState<"original" | "enhanced" | null>(null);
+  const enhanceAbortRef = useRef<AbortController | null>(null);
+  const enhanceCancelledRef = useRef(false);
   const openZoom = useCallback((src: string, alt: string) => {
     setZoomedImage({ src, alt });
   }, []);
@@ -67,8 +69,18 @@ export default function SettingsPage() {
       gender: normalizeGender(user?.bodyProfile?.gender),
       profileImageRequiresGeneration: Boolean(user?.bodyProfile?.profileImageRequiresGeneration),
     });
-    setImageEnhancing(nextEnhancing);
+    if (enhanceCancelledRef.current && nextEnhancing && !nextEnhancedImage) {
+      setImageEnhancing(false);
+    } else {
+      setImageEnhancing(nextEnhancing);
+      if (!nextEnhancing) {
+        enhanceCancelledRef.current = false;
+      }
+    }
     setEnhancedImage(nextEnhancedImage);
+    if (nextEnhancedImage) {
+      enhanceCancelledRef.current = false;
+    }
 
     // Show validation error from LLM if present
     if (validationError) {
@@ -110,6 +122,7 @@ export default function SettingsPage() {
     setBodyError("");
     setEnhanceError("");
     setImageEnhancing(true);
+    enhanceCancelledRef.current = false;
 
     const localPreview = URL.createObjectURL(file);
     setBodyProfile((prev) => ({ ...prev, profileImage: localPreview }));
@@ -153,15 +166,23 @@ export default function SettingsPage() {
     setBodyError("");
     setEnhanceError("");
     setImageEnhancing(true);
+    enhanceCancelledRef.current = false;
+
+    const controller = new AbortController();
+    enhanceAbortRef.current?.abort();
+    enhanceAbortRef.current = controller;
 
     try {
       const res = await fetch("/api/users/me/body-profile/enhance", {
-        ...withAuthRequest({ method: "POST" }),
+        ...withAuthRequest({ method: "POST", signal: controller.signal }),
       });
       const data = await res.json();
       if (!res.ok) {
         setImageEnhancing(false);
         setBodyError(data.error || "Failed to generate enhanced photo.");
+        if (enhanceAbortRef.current === controller) {
+          enhanceAbortRef.current = null;
+        }
         return;
       }
 
@@ -171,10 +192,24 @@ export default function SettingsPage() {
       }));
       await refreshUser();
     } catch {
-      setImageEnhancing(false);
-      setBodyError("Failed to generate enhanced photo.");
+      if (!controller.signal.aborted) {
+        setImageEnhancing(false);
+        setBodyError("Failed to generate enhanced photo.");
+      }
+    } finally {
+      if (enhanceAbortRef.current === controller) {
+        enhanceAbortRef.current = null;
+      }
     }
   }, [hasEnhanced, hasOriginal, imageEnhancing, refreshUser]);
+
+  const handleCancelGeneratePhoto = useCallback(() => {
+    enhanceCancelledRef.current = true;
+    enhanceAbortRef.current?.abort();
+    enhanceAbortRef.current = null;
+    setImageEnhancing(false);
+    setEnhanceError("");
+  }, []);
 
   const handleDeletePhoto = useCallback(async (target: "original" | "enhanced") => {
     setDeletingPhoto(target);
@@ -301,6 +336,14 @@ export default function SettingsPage() {
           <div className="relative">
             {imageEnhancing && (
               <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-background/60 backdrop-blur-sm">
+                <button
+                  type="button"
+                  onClick={handleCancelGeneratePhoto}
+                  aria-label="Cancel enhancement"
+                  className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center border border-border-color bg-background text-sm text-text-secondary hover:bg-hover"
+                >
+                  ×
+                </button>
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-border-color border-t-foreground" />
                 <span className="text-[11px] uppercase tracking-[0.18em] text-text-secondary">Enhancing photo...</span>
               </div>

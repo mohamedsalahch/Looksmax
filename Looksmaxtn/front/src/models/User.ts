@@ -18,6 +18,7 @@ export interface IBodyProfile {
   profileImageEnhanced: string;
   gender: string;
   imageEnhancing: boolean;
+  profileImageValidationError?: string;
 }
 
 export interface IUser extends Document {
