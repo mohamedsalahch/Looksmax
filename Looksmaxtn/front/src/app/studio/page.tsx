@@ -596,6 +596,9 @@ export default function OutfitStudioPage() {
     const [studioStateHydrated, setStudioStateHydrated] = useState(false);
     const [showAllSelectedItems, setShowAllSelectedItems] = useState(true);
     const sharedResetTimerRef = useRef<number | null>(null);
+    const outfitGenerationStartAbortRef = useRef<AbortController | null>(null);
+    const outfitGenerationPollAbortRef = useRef<AbortController | null>(null);
+    const ignoredGenerationJobIdRef = useRef("");
 
     useEffect(() => {
         if (!loading && !user) {
@@ -709,6 +712,9 @@ export default function OutfitStudioPage() {
                 if (!data.job) {
                     return;
                 }
+                if (ignoredGenerationJobIdRef.current && String(data.job.id || "") === ignoredGenerationJobIdRef.current) {
+                    return;
+                }
 
                 const nextImages = [data.job.images?.front, data.job.images?.back]
                     .filter((image: unknown): image is string => typeof image === "string" && image.length > 0)
@@ -719,6 +725,7 @@ export default function OutfitStudioPage() {
                 setGeneratingOutfit(data.job.status === "pending" || data.job.status === "processing");
                 setGenerationError(data.job.errorMessage || "");
                 setNeedsGenerationRecovery(false);
+                ignoredGenerationJobIdRef.current = "";
                 completed = true;
                 writeStoredGenerationState(user.id, {
                     jobId: String(data.job.id || ""),
@@ -1018,6 +1025,11 @@ export default function OutfitStudioPage() {
         setGeneratingOutfit(true);
         setOutfitNameDraft("Outfit");
         setNeedsGenerationRecovery(false);
+        ignoredGenerationJobIdRef.current = "";
+
+        const controller = new AbortController();
+        outfitGenerationStartAbortRef.current?.abort();
+        outfitGenerationStartAbortRef.current = controller;
 
         if (user?.id) {
             writeStoredGenerationState(user.id, {
@@ -1034,6 +1046,7 @@ export default function OutfitStudioPage() {
             const response = await fetch("/api/generate-outfit", withAuthRequest({
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
+                signal: controller.signal,
                 body: JSON.stringify({
                     profileImage: user?.bodyProfile?.profileImageEnhanced || user?.bodyProfile?.profileImage || "",
                     heightCm: user?.bodyProfile?.heightCm || "",
@@ -1095,10 +1108,19 @@ export default function OutfitStudioPage() {
                 void refreshUser();
             }
         } catch {
-            setGenerationError("Generation request failed.");
-            setGeneratingOutfit(false);
+            if (!controller.signal.aborted) {
+                setGenerationError("Generation request failed.");
+                setGeneratingOutfit(false);
+                if (user?.id) {
+                    writeStoredGenerationState(user.id, null);
+                }
+            }
             if (user?.id) {
-                writeStoredGenerationState(user.id, null);
+                void refreshUser();
+            }
+        } finally {
+            if (outfitGenerationStartAbortRef.current === controller) {
+                outfitGenerationStartAbortRef.current = null;
             }
         }
     };
@@ -1192,7 +1214,33 @@ export default function OutfitStudioPage() {
         setSharingOutfit(false);
     };
 
+    const handleCancelGeneratedOutfit = () => {
+        if (generatedOutfitJobId) {
+            ignoredGenerationJobIdRef.current = generatedOutfitJobId;
+        }
+
+        outfitGenerationStartAbortRef.current?.abort();
+        outfitGenerationStartAbortRef.current = null;
+        outfitGenerationPollAbortRef.current?.abort();
+        outfitGenerationPollAbortRef.current = null;
+        setGeneratedOutfitJobId("");
+        setGeneratedOutfitImages([]);
+        setGeneratedOutfitIndex(0);
+        setGenerationError("");
+        setGeneratingOutfit(false);
+        setOutfitNameDraft("Outfit");
+        setNeedsGenerationRecovery(false);
+        if (user?.id) {
+            writeStoredGenerationState(user.id, null);
+        }
+    };
+
     const handleDiscardGeneratedOutfit = () => {
+        ignoredGenerationJobIdRef.current = "";
+        outfitGenerationStartAbortRef.current?.abort();
+        outfitGenerationStartAbortRef.current = null;
+        outfitGenerationPollAbortRef.current?.abort();
+        outfitGenerationPollAbortRef.current = null;
         setGeneratedOutfitJobId("");
         setGeneratedOutfitImages([]);
         setGeneratedOutfitIndex(0);
@@ -1220,10 +1268,19 @@ export default function OutfitStudioPage() {
         let cancelled = false;
 
         const pollJob = () => {
-            fetch(`/api/generate-outfit/${generatedOutfitJobId}`)
+            const controller = new AbortController();
+            outfitGenerationPollAbortRef.current?.abort();
+            outfitGenerationPollAbortRef.current = controller;
+
+            fetch(`/api/generate-outfit/${generatedOutfitJobId}`, {
+                signal: controller.signal,
+            })
                 .then((response) => response.json())
                 .then((data) => {
-                    if (cancelled || !data.job) return;
+                    if (cancelled || controller.signal.aborted || !data.job) return;
+                    if (ignoredGenerationJobIdRef.current && String(data.job.id || "") === ignoredGenerationJobIdRef.current) {
+                        return;
+                    }
 
                     if (data.job.status === "failed") {
                         setGenerationError(data.job.errorMessage || "Outfit generation failed.");
@@ -1251,6 +1308,7 @@ export default function OutfitStudioPage() {
 
                     if (data.job.status === "completed") {
                         setGeneratingOutfit(false);
+                        ignoredGenerationJobIdRef.current = "";
                         if (user?.id) {
                             writeStoredGenerationState(user.id, {
                                 jobId: generatedOutfitJobId,
@@ -1264,6 +1322,11 @@ export default function OutfitStudioPage() {
                     }
                 })
                 .catch(() => {
+                })
+                .finally(() => {
+                    if (outfitGenerationPollAbortRef.current === controller) {
+                        outfitGenerationPollAbortRef.current = null;
+                    }
                 });
         };
 
@@ -1273,6 +1336,7 @@ export default function OutfitStudioPage() {
         return () => {
             cancelled = true;
             window.clearInterval(interval);
+            outfitGenerationPollAbortRef.current?.abort();
         };
     }, [generatedOutfitJobId, generatingOutfit]);
 
@@ -1516,8 +1580,20 @@ export default function OutfitStudioPage() {
                         {showGeneratedOutfitPanel && (
                             <div className="flex flex-col gap-3 bg-transparent px-6 py-6 2xl:min-h-[560px]">
                                 <div className="flex items-center justify-between gap-3">
-                                    <p className="text-[11px] uppercase tracking-[0.18em] text-[#666]">Generated
-                                        outfit</p>
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-[11px] uppercase tracking-[0.18em] text-[#666]">Generated
+                                            outfit</p>
+                                        {generatingOutfit && (
+                                            <button
+                                                type="button"
+                                                onClick={handleCancelGeneratedOutfit}
+                                                aria-label="Cancel generation"
+                                                className="inline-flex h-7 w-7 items-center justify-center border border-[#00000012] text-[13px] leading-none text-[#666] transition-colors hover:border-[#c9a96e] hover:text-[#c9a96e]"
+                                            >
+                                                ×
+                                            </button>
+                                        )}
+                                    </div>
                                     {activeGeneratedOutfitImage && !generatingOutfit && !isRestoringGeneration ? (
                                         <div className="flex items-center gap-3">
                                             <button

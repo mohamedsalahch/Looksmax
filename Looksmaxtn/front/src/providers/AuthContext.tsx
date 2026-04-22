@@ -41,6 +41,7 @@ interface User {
     gender: string;
     imageEnhancing: boolean;
     profileImageRequiresGeneration: boolean;
+    profileImageValidationError?: string;
   };
 }
 
