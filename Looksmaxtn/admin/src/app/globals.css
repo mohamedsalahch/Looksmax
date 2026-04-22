@@ -84,7 +84,7 @@ button,
 input,
 select,
 textarea {
-  border-radius: 0;
+  border-radius: 0 !important;
 }
 
 .stat-card {
