@@ -51,3 +51,4 @@ yarn-error.log*
 # Docker and local deployment artifacts
 .docker/
 /.codex/
+/.codex/

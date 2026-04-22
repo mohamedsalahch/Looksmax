@@ -16,8 +16,13 @@ export default function SidePanel() {
   const [isOpen, setIsOpen] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [expandedParents, setExpandedParents] = useState<string[]>([]);
+  const [mounted, setMounted] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     // Fetch dynamic categories
@@ -92,7 +97,7 @@ export default function SidePanel() {
         >
           <Link
             href={`/category/${category.slug}`}
-            className={`flex min-h-10 items-center justify-between py-1.5 transition-colors hover:text-foreground ${rowTextClass}`}
+            className={`group flex min-h-10 items-center justify-between py-1.5 px-3 -mx-3 transition-all duration-150 hover:bg-hover hover:text-foreground hover:pl-4 cursor-pointer ${rowTextClass}`}
             onClick={() => setIsOpen(false)}
           >
             <span>{category.name}</span>
@@ -107,10 +112,10 @@ export default function SidePanel() {
         className={`${depth > 0 ? "relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-px before:bg-border-color/30" : ""}`}
         style={{ paddingLeft: `${indent}px` }}
       >
-        <div className="flex items-center gap-3">
+        <div className="group flex items-center gap-3 px-3 -mx-3 transition-all duration-150 hover:bg-hover">
           <Link
             href={`/category/${category.slug}`}
-            className={`min-h-10 py-1.5 transition-colors hover:text-foreground ${rowTextClass}`}
+            className={`flex min-h-10 items-center py-1.5 transition-colors hover:text-foreground cursor-pointer ${rowTextClass}`}
             onClick={() => setIsOpen(false)}
           >
             <span className="inline-flex min-h-10 items-center">{category.name}</span>
@@ -118,7 +123,7 @@ export default function SidePanel() {
           <button
             type="button"
             onClick={() => toggleExpanded(category.slug)}
-            className="flex-1 inline-flex h-10 items-center justify-end text-text-secondary transition-colors hover:text-foreground"
+            className="flex-1 inline-flex h-10 items-center justify-end text-text-secondary transition-colors hover:text-foreground cursor-pointer"
             aria-label={`Toggle ${category.name} subcategories`}
           >
             <svg
@@ -151,6 +156,8 @@ export default function SidePanel() {
 
   return (
     <>
+      {!mounted ? null : (
+        <>
       {/* Overlay */}
       <div
         className={`fixed inset-0 z-50 panel-overlay transition-opacity duration-300 ${
@@ -174,7 +181,7 @@ export default function SidePanel() {
 
           <button
             onClick={() => setIsOpen(false)}
-            className="text-foreground hover:text-text-secondary transition-colors cursor-pointer"
+            className="inline-flex h-10 w-10 items-center justify-center border border-transparent text-foreground transition-colors hover:border-border-color hover:bg-hover hover:text-text-secondary cursor-pointer"
             aria-label="Close menu"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -189,21 +196,21 @@ export default function SidePanel() {
           <div className="mb-8 space-y-3">
             <Link
               href="/"
-              className="block text-sm font-semibold text-foreground transition-colors hover:text-text-secondary"
+              className="block border border-transparent px-3 py-2 text-sm font-semibold text-foreground transition-all hover:border-border-color hover:bg-hover hover:text-text-secondary cursor-pointer"
               onClick={() => setIsOpen(false)}
             >
               Home
             </Link>
             <Link
               href="/category/new-arrivals"
-              className="block text-sm font-semibold text-foreground transition-colors hover:text-text-secondary"
+              className="block border border-transparent px-3 py-2 text-sm font-semibold text-foreground transition-all hover:border-border-color hover:bg-hover hover:text-text-secondary cursor-pointer"
               onClick={() => setIsOpen(false)}
             >
               New Arrivals
             </Link>
             <Link
               href="/category/all"
-              className="block text-sm font-semibold text-foreground transition-colors hover:text-text-secondary"
+              className="block border border-transparent px-3 py-2 text-sm font-semibold text-foreground transition-all hover:border-border-color hover:bg-hover hover:text-text-secondary cursor-pointer"
               onClick={() => setIsOpen(false)}
             >
               All Categories
@@ -218,6 +225,8 @@ export default function SidePanel() {
           </div>
         </div>
       </div>
+        </>
+      )}
     </>
   );
 }

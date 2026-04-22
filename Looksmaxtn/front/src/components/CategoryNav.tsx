@@ -114,22 +114,22 @@ export default function CategoryNav({
   };
 
   return (
-    <nav className="hidden md:block sticky top-[57px] z-30 bg-background/95 backdrop-blur-sm border-b border-border-color">
+    <nav className="hidden md:block sticky top-[57px] z-30 border-b border-border-color/70 bg-background/92 backdrop-blur-md shadow-[0_8px_24px_rgba(26,26,26,0.04)]">
       <div className="max-w-7xl mx-auto px-4">
-        <div className="flex items-center gap-6 overflow-x-auto py-3 scrollbar-hide">
-          <Link href="/" className={`hidden text-xs whitespace-nowrap transition-colors py-1 px-1 md:inline-block ${activeSlug === "home" ? "text-foreground font-medium border-b border-foreground" : "text-text-secondary hover:text-foreground"}`}>
+        <div className="flex items-center gap-2 overflow-x-auto px-2 py-2.5 scrollbar-hide md:px-4">
+          <Link href="/" className={`hidden whitespace-nowrap border px-3 py-1.5 text-xs transition-all md:inline-block ${activeSlug === "home" ? "border-border-color bg-[#ede1ce] text-foreground font-medium" : "border-transparent text-text-secondary hover:border-border-color hover:bg-[#ede1ce]/70 hover:text-foreground"}`}>
             Home
           </Link>
-          <Link href="/category/new-arrivals" className={`hidden text-xs whitespace-nowrap transition-colors py-1 px-1 md:inline-block ${activeSlug === "new-arrivals" ? "text-foreground font-medium border-b border-foreground" : "text-text-secondary hover:text-foreground"}`}>
+          <Link href="/category/new-arrivals" className={`hidden whitespace-nowrap border px-3 py-1.5 text-xs transition-all md:inline-block ${activeSlug === "new-arrivals" ? "border-border-color bg-[#ede1ce] text-foreground font-medium" : "border-transparent text-text-secondary hover:border-border-color hover:bg-[#ede1ce]/70 hover:text-foreground"}`}>
             New Arrivals
           </Link>
-          <Link href="/category/all" className={`hidden text-xs whitespace-nowrap transition-colors py-1 px-1 md:inline-block ${activeSlug === "all-categories" ? "text-foreground font-medium border-b border-foreground" : "text-text-secondary hover:text-foreground"}`}>
+          <Link href="/category/all" className={`hidden whitespace-nowrap border px-3 py-1.5 text-xs transition-all md:inline-block ${activeSlug === "all-categories" ? "border-border-color bg-[#ede1ce] text-foreground font-medium" : "border-transparent text-text-secondary hover:border-border-color hover:bg-[#ede1ce]/70 hover:text-foreground"}`}>
             All Categories
           </Link>
           {categoriesLoaded && categories.map((item) => (
             <div
               key={item._id}
-              className="hidden items-center gap-1 whitespace-nowrap md:flex"
+              className="hidden items-center gap-2 whitespace-nowrap md:flex"
               onClick={() => {
                 if (!item.children || item.children.length === 0) return;
                 setExpandedParent((current) => {
@@ -146,10 +146,10 @@ export default function CategoryNav({
                   setExpandedParent(item.slug);
                   setPreviewPath([item.slug]);
                 }}
-                className={`text-xs transition-colors py-1 px-1 ${
+                className={`border px-3 py-1.5 text-xs transition-all ${
                   activePath.includes(item.slug)
-                    ? "text-foreground font-medium border-b border-foreground"
-                    : "text-text-secondary hover:text-foreground"
+                    ? "border-border-color bg-[#ede1ce] text-foreground font-medium"
+                    : "border-transparent text-text-secondary hover:border-border-color hover:bg-[#ede1ce]/70 hover:text-foreground"
                 }`}
               >
                 {item.name}
@@ -184,7 +184,7 @@ export default function CategoryNav({
             categoriesLoaded && drilldownColumns.length > 0 ? "max-h-[420px] opacity-100 pb-4" : "max-h-0 opacity-0"
           }`}
         >
-          <div className="grid gap-3 border-t border-border-color pt-3 md:grid-cols-3">
+          <div className="grid gap-3 border-t border-border-color/70 pt-3 md:grid-cols-3">
             {drilldownColumns.map((column, columnIndex) => (
               <div key={`col-${columnIndex}`} className="min-w-0">
                 <div className="space-y-1">
@@ -203,14 +203,16 @@ export default function CategoryNav({
                           }
                           router.push(`/category/${item.slug}`);
                         }}
-                        className={`flex items-center justify-between gap-3 px-2 py-2 transition-colors ${
-                          isCurrent || isPreviewed ? "bg-[#ede1ce]" : "hover:bg-[#ede1ce]/60"
+                        className={`flex items-center justify-between gap-3 border px-3 py-2.5 transition-all ${
+                          isCurrent || isPreviewed
+                            ? "border-[#d8c9b8] bg-[#ede1ce]"
+                            : "border-transparent hover:border-[#d8c9b8] hover:bg-[#ede1ce]/60"
                         }`}
                       >
                         <Link
                           href={`/category/${item.slug}`}
                           onClick={(e) => e.stopPropagation()}
-                          className={`min-w-0 text-[12px] ${
+                          className={`min-w-0 text-[12px] transition-colors ${
                             isCurrent ? "font-medium text-foreground" : "text-text-secondary hover:text-foreground"
                           }`}
                         >

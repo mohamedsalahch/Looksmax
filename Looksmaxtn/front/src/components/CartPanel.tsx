@@ -14,6 +14,11 @@ export default function CartPanel() {
   const router = useRouter();
   const hasUnavailableItems = items.some((item) => item.isUnavailable);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Close on Escape
   useEffect(() => {
@@ -41,6 +46,10 @@ export default function CartPanel() {
 
     return () => window.clearInterval(interval);
   }, [isOpen]);
+
+  if (!mounted) {
+    return null;
+  }
 
   return (
     <>
