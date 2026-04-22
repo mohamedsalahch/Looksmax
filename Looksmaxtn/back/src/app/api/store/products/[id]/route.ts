@@ -57,7 +57,7 @@ export async function GET(
     }
     const reservedElsewhere = hasSizeStock
       ? Object.values(sizeAvailability || {}).some((size) => size.reservedElsewhere)
-      : reservedByOthersQuantity > 0 && reservedByOthersQuantity >= stock;
+      : reservedByOthersQuantity > 0 && (reservedByOthersQuantity >= stock || reservedByOthersQuantity + ownedReservationQuantity > stock);
 
     return NextResponse.json({
       product: {

@@ -25,6 +25,9 @@ export function buildSizeAvailability(
       const reservedByOthers = sizeReservations
         .filter((reservation) => reservation.reservationKey !== reservationKey)
         .reduce((sum, reservation) => sum + Math.max(1, Number(reservation.quantity) || 1), 0);
+      const ownedQuantity = sizeReservations
+        .filter((reservation) => reservation.reservationKey === reservationKey)
+        .reduce((sum, reservation) => sum + Math.max(1, Number(reservation.quantity) || 1), 0);
       const stock = Math.max(entry.stock ?? 0, 0);
 
       return [
@@ -32,7 +35,7 @@ export function buildSizeAvailability(
         {
           stock,
           available: stock > 0,
-          reservedElsewhere: stock > 0 && reservedByOthers > 0 && reservedByOthers >= stock,
+          reservedElsewhere: stock > 0 && reservedByOthers > 0 && (reservedByOthers >= stock || reservedByOthers + ownedQuantity > stock),
         },
       ] as const;
     })

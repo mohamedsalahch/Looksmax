@@ -75,12 +75,16 @@ export async function POST(req: NextRequest) {
           if (reservation.reservationKey === key) return sum;
           return sum + reservation.quantity;
         }, 0);
+        const ownedQuantity = productReservations.reduce((sum, reservation) => {
+          if (reservation.reservationKey !== key) return sum;
+          return sum + reservation.quantity;
+        }, 0);
         const hasSelectableSize = hasSizeStock
           ? Object.values(sizeAvailability || {}).some((sizeInfo) => sizeInfo.available)
           : remainingStock > 0;
         const reservedElsewhere = hasSizeStock
           ? Object.values(sizeAvailability || {}).some((sizeInfo) => sizeInfo.reservedElsewhere)
-          : reservedByOthers > 0 && reservedByOthers >= remainingStock;
+          : reservedByOthers > 0 && (reservedByOthers >= remainingStock || reservedByOthers + ownedQuantity > remainingStock);
 
         const ownedReservationEntry = key
           ? productReservations.find((reservation) => reservation.reservationKey === key) || null
