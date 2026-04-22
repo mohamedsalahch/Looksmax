@@ -5,6 +5,7 @@ import ProductReservation from "@/store/models/ProductReservation";
 import { getSession } from "@/store/lib/auth";
 import { getActiveOrderHoldMapByProductIds } from "@/lib/productInventory";
 import { getSizeStockEntries } from "@/lib/sizeAvailability";
+import { broadcastAvailabilityChange } from "@/lib/sseClients";
 import mongoose from "mongoose";
 
 const CART_PRESENCE_DURATION_MS = 30 * 60 * 1000;
@@ -147,9 +148,12 @@ export async function POST(
       },
     ]);
 
+    const finalCartCount = cartCount[0]?.cartCount || 0;
+    broadcastAvailabilityChange(id, finalCartCount);
+
     return NextResponse.json({
       success: true,
-      cartCount: cartCount[0]?.cartCount || 0,
+      cartCount: finalCartCount,
       reservationExpiresAt: cartPresence?.reservedUntil?.toISOString(),
     });
   } catch (error: unknown) {
@@ -192,7 +196,10 @@ export async function DELETE(
       },
     ]);
 
-    return NextResponse.json({ success: true, cartCount: cartCount[0]?.cartCount || 0 });
+    const finalCartCount = cartCount[0]?.cartCount || 0;
+    broadcastAvailabilityChange(id, finalCartCount);
+
+    return NextResponse.json({ success: true, cartCount: finalCartCount });
   } catch (error: unknown) {
     console.error("Release cart presence error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
 import { reserveProduct, subscribeToReservationChanges } from "@/lib/reservations";
+import { subscribeToAvailabilityStream } from "@/lib/availabilityStream";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { getConditionColor, getConditionLabel, getConditionPercent } from "@/lib/productCondition";
 import { queueStudioAssignment } from "@/lib/studioAssignment";
@@ -150,9 +151,9 @@ export default function ProductCard({
 
     let cancelled = false;
 
-    const refreshAvailability = () => {
+    const refresh = () => {
       fetch(`/api/products/${id}`, { cache: "no-store" })
-        .then((response) => response.json())
+        .then((r) => r.json())
         .then((data) => {
           if (cancelled || !data.product) return;
           setSizeAvailabilityState(data.product.sizeAvailability || null);
@@ -162,42 +163,30 @@ export default function ProductCard({
         .catch(() => {});
     };
 
-    const interval = window.setInterval(refreshAvailability, 5000);
-    refreshAvailability();
+    // Initial hydration
+    refresh();
 
-    const handleFocus = () => {
-      refreshAvailability();
-    };
-    window.addEventListener("focus", handleFocus);
+    // Re-fetch when user returns to the tab (catches any SSE events missed while hidden)
+    window.addEventListener("focus", refresh);
+
+    // Re-fetch when the backend pushes a reservation change for this product
+    const unsubscribeSSE = subscribeToAvailabilityStream((event) => {
+      if (event.productId !== id) return;
+      refresh();
+    });
+
+    // Re-fetch when this tab's own cart action changes this product
+    const unsubscribeLocal = subscribeToReservationChanges((payload) => {
+      if (payload.productId !== id) return;
+      refresh();
+    });
 
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
-      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("focus", refresh);
+      unsubscribeSSE();
+      unsubscribeLocal();
     };
-  }, [id]);
-
-  useEffect(() => {
-    if (!id) return;
-
-    const refreshAvailability = () => {
-      fetch(`/api/products/${id}`, { cache: "no-store" })
-        .then((response) => response.json())
-        .then((data) => {
-          if (!data.product) return;
-          setSizeAvailabilityState(data.product.sizeAvailability || null);
-          setBlockedByOrder(Boolean(data.product.blockedByOrder));
-          setHasHydratedAvailability(true);
-        })
-        .catch(() => {});
-    };
-
-    const unsubscribe = subscribeToReservationChanges((payload) => {
-      if (payload.productId !== id) return;
-      refreshAvailability();
-    });
-
-    return unsubscribe;
   }, [id]);
 
   const handleQuickAdd = async (e: React.MouseEvent) => {
