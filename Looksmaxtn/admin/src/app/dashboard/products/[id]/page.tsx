@@ -33,6 +33,7 @@ interface ProductDetail {
   images?: ProductImage[];
   tag?: string;
   brand: string;
+  reference?: string;
   productType?: "fashion" | "perfume" | "clothing" | "shoes";
   availabilityStatus?: string;
   isActive?: boolean;
@@ -139,6 +140,11 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
           <p className="text-xs text-text-secondary mt-1">
             {product.brand} · ID <span className="font-mono">{product._id}</span>
           </p>
+          {product.reference && (
+            <p className="text-xs text-text-secondary mt-1">
+              Reference <span className="font-mono">{product.reference}</span>
+            </p>
+          )}
         </div>
         <Link
           href={`/dashboard/products/${product._id}/edit`}
@@ -203,6 +209,11 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
               {product.tag && (
                 <span className="text-[10px] bg-accent/10 text-accent px-2 py-1 font-medium uppercase tracking-wider">
                   {product.tag}
+                </span>
+              )}
+              {product.reference && (
+                <span className="text-[10px] bg-bg-secondary text-text-secondary px-2 py-1 font-medium uppercase tracking-wider">
+                  Ref {product.reference}
                 </span>
               )}
               {product.productType && (

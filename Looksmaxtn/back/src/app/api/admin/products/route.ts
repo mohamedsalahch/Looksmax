@@ -122,6 +122,7 @@ function getProductPayload(
     categories: parseStringArray(formData.get("categories")),
     description: String(formData.get("description") || ""),
     brand: String(formData.get("brand") || "LOOKSMAX"),
+    reference: String(formData.get("reference") || ""),
     stock: Number.isNaN(rawStock) ? 0 : Math.max(0, rawStock),
     sizeStock: sizeStockMap,
     tag: String(formData.get("tag") || ""),

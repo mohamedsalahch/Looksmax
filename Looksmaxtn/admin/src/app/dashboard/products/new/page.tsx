@@ -62,6 +62,7 @@ const initialForm = {
   price: "",
   description: "",
   brand: "LOOKSMAX",
+  reference: "",
   stock: "1",
   tag: "",
   sizes: "S,M,L,XL",
@@ -624,6 +625,7 @@ export default function NewProductPage() {
       body.append("name", form.name);
       body.append("price", form.price);
       body.append("brand", form.brand);
+      body.append("reference", form.reference);
       body.append("description", form.description);
       body.append("tag", form.tag);
       body.append("productType", form.productType);
@@ -741,6 +743,16 @@ export default function NewProductPage() {
                 value={form.brand}
                 onChange={(e) => setForm({ ...form, brand: e.target.value })}
                 className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
+              />
+            </div>
+            <div>
+              <FieldLabel>Reference</FieldLabel>
+              <input
+                type="text"
+                value={form.reference}
+                onChange={(e) => setForm({ ...form, reference: e.target.value })}
+                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
+                placeholder="Internal product reference"
               />
             </div>
             <div>

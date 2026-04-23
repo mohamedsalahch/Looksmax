@@ -34,6 +34,7 @@ export interface IProduct extends Document {
   images: IProductImage[];
   tag?: string;
   brand: string;
+  reference?: string;
   productType: ProductType;
   fashionSubtype?: "clothes" | "shoes" | null;
   conditionStatus?: "new" | "like new" | "good" | "used" | null;
@@ -84,6 +85,7 @@ const productSchema = new Schema<IProduct>(
     images: [productImageSchema],
     tag: { type: String, default: "" },
     brand: { type: String, default: "LOOKSMAX" },
+    reference: { type: String, default: "" },
     productType: {
       type: String,
       enum: ["fashion", "perfume", "clothing", "shoes"],

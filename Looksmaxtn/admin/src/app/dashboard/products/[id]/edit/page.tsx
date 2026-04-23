@@ -63,6 +63,7 @@ const initialForm = {
   price: "",
   description: "",
   brand: "LOOKSMAX",
+  reference: "",
   stock: "1",
   tag: "",
   sizes: "",
@@ -345,6 +346,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           price: p.price.toString(),
           description: p.description || "",
           brand: p.brand || "LOOKSMAX",
+          reference: p.reference || "",
           stock: String(p.fullStock ?? p.stock ?? 1),
           tag: p.tag || "",
           sizes: (p.sizes || []).join(","),
@@ -869,6 +871,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       body.append("name", form.name);
       body.append("price", form.price);
       body.append("brand", form.brand);
+      body.append("reference", form.reference);
       body.append("description", form.description);
       body.append("tag", form.tag);
       body.append("productType", form.productType);
@@ -1006,6 +1009,16 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 onChange={(e) => setForm({ ...form, brand: e.target.value })}
                 className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
                 placeholder="Brand"
+              />
+            </div>
+            <div>
+              <FieldLabel>Reference</FieldLabel>
+              <input
+                type="text"
+                value={form.reference}
+                onChange={(e) => setForm({ ...form, reference: e.target.value })}
+                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                placeholder="Internal product reference"
               />
             </div>
             <div>

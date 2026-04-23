@@ -191,6 +191,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         update.isActive = body.isActive;
       }
 
+      if (typeof body.reference === "string") {
+        update.reference = body.reference;
+      }
+
       if (body.sizeStock && typeof body.sizeStock === "object") {
         const sizeStockMap = new Map<string, { fullStock: number; stock: number }>();
         for (const size of declaredSizes) {
@@ -395,6 +399,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       categories: parseStringArray(formData.get("categories")),
       description: String(formData.get("description") || ""),
       brand: String(formData.get("brand") || "LOOKSMAX"),
+      reference: String(formData.get("reference") || ""),
       tag: String(formData.get("tag") || ""),
       productType,
       fashionSubtype,
