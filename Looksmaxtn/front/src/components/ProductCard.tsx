@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
-import { reserveProduct, subscribeToReservationChanges, getStoredReservationKey } from "@/lib/reservations";
+import { reserveProduct, subscribeToReservationChanges } from "@/lib/reservations";
 import { subscribeToAvailabilityStream } from "@/lib/availabilityStream";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { getConditionColor, getConditionLabel, getConditionPercent } from "@/lib/productCondition";
@@ -105,8 +105,15 @@ export default function ProductCard({
   const isSoldOut = !isPerfume && selectedSizeAvailability
     ? selectedSizeAvailability.stock <= 0 && !selectedSizeAvailability.reservedElsewhere
     : false;
+  // Badge uses the neutral view (no rk in fetch, same as SSE payload).
+  // Show only when every size that still has stock is taken by others — meaning
+  // a new browsing user genuinely can't find a free size.
+  const sizesWithStock = sizeAvailabilityState
+    ? Object.values(sizeAvailabilityState).filter((s) => s.stock > 0)
+    : [];
+  const allSizesReservedElsewhere = sizesWithStock.length > 0 && sizesWithStock.every((s) => s.reservedElsewhere);
   const showReservedElsewhere = !isPerfume && hasHydratedAvailability
-    ? selectedSizeAvailability?.reservedElsewhere || (!hasSizes && initialReservedElsewhere)
+    ? allSizesReservedElsewhere || (!hasSizes && initialReservedElsewhere)
     : false;
   const isBlocked = !isPerfume && selectedSizeStock <= 0;
   const statusLabel = showReservedElsewhere
@@ -152,9 +159,7 @@ export default function ProductCard({
     let cancelled = false;
 
     const refresh = () => {
-      const rk = getStoredReservationKey();
-      const url = rk ? `/api/products/${id}?rk=${encodeURIComponent(rk)}` : `/api/products/${id}`;
-      fetch(url, { cache: "no-store" })
+      fetch(`/api/products/${id}`, { cache: "no-store" })
         .then((r) => r.json())
         .then((data) => {
           if (cancelled || !data.product) return;
@@ -171,11 +176,20 @@ export default function ProductCard({
     // Re-fetch when user returns to the tab (catches any SSE events missed while hidden)
     window.addEventListener("focus", refresh);
 
-    // Re-fetch when the backend pushes a reservation change for this product
-    const unsubscribeSSE = subscribeToAvailabilityStream((event) => {
-      if (event.productId !== id) return;
-      refresh();
-    });
+    // Apply SSE payload directly — no round-trip fetch needed.
+    // On reconnect, do a full fetch to restore user-specific fields (blockedByOrder, etc.)
+    const unsubscribeSSE = subscribeToAvailabilityStream(
+      (event) => {
+        if (event.productId !== id) return;
+        if (event.sizeAvailability !== null) {
+          setSizeAvailabilityState(event.sizeAvailability);
+          setHasHydratedAvailability(true);
+        }
+        // sizeAvailability === null means a non-size product (perfume);
+        // ProductCard has no blocked state for perfumes so nothing to update.
+      },
+      refresh,
+    );
 
     // Re-fetch when this tab's own cart action changes this product
     const unsubscribeLocal = subscribeToReservationChanges((payload) => {

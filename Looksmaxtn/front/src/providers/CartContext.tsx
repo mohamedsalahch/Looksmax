@@ -10,6 +10,7 @@ import {
   reserveProduct,
 } from "@/lib/reservations";
 import { buildCartItemId, getCartItemProductId } from "@/lib/cartItem";
+import { subscribeToAvailabilityStream } from "@/lib/availabilityStream";
 
 export interface CartItem {
   id: string;
@@ -112,6 +113,101 @@ export function CartProvider({ children }: { children: ReactNode }) {
     itemsRef.current = items;
   }, [items]);
 
+  const syncCartAvailability = useCallback(() => {
+    const currentItems = itemsRef.current;
+    if (currentItems.length === 0) return;
+
+    fetch("/api/cart/availability", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        productIds: [...new Set(currentItems.map((item) => getCartItemProductId(item.id)))],
+        cartKey: getReservationKey(),
+      }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (!Array.isArray(data.items)) return;
+
+        type AvailabilityItem = {
+          productId: string;
+          available: boolean;
+          blockedByOrder?: boolean;
+          ownedReservation?: boolean;
+          reservedElsewhere?: boolean;
+          maxStock?: number;
+          productType?: "fashion" | "perfume" | "clothing" | "shoes";
+          originPictures?: {
+            front?: string;
+            back?: string;
+            left?: string;
+            right?: string;
+          };
+          fashionSubtype?: "clothes" | "shoes" | null;
+          image?: string;
+          reservationExpiresAt?: string | null;
+          cartCount?: number;
+          sizeAvailability?: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null;
+        };
+
+        const availabilityMap = new Map(
+          data.items.map((item: AvailabilityItem) => [item.productId, item])
+        ) as Map<string, AvailabilityItem>;
+
+        setItems((currentItems) => {
+          const removedItems: CartItem[] = [];
+          const nextItems = currentItems.flatMap((item) => {
+            const productId = getCartItemProductId(item.id);
+            const availability = availabilityMap.get(productId);
+            const sizeInfo = item.size && (availability as { sizeAvailability?: Record<string, { stock: number }> } | null)?.sizeAvailability?.[item.size];
+            const maxStock = Math.max(1, sizeInfo?.stock ?? availability?.maxStock ?? item.maxStock ?? 1);
+            const ownedReservation = Boolean(availability?.ownedReservation);
+
+            const isSizeSoldOut = sizeInfo !== undefined && sizeInfo !== null && sizeInfo.stock <= 0;
+            const isProductSoldOut = Boolean(availability?.blockedByOrder || !availability?.available);
+            const isUnavailable = availability
+              ? (!availability.available && !ownedReservation) || Boolean(item.isUnavailable)
+              : Boolean(item.isUnavailable);
+            const soldOut = isSizeSoldOut || isProductSoldOut;
+
+            if (soldOut) {
+              removedItems.push(item);
+              return [];
+            }
+
+            const unavailableReason = isUnavailable
+              ? "This product is currently unavailable."
+              : null;
+
+            return {
+              ...item,
+              image: availability?.image || item.image,
+              originPictures: availability?.originPictures || item.originPictures,
+              reservationExpiresAt: ownedReservation ? availability?.reservationExpiresAt ?? item.reservationExpiresAt ?? null : item.reservationExpiresAt ?? null,
+              maxStock,
+              quantity: Math.min(item.quantity, maxStock),
+              productType: availability?.productType ?? item.productType,
+              fashionSubtype: availability?.fashionSubtype ?? item.fashionSubtype,
+              cartCount: availability?.cartCount ?? item.cartCount ?? 0,
+              isUnavailable,
+              unavailableReason,
+            };
+          });
+
+          if (JSON.stringify(nextItems) === JSON.stringify(currentItems)) {
+            return currentItems;
+          }
+
+          removedItems.forEach((item) => {
+            releaseProductReservation(getCartItemProductId(item.id), item.size).catch(() => {});
+          });
+
+          return nextItems;
+        });
+      })
+      .catch(() => {});
+  }, []);
+
   // Load cart from localStorage on mount (client-side only)
   useEffect(() => {
     const nextItems = loadCart();
@@ -145,117 +241,34 @@ export function CartProvider({ children }: { children: ReactNode }) {
     void releaseAllReservations().catch(() => {});
   }, [hydrated, items.length]);
 
+  // Initial sync + re-sync on focus. SSE handles real-time updates (see effect below).
+  const hasCartItems = items.length > 0;
   useEffect(() => {
-    if (!hydrated || items.length === 0) return;
-
-    let cancelled = false;
-
-    const syncCartAvailability = () => {
-      const currentItems = itemsRef.current;
-      if (currentItems.length === 0) return;
-
-      fetch("/api/cart/availability", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          productIds: [...new Set(currentItems.map((item) => getCartItemProductId(item.id)))],
-          cartKey: getReservationKey(),
-        }),
-      })
-        .then((response) => response.json())
-        .then((data) => {
-          if (cancelled || !Array.isArray(data.items)) return;
-
-          type AvailabilityItem = {
-            productId: string;
-            available: boolean;
-            blockedByOrder?: boolean;
-            ownedReservation?: boolean;
-            reservedElsewhere?: boolean;
-            maxStock?: number;
-            productType?: "fashion" | "perfume" | "clothing" | "shoes";
-            originPictures?: {
-              front?: string;
-              back?: string;
-              left?: string;
-              right?: string;
-            };
-            fashionSubtype?: "clothes" | "shoes" | null;
-            image?: string;
-            reservationExpiresAt?: string | null;
-            cartCount?: number;
-            sizeAvailability?: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null;
-          };
-
-          const availabilityMap = new Map(
-            data.items.map((item: AvailabilityItem) => [
-              item.productId,
-              item,
-            ])
-          ) as Map<string, AvailabilityItem>;
-
-          setItems((currentItems) => {
-            const removedItems: CartItem[] = [];
-            const nextItems = currentItems.flatMap((item) => {
-              const productId = getCartItemProductId(item.id);
-              const availability = availabilityMap.get(productId);
-              const sizeInfo = item.size && (availability as { sizeAvailability?: Record<string, { stock: number }> } | null)?.sizeAvailability?.[item.size];
-              const maxStock = Math.max(1, sizeInfo?.stock ?? availability?.maxStock ?? item.maxStock ?? 1);
-              const ownedReservation = Boolean(availability?.ownedReservation);
-
-              const isSizeSoldOut = sizeInfo !== undefined && sizeInfo !== null && sizeInfo.stock <= 0;
-              const isProductSoldOut = Boolean(availability?.blockedByOrder || !availability?.available);
-              const isUnavailable = availability
-                ? (!availability.available && !ownedReservation) || Boolean(item.isUnavailable)
-                : Boolean(item.isUnavailable);
-              const soldOut = isSizeSoldOut || isProductSoldOut;
-
-              if (soldOut) {
-                removedItems.push(item);
-                return [];
-              }
-
-              const unavailableReason = isUnavailable
-                ? "This product is currently unavailable."
-                : null;
-
-              return {
-                ...item,
-                image: availability?.image || item.image,
-                originPictures: availability?.originPictures || item.originPictures,
-                reservationExpiresAt: ownedReservation ? availability?.reservationExpiresAt ?? item.reservationExpiresAt ?? null : item.reservationExpiresAt ?? null,
-                maxStock,
-                quantity: Math.min(item.quantity, maxStock),
-                productType: availability?.productType ?? item.productType,
-                fashionSubtype: availability?.fashionSubtype ?? item.fashionSubtype,
-                cartCount: availability?.cartCount ?? item.cartCount ?? 0,
-                isUnavailable,
-                unavailableReason,
-              };
-            });
-
-            if (JSON.stringify(nextItems) === JSON.stringify(currentItems)) {
-              return currentItems;
-            }
-
-            removedItems.forEach((item) => {
-              releaseProductReservation(getCartItemProductId(item.id), item.size).catch(() => {});
-            });
-
-            return nextItems;
-          });
-        })
-        .catch(() => {});
-    };
+    if (!hydrated || !hasCartItems) return;
 
     syncCartAvailability();
-    const interval = window.setInterval(syncCartAvailability, 5000);
 
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [hydrated, items]);
+    const handleFocus = () => syncCartAvailability();
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [hydrated, hasCartItems, syncCartAvailability]);
+
+  // Subscribe to SSE — sync cart when a reserved product changes, and on reconnect.
+  useEffect(() => {
+    if (!hydrated) return;
+
+    const unsubscribe = subscribeToAvailabilityStream(
+      (event) => {
+        const isCartProduct = itemsRef.current.some(
+          (item) => getCartItemProductId(item.id) === event.productId
+        );
+        if (isCartProduct) syncCartAvailability();
+      },
+      () => syncCartAvailability(),
+    );
+
+    return unsubscribe;
+  }, [hydrated, syncCartAvailability]);
 
   useEffect(() => {
     if (!hydrated || items.length === 0) return;

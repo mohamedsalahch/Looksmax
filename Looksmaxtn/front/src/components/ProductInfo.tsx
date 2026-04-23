@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
 import { reserveProduct, subscribeToReservationChanges } from "@/lib/reservations";
+import { subscribeToAvailabilityStream } from "@/lib/availabilityStream";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { getConditionColor, getConditionLabel, getConditionPercent } from "@/lib/productCondition";
 import { buildCartItemId } from "@/lib/cartItem";
@@ -126,19 +127,36 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
     if (!product.id) return;
 
     let cancelled = false;
-    const interval = window.setInterval(() => {
-      if (!cancelled) refreshAvailability();
-    }, 5000);
+
+    // Initial hydration — user-specific fields (ownedReservation, blockedByOrder, reservedElsewhere)
+    refreshAvailability();
 
     const handleFocus = () => {
-      refreshAvailability();
+      if (!cancelled) refreshAvailability();
     };
     window.addEventListener("focus", handleFocus);
 
+    // Apply neutral availability from SSE payload directly — no round-trip fetch needed.
+    // On reconnect, do a full fetch to restore user-specific fields.
+    const unsubscribeSSE = subscribeToAvailabilityStream(
+      (event) => {
+        if (cancelled || event.productId !== product.id) return;
+        if (event.sizeAvailability !== null) {
+          setSizeAvailability(event.sizeAvailability);
+        } else {
+          setCurrentStock(event.stock);
+        }
+        setHasHydratedAvailability(true);
+      },
+      () => {
+        if (!cancelled) refreshAvailability();
+      },
+    );
+
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
       window.removeEventListener("focus", handleFocus);
+      unsubscribeSSE();
     };
   }, [product.id]);
 
