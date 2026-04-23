@@ -5,6 +5,7 @@ import mongoose from "mongoose";
 import dbConnect from "@/store/lib/mongodb";
 import User from "@/store/models/User";
 import { getUploadCategoryDir } from "@/store/lib/uploadStorage";
+import { compressBase64Image } from "@/lib/imageCompression";
 
 const STUDIO_PORTRAIT_PROMPT = `Transform this image into a professional studio portrait.
 
@@ -74,7 +75,7 @@ export async function queueBodyProfileEnhancement(userId: string, imagePath: str
     const uploadDir = getUploadCategoryDir("body-profiles");
     const fullPath = path.join(uploadDir, path.basename(imagePath));
     const fileBuffer = await readFile(fullPath);
-    const base64 = fileBuffer.toString("base64");
+    const base64 = await compressBase64Image(fileBuffer.toString("base64"));
 
     // Step 1: Validate the photo with LLM before enhancing
     try {
