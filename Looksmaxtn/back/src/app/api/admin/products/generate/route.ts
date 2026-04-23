@@ -3,10 +3,11 @@ import dbConnect from "@/admin/lib/mongodb";
 import ModelAsset from "@/admin/models/ModelAsset";
 import { getSession } from "@/admin/lib/auth";
 import { readModelImageAsBase64 } from "@/admin/lib/modelUploads";
+import { compressBase64Image } from "@/lib/imageCompression";
 
 async function fileToBase64(file: File) {
   const bytes = await file.arrayBuffer();
-  return Buffer.from(bytes).toString("base64");
+  return compressBase64Image(Buffer.from(bytes).toString("base64"));
 }
 
 function normalizeType(type: string, fashionSubtype: string) {

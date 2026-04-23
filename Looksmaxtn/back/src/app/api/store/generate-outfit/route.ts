@@ -9,6 +9,7 @@ import Product from "@/store/models/Product";
 import User from "@/store/models/User";
 import OutfitGenerationJob from "@/store/models/OutfitGenerationJob";
 import { getUploadCategoryDir } from "@/store/lib/uploadStorage";
+import { compressBase64Image } from "@/lib/imageCompression";
 
 type ZonePayload = {
   status?: boolean;
@@ -76,7 +77,7 @@ async function publicPathToBase64(imagePath: string) {
 
   try {
     const buffer = await readFile(fullPath);
-    return buffer.toString("base64");
+    return compressBase64Image(buffer.toString("base64"));
   } catch (err) {
     console.error("[publicPathToBase64] failed to read file:", fullPath, err);
     return "";
