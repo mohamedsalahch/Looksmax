@@ -147,7 +147,7 @@ export default function ProductImageGallery({ images = [] }: { images?: ProductI
       {/* Main Image */}
       <div
         ref={imageShellRef}
-        className={`flex-1 relative aspect-[3/4] md:aspect-auto md:h-[600px] bg-surface overflow-visible ${
+        className={`flex-1 relative aspect-[3/4] md:aspect-auto md:h-[600px] bg-transparent overflow-visible ${
           isDesktop && displayImages[activeIndex]?.url ? "cursor-zoom-in" : "cursor-default"
         }`}
         onClick={toggleZoom}
@@ -157,7 +157,7 @@ export default function ProductImageGallery({ images = [] }: { images?: ProductI
       >
         {displayImages[activeIndex]?.url ? (
           <>
-            <div className="absolute inset-0 overflow-hidden">
+            <div className="absolute inset-0">
               <img
                 src={displayImages[activeIndex].url}
                 alt="Main product"
