@@ -41,6 +41,10 @@ yarn-error.log*
 **/.venv/
 **/venv/
 **/env/
+batch_products/
+result-folder-name/
+scripts/batch_products/
+scripts/result-folder-name/
 
 # Uploads and media
 **/public/uploads/**
