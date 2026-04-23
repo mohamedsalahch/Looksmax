@@ -111,39 +111,6 @@ const ZONE_PREVIEW_POSITIONS: Record<
     },
 };
 
-async function copyShareLink(text: string) {
-    if (!text) return false;
-
-    try {
-        if (typeof navigator !== "undefined" && navigator.clipboard && window.isSecureContext) {
-            await navigator.clipboard.writeText(text);
-            return true;
-        }
-    } catch {
-        // Fall through to the legacy copy path below.
-    }
-
-    if (typeof document === "undefined") return false;
-
-    const input = document.createElement("input");
-    input.value = text;
-    input.setAttribute("readonly", "true");
-    input.style.position = "fixed";
-    input.style.left = "-9999px";
-    document.body.appendChild(input);
-    input.select();
-
-    try {
-        const copied = document.execCommand("copy");
-        document.body.removeChild(input);
-        if (copied) return true;
-    } catch {
-        document.body.removeChild(input);
-    }
-
-    return false;
-}
-
 const ZONE_DETAILS: Record<
     (typeof BODY_ZONES)[number]["id"],
     { title: string; type: string; fit: string; season: string; care: string }
@@ -1178,7 +1145,10 @@ export default function OutfitStudioPage() {
 
     const handleSaveOutfit = async () => {
         setSavingOutfit(true);
-        await persistGeneratedOutfit();
+        const outfitId = await persistGeneratedOutfit();
+        if (outfitId) {
+            router.push("/studio/outfits");
+        }
         setSavingOutfit(false);
     };
 
