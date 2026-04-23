@@ -161,7 +161,7 @@ export default function ProductImageGallery({ images = [] }: { images?: ProductI
               <img
                 src={displayImages[activeIndex].url}
                 alt="Main product"
-                className="absolute inset-0 w-full h-full object-cover"
+                className="absolute inset-0 w-full h-full object-contain"
                 loading="eager"
                 fetchPriority="high"
                 decoding="async"
@@ -182,7 +182,7 @@ export default function ProductImageGallery({ images = [] }: { images?: ProductI
                   style={{
                     backgroundImage: `url(${displayImages[activeIndex].url})`,
                     backgroundRepeat: "no-repeat",
-                    backgroundSize: "360%",
+                    backgroundSize: "450%",
                     backgroundPosition: `${zoomPoint.x}% ${zoomPoint.y}%`,
                     transform: "scale(1.01)",
                   }}
