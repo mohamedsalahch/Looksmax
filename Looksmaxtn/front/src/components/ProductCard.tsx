@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
 import { reserveProduct, subscribeToReservationChanges } from "@/lib/reservations";
+import { subscribeToAvailabilityStream } from "@/lib/availabilityStream";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { getConditionColor, getConditionLabel, getConditionPercent } from "@/lib/productCondition";
 import { queueStudioAssignment } from "@/lib/studioAssignment";
@@ -104,8 +105,15 @@ export default function ProductCard({
   const isSoldOut = !isPerfume && selectedSizeAvailability
     ? selectedSizeAvailability.stock <= 0 && !selectedSizeAvailability.reservedElsewhere
     : false;
+  // Badge uses the neutral view (no rk in fetch, same as SSE payload).
+  // Show only when every size that still has stock is taken by others — meaning
+  // a new browsing user genuinely can't find a free size.
+  const sizesWithStock = sizeAvailabilityState
+    ? Object.values(sizeAvailabilityState).filter((s) => s.stock > 0)
+    : [];
+  const allSizesReservedElsewhere = sizesWithStock.length > 0 && sizesWithStock.every((s) => s.reservedElsewhere);
   const showReservedElsewhere = !isPerfume && hasHydratedAvailability
-    ? selectedSizeAvailability?.reservedElsewhere || (!hasSizes && initialReservedElsewhere)
+    ? allSizesReservedElsewhere || (!hasSizes && initialReservedElsewhere)
     : false;
   const isBlocked = !isPerfume && selectedSizeStock <= 0;
   const statusLabel = showReservedElsewhere
@@ -150,9 +158,9 @@ export default function ProductCard({
 
     let cancelled = false;
 
-    const refreshAvailability = () => {
+    const refresh = () => {
       fetch(`/api/products/${id}`, { cache: "no-store" })
-        .then((response) => response.json())
+        .then((r) => r.json())
         .then((data) => {
           if (cancelled || !data.product) return;
           setSizeAvailabilityState(data.product.sizeAvailability || null);
@@ -162,42 +170,39 @@ export default function ProductCard({
         .catch(() => {});
     };
 
-    const interval = window.setInterval(refreshAvailability, 5000);
-    refreshAvailability();
+    // Initial hydration
+    refresh();
 
-    const handleFocus = () => {
-      refreshAvailability();
-    };
-    window.addEventListener("focus", handleFocus);
+    // Re-fetch when user returns to the tab (catches any SSE events missed while hidden)
+    window.addEventListener("focus", refresh);
+
+    // Apply SSE payload directly — no round-trip fetch needed.
+    // On reconnect, do a full fetch to restore user-specific fields (blockedByOrder, etc.)
+    const unsubscribeSSE = subscribeToAvailabilityStream(
+      (event) => {
+        if (event.productId !== id) return;
+        if (event.sizeAvailability !== null) {
+          setSizeAvailabilityState(event.sizeAvailability);
+          setHasHydratedAvailability(true);
+        }
+        // sizeAvailability === null means a non-size product (perfume);
+        // ProductCard has no blocked state for perfumes so nothing to update.
+      },
+      refresh,
+    );
+
+    // Re-fetch when this tab's own cart action changes this product
+    const unsubscribeLocal = subscribeToReservationChanges((payload) => {
+      if (payload.productId !== id) return;
+      refresh();
+    });
 
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
-      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("focus", refresh);
+      unsubscribeSSE();
+      unsubscribeLocal();
     };
-  }, [id]);
-
-  useEffect(() => {
-    if (!id) return;
-
-    const refreshAvailability = () => {
-      fetch(`/api/products/${id}`, { cache: "no-store" })
-        .then((response) => response.json())
-        .then((data) => {
-          if (!data.product) return;
-          setSizeAvailabilityState(data.product.sizeAvailability || null);
-          setBlockedByOrder(Boolean(data.product.blockedByOrder));
-          setHasHydratedAvailability(true);
-        })
-        .catch(() => {});
-    };
-
-    const unsubscribe = subscribeToReservationChanges((payload) => {
-      if (payload.productId !== id) return;
-      refreshAvailability();
-    });
-
-    return unsubscribe;
   }, [id]);
 
   const handleQuickAdd = async (e: React.MouseEvent) => {

@@ -56,3 +56,4 @@ scripts/result-folder-name/
 .docker/
 /.codex/
 /.codex/
+/scripts/batch_products/

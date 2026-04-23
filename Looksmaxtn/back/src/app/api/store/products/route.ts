@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
       products.map((product) => product._id.toString()),
       session?.userId || null
     );
-    const reservationKey = session?.userId ? `user:${session.userId}` : null;
+    const reservationKey = session?.userId ? `user:${session.userId}` : (searchParams.get("rk") || null);
     const reservationMap = activeReservations.reduce((map, reservation) => {
       const productId = reservation.product.toString();
       const current =
@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
         : displayStock > 0;
       const reservedElsewhere = sizeAvailability
         ? Object.values(sizeAvailability).some((sizeInfo) => sizeInfo.reservedElsewhere)
-        : reservedByOthers > 0;
+        : reservedByOthers > 0 && (reservedByOthers >= stock || reservedByOthers + reservationInfo.ownedQuantity > stock);
       const blockedByOrder = sizeAvailability
         ? Boolean(activeOrderHold) && !hasSelectableSize
         : Boolean(activeOrderHold) && displayStock <= 0;

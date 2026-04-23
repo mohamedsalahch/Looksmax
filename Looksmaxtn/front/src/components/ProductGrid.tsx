@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ProductCard from "./ProductCard";
+import { getStoredReservationKey } from "@/lib/reservations";
 
 interface ProductImage {
   url: string;
@@ -87,6 +88,8 @@ export default function ProductGrid({
       if (appliedPriceMin) params.set("priceMin", appliedPriceMin);
       if (appliedPriceMax) params.set("priceMax", appliedPriceMax);
       params.set("includeFacets", "1");
+      const rk = getStoredReservationKey();
+      if (rk) params.set("rk", rk);
 
       fetch(`/api/products?${params}`, { cache: "no-store" })
         .then((r) => r.json())
@@ -112,11 +115,9 @@ export default function ProductGrid({
     };
 
     loadProducts();
-    const interval = window.setInterval(loadProducts, 5000);
 
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
     };
   }, [category, selectedSize, appliedPriceMin, appliedPriceMax]);
 

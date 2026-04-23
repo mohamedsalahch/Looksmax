@@ -4,7 +4,8 @@ import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
 import { getSession } from "@/store/lib/auth";
 import { getActiveOrderHoldMapByProductIds } from "@/lib/productInventory";
-import { getSizeStockEntries } from "@/lib/sizeAvailability";
+import { buildSizeAvailability, getSizeStockEntries } from "@/lib/sizeAvailability";
+import { broadcastAvailabilityChange } from "@/lib/sseClients";
 import mongoose from "mongoose";
 
 const CART_PRESENCE_DURATION_MS = 30 * 60 * 1000;
@@ -132,24 +133,33 @@ export async function POST(
       ).lean();
     }
 
-    const cartCount = await ProductReservation.aggregate<{ _id: null; cartCount: number }>([
-      {
-        $match: {
-          product: new mongoose.Types.ObjectId(id),
-          reservedUntil: { $gt: now },
-        },
-      },
-      {
-        $group: {
-          _id: null,
-          cartCount: { $sum: { $ifNull: ["$quantity", 1] } },
-        },
-      },
-    ]);
+    const allActiveReservations = await ProductReservation.find({
+      product: id,
+      reservedUntil: { $gt: now },
+    }).select("reservationKey quantity size").lean();
+
+    const finalCartCount = allActiveReservations.reduce(
+      (sum, r) => sum + Math.max(1, Number(r.quantity) || 1), 0
+    );
+
+    const broadcastSizeAvailability = hasSizeStock
+      ? buildSizeAvailability(product.sizeStock, allActiveReservations, null)
+      : null;
+    const rawStock = Math.max(product.stock ?? 0, 0);
+    const broadcastStock = hasSizeStock
+      ? rawStock
+      : Math.max(rawStock - finalCartCount, 0);
+
+    broadcastAvailabilityChange({
+      productId: id,
+      cartCount: finalCartCount,
+      stock: broadcastStock,
+      sizeAvailability: broadcastSizeAvailability,
+    });
 
     return NextResponse.json({
       success: true,
-      cartCount: cartCount[0]?.cartCount || 0,
+      cartCount: finalCartCount,
       reservationExpiresAt: cartPresence?.reservedUntil?.toISOString(),
     });
   } catch (error: unknown) {
@@ -177,22 +187,34 @@ export async function DELETE(
 
     await ProductReservation.deleteOne({ product: id, reservationKey: key, size: normalizedSize });
 
-    const cartCount = await ProductReservation.aggregate<{ _id: null; cartCount: number }>([
-      {
-        $match: {
-          product: new mongoose.Types.ObjectId(id),
-          reservedUntil: { $gt: new Date() },
-        },
-      },
-      {
-        $group: {
-          _id: null,
-          cartCount: { $sum: { $ifNull: ["$quantity", 1] } },
-        },
-      },
+    const now = new Date();
+    const [allActiveReservations, productForBroadcast] = await Promise.all([
+      ProductReservation.find({ product: id, reservedUntil: { $gt: now } })
+        .select("reservationKey quantity size").lean(),
+      Product.findById(id).select("stock sizeStock").lean(),
     ]);
 
-    return NextResponse.json({ success: true, cartCount: cartCount[0]?.cartCount || 0 });
+    const finalCartCount = allActiveReservations.reduce(
+      (sum, r) => sum + Math.max(1, Number(r.quantity) || 1), 0
+    );
+
+    const hasSizeStockBroadcast = getSizeStockEntries(productForBroadcast?.sizeStock).length > 0;
+    const broadcastSizeAvailability = hasSizeStockBroadcast && productForBroadcast
+      ? buildSizeAvailability(productForBroadcast.sizeStock, allActiveReservations, null)
+      : null;
+    const rawStock = Math.max(productForBroadcast?.stock ?? 0, 0);
+    const broadcastStock = hasSizeStockBroadcast
+      ? rawStock
+      : Math.max(rawStock - finalCartCount, 0);
+
+    broadcastAvailabilityChange({
+      productId: id,
+      cartCount: finalCartCount,
+      stock: broadcastStock,
+      sizeAvailability: broadcastSizeAvailability,
+    });
+
+    return NextResponse.json({ success: true, cartCount: finalCartCount });
   } catch (error: unknown) {
     console.error("Release cart presence error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
