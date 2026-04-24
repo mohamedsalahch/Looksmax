@@ -43,7 +43,10 @@ export async function GET() {
         .sort({ createdAt: -1 })
         .lean();
     } else {
-      orders = await Order.find({ user: session.userId, isArchived: { $ne: true } })
+      orders = await Order.find({
+        user: session.userId,
+        isArchived: { $ne: true },
+      })
         .sort({ createdAt: -1 })
         .lean();
     }

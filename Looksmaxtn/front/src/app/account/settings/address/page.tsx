@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useAuth } from "@/providers/AuthContext";
 import { withAuthRequest } from "@/lib/authClient";
 
@@ -70,9 +69,6 @@ export default function AddressSettingsPage() {
 
   return (
     <div className="max-w-md space-y-6">
-      <Link href="/account/settings" className="text-xs text-text-secondary underline underline-offset-2">
-        Back to Settings
-      </Link>
       <div>
         <h2 className="text-xs font-semibold uppercase tracking-wider mb-6 text-text-secondary">
           Billing Address
@@ -104,9 +100,11 @@ export default function AddressSettingsPage() {
               <input type="tel" value={address.phone} onChange={(e) => setAddress({ ...address, phone: e.target.value })} className="w-full border border-border-color bg-transparent px-4 py-3 text-sm" />
             </div>
           </div>
-          <button type="submit" disabled={loading} className="bg-foreground text-background px-6 py-3 text-xs font-medium tracking-wide uppercase hover:bg-accent transition-colors cursor-pointer disabled:opacity-50">
-            {loading ? "Saving..." : "Save Address"}
-          </button>
+          <div className="flex justify-start">
+            <button type="submit" disabled={loading} className="bg-foreground text-background px-6 py-3 text-xs font-medium tracking-wide uppercase hover:bg-accent transition-colors cursor-pointer disabled:opacity-50">
+              {loading ? "Saving..." : "Save Address"}
+            </button>
+          </div>
         </form>
       </div>
     </div>

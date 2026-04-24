@@ -24,6 +24,7 @@ export default function OrdersPage() {
   const [archivingOrderId, setArchivingOrderId] = useState("");
 
   useEffect(() => {
+    setLoading(true);
     fetch("/api/orders", withAuthRequest())
       .then((r) => r.json())
       .then((data) => setOrders(data.orders || []))
@@ -119,7 +120,18 @@ export default function OrdersPage() {
                     })}
                   </p>
                 </div>
-                <div className="text-right">
+                <div className="flex flex-col items-end gap-3 text-right">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void handleArchive(order._id);
+                    }}
+                    disabled={archivingOrderId === order._id}
+                    className="bg-foreground px-4 py-2 text-[10px] font-medium uppercase tracking-[0.15em] text-background transition-colors hover:bg-accent disabled:opacity-50"
+                  >
+                    {archivingOrderId === order._id ? "Archiving..." : "Archive"}
+                  </button>
                   <span
                     className={`inline-block text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider ${statusColor(order.orderStatus)}`}
                   >
@@ -143,20 +155,7 @@ export default function OrdersPage() {
                     {order.paymentMethod === "cod" ? "Cash on Delivery" : order.paymentMethod}
                   </span>
                 </div>
-                <div className="flex items-center gap-4">
-                  <span className="text-sm font-semibold">{formatTndPrice(order.totalPrice)}</span>
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void handleArchive(order._id);
-                    }}
-                    disabled={archivingOrderId === order._id}
-                    className="text-[10px] uppercase tracking-[0.15em] text-text-secondary transition-colors hover:text-foreground disabled:opacity-50"
-                  >
-                    {archivingOrderId === order._id ? "Archiving..." : "Archive"}
-                  </button>
-                </div>
+                <span className="text-sm font-semibold">{formatTndPrice(order.totalPrice)}</span>
               </div>
             </div>
           ))}

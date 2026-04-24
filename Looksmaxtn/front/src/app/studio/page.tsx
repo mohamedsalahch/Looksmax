@@ -717,6 +717,7 @@ export default function OutfitStudioPage() {
     }, [generatedOutfitJobId, needsGenerationRecovery, outfitNameDraft, user?.id]);
 
     const imageEnhancing = Boolean(user?.bodyProfile?.imageEnhancing);
+    const hasEnhancedProfileImage = Boolean(user?.bodyProfile?.profileImageEnhanced);
 
     useEffect(() => {
         if (!imageEnhancing) return;
@@ -1144,6 +1145,10 @@ export default function OutfitStudioPage() {
     };
 
     const handleSaveOutfit = async () => {
+        if (!hasEnhancedProfileImage) {
+            setGenerationError("You need an enhanced profile picture before saving an outfit.");
+            return;
+        }
         setSavingOutfit(true);
         const outfitId = await persistGeneratedOutfit();
         if (outfitId) {
@@ -1569,7 +1574,7 @@ export default function OutfitStudioPage() {
                                             <button
                                                 type="button"
                                                 onClick={handleSaveOutfit}
-                                                disabled={savingOutfit || sharingOutfit || generatedOutfitImages.length === 0}
+                                                disabled={savingOutfit || sharingOutfit || generatedOutfitImages.length === 0 || !hasEnhancedProfileImage}
                                                 className="px-0 py-1 text-[11px] uppercase tracking-[0.15em] text-[#666] hover:text-[#1a1a1a] hover:underline hover:underline-offset-[6px] hover:decoration-[1px] disabled:opacity-50 disabled:no-underline"
                                             >
                                                 {savingOutfit ? "Saving..." : "Save"}

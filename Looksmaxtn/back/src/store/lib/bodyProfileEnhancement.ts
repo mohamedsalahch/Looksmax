@@ -5,6 +5,7 @@ import mongoose from "mongoose";
 import dbConnect from "@/store/lib/mongodb";
 import User from "@/store/models/User";
 import { getUploadCategoryDir } from "@/store/lib/uploadStorage";
+import { deleteBodyProfileImage } from "@/store/lib/bodyProfileUploads";
 import { compressBase64Image } from "@/lib/imageCompression";
 
 const STUDIO_PORTRAIT_PROMPT = `Transform this image into a professional studio portrait.
@@ -67,7 +68,7 @@ export async function queueBodyProfileEnhancement(userId: string, imagePath: str
   const baseUrl = (process.env.PRODUCT_GENERATION_URL_BASE || "").replace(/\/?$/, "/");
   if (!baseUrl) {
     console.warn("[profile-photo] PRODUCT_GENERATION_URL_BASE not configured, skipping enhancement");
-    await markEnhancingDone(userId);
+    await clearFailedBodyProfileImage(userId, "Photo enhancement is unavailable. Please upload another photo later.");
     return;
   }
 
@@ -91,15 +92,17 @@ export async function queueBodyProfileEnhancement(userId: string, imagePath: str
           const reason = validateData.reason || "This photo is not suitable for outfit generation. Please upload a clear, full-body standing photo.";
           console.warn(`[profile-photo] Validation failed for user ${userId}: ${reason}`);
           await dbConnect();
-          await User.collection.updateOne(
+          const currentUser = await User.collection.findOne(
             { _id: new mongoose.Types.ObjectId(userId) },
-            {
-              $set: {
-                "bodyProfile.imageEnhancing": false,
-                "bodyProfile.profileImageValidationError": reason,
-              },
-            }
+            { projection: { bodyProfile: 1 } }
           );
+          await clearFailedBodyProfileImage(userId, reason);
+          if (currentUser?.bodyProfile?.profileImage) {
+            await deleteBodyProfileImage(currentUser.bodyProfile.profileImage);
+          }
+          if (currentUser?.bodyProfile?.profileImageEnhanced) {
+            await deleteBodyProfileImage(currentUser.bodyProfile.profileImageEnhanced);
+          }
           return;
         }
       }
@@ -126,11 +129,33 @@ export async function queueBodyProfileEnhancement(userId: string, imagePath: str
 
     if (!response.ok) {
       console.error("[profile-photo] Proxy request failed:", response.status);
-      await markEnhancingDone(userId);
+      await clearFailedBodyProfileImage(userId, "Photo enhancement failed. Please upload another photo.");
+      await deleteBodyProfileImage(imagePath);
     }
   } catch (error) {
     console.error("[profile-photo] Enhancement error:", error);
-    await markEnhancingDone(userId);
+    await clearFailedBodyProfileImage(userId, "Photo enhancement failed. Please upload another photo.");
+    await deleteBodyProfileImage(imagePath);
+  }
+}
+
+export async function clearFailedBodyProfileImage(userId: string, reason: string) {
+  try {
+    await dbConnect();
+    await User.collection.updateOne(
+      { _id: new mongoose.Types.ObjectId(userId) },
+      {
+        $set: {
+          "bodyProfile.profileImage": "",
+          "bodyProfile.profileImageEnhanced": "",
+          "bodyProfile.imageEnhancing": false,
+          "bodyProfile.profileImageRequiresGeneration": false,
+          "bodyProfile.profileImageValidationError": reason,
+        },
+      }
+    );
+  } catch (err) {
+    console.error("[profile-photo] Failed to clear failed image:", err);
   }
 }
 
