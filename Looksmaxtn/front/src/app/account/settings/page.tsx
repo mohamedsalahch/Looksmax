@@ -21,6 +21,7 @@ function normalizeGender(value: string | undefined) {
 export default function SettingsPage() {
   const { user, refreshUser } = useAuth();
   const router = useRouter();
+  type ValidationField = "photo" | "heightCm" | "weightKg" | "gender" | "topSize" | "bottomSize" | "shoeSize";
   const [bodyProfile, setBodyProfile] = useState({
     heightCm: "",
     weightKg: "",
@@ -39,13 +40,53 @@ export default function SettingsPage() {
   const [imageEnhancing, setImageEnhancing] = useState(false);
   const [enhancedImage, setEnhancedImage] = useState("");
   const [enhanceError, setEnhanceError] = useState("");
+  const [validationField, setValidationField] = useState<ValidationField | null>(null);
   const [zoomedImage, setZoomedImage] = useState<{ src: string; alt: string } | null>(null);
   const [deletingPhoto, setDeletingPhoto] = useState<"original" | "enhanced" | null>(null);
+  const heightRef = useRef<HTMLInputElement | null>(null);
+  const weightRef = useRef<HTMLInputElement | null>(null);
+  const genderRef = useRef<HTMLSelectElement | null>(null);
+  const topSizeRef = useRef<HTMLSelectElement | null>(null);
+  const bottomSizeRef = useRef<HTMLSelectElement | null>(null);
+  const shoeSizeRef = useRef<HTMLSelectElement | null>(null);
   const enhanceAbortRef = useRef<AbortController | null>(null);
   const enhanceCancelledRef = useRef(false);
   const openZoom = useCallback((src: string, alt: string) => {
     setZoomedImage({ src, alt });
   }, []);
+  const requiredLabelClass = "block text-xs text-text-secondary uppercase tracking-wider mb-1.5";
+  const requiredFieldErrorClass = "mt-1 text-[10px] uppercase tracking-[0.14em] text-[#430C05]";
+  const fieldClass = "w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm transition-colors placeholder:text-text-secondary/70 focus:border-foreground focus:outline-none";
+  const invalidFieldClass = "border-0 border-b border-[#430C05] ring-0";
+
+  const getFirstMissingFocusableField = useCallback((): ValidationField | null => {
+    if (!String(bodyProfile.heightCm || "").trim()) {
+      return "heightCm";
+    }
+    if (!String(bodyProfile.weightKg || "").trim()) {
+      return "weightKg";
+    }
+    if (!String(bodyProfile.gender || "").trim()) {
+      return "gender";
+    }
+    if (!String(bodyProfile.topSize || "").trim()) {
+      return "topSize";
+    }
+    if (!String(bodyProfile.bottomSize || "").trim()) {
+      return "bottomSize";
+    }
+    if (!String(bodyProfile.shoeSize || "").trim()) {
+      return "shoeSize";
+    }
+    return null;
+  }, [
+    bodyProfile.bottomSize,
+    bodyProfile.gender,
+    bodyProfile.heightCm,
+    bodyProfile.shoeSize,
+    bodyProfile.topSize,
+    bodyProfile.weightKg,
+  ]);
 
   useEffect(() => {
     void refreshUser();
@@ -85,8 +126,18 @@ export default function SettingsPage() {
     // Show validation error from LLM if present
     if (validationError) {
       setEnhanceError(validationError);
+      setBodyProfile((prev) => ({
+        ...prev,
+        profileImage: "",
+        profileImageRequiresGeneration: false,
+      }));
     } else if (wasEnhancing && !nextEnhancing && !nextEnhancedImage) {
       setEnhanceError("Photo enhancement failed. Please try uploading again.");
+      setBodyProfile((prev) => ({
+        ...prev,
+        profileImage: "",
+        profileImageRequiresGeneration: false,
+      }));
     }
   }, [user]);
 
@@ -103,7 +154,7 @@ export default function SettingsPage() {
   const hasEnhanced = Boolean(enhancedImage);
   const originalTileInteractive = hasOriginal;
   const enhancedTileInteractive = hasEnhanced;
-  const showGenerateButton = hasOriginal && !hasEnhanced;
+  const showGenerateButton = hasOriginal && !hasEnhanced && !imageEnhancing;
   const uploadLimit = 100;
   const uploadsUsed = Math.min(Number(bodyProfile.profileImageUploadCount || 0), uploadLimit);
   const remainingUploads = Math.max(uploadLimit - uploadsUsed, 0);
@@ -114,6 +165,10 @@ export default function SettingsPage() {
   const showEnhanced = hasEnhanced || (hasOriginal && imageEnhancing);
   // Hide original once enhanced is ready
   const showOriginal = !hasEnhanced || imageEnhancing;
+  const showUploadControls = !hasOriginal && !hasEnhanced;
+  const showDeleteControls = hasEnhanced && !imageEnhancing;
+  const showImageGap = showOriginal && showEnhanced;
+  const photoActionWidthClass = showOriginal && showEnhanced ? "w-[332px]" : "w-[160px]";
 
   const handlePhotoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -121,6 +176,8 @@ export default function SettingsPage() {
 
     setBodyError("");
     setEnhanceError("");
+    setEnhancedImage("");
+    setValidationField(null);
     setImageEnhancing(true);
     enhanceCancelledRef.current = false;
 
@@ -180,6 +237,12 @@ export default function SettingsPage() {
       if (!res.ok) {
         setImageEnhancing(false);
         setBodyError(data.error || "Failed to generate enhanced photo.");
+        setBodyProfile((prev) => ({
+          ...prev,
+          profileImage: "",
+          profileImageRequiresGeneration: false,
+        }));
+        setEnhancedImage("");
         if (enhanceAbortRef.current === controller) {
           enhanceAbortRef.current = null;
         }
@@ -195,6 +258,12 @@ export default function SettingsPage() {
       if (!controller.signal.aborted) {
         setImageEnhancing(false);
         setBodyError("Failed to generate enhanced photo.");
+        setBodyProfile((prev) => ({
+          ...prev,
+          profileImage: "",
+          profileImageRequiresGeneration: false,
+        }));
+        setEnhancedImage("");
       }
     } finally {
       if (enhanceAbortRef.current === controller) {
@@ -208,8 +277,32 @@ export default function SettingsPage() {
     enhanceAbortRef.current?.abort();
     enhanceAbortRef.current = null;
     setImageEnhancing(false);
+    setEnhancedImage("");
     setEnhanceError("");
-  }, []);
+    setBodyError("");
+    setValidationField(null);
+
+    const discardUploadedPhoto = async () => {
+      if (!bodyProfile.profileImage) return;
+
+      try {
+        await fetch("/api/users/me/body-profile/photo?target=original", {
+          ...withAuthRequest({ method: "DELETE" }),
+        });
+      } catch {
+        // Ignore cancellation cleanup failures.
+      } finally {
+        setBodyProfile((prev) => ({
+          ...prev,
+          profileImage: "",
+          profileImageRequiresGeneration: false,
+        }));
+        await refreshUser();
+      }
+    };
+
+    void discardUploadedPhoto();
+  }, [bodyProfile.profileImage, refreshUser]);
 
   const handleDeletePhoto = useCallback(async (target: "original" | "enhanced") => {
     setDeletingPhoto(target);
@@ -241,6 +334,45 @@ export default function SettingsPage() {
     e.preventDefault();
     setBodyError("");
     setBodySuccess("");
+
+    if (!String(enhancedImage || "").trim()) {
+      setValidationField("photo");
+      setBodyError(
+        bodyProfile.profileImage
+          ? "Enhanced profile picture is required before saving."
+          : "Upload and enhance a profile picture before saving."
+      );
+      return;
+    }
+
+    const requiredFields = [
+      bodyProfile.heightCm,
+      bodyProfile.weightKg,
+      bodyProfile.gender,
+      bodyProfile.topSize,
+      bodyProfile.bottomSize,
+      bodyProfile.shoeSize,
+    ];
+    if (requiredFields.some((value) => !String(value || "").trim())) {
+      const missingFocusableField = getFirstMissingFocusableField();
+      setValidationField(missingFocusableField);
+      setBodyError("Please fill in the required field.");
+      if (missingFocusableField === "heightCm") {
+        heightRef.current?.focus();
+      } else if (missingFocusableField === "weightKg") {
+        weightRef.current?.focus();
+      } else if (missingFocusableField === "gender") {
+        genderRef.current?.focus();
+      } else if (missingFocusableField === "topSize") {
+        topSizeRef.current?.focus();
+      } else if (missingFocusableField === "bottomSize") {
+        bottomSizeRef.current?.focus();
+      } else if (missingFocusableField === "shoeSize") {
+        shoeSizeRef.current?.focus();
+      }
+      return;
+    }
+
     setBodyLoading(true);
 
     try {
@@ -264,6 +396,7 @@ export default function SettingsPage() {
       if (!res.ok) {
         setBodyError(data.error || "Unable to save body profile.");
       } else {
+        setValidationField(null);
         setBodyProfile({
           heightCm: data.user?.bodyProfile?.heightCm || "",
           weightKg: data.user?.bodyProfile?.weightKg || "",
@@ -278,6 +411,7 @@ export default function SettingsPage() {
             data.user?.bodyProfile?.profileImageRequiresGeneration
           ),
         });
+        setValidationField(null);
         await refreshUser();
         router.replace("/studio");
       }
@@ -322,12 +456,7 @@ export default function SettingsPage() {
             {enhanceError}
           </div>
         )}
-        <form onSubmit={handleBodyProfileUpdate} className="max-w-3xl space-y-4">
-          {bodyError && (
-            <div className="border border-[#430C05] bg-[#faf3f2] px-4 py-3 text-xs text-[#430C05]">
-              {bodyError}
-            </div>
-          )}
+        <form onSubmit={handleBodyProfileUpdate} noValidate className="max-w-3xl space-y-4">
             {bodySuccess && (
             <div className="border border-[#d8c9b8] bg-[#f1ede8] px-4 py-3 text-xs text-[#6b6055]">
               {bodySuccess}
@@ -340,7 +469,7 @@ export default function SettingsPage() {
                   type="button"
                   onClick={handleCancelGeneratePhoto}
                   aria-label="Cancel enhancement"
-                  className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center border border-border-color bg-background text-sm text-text-secondary hover:bg-hover"
+                  className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center bg-foreground text-sm text-background transition-colors hover:bg-accent"
                 >
                   ×
                 </button>
@@ -350,11 +479,13 @@ export default function SettingsPage() {
             )}
           <div className={`grid grid-cols-1 md:grid-cols-[auto_1fr] gap-6 items-start transition-all duration-300 ${imageEnhancing ? "pointer-events-none select-none blur-[2px] opacity-60" : ""}`}>
             <div className="flex flex-col items-center gap-3">
-              <div className="flex w-[332px] justify-center gap-3">
+              <div className={`flex ${photoActionWidthClass} justify-start`}>
                 {/* Original — hidden once enhanced photo is ready */}
                 {showOriginal && (
                 <div className="w-[160px] space-y-1.5">
-                  <p className="text-[10px] uppercase tracking-wider text-text-secondary text-center">Original</p>
+                  <p className="text-[10px] uppercase tracking-wider text-text-secondary text-center">
+                    Profile Photo <span className="text-[#430C05]">*</span>
+                  </p>
                   <div
                     className={`aspect-[4/5] border border-border-color bg-hover overflow-hidden relative group ${
                       originalTileInteractive ? "cursor-zoom-in" : ""
@@ -377,6 +508,9 @@ export default function SettingsPage() {
                   >
                     {hasOriginal ? (
                       <div className="h-full w-full">
+                        <span className="absolute left-2 top-2 z-10 bg-background/85 px-2 py-1 text-[9px] uppercase tracking-wider text-text-secondary">
+                          Original
+                        </span>
                         <img
                           src={bodyProfile.profileImage}
                           alt="Original photo"
@@ -396,6 +530,9 @@ export default function SettingsPage() {
                       </div>
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-[10px] uppercase tracking-wider text-text-secondary">
+                        <span className="absolute left-2 top-2 bg-background/85 px-2 py-1 text-[9px] uppercase tracking-wider text-text-secondary">
+                          Original
+                        </span>
                         <span>No image yet</span>
                       </div>
                     )}
@@ -409,7 +546,7 @@ export default function SettingsPage() {
                   style={{
                     width: showEnhanced ? 160 : 0,
                     opacity: showEnhanced ? 1 : 0,
-                    marginLeft: showEnhanced ? 12 : 0,
+                    marginLeft: showImageGap ? 12 : 0,
                   }}
                 >
                   <div className="w-[160px] space-y-1.5">
@@ -468,105 +605,150 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div className="flex w-[332px] flex-col gap-2">
-                {(hasOriginal || hasEnhanced) && (
+              <div className={`flex ${photoActionWidthClass} flex-col gap-2`}>
+                {showGenerateButton && (
                   <button
                     type="button"
-                    onClick={() => handleDeletePhoto("original")}
+                    onClick={handleGeneratePhoto}
+                    disabled={remainingGenerations <= 0}
+                    className="w-full bg-foreground px-6 py-3 text-xs font-medium tracking-wide uppercase text-background transition-colors hover:bg-accent cursor-pointer disabled:opacity-50"
+                    aria-label="Enhance photo"
+                  >
+                    Enhance photo
+                  </button>
+                )}
+                {showDeleteControls && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeletePhoto("enhanced")}
                     disabled={deletingPhoto !== null}
-                    className="flex w-full items-center justify-center py-2.5 text-xs font-medium tracking-wide uppercase text-center transition-all duration-300 border border-[#430C05] text-[#430C05] hover:bg-[#faf3f2] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="w-full bg-foreground px-6 py-3 text-xs font-medium tracking-wide uppercase text-background transition-colors hover:bg-accent cursor-pointer disabled:opacity-50"
                     aria-label="Delete photo"
                   >
                     {deletingPhoto !== null ? "Deleting..." : "Delete photo"}
                   </button>
                 )}
+                {validationField === "photo" && !showUploadControls && bodyError && (
+                  <p className={requiredFieldErrorClass}>{bodyError}</p>
+                )}
               </div>
 
-              <label
-                className={`flex items-center justify-center py-2.5 text-xs font-medium tracking-wide uppercase text-center transition-all duration-300 ${
-                  imageEnhancing || remainingUploads <= 0
-                    ? "border border-border-color text-text-secondary cursor-not-allowed opacity-60 pointer-events-none"
-                    : "border border-border-color text-foreground hover:bg-hover cursor-pointer"
-                }`}
-                style={{ width: 332 }}
-              >
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handlePhotoUpload}
-                  disabled={imageEnhancing}
-                  className="hidden"
-                />
-                Upload File
-              </label>
+              {showUploadControls && (
+                <>
+                  <div className={`${photoActionWidthClass} space-y-1.5`}>
+                    <label
+                      className={`flex items-center justify-center py-2.5 text-xs font-medium tracking-wide uppercase text-center transition-all duration-300 outline-none ${
+                        imageEnhancing || remainingUploads <= 0
+                          ? "w-full bg-foreground px-6 py-3 text-xs font-medium tracking-wide uppercase text-background transition-colors hover:bg-accent cursor-pointer disabled:opacity-50 pointer-events-none"
+                          : `w-full bg-foreground px-6 py-3 text-xs font-medium tracking-wide uppercase text-background transition-colors hover:bg-accent cursor-pointer disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+                              validationField === "photo" ? invalidFieldClass : "border-border-color"
+                            }`
+                      }`}
+                    >
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handlePhotoUpload}
+                        disabled={imageEnhancing}
+                        className="hidden"
+                      />
+                      Upload File
+                    </label>
+                    {validationField === "photo" && bodyError && (
+                      <p className={requiredFieldErrorClass}>{bodyError}</p>
+                    )}
+                  </div>
 
-              <p className="text-[10px] uppercase tracking-[0.18em] text-text-secondary text-center">
-                {remainingUploads > 0
-                  ? `${remainingUploads} upload${remainingUploads === 1 ? "" : "s"} left`
-                  : "Upload limit reached"}
-              </p>
-              <p className="text-[10px] uppercase tracking-[0.18em] text-text-secondary text-center">
-                {remainingGenerations > 0
-                  ? `${remainingGenerations} generation${remainingGenerations === 1 ? "" : "s"} left`
-                  : "Generation limit reached"}
-              </p>
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-text-secondary text-center">
+                    {remainingUploads > 0
+                      ? `${remainingUploads} upload${remainingUploads === 1 ? "" : "s"} left`
+                      : "Upload limit reached"}
+                  </p>
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-text-secondary text-center">
+                    {remainingGenerations > 0
+                      ? `${remainingGenerations} generation${remainingGenerations === 1 ? "" : "s"} left`
+                      : "Generation limit reached"}
+                  </p>
+                </>
+              )}
 
             </div>
 
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
-                    Height (cm)
+                  <label className={requiredLabelClass}>
+                    Height (cm) <span className="text-[#430C05]">*</span>
                   </label>
                   <input
                     type="text"
                     value={bodyProfile.heightCm}
                     onChange={(e) => setBodyProfile({ ...bodyProfile, heightCm: e.target.value })}
                     required
+                    ref={heightRef}
                     placeholder="e.g. 180"
-                    className="w-full border border-border-color bg-transparent px-4 py-3 text-sm"
+                    className={`${fieldClass} ${
+                      validationField === "heightCm" ? invalidFieldClass : ""
+                    }`}
                   />
+                  {validationField === "heightCm" && bodyError && (
+                    <p className={requiredFieldErrorClass}>{bodyError}</p>
+                  )}
                 </div>
                 <div>
-                  <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
-                    Weight (kg)
+                  <label className={requiredLabelClass}>
+                    Weight (kg) <span className="text-[#430C05]">*</span>
                   </label>
                   <input
                     type="text"
                     value={bodyProfile.weightKg}
                     onChange={(e) => setBodyProfile({ ...bodyProfile, weightKg: e.target.value })}
                     required
+                    ref={weightRef}
                     placeholder="e.g. 75"
-                    className="w-full border border-border-color bg-transparent px-4 py-3 text-sm"
+                    className={`${fieldClass} ${
+                      validationField === "weightKg" ? invalidFieldClass : ""
+                    }`}
                   />
+                  {validationField === "weightKg" && bodyError && (
+                    <p className={requiredFieldErrorClass}>{bodyError}</p>
+                  )}
                 </div>
                 <div>
-                  <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
-                    Gender
+                  <label className={requiredLabelClass}>
+                    Gender <span className="text-[#430C05]">*</span>
                   </label>
                   <select
                     value={bodyProfile.gender}
                     onChange={(e) => setBodyProfile({ ...bodyProfile, gender: e.target.value })}
                     required
-                    className="w-full border border-border-color bg-transparent px-4 py-3 text-sm"
+                    ref={genderRef}
+                    className={`${fieldClass} ${
+                      validationField === "gender" ? invalidFieldClass : ""
+                    }`}
                   >
                     <option value="">Select gender</option>
                     <option value="men">Men</option>
                     <option value="women">Women</option>
                   </select>
+                  {validationField === "gender" && bodyError && (
+                    <p className={requiredFieldErrorClass}>{bodyError}</p>
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
-                    Top Size
+                  <label className={requiredLabelClass}>
+                    Top Size <span className="text-[#430C05]">*</span>
                   </label>
                   <select
                     value={bodyProfile.topSize}
                     onChange={(e) => setBodyProfile({ ...bodyProfile, topSize: e.target.value })}
                     required
-                    className="w-full border border-border-color bg-transparent px-4 py-3 text-sm"
+                    ref={topSizeRef}
+                    className={`${fieldClass} ${
+                      validationField === "topSize" ? invalidFieldClass : ""
+                    }`}
                   >
                     <option value="">Select size</option>
                     <option value="XS">XS</option>
@@ -576,45 +758,65 @@ export default function SettingsPage() {
                     <option value="XL">XL</option>
                     <option value="XXL">XXL</option>
                   </select>
+                  {validationField === "topSize" && bodyError && (
+                    <p className={requiredFieldErrorClass}>{bodyError}</p>
+                  )}
                 </div>
                 <div>
-                  <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
-                    Bottom Size
+                  <label className={requiredLabelClass}>
+                    Bottom Size <span className="text-[#430C05]">*</span>
                   </label>
                   <select
                     value={bodyProfile.bottomSize}
                     onChange={(e) => setBodyProfile({ ...bodyProfile, bottomSize: e.target.value })}
                     required
-                    className="w-full border border-border-color bg-transparent px-4 py-3 text-sm"
+                    ref={bottomSizeRef}
+                    className={`${fieldClass} ${
+                      validationField === "bottomSize" ? invalidFieldClass : ""
+                    }`}
                   >
                     <option value="">Select size</option>
                     {[36, 38, 40, 42, 44, 46, 48].map((size) => (
                       <option key={size} value={String(size)}>{size}</option>
                     ))}
                   </select>
+                  {validationField === "bottomSize" && bodyError && (
+                    <p className={requiredFieldErrorClass}>{bodyError}</p>
+                  )}
                 </div>
                 <div>
-                  <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
-                    Shoe Size
+                  <label className={requiredLabelClass}>
+                    Shoe Size <span className="text-[#430C05]">*</span>
                   </label>
                   <select
                     value={bodyProfile.shoeSize}
                     onChange={(e) => setBodyProfile({ ...bodyProfile, shoeSize: e.target.value })}
                     required
-                    className="w-full border border-border-color bg-transparent px-4 py-3 text-sm"
+                    ref={shoeSizeRef}
+                    className={`${fieldClass} ${
+                      validationField === "shoeSize" ? invalidFieldClass : ""
+                    }`}
                   >
                     <option value="">Select size</option>
                     {[38, 39, 40, 41, 42, 43, 44, 45, 46, 47].map((size) => (
                       <option key={size} value={String(size)}>{size}</option>
                     ))}
                   </select>
+                  {validationField === "shoeSize" && bodyError && (
+                    <p className={requiredFieldErrorClass}>{bodyError}</p>
+                  )}
                 </div>
               </div>
-              <div className="flex w-full flex-col gap-3 md:flex-row md:items-stretch">
+              <div className="flex w-full flex-col gap-3 md:items-end">
+                {bodyError && !validationField && (
+                  <div className="border border-[#430C05] bg-[#faf3f2] px-4 py-3 text-xs text-[#430C05]">
+                    {bodyError}
+                  </div>
+                )}
                 <button
                   type="submit"
-                  disabled={bodyLoading || imageEnhancing || !hasEnhanced}
-                  className="flex-1 bg-foreground px-6 py-3 text-xs font-medium tracking-wide uppercase text-background transition-colors hover:bg-accent cursor-pointer disabled:opacity-50"
+                  disabled={bodyLoading || imageEnhancing}
+                  className="bg-foreground px-6 py-3 text-xs font-medium tracking-wide uppercase text-background transition-colors hover:bg-accent cursor-pointer disabled:opacity-50"
                 >
                   {bodyLoading ? "Saving..." : "Save Studio Profile"}
                 </button>

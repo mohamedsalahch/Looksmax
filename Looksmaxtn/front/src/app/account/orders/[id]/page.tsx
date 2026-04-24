@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, use } from "react";
-import Link from "next/link";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { formatStoreDate } from "@/lib/dateFormat";
 import { withAuthRequest } from "@/lib/authClient";
@@ -10,7 +9,6 @@ interface OrderDetail {
   _id: string;
   totalPrice: number;
   orderStatus: string;
-  isArchived?: boolean;
   paymentMethod: string;
   createdAt: string;
   shippingAddress: {
@@ -34,7 +32,6 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const { id } = use(params);
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [archiving, setArchiving] = useState(false);
 
   useEffect(() => {
     fetch(`/api/orders/${id}`, withAuthRequest())
@@ -55,26 +52,6 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     }
   };
 
-  const handleArchive = async () => {
-    setArchiving(true);
-    try {
-      const response = await fetch(`/api/orders/${id}`, {
-        ...withAuthRequest({
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ archive: true }),
-        }),
-      });
-      if (response.ok) {
-        window.location.href = "/account/orders";
-      }
-    } catch {
-      // Keep current screen on failure.
-    } finally {
-      setArchiving(false);
-    }
-  };
-
   if (loading) return <p className="text-xs text-text-secondary">Loading order...</p>;
   if (!order) return <p className="text-sm text-text-secondary">Order not found.</p>;
 
@@ -86,9 +63,6 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <Link href="/account/orders" className="text-xs text-text-secondary hover:text-foreground transition-colors mb-2 inline-block">
-            ← Back to Orders
-          </Link>
           <h2 className="text-sm font-semibold uppercase tracking-wider">
             Order #{order._id.slice(-8).toUpperCase()}
           </h2>
@@ -98,30 +72,10 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             })}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {order.isArchived ? (
-            <span className="text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider text-neutral-700 bg-neutral-200">
-              archived
-            </span>
-          ) : null}
-          <span className={`text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider ${statusColor(order.orderStatus)}`}>
-            {order.orderStatus}
-          </span>
-        </div>
+        <span className={`text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider ${statusColor(order.orderStatus)}`}>
+          {order.orderStatus}
+        </span>
       </div>
-
-      {!order.isArchived ? (
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={() => void handleArchive()}
-            disabled={archiving}
-            className="border border-border-color px-4 py-2 text-[10px] uppercase tracking-[0.18em] text-text-secondary transition-colors hover:text-foreground disabled:opacity-50"
-          >
-            {archiving ? "Archiving..." : "Archive Order"}
-          </button>
-        </div>
-      ) : null}
 
       {/* Progress */}
       {!["canceled", "returned"].includes(order.orderStatus) && (
@@ -133,9 +87,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               }`}>
                 {i <= currentStep ? "✓" : i + 1}
               </div>
-              {i < steps.length - 1 && (
-                <div className={`flex-1 h-0.5 ${i < currentStep ? "bg-foreground" : "bg-border-color"}`} />
-              )}
+              <div className={`flex-1 h-0.5 ${i < currentStep ? "bg-foreground" : "bg-border-color"}`} />
             </div>
           ))}
         </div>

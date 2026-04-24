@@ -113,6 +113,7 @@ export async function GET(req: NextRequest) {
       : productsWithAvailability;
 
     const filteredProducts = searchMatchedProducts.filter((product) => {
+      if (product.isActive === false) return false;
       const stock = Math.max(product.stock ?? 0, 0);
       const hasSelectableSize = product.sizeAvailability
         ? Object.values(product.sizeAvailability).some((sizeInfo) => sizeInfo.available)
@@ -120,10 +121,8 @@ export async function GET(req: NextRequest) {
       if (brand && product.brand !== brand) return false;
       if (size && !(product.sizes || []).includes(size)) return false;
       if (color && !(product.colors || []).includes(color)) return false;
-      const blockedByOrder = Boolean(product.blockedByOrder);
       if (availability === "out-of-stock") return !hasSelectableSize;
       if (availability === "in-stock") return hasSelectableSize;
-      if (!hasSelectableSize && !blockedByOrder && product.isActive === false) return false;
       if (Number.isFinite(priceMin) && product.price < priceMin) return false;
       if (Number.isFinite(priceMax) && priceMax > 0 && product.price > priceMax) return false;
       return true;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type SharedOutfitViewerProps = {
   name: string;
@@ -18,6 +18,13 @@ export default function SharedOutfitViewer({
     return images[zoomedImageIndex] || "";
   }, [images, zoomedImageIndex]);
 
+  useEffect(() => {
+    document.body.classList.toggle("shared-outfit-zoom-open", zoomedImageIndex !== null);
+    return () => {
+      document.body.classList.remove("shared-outfit-zoom-open");
+    };
+  }, [zoomedImageIndex]);
+
   const showPreviousImage = () => {
     if (zoomedImageIndex === null || images.length <= 1) return;
     setZoomedImageIndex(zoomedImageIndex === 0 ? images.length - 1 : zoomedImageIndex - 1);
@@ -32,21 +39,19 @@ export default function SharedOutfitViewer({
     <>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {images.map((image, index) => (
-          <div key={index} className="relative border border-border-color bg-hover p-4">
+          <button
+            key={index}
+            type="button"
+            onClick={() => setZoomedImageIndex(index)}
+            className="relative border border-border-color bg-hover p-4 text-left cursor-zoom-in"
+            aria-label={`Zoom ${name} ${index === 0 ? "front" : "back"}`}
+          >
             <img
               src={image}
               alt={`${name} ${index === 0 ? "front" : "back"}`}
               className="w-full max-h-[70vh] object-contain"
             />
-            <button
-              type="button"
-              onClick={() => setZoomedImageIndex(index)}
-              className="absolute right-6 top-6 flex h-8 w-8 items-center justify-center border border-[#00000012] bg-[#ede1ce] text-lg text-[#1a1a1a]"
-              aria-label={`Zoom ${name} ${index === 0 ? "front" : "back"}`}
-            >
-              +
-            </button>
-          </div>
+          </button>
         ))}
       </div>
 

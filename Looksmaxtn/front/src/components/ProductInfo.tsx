@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
-import { reserveProduct, subscribeToReservationChanges } from "@/lib/reservations";
+import { getReservationKey, reserveProduct, subscribeToReservationChanges } from "@/lib/reservations";
 import { subscribeToAvailabilityStream } from "@/lib/availabilityStream";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { getConditionColor, getConditionLabel, getConditionPercent } from "@/lib/productCondition";
@@ -107,7 +107,11 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
   const refreshAvailability = () => {
     if (!product.id) return;
 
-    fetch(`/api/products/${product.id}`, { cache: "no-store" })
+    const rk = getReservationKey();
+    const url = rk
+      ? `/api/products/${product.id}?rk=${encodeURIComponent(rk)}`
+      : `/api/products/${product.id}`;
+    fetch(url, { cache: "no-store" })
       .then((response) => response.json())
       .then((data) => {
         if (!data.product) return;
@@ -483,7 +487,7 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
             <button
               type="button"
               onClick={handleAddToTryOn}
-              className="w-full py-3.5 text-sm font-medium tracking-wide uppercase transition-all duration-300 cursor-pointer border border-border-color text-foreground hover:bg-hover"
+              className="w-full py-3.5 text-sm font-medium tracking-wide uppercase transition-all duration-300 cursor-pointer border border-border-color bg-surface/40 text-foreground hover:bg-surface/70"
             >
               TRY ON
             </button>

@@ -42,9 +42,11 @@ export default function CheckoutPage() {
     zip: user?.address?.zip || "",
     phone: user?.address?.phone || "",
   });
+  const [guestEmail, setGuestEmail] = useState("");
   const [submitLoading, setSubmitLoading] = useState(false);
   const [error, setError] = useState("");
   const [orderPlaced, setOrderPlaced] = useState<string | null>(null);
+  const [guestTrackingUrl, setGuestTrackingUrl] = useState<string | null>(null);
   const unavailableItems = items.filter((item) => item.isUnavailable);
   const hasUnavailableItems = unavailableItems.length > 0;
 
@@ -136,33 +138,19 @@ export default function CheckoutPage() {
   }, [appliedCoupon?.code, totalPrice]);
 
   useEffect(() => {
-    if (!orderPlaced) return;
+    if (!orderPlaced || guestTrackingUrl) return;
 
     const timeout = window.setTimeout(() => {
       router.replace("/");
     }, 5000);
 
     return () => window.clearTimeout(timeout);
-  }, [orderPlaced, router]);
-
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.replace(`/login?next=${encodeURIComponent("/checkout")}`);
-    }
-  }, [authLoading, router, user]);
+  }, [orderPlaced, router, guestTrackingUrl]);
 
   if (authLoading) {
     return (
       <div className="pt-[72px] min-h-screen flex items-center justify-center">
         <p className="text-xs text-text-secondary uppercase tracking-wider">Loading...</p>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="pt-[72px] min-h-screen flex items-center justify-center">
-        <p className="text-xs text-text-secondary uppercase tracking-wider">Redirecting to login...</p>
       </div>
     );
   }
@@ -205,13 +193,27 @@ export default function CheckoutPage() {
           <p className="text-xs text-text-secondary mb-6">
             You will pay when you receive your order.
           </p>
+          {guestTrackingUrl && (
+            <p className="text-xs text-text-secondary mb-4">
+              We emailed a tracking link to your inbox. You can also save this link to follow your order status.
+            </p>
+          )}
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Link
-              href={`/account/orders`}
-              className="bg-foreground text-background px-6 py-3 text-xs font-medium tracking-wide uppercase hover:bg-accent transition-colors"
-            >
-              View My Orders
-            </Link>
+            {guestTrackingUrl ? (
+              <Link
+                href={guestTrackingUrl}
+                className="bg-foreground text-background px-6 py-3 text-xs font-medium tracking-wide uppercase hover:bg-accent transition-colors"
+              >
+                Track My Order
+              </Link>
+            ) : (
+              <Link
+                href={`/account/orders`}
+                className="bg-foreground text-background px-6 py-3 text-xs font-medium tracking-wide uppercase hover:bg-accent transition-colors"
+              >
+                View My Orders
+              </Link>
+            )}
             <Link
               href="/"
               className="border border-foreground text-foreground px-6 py-3 text-xs font-medium tracking-wide uppercase hover:bg-hover transition-colors"
@@ -231,6 +233,13 @@ export default function CheckoutPage() {
       setError("Some products in your cart are already taken. Remove them manually to continue.");
       return;
     }
+    if (!user) {
+      const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRe.test(guestEmail.trim())) {
+        setError("Please enter a valid email address so we can send your order tracking link.");
+        return;
+      }
+    }
     setSubmitLoading(true);
 
     try {
@@ -242,18 +251,21 @@ export default function CheckoutPage() {
         quantity: item.quantity,
       }));
 
-      const res = await fetch("/api/orders", {
-        ...withAuthRequest({
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            items: orderItems,
-            shippingAddress: address,
-            cartKey: getReservationKey(),
-            couponCode: appliedCoupon?.code || couponCode.trim() || "",
-          }),
-        }),
-      });
+      const payload = {
+        items: orderItems,
+        shippingAddress: address,
+        cartKey: getReservationKey(),
+        couponCode: appliedCoupon?.code || couponCode.trim() || "",
+        ...(user ? {} : { guestEmail: guestEmail.trim() }),
+      };
+
+      const init: RequestInit = {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      };
+
+      const res = await fetch("/api/orders", user ? withAuthRequest(init) : init);
 
       const data = await res.json();
       if (!res.ok) {
@@ -266,6 +278,7 @@ export default function CheckoutPage() {
       setCouponCode("");
       setAppliedCoupon(null);
       setCouponError("");
+      setGuestTrackingUrl(typeof data.trackingUrl === "string" ? data.trackingUrl : null);
       setOrderPlaced(data.order._id);
     } catch {
       setError("Network error. Please try again.");
@@ -282,7 +295,7 @@ export default function CheckoutPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
             {/* Left — Shipping */}
             <div>
-              <h2 className="text-xs font-semibold uppercase tracking-wider mb-6 text-text-secondary">
+              <h2 className="text-[10px] uppercase tracking-[0.28em] text-text-secondary mb-6">
                 Shipping Address
               </h2>
 
@@ -292,7 +305,38 @@ export default function CheckoutPage() {
                 </div>
               )}
 
+              {!user && (
+                <div className="mb-4 border border-border-color bg-surface/40 px-4 py-3 text-xs text-text-secondary">
+                  Checking out as guest.{" "}
+                  <Link
+                    href={`/login?next=${encodeURIComponent("/checkout")}`}
+                    className="text-foreground underline underline-offset-2 hover:text-accent"
+                  >
+                    Sign in
+                  </Link>{" "}
+                  to save your order to your account.
+                </div>
+              )}
+
               <div className="space-y-4">
+                {!user && (
+                  <div>
+                    <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={guestEmail}
+                      onChange={(e) => setGuestEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm focus:outline-none focus:border-foreground transition-colors placeholder:text-text-secondary/70"
+                    />
+                    <p className="mt-1 text-[10px] text-text-secondary">
+                      We will email you a link to track your order status.
+                    </p>
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
                     Full Name
@@ -302,7 +346,7 @@ export default function CheckoutPage() {
                     required
                     value={address.fullName}
                     onChange={(e) => setAddress({ ...address, fullName: e.target.value })}
-                    className="w-full border border-border-color bg-transparent px-4 py-3 text-sm focus:border-foreground transition-colors"
+                    className="w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm focus:outline-none focus:border-foreground transition-colors placeholder:text-text-secondary/70"
                   />
                 </div>
                 <div>
@@ -314,7 +358,7 @@ export default function CheckoutPage() {
                     required
                     value={address.street}
                     onChange={(e) => setAddress({ ...address, street: e.target.value })}
-                    className="w-full border border-border-color bg-transparent px-4 py-3 text-sm focus:border-foreground transition-colors"
+                    className="w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm focus:outline-none focus:border-foreground transition-colors placeholder:text-text-secondary/70"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -327,7 +371,7 @@ export default function CheckoutPage() {
                       required
                       value={address.city}
                       onChange={(e) => setAddress({ ...address, city: e.target.value })}
-                      className="w-full border border-border-color bg-transparent px-4 py-3 text-sm focus:border-foreground transition-colors"
+                      className="w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm focus:outline-none focus:border-foreground transition-colors placeholder:text-text-secondary/70"
                     />
                   </div>
                   <div>
@@ -339,7 +383,7 @@ export default function CheckoutPage() {
                       required
                       value={address.state}
                       onChange={(e) => setAddress({ ...address, state: e.target.value })}
-                      className="w-full border border-border-color bg-transparent px-4 py-3 text-sm focus:border-foreground transition-colors"
+                      className="w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm focus:outline-none focus:border-foreground transition-colors placeholder:text-text-secondary/70"
                     />
                   </div>
                 </div>
@@ -353,7 +397,7 @@ export default function CheckoutPage() {
                       required
                       value={address.zip}
                       onChange={(e) => setAddress({ ...address, zip: e.target.value })}
-                      className="w-full border border-border-color bg-transparent px-4 py-3 text-sm focus:border-foreground transition-colors"
+                      className="w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm focus:outline-none focus:border-foreground transition-colors placeholder:text-text-secondary/70"
                     />
                   </div>
                   <div>
@@ -365,7 +409,7 @@ export default function CheckoutPage() {
                       required
                       value={address.phone}
                       onChange={(e) => setAddress({ ...address, phone: e.target.value })}
-                      className="w-full border border-border-color bg-transparent px-4 py-3 text-sm focus:border-foreground transition-colors"
+                      className="w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm focus:outline-none focus:border-foreground transition-colors placeholder:text-text-secondary/70"
                     />
                   </div>
                 </div>
@@ -392,10 +436,10 @@ export default function CheckoutPage() {
 
             {/* Right — Order Summary */}
             <div>
-              <h2 className="text-xs font-semibold uppercase tracking-wider mb-6 text-text-secondary">
+              <h2 className="text-[10px] uppercase tracking-[0.28em] text-text-secondary mb-6">
                 Order Summary
               </h2>
-              <div className="border border-border-color divide-y divide-border-color">
+              <div className="divide-y divide-border-color/40">
                 {items.map((item) => (
                   <div
                     key={item.id}
@@ -404,7 +448,7 @@ export default function CheckoutPage() {
                     }`}
                   >
                     <div
-                      className={`w-14 h-20 shrink-0 overflow-hidden rounded-sm ${
+                      className={`w-32 h-44 shrink-0 overflow-hidden ${
                         item.isUnavailable ? "bg-[#f6ddd7]" : "bg-surface"
                       }`}
                     >
@@ -423,12 +467,23 @@ export default function CheckoutPage() {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate">{item.name}</p>
-                      <p className="text-[10px] text-text-secondary mt-0.5">
-                        {item.productType === "perfume"
-                          ? `Fragrance · Qty: ${item.quantity}`
-                          : `${item.size || ""}${item.size && item.color ? " · " : ""}${item.color || ""} · Qty: ${item.quantity}`}
-                      </p>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium truncate">{item.name}</p>
+                          <p className="text-[10px] text-text-secondary mt-0.5">
+                            {item.productType === "perfume"
+                              ? `Fragrance · Qty: ${item.quantity}`
+                              : `${item.size || ""}${item.size && item.color ? " · " : ""}${item.color || ""} · Qty: ${item.quantity}`}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveItem(item.id)}
+                          className="shrink-0 text-xs uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-foreground hover:decoration-foreground"
+                        >
+                          Remove
+                        </button>
+                      </div>
                       {item.isUnavailable && (
                         <p className="text-[10px] text-[#430C05] mt-1">
                           {item.unavailableReason || "This product is already taken."}
@@ -437,40 +492,31 @@ export default function CheckoutPage() {
                       <p className="text-xs font-medium mt-1">
                         {formatTndPrice(parseFloat(item.price) * item.quantity)}
                       </p>
-                      <div className="mt-2 flex items-center gap-3 flex-wrap">
-                        <div className="flex items-center border border-border-color">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (item.quantity === 1) {
-                                void handleRemoveItem(item.id);
-                                return;
-                              }
-                              handleUpdateQuantity(item.id, item.quantity - 1);
-                            }}
-                            className="w-7 h-7 flex items-center justify-center text-xs hover:bg-hover transition-colors"
-                            aria-label="Decrease quantity"
-                          >
-                            −
-                          </button>
-                          <span className="w-8 h-7 flex items-center justify-center text-xs font-medium border-x border-border-color">
-                            {item.quantity}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
-                            className="w-7 h-7 flex items-center justify-center text-xs hover:bg-hover transition-colors"
-                            aria-label="Increase quantity"
-                          >
-                            +
-                          </button>
-                        </div>
+                      <div className="mt-2 flex items-center gap-3">
                         <button
                           type="button"
-                          onClick={() => handleRemoveItem(item.id)}
-                          className="text-[10px] uppercase tracking-[0.2em] text-text-secondary hover:text-foreground transition-colors"
+                          onClick={() => {
+                            if (item.quantity === 1) {
+                              void handleRemoveItem(item.id);
+                              return;
+                            }
+                            handleUpdateQuantity(item.id, item.quantity - 1);
+                          }}
+                          className="text-sm leading-none text-text-secondary hover:text-foreground transition-colors"
+                          aria-label="Decrease quantity"
                         >
-                          Remove
+                          −
+                        </button>
+                        <span className="min-w-[1.5rem] border-b border-border-color py-1 text-center text-xs font-medium tabular-nums">
+                          {item.quantity}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
+                          className="text-sm leading-none text-text-secondary hover:text-foreground transition-colors"
+                          aria-label="Increase quantity"
+                        >
+                          +
                         </button>
                       </div>
                     </div>
@@ -515,13 +561,13 @@ export default function CheckoutPage() {
                       value={couponCode}
                       onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
                       placeholder="Enter coupon code"
-                      className="flex-1 border border-border-color bg-transparent px-4 py-3 text-sm focus:border-foreground transition-colors uppercase"
+                      className="flex-1 border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm focus:outline-none focus:border-foreground transition-colors uppercase placeholder:text-text-secondary/70"
                     />
                     <button
                       type="button"
                       onClick={() => void validateCoupon(couponCode)}
                       disabled={couponLoading}
-                      className="border border-foreground px-5 py-3 text-xs font-medium uppercase tracking-wide hover:bg-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="self-end pb-2 inline-flex items-center text-xs uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-foreground hover:decoration-foreground disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {couponLoading ? "Checking..." : appliedCoupon ? "Recheck" : "Apply"}
                     </button>
@@ -561,7 +607,14 @@ export default function CheckoutPage() {
               </button>
 
               <p className="text-[10px] text-text-secondary text-center mt-3">
-                By placing this order you agree to our Terms & Conditions.
+                By placing this order you agree to our{" "}
+                <Link
+                  href="/terms-and-conditions"
+                  className="text-foreground underline underline-offset-2 hover:text-accent transition-colors"
+                >
+                  Terms & Conditions
+                </Link>
+                .
               </p>
             </div>
           </div>

@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import { getSession } from "@/store/lib/auth";
 import dbConnect from "@/store/lib/mongodb";
 import SavedOutfit from "@/store/models/SavedOutfit";
+import User from "@/store/models/User";
 
 export async function GET(
   _req: NextRequest,
@@ -58,6 +59,19 @@ export async function PUT(
     };
 
     await dbConnect();
+    const userObjectId = new mongoose.Types.ObjectId(session.userId);
+    const existingUser = await User.collection.findOne(
+      { _id: userObjectId },
+      { projection: { bodyProfile: 1 } }
+    );
+    const enhancedProfileImage = existingUser?.bodyProfile?.profileImageEnhanced || "";
+    if (!enhancedProfileImage) {
+      return NextResponse.json(
+        { error: "An enhanced profile picture is required to save an outfit." },
+        { status: 400 }
+      );
+    }
+
     const outfit = await SavedOutfit.findById(id);
     if (!outfit) return NextResponse.json({ error: "Outfit not found" }, { status: 404 });
     if (outfit.user?.toString() !== session.userId) {

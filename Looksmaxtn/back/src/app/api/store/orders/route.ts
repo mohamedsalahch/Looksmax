@@ -14,6 +14,9 @@ import {
   normalizeCouponCode,
 } from "@/lib/coupons";
 import mongoose from "mongoose";
+import crypto from "crypto";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function getSizeStockEntries(
   sizeStock: unknown
@@ -43,7 +46,7 @@ export async function GET() {
         .sort({ createdAt: -1 })
         .lean();
     } else {
-      orders = await Order.find({ user: session.userId, isArchived: { $ne: true } })
+      orders = await Order.find({ user: session.userId })
         .sort({ createdAt: -1 })
         .lean();
     }
@@ -61,13 +64,17 @@ export async function POST(req: NextRequest) {
 
   try {
     const session = await getSession();
-    if (!session) {
-      return NextResponse.json({ error: "Please login to place an order" }, { status: 401 });
-    }
 
     await dbConnect();
-    const auditActor = await getAuditActorFromSession(session);
-    const { items, shippingAddress, couponCode } = await req.json();
+    const auditActor = session ? await getAuditActorFromSession(session) : null;
+    const { items, shippingAddress, couponCode, guestEmail, cartKey } = await req.json();
+
+    const normalizedGuestEmail = typeof guestEmail === "string" ? guestEmail.trim().toLowerCase() : "";
+    if (!session) {
+      if (!normalizedGuestEmail || !EMAIL_RE.test(normalizedGuestEmail)) {
+        return NextResponse.json({ error: "A valid email is required to place an order" }, { status: 400 });
+      }
+    }
 
     if (!items || items.length === 0) {
       return NextResponse.json({ error: "No items in order" }, { status: 400 });
@@ -219,10 +226,13 @@ export async function POST(req: NextRequest) {
     const shippingFee = 0;
     const totalPrice = Math.max(0, subtotalPrice - couponDiscountAmount + shippingFee);
 
+    const guestAccessToken = session ? "" : crypto.randomBytes(24).toString("hex");
+
     const order = await Order.create({
-      user: session.userId,
+      user: session?.userId || null,
+      guestEmail: session ? "" : normalizedGuestEmail,
+      guestAccessToken,
       items: orderItems,
-      isArchived: false,
       shippingAddress,
       paymentMethod: "cod",
       orderStatus: "processing",
@@ -238,15 +248,27 @@ export async function POST(req: NextRequest) {
     });
 
     try {
-      const customer = await User.findById(session.userId).select("name email").lean();
-      if (customer?.email) {
-        const frontendBaseUrl = (process.env.FRONTEND_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
+      const frontendBaseUrl = (process.env.FRONTEND_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
+      const orderNumber = order._id.toString().slice(-8).toUpperCase();
+
+      if (session) {
+        const customer = await User.findById(session.userId).select("name email").lean();
+        if (customer?.email) {
+          await sendOrderStatusEmail({
+            to: customer.email,
+            name: customer.name || shippingAddress.fullName || "Customer",
+            orderNumber,
+            orderStatus: "processing",
+            orderUrl: `${frontendBaseUrl}/account/orders/${order._id.toString()}`,
+          });
+        }
+      } else {
         await sendOrderStatusEmail({
-          to: customer.email,
-          name: customer.name || shippingAddress.fullName || "Customer",
-          orderNumber: order._id.toString().slice(-8).toUpperCase(),
+          to: normalizedGuestEmail,
+          name: shippingAddress.fullName || "Customer",
+          orderNumber,
           orderStatus: "processing",
-          orderUrl: `${frontendBaseUrl}/account/orders/${order._id.toString()}`,
+          orderUrl: `${frontendBaseUrl}/orders/track/${order._id.toString()}?token=${guestAccessToken}`,
         });
       }
     } catch (emailError) {
@@ -254,16 +276,25 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      const reservationKey = `user:${session.userId}`;
-      await ProductReservation.deleteMany({
-        product: { $in: stockAdjustments.map((adjustment) => adjustment.productId) },
-        reservationKey,
-      });
+      const reservationKey = session
+        ? `user:${session.userId}`
+        : (typeof cartKey === "string" && cartKey ? cartKey : "");
+      if (reservationKey) {
+        await ProductReservation.deleteMany({
+          product: { $in: stockAdjustments.map((adjustment) => adjustment.productId) },
+          reservationKey,
+        });
+      }
     } catch (reservationCleanupError) {
       console.error("Cleanup order reservations error:", reservationCleanupError);
     }
 
-    return NextResponse.json({ order }, { status: 201 });
+    const responseBody: Record<string, unknown> = { order };
+    if (!session) {
+      responseBody.guestAccessToken = guestAccessToken;
+      responseBody.trackingUrl = `/orders/track/${order._id.toString()}?token=${guestAccessToken}`;
+    }
+    return NextResponse.json(responseBody, { status: 201 });
   } catch (error: unknown) {
     if (couponClaimed?.usageIncremented) {
       try {

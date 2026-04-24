@@ -57,7 +57,7 @@ export default function AccountOverview() {
             )}
             <Link
               href="/account/settings"
-              className="text-xs text-foreground underline underline-offset-2 mt-2 inline-block"
+              className="mt-2 inline-flex items-center text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-foreground hover:decoration-foreground"
             >
               Edit Address
             </Link>
@@ -67,7 +67,7 @@ export default function AccountOverview() {
             <p className="text-xs text-text-secondary mb-2">No address saved yet</p>
             <Link
               href="/account/settings/address"
-              className="text-xs text-foreground underline underline-offset-2"
+              className="inline-flex items-center text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-foreground hover:decoration-foreground"
             >
               Add Address
             </Link>
@@ -104,7 +104,7 @@ export default function AccountOverview() {
             </div>
             <Link
               href="/account/settings"
-              className="text-[10px] uppercase tracking-[0.15em] text-foreground underline underline-offset-2"
+              className="inline-flex items-center text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-foreground hover:decoration-foreground"
             >
               Edit
             </Link>
@@ -120,7 +120,7 @@ export default function AccountOverview() {
           </h2>
           <Link
             href="/account/orders"
-            className="text-xs text-foreground underline underline-offset-2"
+            className="inline-flex items-center text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-foreground hover:decoration-foreground"
           >
             View All
           </Link>

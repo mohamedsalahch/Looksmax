@@ -11,7 +11,6 @@ interface Order {
   _id: string;
   totalPrice: number;
   orderStatus: string;
-  isArchived?: boolean;
   paymentMethod: string;
   createdAt: string;
   items: { name: string; quantity: number; price: number }[];
@@ -21,9 +20,9 @@ export default function OrdersPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [archivingOrderId, setArchivingOrderId] = useState("");
 
   useEffect(() => {
+    setLoading(true);
     fetch("/api/orders", withAuthRequest())
       .then((r) => r.json())
       .then((data) => setOrders(data.orders || []))
@@ -39,26 +38,6 @@ export default function OrdersPage() {
       case "shipping": return "text-blue-700 bg-blue-100";
       case "confirmed": return "text-[#5d6358] bg-[#ecebe5]";
       default: return "text-[#7d6e5f] bg-[#f6f2eb]";
-    }
-  };
-
-  const handleArchive = async (orderId: string) => {
-    setArchivingOrderId(orderId);
-    try {
-      const response = await fetch(`/api/orders/${orderId}`, {
-        ...withAuthRequest({
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ archive: true }),
-        }),
-      });
-      if (response.ok) {
-        setOrders((current) => current.filter((order) => order._id !== orderId));
-      }
-    } catch {
-      // Keep current UI state on network failure.
-    } finally {
-      setArchivingOrderId("");
     }
   };
 
@@ -119,13 +98,11 @@ export default function OrdersPage() {
                     })}
                   </p>
                 </div>
-                <div className="text-right">
-                  <span
-                    className={`inline-block text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider ${statusColor(order.orderStatus)}`}
-                  >
-                    {order.orderStatus}
-                  </span>
-                </div>
+                <span
+                  className={`inline-block text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider ${statusColor(order.orderStatus)}`}
+                >
+                  {order.orderStatus}
+                </span>
               </div>
 
               <div className="text-xs text-text-secondary mb-3">
@@ -143,20 +120,7 @@ export default function OrdersPage() {
                     {order.paymentMethod === "cod" ? "Cash on Delivery" : order.paymentMethod}
                   </span>
                 </div>
-                <div className="flex items-center gap-4">
-                  <span className="text-sm font-semibold">{formatTndPrice(order.totalPrice)}</span>
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void handleArchive(order._id);
-                    }}
-                    disabled={archivingOrderId === order._id}
-                    className="text-[10px] uppercase tracking-[0.15em] text-text-secondary transition-colors hover:text-foreground disabled:opacity-50"
-                  >
-                    {archivingOrderId === order._id ? "Archiving..." : "Archive"}
-                  </button>
-                </div>
+                <span className="text-sm font-semibold">{formatTndPrice(order.totalPrice)}</span>
               </div>
             </div>
           ))}

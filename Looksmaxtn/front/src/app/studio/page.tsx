@@ -565,6 +565,7 @@ export default function OutfitStudioPage() {
     const sharedResetTimerRef = useRef<number | null>(null);
     const outfitGenerationStartAbortRef = useRef<AbortController | null>(null);
     const outfitGenerationPollAbortRef = useRef<AbortController | null>(null);
+    const generatedPanelRef = useRef<HTMLDivElement | null>(null);
     const ignoredGenerationJobIdRef = useRef("");
 
     useEffect(() => {
@@ -717,6 +718,7 @@ export default function OutfitStudioPage() {
     }, [generatedOutfitJobId, needsGenerationRecovery, outfitNameDraft, user?.id]);
 
     const imageEnhancing = Boolean(user?.bodyProfile?.imageEnhancing);
+    const hasEnhancedProfileImage = Boolean(user?.bodyProfile?.profileImageEnhanced);
 
     useEffect(() => {
         if (!imageEnhancing) return;
@@ -994,6 +996,10 @@ export default function OutfitStudioPage() {
         setNeedsGenerationRecovery(false);
         ignoredGenerationJobIdRef.current = "";
 
+        requestAnimationFrame(() => {
+            generatedPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+
         const controller = new AbortController();
         outfitGenerationStartAbortRef.current?.abort();
         outfitGenerationStartAbortRef.current = controller;
@@ -1144,6 +1150,10 @@ export default function OutfitStudioPage() {
     };
 
     const handleSaveOutfit = async () => {
+        if (!hasEnhancedProfileImage) {
+            setGenerationError("You need an enhanced profile picture before saving an outfit.");
+            return;
+        }
         setSavingOutfit(true);
         const outfitId = await persistGeneratedOutfit();
         if (outfitId) {
@@ -1367,7 +1377,7 @@ export default function OutfitStudioPage() {
                     </div>
                     <Link
                         href="/account/settings"
-                        className="mt-1 inline-flex h-10 shrink-0 items-center border border-border-color px-4 text-[10px] uppercase tracking-wider text-text-secondary hover:text-foreground md:mt-0"
+                        className="mt-1 inline-flex h-10 shrink-0 items-center text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-foreground hover:decoration-foreground md:mt-0"
                     >
                         Edit Profile
                     </Link>
@@ -1535,7 +1545,7 @@ export default function OutfitStudioPage() {
                                 </button>
                                 <Link
                                     href="/studio/outfits"
-                                    className="mt-3 inline-flex w-full items-center justify-center rounded-none border border-[#00000012] bg-transparent px-3.5 py-2 text-[11px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:border-[#c9a96e] hover:text-[#c9a96e]"
+                                    className="mt-3 inline-flex w-full items-center justify-center rounded-none border border-border-color bg-surface/40 px-3.5 py-2 text-[11px] uppercase tracking-[0.15em] text-foreground transition-colors hover:bg-surface/70"
                                 >
                                     SEE ALL OUTFITS
                                 </Link>
@@ -1548,48 +1558,36 @@ export default function OutfitStudioPage() {
                         </div>
 
                         {showGeneratedOutfitPanel && (
-                            <div className="flex flex-col gap-3 bg-transparent px-6 py-6 2xl:min-h-[560px]">
-                                <div className="flex items-center justify-between gap-3">
-                                    <div className="flex items-center gap-2">
-                                        <p className="text-[11px] uppercase tracking-[0.18em] text-[#666]">Generated
-                                            outfit</p>
-                                        {generatingOutfit && (
+                            <div ref={generatedPanelRef} className="flex flex-col gap-3 bg-transparent px-6 py-6 2xl:min-h-[560px] scroll-mt-20">
+                                <div className="flex items-center justify-between gap-4">
+                                    <p className="text-[11px] uppercase tracking-[0.18em] text-[#666]">Generated outfit</p>
+                                    {generatingOutfit ? (
+                                        <button
+                                            type="button"
+                                            onClick={handleCancelGeneratedOutfit}
+                                            aria-label="Cancel generation"
+                                            className="inline-flex h-7 w-7 items-center justify-center bg-foreground text-[16px] leading-none text-background transition-colors hover:bg-accent"
+                                        >
+                                            ×
+                                        </button>
+                                    ) : activeGeneratedOutfitImage && !isRestoringGeneration ? (
+                                        <div className="flex items-center gap-6">
                                             <button
                                                 type="button"
-                                                onClick={handleCancelGeneratedOutfit}
-                                                aria-label="Cancel generation"
-                                                className="inline-flex h-7 w-7 items-center justify-center border border-[#00000012] text-[13px] leading-none text-[#666] transition-colors hover:border-[#c9a96e] hover:text-[#c9a96e]"
+                                                onClick={handleDiscardGeneratedOutfit}
+                                                disabled={savingOutfit || sharingOutfit}
+                                                className="text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-[#430C05] hover:decoration-[#430C05] disabled:opacity-50"
                                             >
-                                                ×
-                                            </button>
-                                        )}
-                                    </div>
-                                    {activeGeneratedOutfitImage && !generatingOutfit && !isRestoringGeneration ? (
-                                        <div className="flex items-center gap-3">
-                                            <button
-                                                type="button"
-                                                onClick={handleSaveOutfit}
-                                                disabled={savingOutfit || sharingOutfit || generatedOutfitImages.length === 0}
-                                                className="px-0 py-1 text-[11px] uppercase tracking-[0.15em] text-[#666] hover:text-[#1a1a1a] hover:underline hover:underline-offset-[6px] hover:decoration-[1px] disabled:opacity-50 disabled:no-underline"
-                                            >
-                                                {savingOutfit ? "Saving..." : "Save"}
+                                                Discard
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={handleShareGeneratedOutfit}
                                                 disabled={savingOutfit || sharingOutfit || generatedOutfitImages.length === 0}
                                                 aria-busy={sharingOutfit}
-                                                className="px-0 py-1 text-[11px] uppercase tracking-[0.15em] text-[#666] hover:text-[#1a1a1a] hover:underline hover:underline-offset-[6px] hover:decoration-[1px] disabled:opacity-50 disabled:no-underline"
+                                                className="text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-foreground hover:decoration-foreground disabled:opacity-50"
                                             >
                                                 {sharedOutfit ? "Copied" : "Share"}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={handleDiscardGeneratedOutfit}
-                                                disabled={savingOutfit || sharingOutfit}
-                                                className="px-0 py-1 text-[11px] uppercase tracking-[0.15em] text-[#666] hover:text-[#430C05] hover:underline hover:underline-offset-[6px] hover:decoration-[1px] disabled:opacity-50 disabled:no-underline"
-                                            >
-                                                Discard
                                             </button>
                                         </div>
                                     ) : null}
@@ -1643,18 +1641,28 @@ export default function OutfitStudioPage() {
                                     </div>
                                 </div>
 
-                                {generatedOutfitImages.length > 0 && (
+                                {generatedOutfitImages.length > 0 && activeGeneratedOutfitImage && !generatingOutfit && !isRestoringGeneration && (
                                     <div className="space-y-2">
                                         <label className="text-[10px] uppercase tracking-[0.18em] text-[#666]">
                                             Outfit name
                                         </label>
-                                        <input
-                                            type="text"
-                                            value={outfitNameDraft}
-                                            onChange={(e) => setOutfitNameDraft(e.target.value)}
-                                            className="w-full border border-[#00000012] bg-[#f7f2e8] px-3 py-2 text-sm text-[#1a1a1a] outline-none placeholder:text-[#999]"
-                                            placeholder="Outfit name"
-                                        />
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="text"
+                                                value={outfitNameDraft}
+                                                onChange={(e) => setOutfitNameDraft(e.target.value)}
+                                                className="flex-1 min-w-0 border-0 border-b border-border-color bg-transparent px-1 py-2 text-xs text-[#1a1a1a] transition-colors placeholder:text-text-secondary/70 focus:border-foreground focus:outline-none"
+                                                placeholder="Outfit name"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={handleSaveOutfit}
+                                                disabled={savingOutfit || sharingOutfit || generatedOutfitImages.length === 0}
+                                                className="shrink-0 bg-foreground px-5 py-2 text-[11px] uppercase tracking-wide text-background transition-colors hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {savingOutfit ? "Saving..." : "Save"}
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
 
@@ -1697,7 +1705,7 @@ export default function OutfitStudioPage() {
                         </div>
                         <Link
                             href={`/category/${genderCollectionSlug}`}
-                            className="border border-[#00000012] px-4 py-2 text-[10px] uppercase tracking-[0.18em] text-[#666] transition-colors hover:border-[#c9a96e] hover:text-[#c9a96e]"
+                            className="text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-foreground hover:decoration-foreground"
                         >
                             See all
                         </Link>

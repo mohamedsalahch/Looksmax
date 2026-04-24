@@ -9,6 +9,7 @@ import {
   getDisplayStock,
   getSizeStockEntries,
 } from "@/lib/sizeAvailability";
+import { computeViewerBlocked } from "@/lib/sseClients";
 
 export async function GET(
   req: NextRequest,
@@ -52,12 +53,19 @@ export async function GET(
       ? Boolean(activeOrderHold) && !anySizeAvailable
       : Boolean(activeOrderHold) && displayStock <= 0;
 
-    if (product.isActive === false && !anySizeAvailable && !blockedByOrder && reservedByOthersQuantity <= 0 && !ownedReservation) {
+    if (product.isActive === false) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
     const reservedElsewhere = hasSizeStock
       ? Object.values(sizeAvailability || {}).some((size) => size.reservedElsewhere)
       : reservedByOthersQuantity > 0 && (reservedByOthersQuantity >= stock || reservedByOthersQuantity + ownedReservationQuantity > stock);
+
+    const viewerBlocked = computeViewerBlocked(
+      product.sizeStock,
+      stock,
+      activeReservations,
+      reservationKey,
+    );
 
     return NextResponse.json({
       product: {
@@ -69,6 +77,7 @@ export async function GET(
         ownedReservation,
         reservationExpiresAt: null,
         sizeAvailability,
+        viewerBlocked,
       },
     });
   } catch (error: unknown) {

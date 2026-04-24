@@ -48,8 +48,33 @@ export default function SidePanel() {
 
   useEffect(() => {
     setIsOpen(false);
-    setExpandedParents([]);
   }, [pathname]);
+
+  useEffect(() => {
+    const match = pathname?.match(/^\/category\/([^/?#]+)/);
+    const activeSlug = match?.[1];
+    if (!activeSlug || categories.length === 0) return;
+
+    const findAncestorSlugs = (items: Category[], target: string, trail: string[] = []): string[] | null => {
+      for (const item of items) {
+        if (item.slug === target) return trail;
+        if (item.children?.length) {
+          const found = findAncestorSlugs(item.children, target, [...trail, item.slug]);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+
+    const ancestors = findAncestorSlugs(categories, activeSlug);
+    if (ancestors && ancestors.length > 0) {
+      setExpandedParents((current) => {
+        const next = new Set(current);
+        ancestors.forEach((slug) => next.add(slug));
+        return Array.from(next);
+      });
+    }
+  }, [pathname, categories]);
 
   // Close on Escape
   useEffect(() => {
@@ -76,10 +101,18 @@ export default function SidePanel() {
     );
   };
 
+  const rowBase =
+    "transition-all duration-150 cursor-pointer underline-offset-[6px] decoration-1";
+  const rowActive =
+    "text-foreground font-medium underline decoration-foreground";
+  const rowIdle =
+    "hover:pl-1 hover:text-foreground/60 hover:underline hover:decoration-foreground/60 group-hover:pl-1 group-hover:text-foreground/60 group-hover:underline group-hover:decoration-foreground/60";
+
   const renderCategoryItems = (items: Category[], depth = 0): React.ReactNode =>
     items.map((category) => {
     const hasChildren = Boolean(category.children && category.children.length > 0);
     const isExpanded = expandedParents.includes(category.slug);
+    const isActive = pathname === `/category/${category.slug}`;
     const indent = depth === 0 ? 0 : depth === 1 ? 18 : 34;
     const rowTextClass =
       depth === 0
@@ -97,7 +130,7 @@ export default function SidePanel() {
         >
           <Link
             href={`/category/${category.slug}`}
-            className={`group flex min-h-10 items-center justify-between py-1.5 px-3 -mx-3 transition-all duration-150 hover:bg-hover hover:text-foreground hover:pl-4 cursor-pointer ${rowTextClass}`}
+            className={`group flex min-h-10 items-center justify-between py-1.5 ${rowBase} ${isActive ? rowActive : rowIdle} ${rowTextClass}`}
             onClick={() => setIsOpen(false)}
           >
             <span>{category.name}</span>
@@ -112,10 +145,10 @@ export default function SidePanel() {
         className={`${depth > 0 ? "relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-px before:bg-border-color/30" : ""}`}
         style={{ paddingLeft: `${indent}px` }}
       >
-        <div className="group flex items-center gap-3 px-3 -mx-3 transition-all duration-150 hover:bg-hover">
+        <div className="group flex items-center gap-3">
           <Link
             href={`/category/${category.slug}`}
-            className={`flex min-h-10 items-center py-1.5 transition-colors hover:text-foreground cursor-pointer ${rowTextClass}`}
+            className={`flex min-h-10 items-center py-1.5 ${rowBase} ${isActive ? rowActive : rowIdle} ${rowTextClass}`}
             onClick={() => setIsOpen(false)}
           >
             <span className="inline-flex min-h-10 items-center">{category.name}</span>
@@ -181,7 +214,7 @@ export default function SidePanel() {
 
           <button
             onClick={() => setIsOpen(false)}
-            className="inline-flex h-10 w-10 items-center justify-center border border-transparent text-foreground transition-colors hover:border-border-color hover:bg-hover hover:text-text-secondary cursor-pointer"
+            className="inline-flex h-10 w-10 items-center justify-center text-foreground opacity-70 transition-opacity hover:opacity-100 cursor-pointer"
             aria-label="Close menu"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -193,24 +226,24 @@ export default function SidePanel() {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-6 py-6">
-          <div className="mb-8 space-y-3">
+          <div className="mb-8 space-y-1">
             <Link
               href="/"
-              className="block border border-transparent px-3 py-2 text-sm font-semibold text-foreground transition-all hover:border-border-color hover:bg-hover hover:text-text-secondary cursor-pointer"
+              className={`group block py-2 text-sm font-semibold ${rowBase} ${pathname === "/" ? rowActive : rowIdle}`}
               onClick={() => setIsOpen(false)}
             >
               Home
             </Link>
             <Link
               href="/category/new-arrivals"
-              className="block border border-transparent px-3 py-2 text-sm font-semibold text-foreground transition-all hover:border-border-color hover:bg-hover hover:text-text-secondary cursor-pointer"
+              className={`group block py-2 text-sm font-semibold ${rowBase} ${pathname === "/category/new-arrivals" ? rowActive : rowIdle}`}
               onClick={() => setIsOpen(false)}
             >
               New Arrivals
             </Link>
             <Link
               href="/category/all"
-              className="block border border-transparent px-3 py-2 text-sm font-semibold text-foreground transition-all hover:border-border-color hover:bg-hover hover:text-text-secondary cursor-pointer"
+              className={`group block py-2 text-sm font-semibold ${rowBase} ${pathname === "/category/all" ? rowActive : rowIdle}`}
               onClick={() => setIsOpen(false)}
             >
               All Categories

@@ -11,7 +11,9 @@ export interface IOrderItem {
 }
 
 export interface IOrder extends Document {
-  user: mongoose.Types.ObjectId;
+  user?: mongoose.Types.ObjectId | null;
+  guestEmail?: string;
+  guestAccessToken?: string;
   items: IOrderItem[];
   isArchived: boolean;
   archivedAt?: Date | null;
@@ -52,7 +54,9 @@ const orderItemSchema = new Schema<IOrderItem>(
 
 const orderSchema = new Schema<IOrder>(
   {
-    user: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    user: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    guestEmail: { type: String, default: "" },
+    guestAccessToken: { type: String, default: "" },
     items: [orderItemSchema],
     isArchived: { type: Boolean, default: false },
     archivedAt: { type: Date, default: null },

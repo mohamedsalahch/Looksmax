@@ -4,7 +4,7 @@ import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
 import { getSession } from "@/store/lib/auth";
 import { getActiveOrderHoldMapByProductIds } from "@/lib/productInventory";
-import { buildSizeAvailability, getSizeStockEntries } from "@/lib/sizeAvailability";
+import { getSizeStockEntries } from "@/lib/sizeAvailability";
 import { broadcastAvailabilityChange } from "@/lib/sseClients";
 import mongoose from "mongoose";
 
@@ -142,19 +142,11 @@ export async function POST(
       (sum, r) => sum + Math.max(1, Number(r.quantity) || 1), 0
     );
 
-    const broadcastSizeAvailability = hasSizeStock
-      ? buildSizeAvailability(product.sizeStock, allActiveReservations, null)
-      : null;
-    const rawStock = Math.max(product.stock ?? 0, 0);
-    const broadcastStock = hasSizeStock
-      ? rawStock
-      : Math.max(rawStock - finalCartCount, 0);
-
     broadcastAvailabilityChange({
       productId: id,
-      cartCount: finalCartCount,
-      stock: broadcastStock,
-      sizeAvailability: broadcastSizeAvailability,
+      stock: Math.max(product.stock ?? 0, 0),
+      sizeStock: product.sizeStock,
+      reservations: allActiveReservations,
     });
 
     return NextResponse.json({
@@ -198,20 +190,11 @@ export async function DELETE(
       (sum, r) => sum + Math.max(1, Number(r.quantity) || 1), 0
     );
 
-    const hasSizeStockBroadcast = getSizeStockEntries(productForBroadcast?.sizeStock).length > 0;
-    const broadcastSizeAvailability = hasSizeStockBroadcast && productForBroadcast
-      ? buildSizeAvailability(productForBroadcast.sizeStock, allActiveReservations, null)
-      : null;
-    const rawStock = Math.max(productForBroadcast?.stock ?? 0, 0);
-    const broadcastStock = hasSizeStockBroadcast
-      ? rawStock
-      : Math.max(rawStock - finalCartCount, 0);
-
     broadcastAvailabilityChange({
       productId: id,
-      cartCount: finalCartCount,
-      stock: broadcastStock,
-      sizeAvailability: broadcastSizeAvailability,
+      stock: Math.max(productForBroadcast?.stock ?? 0, 0),
+      sizeStock: productForBroadcast?.sizeStock,
+      reservations: allActiveReservations,
     });
 
     return NextResponse.json({ success: true, cartCount: finalCartCount });

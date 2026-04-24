@@ -10,6 +10,7 @@ export default function Footer() {
   const [showUnsub, setShowUnsub] = useState(false);
   const [loading, setLoading] = useState(false);
   const currentYear = useMemo(() => new Date().getFullYear(), []);
+  const fieldClass = "w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm transition-colors placeholder:text-text-secondary/70 focus:border-foreground focus:outline-none";
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,7 +83,7 @@ export default function Footer() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Email address"
               required
-              className="w-full border border-foreground/30 bg-transparent px-4 py-3 text-sm focus:border-foreground transition-colors placeholder:text-text-secondary"
+              className={fieldClass}
             />
             <button
               type="submit"
@@ -100,7 +101,7 @@ export default function Footer() {
               onChange={(e) => setUnsubEmail(e.target.value)}
               placeholder="Enter your email to unsubscribe"
               required
-              className="w-full border border-foreground/30 bg-transparent px-4 py-3 text-sm focus:border-foreground transition-colors placeholder:text-text-secondary"
+              className={fieldClass}
             />
             <button
               type="submit"
@@ -144,6 +145,9 @@ export default function Footer() {
               </Link>
               <Link href="/about" className="block text-xs text-text-secondary hover:text-foreground transition-colors">
                 FAQ
+              </Link>
+              <Link href="/terms-and-conditions" className="block text-xs text-text-secondary hover:text-foreground transition-colors">
+                Terms & Conditions
               </Link>
             </div>
           </div>
@@ -196,6 +200,9 @@ export default function Footer() {
           </Link>
           <Link href="/contact" className="text-[10px] text-text-secondary hover:text-foreground transition-colors">
             Contact
+          </Link>
+          <Link href="/terms-and-conditions" className="text-[10px] text-text-secondary hover:text-foreground transition-colors">
+            Terms
           </Link>
         </div>
       </div>

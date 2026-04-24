@@ -27,10 +27,6 @@ export default async function AllCategoriesPage() {
     <div className="pt-[57px]">
       <CategoryNav activeSlug="all-categories" />
 
-      <div className="max-w-7xl mx-auto px-4 pt-6 pb-2">
-        <h1 className="text-sm font-medium tracking-wide">All Categories</h1>
-      </div>
-
       <ProductGrid
         initialProducts={initialData.products}
         initialTotal={initialData.total}

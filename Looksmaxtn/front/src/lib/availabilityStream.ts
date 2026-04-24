@@ -1,10 +1,13 @@
 "use client";
 
+import { getReservationKey } from "@/lib/reservations";
+
 export type AvailabilityEvent = {
   productId: string;
   cartCount: number;
   stock: number;
   sizeAvailability: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null;
+  viewerBlocked: boolean;
 };
 
 type EventFn = (event: AvailabilityEvent) => void;
@@ -16,10 +19,19 @@ const reconnectListeners = new Set<ReconnectFn>();
 let source: EventSource | null = null;
 let connectedOnce = false;
 
+function buildStreamUrl() {
+  // Always ensure a stable guest key exists BEFORE opening the stream, so the
+  // server registers this SSE client with the same key the reserve POSTs will use.
+  // Without this, a first-time guest would open SSE with no rk, get registered as
+  // reservationKey=null, and then see their own reservations as "reservedElsewhere".
+  const rk = getReservationKey();
+  return rk ? `/api/products/events?rk=${encodeURIComponent(rk)}` : "/api/products/events";
+}
+
 function connect() {
   if (source || typeof window === "undefined") return;
 
-  source = new EventSource("/api/products/events");
+  source = new EventSource(buildStreamUrl());
 
   source.onopen = () => {
     if (connectedOnce) {
@@ -51,6 +63,12 @@ function disconnect() {
   source?.close();
   source = null;
   connectedOnce = false;
+}
+
+export function reconnectAvailabilityStream() {
+  if (typeof window === "undefined") return;
+  disconnect();
+  if (listeners.size > 0) connect();
 }
 
 export function subscribeToAvailabilityStream(

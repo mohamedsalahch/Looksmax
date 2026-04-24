@@ -99,6 +99,21 @@ textarea {
   border-radius: 0 !important;
 }
 
+#hamburger-btn {
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+}
+
+body.shared-outfit-zoom-open header {
+  display: none;
+}
+
+body.outfit-detail-zoom-open header {
+  display: none;
+}
+
 @media (max-width: 767px) {
   input:not([type="checkbox"]):not([type="radio"]),
   select,

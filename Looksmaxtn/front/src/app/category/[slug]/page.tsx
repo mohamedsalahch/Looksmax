@@ -57,11 +57,6 @@ export default async function CategoryPage({
     <div className="pt-[57px]">
       <CategoryNav activeSlug={slug} />
 
-      {/* Category header */}
-      <div className="max-w-7xl mx-auto px-4 pt-6 pb-2">
-        <h1 className="text-sm font-medium tracking-wide">{categoryName}</h1>
-      </div>
-
       <ProductGrid
         category={slug}
         initialProducts={initialData.products}

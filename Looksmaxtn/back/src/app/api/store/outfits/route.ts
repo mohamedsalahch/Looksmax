@@ -1,8 +1,10 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { getSession } from "@/store/lib/auth";
 import dbConnect from "@/store/lib/mongodb";
 import SavedOutfit from "@/store/models/SavedOutfit";
+import User from "@/store/models/User";
 
 function withNoStoreHeaders(data: unknown, status = 200) {
   return NextResponse.json(data, {
@@ -53,6 +55,20 @@ export async function POST(req: NextRequest) {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+    await dbConnect();
+    const userObjectId = new mongoose.Types.ObjectId(session.userId);
+    const existingUser = await User.collection.findOne(
+      { _id: userObjectId },
+      { projection: { bodyProfile: 1 } }
+    );
+    const enhancedProfileImage = existingUser?.bodyProfile?.profileImageEnhanced || "";
+    if (!enhancedProfileImage) {
+      return NextResponse.json(
+        { error: "An enhanced profile picture is required to save an outfit." },
+        { status: 400 }
+      );
+    }
+
     const body = (await req.json()) as {
       name?: string;
       images?: { front?: string; back?: string };
@@ -65,7 +81,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing outfit images." }, { status: 400 });
     }
 
-    await dbConnect();
     const outfit = new SavedOutfit({
       user: session.userId,
       name: String(body.name || "First Outfit").trim() || "First Outfit",

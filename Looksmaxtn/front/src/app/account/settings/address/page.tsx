@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useAuth } from "@/providers/AuthContext";
 import { withAuthRequest } from "@/lib/authClient";
 
@@ -17,6 +16,7 @@ export default function AddressSettingsPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const fieldClass = "w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm transition-colors placeholder:text-text-secondary/70 focus:border-foreground focus:outline-none";
 
   const blurActiveElement = () => {
     const activeElement = document.activeElement;
@@ -70,9 +70,6 @@ export default function AddressSettingsPage() {
 
   return (
     <div className="max-w-md space-y-6">
-      <Link href="/account/settings" className="text-xs text-text-secondary underline underline-offset-2">
-        Back to Settings
-      </Link>
       <div>
         <h2 className="text-xs font-semibold uppercase tracking-wider mb-6 text-text-secondary">
           Billing Address
@@ -82,31 +79,33 @@ export default function AddressSettingsPage() {
           {success && <div className="border border-[#d8c9b8] bg-[#f1ede8] px-4 py-3 text-xs text-[#6b6055]">{success}</div>}
           <div>
             <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">Street Address</label>
-            <input type="text" value={address.street} onChange={(e) => setAddress({ ...address, street: e.target.value })} className="w-full border border-border-color bg-transparent px-4 py-3 text-sm" />
+            <input type="text" value={address.street} onChange={(e) => setAddress({ ...address, street: e.target.value })} className={fieldClass} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">City</label>
-              <input type="text" value={address.city} onChange={(e) => setAddress({ ...address, city: e.target.value })} className="w-full border border-border-color bg-transparent px-4 py-3 text-sm" />
+              <input type="text" value={address.city} onChange={(e) => setAddress({ ...address, city: e.target.value })} className={fieldClass} />
             </div>
             <div>
               <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">State</label>
-              <input type="text" value={address.state} onChange={(e) => setAddress({ ...address, state: e.target.value })} className="w-full border border-border-color bg-transparent px-4 py-3 text-sm" />
+              <input type="text" value={address.state} onChange={(e) => setAddress({ ...address, state: e.target.value })} className={fieldClass} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">ZIP Code</label>
-              <input type="text" value={address.zip} onChange={(e) => setAddress({ ...address, zip: e.target.value })} className="w-full border border-border-color bg-transparent px-4 py-3 text-sm" />
+              <input type="text" value={address.zip} onChange={(e) => setAddress({ ...address, zip: e.target.value })} className={fieldClass} />
             </div>
             <div>
               <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">Phone</label>
-              <input type="tel" value={address.phone} onChange={(e) => setAddress({ ...address, phone: e.target.value })} className="w-full border border-border-color bg-transparent px-4 py-3 text-sm" />
+              <input type="tel" value={address.phone} onChange={(e) => setAddress({ ...address, phone: e.target.value })} className={fieldClass} />
             </div>
           </div>
-          <button type="submit" disabled={loading} className="bg-foreground text-background px-6 py-3 text-xs font-medium tracking-wide uppercase hover:bg-accent transition-colors cursor-pointer disabled:opacity-50">
-            {loading ? "Saving..." : "Save Address"}
-          </button>
+          <div className="flex justify-start">
+            <button type="submit" disabled={loading} className="bg-foreground text-background px-6 py-3 text-xs font-medium tracking-wide uppercase hover:bg-accent transition-colors cursor-pointer disabled:opacity-50">
+              {loading ? "Saving..." : "Save Address"}
+            </button>
+          </div>
         </form>
       </div>
     </div>
