@@ -14,6 +14,7 @@ import {
   storeAuthToken,
   withAuthRequest,
 } from "@/lib/authClient";
+import { reconnectAvailabilityStream } from "@/lib/availabilityStream";
 
 interface User {
   id: string;
@@ -176,6 +177,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => clearRefreshTimer();
   }, [clearRefreshTimer, isProtectedPath, pathname, refreshUser, scheduleTokenRefresh]);
+
+  useEffect(() => {
+    // Identity changed (login / logout) — rebuild the SSE connection so the
+    // server re-reads the session cookie and personalizes subsequent ticks.
+    reconnectAvailabilityStream();
+  }, [user?.id]);
 
   const login = async (email: string, password: string) => {
     logoutInProgressRef.current = false;

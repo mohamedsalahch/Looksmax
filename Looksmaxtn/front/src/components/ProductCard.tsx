@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
-import { reserveProduct, subscribeToReservationChanges } from "@/lib/reservations";
+import { getReservationKey, reserveProduct, subscribeToReservationChanges } from "@/lib/reservations";
 import { subscribeToAvailabilityStream } from "@/lib/availabilityStream";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { getConditionColor, getConditionLabel, getConditionPercent } from "@/lib/productCondition";
@@ -72,6 +72,7 @@ export default function ProductCard({
   const [isMounted, setIsMounted] = useState(false);
   const [hasHydratedAvailability, setHasHydratedAvailability] = useState(false);
   const [sizeAvailabilityState, setSizeAvailabilityState] = useState(sizeAvailability || null);
+  const [viewerBlocked, setViewerBlocked] = useState<boolean>(initialReservedElsewhere);
   const availableSizes = (
     sizes?.length
       ? sizes
@@ -105,16 +106,11 @@ export default function ProductCard({
   const isSoldOut = !isPerfume && selectedSizeAvailability
     ? selectedSizeAvailability.stock <= 0 && !selectedSizeAvailability.reservedElsewhere
     : false;
-  // Badge uses the neutral view (no rk in fetch, same as SSE payload).
-  // Show only when every size that still has stock is taken by others — meaning
-  // a new browsing user genuinely can't find a free size.
-  const sizesWithStock = sizeAvailabilityState
-    ? Object.values(sizeAvailabilityState).filter((s) => s.stock > 0)
-    : [];
-  const allSizesReservedElsewhere = sizesWithStock.length > 0 && sizesWithStock.every((s) => s.reservedElsewhere);
-  const showReservedElsewhere = !isPerfume && hasHydratedAvailability
-    ? allSizesReservedElsewhere || (!hasSizes && initialReservedElsewhere)
-    : false;
+  // viewerBlocked is computed server-side per viewer. True when:
+  //   - viewer owns at least one reservation on this product AND some size
+  //     overbooks (owned + others > stock), OR
+  //   - viewer owns nothing AND every in-stock size is fully held by others.
+  const showReservedElsewhere = !isPerfume && hasHydratedAvailability && viewerBlocked;
   const isBlocked = !isPerfume && selectedSizeStock <= 0;
   const statusLabel = showReservedElsewhere
     ? "Reserved elsewhere"
@@ -159,12 +155,17 @@ export default function ProductCard({
     let cancelled = false;
 
     const refresh = () => {
-      fetch(`/api/products/${id}`, { cache: "no-store" })
+      const rk = getReservationKey();
+      const url = rk
+        ? `/api/products/${id}?rk=${encodeURIComponent(rk)}`
+        : `/api/products/${id}`;
+      fetch(url, { cache: "no-store" })
         .then((r) => r.json())
         .then((data) => {
           if (cancelled || !data.product) return;
           setSizeAvailabilityState(data.product.sizeAvailability || null);
           setBlockedByOrder(Boolean(data.product.blockedByOrder));
+          setViewerBlocked(Boolean(data.product.viewerBlocked));
           setHasHydratedAvailability(true);
         })
         .catch(() => {});
@@ -181,6 +182,7 @@ export default function ProductCard({
     const unsubscribeSSE = subscribeToAvailabilityStream(
       (event) => {
         if (event.productId !== id) return;
+        setViewerBlocked(Boolean(event.viewerBlocked));
         if (event.sizeAvailability !== null) {
           setSizeAvailabilityState(event.sizeAvailability);
           setHasHydratedAvailability(true);

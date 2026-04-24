@@ -9,6 +9,7 @@ import {
   getDisplayStock,
   getSizeStockEntries,
 } from "@/lib/sizeAvailability";
+import { computeViewerBlocked } from "@/lib/sseClients";
 
 export async function GET(
   req: NextRequest,
@@ -59,6 +60,13 @@ export async function GET(
       ? Object.values(sizeAvailability || {}).some((size) => size.reservedElsewhere)
       : reservedByOthersQuantity > 0 && (reservedByOthersQuantity >= stock || reservedByOthersQuantity + ownedReservationQuantity > stock);
 
+    const viewerBlocked = computeViewerBlocked(
+      product.sizeStock,
+      stock,
+      activeReservations,
+      reservationKey,
+    );
+
     return NextResponse.json({
       product: {
         ...product,
@@ -69,6 +77,7 @@ export async function GET(
         ownedReservation,
         reservationExpiresAt: null,
         sizeAvailability,
+        viewerBlocked,
       },
     });
   } catch (error: unknown) {
