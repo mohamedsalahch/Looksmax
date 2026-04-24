@@ -82,7 +82,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const isProtectedPath = useCallback((path: string) => {
     return (
-      path === "/checkout" ||
       path.startsWith("/account") ||
       path.startsWith("/studio")
     );

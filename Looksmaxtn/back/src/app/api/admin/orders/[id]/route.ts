@@ -146,20 +146,32 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     if (orderStatus) {
       try {
-        const customer = await User.findById(existingOrder.user)
-          .select("name email")
-          .lean();
-        if (!customer?.email) {
-          return NextResponse.json({ order: serializeOrder(order) });
-        }
         const frontendBaseUrl = (process.env.FRONTEND_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
-        await sendOrderStatusEmail({
-          to: customer.email,
-          name: customer.name || order.shippingAddress?.fullName || "Customer",
-          orderNumber: String(order._id).slice(-8).toUpperCase(),
-          orderStatus: orderStatus as "processing" | "confirmed" | "shipping" | "delivered" | "canceled" | "returned",
-          orderUrl: `${frontendBaseUrl}/account/orders/${order._id}`,
-        });
+        const orderNumber = String(order._id).slice(-8).toUpperCase();
+        const statusCast = orderStatus as "processing" | "confirmed" | "shipping" | "delivered" | "canceled" | "returned";
+
+        if (existingOrder.user) {
+          const customer = await User.findById(existingOrder.user)
+            .select("name email")
+            .lean();
+          if (customer?.email) {
+            await sendOrderStatusEmail({
+              to: customer.email,
+              name: customer.name || order.shippingAddress?.fullName || "Customer",
+              orderNumber,
+              orderStatus: statusCast,
+              orderUrl: `${frontendBaseUrl}/account/orders/${order._id}`,
+            });
+          }
+        } else if (existingOrder.guestEmail && existingOrder.guestAccessToken) {
+          await sendOrderStatusEmail({
+            to: existingOrder.guestEmail,
+            name: order.shippingAddress?.fullName || "Customer",
+            orderNumber,
+            orderStatus: statusCast,
+            orderUrl: `${frontendBaseUrl}/orders/track/${order._id}?token=${existingOrder.guestAccessToken}`,
+          });
+        }
       } catch (emailError) {
         console.error("Order status email error:", emailError);
       }

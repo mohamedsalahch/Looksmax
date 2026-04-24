@@ -38,7 +38,7 @@ export async function GET(
     }
 
     // Only allow access to own orders (or admin)
-    if (session.role !== "admin" && order.user._id?.toString() !== session.userId) {
+    if (session.role !== "admin" && order.user?._id?.toString() !== session.userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 

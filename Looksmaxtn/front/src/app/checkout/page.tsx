@@ -42,9 +42,11 @@ export default function CheckoutPage() {
     zip: user?.address?.zip || "",
     phone: user?.address?.phone || "",
   });
+  const [guestEmail, setGuestEmail] = useState("");
   const [submitLoading, setSubmitLoading] = useState(false);
   const [error, setError] = useState("");
   const [orderPlaced, setOrderPlaced] = useState<string | null>(null);
+  const [guestTrackingUrl, setGuestTrackingUrl] = useState<string | null>(null);
   const unavailableItems = items.filter((item) => item.isUnavailable);
   const hasUnavailableItems = unavailableItems.length > 0;
 
@@ -136,33 +138,19 @@ export default function CheckoutPage() {
   }, [appliedCoupon?.code, totalPrice]);
 
   useEffect(() => {
-    if (!orderPlaced) return;
+    if (!orderPlaced || guestTrackingUrl) return;
 
     const timeout = window.setTimeout(() => {
       router.replace("/");
     }, 5000);
 
     return () => window.clearTimeout(timeout);
-  }, [orderPlaced, router]);
-
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.replace(`/login?next=${encodeURIComponent("/checkout")}`);
-    }
-  }, [authLoading, router, user]);
+  }, [orderPlaced, router, guestTrackingUrl]);
 
   if (authLoading) {
     return (
       <div className="pt-[72px] min-h-screen flex items-center justify-center">
         <p className="text-xs text-text-secondary uppercase tracking-wider">Loading...</p>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="pt-[72px] min-h-screen flex items-center justify-center">
-        <p className="text-xs text-text-secondary uppercase tracking-wider">Redirecting to login...</p>
       </div>
     );
   }
@@ -205,13 +193,27 @@ export default function CheckoutPage() {
           <p className="text-xs text-text-secondary mb-6">
             You will pay when you receive your order.
           </p>
+          {guestTrackingUrl && (
+            <p className="text-xs text-text-secondary mb-4">
+              We emailed a tracking link to your inbox. You can also save this link to follow your order status.
+            </p>
+          )}
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Link
-              href={`/account/orders`}
-              className="bg-foreground text-background px-6 py-3 text-xs font-medium tracking-wide uppercase hover:bg-accent transition-colors"
-            >
-              View My Orders
-            </Link>
+            {guestTrackingUrl ? (
+              <Link
+                href={guestTrackingUrl}
+                className="bg-foreground text-background px-6 py-3 text-xs font-medium tracking-wide uppercase hover:bg-accent transition-colors"
+              >
+                Track My Order
+              </Link>
+            ) : (
+              <Link
+                href={`/account/orders`}
+                className="bg-foreground text-background px-6 py-3 text-xs font-medium tracking-wide uppercase hover:bg-accent transition-colors"
+              >
+                View My Orders
+              </Link>
+            )}
             <Link
               href="/"
               className="border border-foreground text-foreground px-6 py-3 text-xs font-medium tracking-wide uppercase hover:bg-hover transition-colors"
@@ -231,6 +233,13 @@ export default function CheckoutPage() {
       setError("Some products in your cart are already taken. Remove them manually to continue.");
       return;
     }
+    if (!user) {
+      const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRe.test(guestEmail.trim())) {
+        setError("Please enter a valid email address so we can send your order tracking link.");
+        return;
+      }
+    }
     setSubmitLoading(true);
 
     try {
@@ -242,18 +251,21 @@ export default function CheckoutPage() {
         quantity: item.quantity,
       }));
 
-      const res = await fetch("/api/orders", {
-        ...withAuthRequest({
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            items: orderItems,
-            shippingAddress: address,
-            cartKey: getReservationKey(),
-            couponCode: appliedCoupon?.code || couponCode.trim() || "",
-          }),
-        }),
-      });
+      const payload = {
+        items: orderItems,
+        shippingAddress: address,
+        cartKey: getReservationKey(),
+        couponCode: appliedCoupon?.code || couponCode.trim() || "",
+        ...(user ? {} : { guestEmail: guestEmail.trim() }),
+      };
+
+      const init: RequestInit = {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      };
+
+      const res = await fetch("/api/orders", user ? withAuthRequest(init) : init);
 
       const data = await res.json();
       if (!res.ok) {
@@ -266,6 +278,7 @@ export default function CheckoutPage() {
       setCouponCode("");
       setAppliedCoupon(null);
       setCouponError("");
+      setGuestTrackingUrl(typeof data.trackingUrl === "string" ? data.trackingUrl : null);
       setOrderPlaced(data.order._id);
     } catch {
       setError("Network error. Please try again.");
@@ -292,7 +305,38 @@ export default function CheckoutPage() {
                 </div>
               )}
 
+              {!user && (
+                <div className="mb-4 border border-border-color bg-surface/40 px-4 py-3 text-xs text-text-secondary">
+                  Checking out as guest.{" "}
+                  <Link
+                    href={`/login?next=${encodeURIComponent("/checkout")}`}
+                    className="text-foreground underline underline-offset-2 hover:text-accent"
+                  >
+                    Sign in
+                  </Link>{" "}
+                  to save your order to your account.
+                </div>
+              )}
+
               <div className="space-y-4">
+                {!user && (
+                  <div>
+                    <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={guestEmail}
+                      onChange={(e) => setGuestEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="w-full border border-border-color bg-transparent px-4 py-3 text-sm focus:border-foreground transition-colors"
+                    />
+                    <p className="mt-1 text-[10px] text-text-secondary">
+                      We will email you a link to track your order status.
+                    </p>
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
                     Full Name
