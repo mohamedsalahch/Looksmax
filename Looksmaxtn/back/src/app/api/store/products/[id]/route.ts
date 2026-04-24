@@ -53,7 +53,7 @@ export async function GET(
       ? Boolean(activeOrderHold) && !anySizeAvailable
       : Boolean(activeOrderHold) && displayStock <= 0;
 
-    if (product.isActive === false && !anySizeAvailable && !blockedByOrder && reservedByOthersQuantity <= 0 && !ownedReservation) {
+    if (product.isActive === false) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
     const reservedElsewhere = hasSizeStock

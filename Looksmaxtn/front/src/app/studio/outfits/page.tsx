@@ -148,19 +148,26 @@ export default function SavedOutfitsPage() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-[10px] uppercase tracking-[0.28em] text-text-secondary">Saved outfits</p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-wide uppercase">All Saved Outfits</h1>
           </div>
-          <Link
-            href="/studio"
-            className="border border-border-color px-4 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:text-foreground"
-          >
-            Back to Studio
-          </Link>
+          {outfits.length > 0 && (
+            <Link
+              href="/studio"
+              className="inline-flex items-center text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-foreground hover:decoration-foreground"
+            >
+              Back to Studio
+            </Link>
+          )}
         </div>
 
         {outfits.length === 0 ? (
-          <div className="border border-border-color border-dashed bg-background px-6 py-12 text-center text-sm text-text-secondary">
-            No saved outfits yet.
+          <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 text-center">
+            <p className="text-sm text-text-secondary">No saved outfits yet.</p>
+            <Link
+              href="/studio"
+              className="inline-flex items-center text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-foreground hover:decoration-foreground"
+            >
+              Back to Studio
+            </Link>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">

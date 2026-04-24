@@ -9,7 +9,6 @@ interface OrderDetail {
   _id: string;
   totalPrice: number;
   orderStatus: string;
-  isArchived?: boolean;
   paymentMethod: string;
   createdAt: string;
   shippingAddress: {
@@ -33,7 +32,6 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const { id } = use(params);
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [archiving, setArchiving] = useState(false);
 
   useEffect(() => {
     fetch(`/api/orders/${id}`, withAuthRequest())
@@ -51,27 +49,6 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       case "shipping": return "text-blue-700 bg-blue-100";
       case "confirmed": return "text-[#5d6358] bg-[#ecebe5]";
       default: return "text-[#7d6e5f] bg-[#f6f2eb]";
-    }
-  };
-
-  const handleArchive = async () => {
-    setArchiving(true);
-    try {
-      const response = await fetch(`/api/orders/${id}`, {
-        ...withAuthRequest({
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ archive: true }),
-        }),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setOrder(data.order);
-      }
-    } catch {
-      // Keep current screen on failure.
-    } finally {
-      setArchiving(false);
     }
   };
 
@@ -95,28 +72,9 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             })}
           </p>
         </div>
-        <div className="flex flex-col items-end gap-3">
-          {!order.isArchived ? (
-            <button
-              type="button"
-              onClick={() => void handleArchive()}
-              disabled={archiving}
-              className="bg-foreground px-4 py-2 text-[10px] font-medium uppercase tracking-[0.18em] text-background transition-colors hover:bg-accent disabled:opacity-50"
-            >
-              {archiving ? "Archiving..." : "Archive Order"}
-            </button>
-          ) : null}
-          <div className="flex items-center gap-2">
-            {order.isArchived ? (
-              <span className="text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider text-neutral-700 bg-neutral-200">
-                archived
-              </span>
-            ) : null}
-            <span className={`text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider ${statusColor(order.orderStatus)}`}>
-              {order.orderStatus}
-            </span>
-          </div>
-        </div>
+        <span className={`text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider ${statusColor(order.orderStatus)}`}>
+          {order.orderStatus}
+        </span>
       </div>
 
       {/* Progress */}
@@ -129,9 +87,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               }`}>
                 {i <= currentStep ? "✓" : i + 1}
               </div>
-              {i < steps.length - 1 && (
-                <div className={`flex-1 h-0.5 ${i < currentStep ? "bg-foreground" : "bg-border-color"}`} />
-              )}
+              <div className={`flex-1 h-0.5 ${i < currentStep ? "bg-foreground" : "bg-border-color"}`} />
             </div>
           ))}
         </div>

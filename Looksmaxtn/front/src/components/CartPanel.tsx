@@ -187,7 +187,7 @@ export default function CartPanel() {
                       )}
 
                       <div className="flex items-center justify-between mt-3">
-                        <div className="flex items-center border border-border-color">
+                        <div className="flex items-center gap-3">
                           <button
                             onClick={() => {
                               if (item.quantity === 1) {
@@ -196,21 +196,21 @@ export default function CartPanel() {
                               }
                               updateQuantity(item.id, item.quantity - 1);
                             }}
-                            className="w-7 h-7 flex items-center justify-center text-xs hover:bg-hover transition-colors cursor-pointer"
+                            className="text-sm leading-none text-text-secondary hover:text-foreground transition-colors cursor-pointer"
                             aria-label="Decrease quantity"
                           >
                             −
                           </button>
-                          <span className="w-8 h-7 flex items-center justify-center text-xs font-medium border-x border-border-color">
+                          <span className="min-w-[1.25rem] text-center text-xs font-medium tabular-nums">
                             {item.quantity}
                           </span>
                           <button
                             onClick={() => updateQuantity(item.id, item.quantity + 1)}
                             disabled={item.quantity >= item.maxStock}
-                            className={`w-7 h-7 flex items-center justify-center text-xs transition-colors cursor-pointer ${
+                            className={`text-sm leading-none transition-colors cursor-pointer ${
                               item.quantity >= item.maxStock
                                 ? "text-border-color cursor-not-allowed"
-                                : "hover:bg-hover"
+                                : "text-text-secondary hover:text-foreground"
                             }`}
                             aria-label="Increase quantity"
                           >
@@ -289,7 +289,7 @@ export default function CartPanel() {
                 closeCart();
                 router.push("/studio");
               }}
-              className="block w-full border border-border-color px-4 py-3 text-[10px] uppercase tracking-[0.22em] text-foreground transition-colors hover:bg-hover cursor-pointer"
+              className="block w-full border border-border-color bg-surface/40 px-4 py-3 text-[10px] uppercase tracking-[0.22em] text-foreground transition-colors hover:bg-surface/70 cursor-pointer"
             >
               TRY ON
             </button>
@@ -297,7 +297,7 @@ export default function CartPanel() {
             {/* Continue shopping */}
             <button
               onClick={closeCart}
-              className="w-full text-center text-xs text-text-secondary underline underline-offset-2 hover:text-foreground transition-colors cursor-pointer"
+              className="w-full text-center text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-foreground hover:decoration-foreground cursor-pointer"
             >
               Continue Shopping
             </button>

@@ -62,33 +62,7 @@ export async function PUT(
     await dbConnect();
     const { id } = await params;
     const auditActor = await getAuditActorFromSession(session);
-    const { orderStatus, archive } = await req.json();
-
-    if (archive === true) {
-      const order = await Order.findById(id).populate("user", "name email").lean();
-      if (!order) {
-        return NextResponse.json({ error: "Order not found" }, { status: 404 });
-      }
-
-      const orderUserId =
-        typeof order.user === "object" && order.user !== null && "_id" in order.user
-          ? String((order.user as { _id?: { toString(): string } })._id?.toString() || "")
-          : String(order.user || "");
-
-      if (session.role !== "admin" && orderUserId !== session.userId) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-      }
-
-      const archivedOrder = await Order.findByIdAndUpdate(
-        id,
-        { isArchived: true, archivedAt: new Date(), updatedBy: auditActor },
-        { new: true }
-      )
-        .populate("user", "name email")
-        .lean();
-
-      return NextResponse.json({ order: archivedOrder });
-    }
+    const { orderStatus } = await req.json();
 
     if (session.role !== "admin") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });

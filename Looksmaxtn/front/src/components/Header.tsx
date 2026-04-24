@@ -108,36 +108,36 @@ export default function Header() {
             </button>
 
             {mounted && user && showUserMenu && (
-              <div className="absolute right-0 top-full mt-2 w-48 bg-background border border-border-color shadow-lg z-50">
-                <div className="px-4 py-3 border-b border-border-color">
+              <div className="absolute right-0 top-full mt-2 w-48 bg-background shadow-xl z-50">
+                <div className="px-4 py-3 border-b border-border-color/40">
                   <p className="text-xs font-medium text-foreground truncate">{user.name}</p>
                   <p className="text-[10px] text-text-secondary truncate">{user.email}</p>
                 </div>
                 <Link
                   href="/studio"
                   onClick={() => setShowUserMenu(false)}
-                  className="block px-4 py-2.5 text-xs text-foreground hover:bg-hover transition-colors md:hidden"
+                  className="block px-4 py-2.5 text-xs text-foreground hover:text-accent hover:pl-5 transition-all md:hidden"
                 >
                   Outfit Studio
                 </Link>
                 <Link
                   href="/account"
                   onClick={() => setShowUserMenu(false)}
-                  className="block px-4 py-2.5 text-xs text-foreground hover:bg-hover transition-colors"
+                  className="block px-4 py-2.5 text-xs text-foreground hover:text-accent hover:pl-5 transition-all"
                 >
                   My Account
                 </Link>
                 <Link
                   href="/account/orders"
                   onClick={() => setShowUserMenu(false)}
-                  className="block px-4 py-2.5 text-xs text-foreground hover:bg-hover transition-colors"
+                  className="block px-4 py-2.5 text-xs text-foreground hover:text-accent hover:pl-5 transition-all"
                 >
                   My Orders
                 </Link>
                 <Link
                   href="/account/settings"
                   onClick={() => setShowUserMenu(false)}
-                  className="block px-4 py-2.5 text-xs text-foreground hover:bg-hover transition-colors"
+                  className="block px-4 py-2.5 text-xs text-foreground hover:text-accent hover:pl-5 transition-all"
                 >
                   Settings
                 </Link>
@@ -148,7 +148,7 @@ export default function Header() {
                     router.replace("/login");
                     router.refresh();
                   }}
-                  className="block w-full text-left px-4 py-2.5 text-xs text-red-600 hover:bg-hover transition-colors border-t border-border-color cursor-pointer"
+                  className="block w-full text-left px-4 py-2.5 text-xs text-red-600 hover:text-red-800 hover:pl-5 transition-all border-t border-border-color/40 cursor-pointer"
                 >
                   Sign Out
                 </button>

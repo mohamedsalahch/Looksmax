@@ -62,10 +62,10 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`text-xs px-3 py-2 whitespace-nowrap transition-colors ${
+                    className={`group text-xs px-1 py-2 whitespace-nowrap transition-all duration-150 underline-offset-[6px] decoration-1 ${
                       isActive
-                        ? "bg-foreground text-background font-medium"
-                        : "text-text-secondary hover:text-foreground hover:bg-hover"
+                        ? "text-foreground font-medium underline decoration-foreground"
+                        : "text-text-secondary hover:pl-2 hover:text-foreground/60 hover:underline hover:decoration-foreground/60"
                     }`}
                   >
                     {item.name}

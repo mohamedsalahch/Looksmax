@@ -11,7 +11,6 @@ interface Order {
   _id: string;
   totalPrice: number;
   orderStatus: string;
-  isArchived?: boolean;
   paymentMethod: string;
   createdAt: string;
   items: { name: string; quantity: number; price: number }[];
@@ -21,7 +20,6 @@ export default function OrdersPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [archivingOrderId, setArchivingOrderId] = useState("");
 
   useEffect(() => {
     setLoading(true);
@@ -40,26 +38,6 @@ export default function OrdersPage() {
       case "shipping": return "text-blue-700 bg-blue-100";
       case "confirmed": return "text-[#5d6358] bg-[#ecebe5]";
       default: return "text-[#7d6e5f] bg-[#f6f2eb]";
-    }
-  };
-
-  const handleArchive = async (orderId: string) => {
-    setArchivingOrderId(orderId);
-    try {
-      const response = await fetch(`/api/orders/${orderId}`, {
-        ...withAuthRequest({
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ archive: true }),
-        }),
-      });
-      if (response.ok) {
-        setOrders((current) => current.filter((order) => order._id !== orderId));
-      }
-    } catch {
-      // Keep current UI state on network failure.
-    } finally {
-      setArchivingOrderId("");
     }
   };
 
@@ -120,24 +98,11 @@ export default function OrdersPage() {
                     })}
                   </p>
                 </div>
-                <div className="flex flex-col items-end gap-3 text-right">
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void handleArchive(order._id);
-                    }}
-                    disabled={archivingOrderId === order._id}
-                    className="bg-foreground px-4 py-2 text-[10px] font-medium uppercase tracking-[0.15em] text-background transition-colors hover:bg-accent disabled:opacity-50"
-                  >
-                    {archivingOrderId === order._id ? "Archiving..." : "Archive"}
-                  </button>
-                  <span
-                    className={`inline-block text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider ${statusColor(order.orderStatus)}`}
-                  >
-                    {order.orderStatus}
-                  </span>
-                </div>
+                <span
+                  className={`inline-block text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider ${statusColor(order.orderStatus)}`}
+                >
+                  {order.orderStatus}
+                </span>
               </div>
 
               <div className="text-xs text-text-secondary mb-3">

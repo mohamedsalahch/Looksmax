@@ -46,10 +46,7 @@ export async function GET() {
         .sort({ createdAt: -1 })
         .lean();
     } else {
-      orders = await Order.find({
-        user: session.userId,
-        isArchived: { $ne: true },
-      })
+      orders = await Order.find({ user: session.userId })
         .sort({ createdAt: -1 })
         .lean();
     }
@@ -236,7 +233,6 @@ export async function POST(req: NextRequest) {
       guestEmail: session ? "" : normalizedGuestEmail,
       guestAccessToken,
       items: orderItems,
-      isArchived: false,
       shippingAddress,
       paymentMethod: "cod",
       orderStatus: "processing",

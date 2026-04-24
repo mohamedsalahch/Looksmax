@@ -116,14 +116,14 @@ export default function CategoryNav({
   return (
     <nav className="hidden md:block sticky top-[57px] z-30 border-b border-border-color/70 bg-background/92 backdrop-blur-md shadow-[0_8px_24px_rgba(26,26,26,0.04)]">
       <div className="max-w-7xl mx-auto px-4">
-        <div className="flex items-center gap-2 overflow-x-auto px-2 py-2.5 scrollbar-hide md:px-4">
-          <Link href="/" className={`hidden whitespace-nowrap border px-3 py-1.5 text-xs transition-all md:inline-block ${activeSlug === "home" ? "border-border-color bg-[#ede1ce] text-foreground font-medium" : "border-transparent text-text-secondary hover:border-border-color hover:bg-[#ede1ce]/70 hover:text-foreground"}`}>
+        <div className="flex items-center gap-3 overflow-x-auto px-2 pt-3 pb-1 scrollbar-hide md:px-4">
+          <Link href="/" className={`hidden whitespace-nowrap px-2 py-2 text-xs transition-colors underline-offset-[6px] decoration-1 md:inline-block ${activeSlug === "home" ? "text-foreground font-medium underline decoration-foreground" : "text-text-secondary hover:text-foreground/60 hover:underline hover:decoration-foreground/60"}`}>
             Home
           </Link>
-          <Link href="/category/new-arrivals" className={`hidden whitespace-nowrap border px-3 py-1.5 text-xs transition-all md:inline-block ${activeSlug === "new-arrivals" ? "border-border-color bg-[#ede1ce] text-foreground font-medium" : "border-transparent text-text-secondary hover:border-border-color hover:bg-[#ede1ce]/70 hover:text-foreground"}`}>
+          <Link href="/category/new-arrivals" className={`hidden whitespace-nowrap px-2 py-2 text-xs transition-colors underline-offset-[6px] decoration-1 md:inline-block ${activeSlug === "new-arrivals" ? "text-foreground font-medium underline decoration-foreground" : "text-text-secondary hover:text-foreground/60 hover:underline hover:decoration-foreground/60"}`}>
             New Arrivals
           </Link>
-          <Link href="/category/all" className={`hidden whitespace-nowrap border px-3 py-1.5 text-xs transition-all md:inline-block ${activeSlug === "all-categories" ? "border-border-color bg-[#ede1ce] text-foreground font-medium" : "border-transparent text-text-secondary hover:border-border-color hover:bg-[#ede1ce]/70 hover:text-foreground"}`}>
+          <Link href="/category/all" className={`hidden whitespace-nowrap px-2 py-2 text-xs transition-colors underline-offset-[6px] decoration-1 md:inline-block ${activeSlug === "all-categories" ? "text-foreground font-medium underline decoration-foreground" : "text-text-secondary hover:text-foreground/60 hover:underline hover:decoration-foreground/60"}`}>
             All Categories
           </Link>
           {categoriesLoaded && categories.map((item) => (
@@ -146,10 +146,10 @@ export default function CategoryNav({
                   setExpandedParent(item.slug);
                   setPreviewPath([item.slug]);
                 }}
-                className={`border px-3 py-1.5 text-xs transition-all ${
+                className={`px-2 py-2 text-xs transition-colors underline-offset-[6px] decoration-1 ${
                   activePath.includes(item.slug)
-                    ? "border-border-color bg-[#ede1ce] text-foreground font-medium"
-                    : "border-transparent text-text-secondary hover:border-border-color hover:bg-[#ede1ce]/70 hover:text-foreground"
+                    ? "text-foreground font-medium underline decoration-foreground"
+                    : "text-text-secondary hover:text-foreground/60 hover:underline hover:decoration-foreground/60"
                 }`}
               >
                 {item.name}
@@ -203,17 +203,15 @@ export default function CategoryNav({
                           }
                           router.push(`/category/${item.slug}`);
                         }}
-                        className={`flex items-center justify-between gap-3 border px-3 py-2.5 transition-all ${
-                          isCurrent || isPreviewed
-                            ? "border-[#d8c9b8] bg-[#ede1ce]"
-                            : "border-transparent hover:border-[#d8c9b8] hover:bg-[#ede1ce]/60"
-                        }`}
+                        className="group flex items-center justify-between gap-3 py-2 cursor-pointer"
                       >
                         <Link
                           href={`/category/${item.slug}`}
                           onClick={(e) => e.stopPropagation()}
-                          className={`min-w-0 text-[12px] transition-colors ${
-                            isCurrent ? "font-medium text-foreground" : "text-text-secondary hover:text-foreground"
+                          className={`min-w-0 text-[12px] transition-all underline-offset-[6px] decoration-1 ${
+                            isCurrent || isPreviewed
+                              ? "font-medium text-foreground underline decoration-foreground"
+                              : "text-text-secondary hover:pl-1 hover:text-foreground/60 hover:underline hover:decoration-foreground/60 group-hover:pl-1 group-hover:text-foreground/60 group-hover:underline group-hover:decoration-foreground/60"
                           }`}
                         >
                           {item.name}
