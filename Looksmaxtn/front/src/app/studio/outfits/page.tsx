@@ -40,7 +40,6 @@ export default function SavedOutfitsPage() {
   const [loading, setLoading] = useState(true);
   const [sharingOutfitId, setSharingOutfitId] = useState("");
   const [sharedOutfitId, setSharedOutfitId] = useState("");
-  const [sharedOutfitMode, setSharedOutfitMode] = useState<"copied" | "">("");
   const shareResetTimerRef = useRef<number | null>(null);
 
   const clearShareResetTimer = () => {
@@ -116,20 +115,16 @@ export default function SavedOutfitsPage() {
       const { copied } = await shareOutfit(id);
       if (!copied) {
         setSharedOutfitId("");
-        setSharedOutfitMode("");
         return;
       }
       clearShareResetTimer();
       setSharedOutfitId(id);
-      setSharedOutfitMode("copied");
       shareResetTimerRef.current = window.setTimeout(() => {
         setSharedOutfitId("");
-        setSharedOutfitMode("");
         shareResetTimerRef.current = null;
       }, 1800);
     } catch {
       setSharedOutfitId("");
-      setSharedOutfitMode("");
     }
     setSharingOutfitId("");
   };
@@ -178,18 +173,18 @@ export default function SavedOutfitsPage() {
                 .map(([key]) => key);
 
               return (
-                <div key={outfit.id} className="border border-border-color bg-[#ede1ce] p-4 space-y-4">
+                <div key={outfit.id} className="border border-border-color p-4 space-y-4">
                   <div className="grid grid-cols-2 gap-2">
                     {images.map((image, index) => (
                       <Link
                         key={`${outfit.id}-${index}`}
                         href={`/studio/outfits/${outfit.id}`}
-                        className="block overflow-hidden bg-[#e8dccb]"
+                        className="block overflow-hidden"
                       >
                         <img
                           src={image}
                           alt={`${outfit.name} ${index === 0 ? "front" : "back"}`}
-                          className="h-44 w-full object-contain"
+                          className="h-44 w-full object-contain transition-opacity hover:opacity-90"
                         />
                       </Link>
                     ))}
@@ -199,23 +194,14 @@ export default function SavedOutfitsPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm text-[#1a1a1a]">{outfit.name}</p>
-                        <p className="text-[10px] uppercase tracking-[0.15em] text-[#666]">
-                          Updated {new Date(outfit.updatedAt).toLocaleDateString()}
-                        </p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Link
-                          href={`/studio/outfits/${outfit.id}`}
-                          className="border border-[#00000012] bg-transparent px-3.5 py-2 text-[11px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:border-[#c9a96e] hover:text-[#c9a96e]"
-                        >
-                          Open
-                        </Link>
+                      <div className="flex items-center gap-6">
                         <button
                           type="button"
                           onClick={() => handleShareOutfit(outfit.id)}
                           disabled={sharingOutfitId === outfit.id}
                           aria-busy={sharingOutfitId === outfit.id}
-                          className={`inline-flex min-w-[84px] justify-center border border-[#00000012] bg-transparent px-3.5 py-2 text-[11px] uppercase tracking-[0.15em] text-[#666] transition-colors hover:border-[#c9a96e] hover:text-[#c9a96e] disabled:opacity-50 ${
+                          className={`text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-foreground hover:decoration-foreground disabled:opacity-50 ${
                             sharedOutfitId === outfit.id ? "cursor-default" : "cursor-pointer"
                           }`}
                         >

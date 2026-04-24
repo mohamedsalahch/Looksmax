@@ -13,6 +13,7 @@ export default function PasswordSettingsPage() {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const isGoogleAccount = Boolean(user?.googleId);
+  const fieldClass = "w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm transition-colors placeholder:text-text-secondary/70 focus:border-foreground focus:outline-none";
 
   const blurActiveElement = () => {
     const activeElement = document.activeElement;
@@ -71,7 +72,7 @@ export default function PasswordSettingsPage() {
           {!isGoogleAccount && (
             <div>
               <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">Current Password</label>
-              <input type="password" required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="w-full border border-border-color bg-transparent px-4 py-3 text-sm" />
+              <input type="password" required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className={fieldClass} />
             </div>
           )}
           {isGoogleAccount && (
@@ -81,11 +82,11 @@ export default function PasswordSettingsPage() {
           )}
           <div>
             <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">New Password</label>
-            <input type="password" required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full border border-border-color bg-transparent px-4 py-3 text-sm" />
+            <input type="password" required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className={fieldClass} />
           </div>
           <div>
             <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">Confirm New Password</label>
-            <input type="password" required value={confirmNew} onChange={(e) => setConfirmNew(e.target.value)} className="w-full border border-border-color bg-transparent px-4 py-3 text-sm" />
+            <input type="password" required value={confirmNew} onChange={(e) => setConfirmNew(e.target.value)} className={fieldClass} />
           </div>
           <div className="flex justify-start">
             <button type="submit" disabled={loading} className="bg-foreground text-background px-6 py-3 text-xs font-medium tracking-wide uppercase hover:bg-accent transition-colors cursor-pointer disabled:opacity-50">

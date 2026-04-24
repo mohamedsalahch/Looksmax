@@ -1651,7 +1651,7 @@ export default function OutfitStudioPage() {
                                                 type="text"
                                                 value={outfitNameDraft}
                                                 onChange={(e) => setOutfitNameDraft(e.target.value)}
-                                                className="flex-1 min-w-0 border border-[#00000012] bg-transparent px-3 py-2 text-xs text-[#1a1a1a] outline-none placeholder:text-[#999]"
+                                                className="flex-1 min-w-0 border-0 border-b border-border-color bg-transparent px-1 py-2 text-xs text-[#1a1a1a] transition-colors placeholder:text-text-secondary/70 focus:border-foreground focus:outline-none"
                                                 placeholder="Outfit name"
                                             />
                                             <button

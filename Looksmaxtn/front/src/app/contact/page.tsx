@@ -6,6 +6,7 @@ export default function ContactPage() {
   const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" });
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const fieldClass = "w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm transition-colors placeholder:text-text-secondary/70 focus:border-foreground focus:outline-none";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,7 +83,7 @@ export default function ContactPage() {
                   <input
                     type="text" required value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    className="w-full border border-border-color bg-transparent px-4 py-3 text-sm focus:border-foreground transition-colors"
+                    className={fieldClass}
                     placeholder="John Doe"
                   />
                 </div>
@@ -93,7 +94,7 @@ export default function ContactPage() {
                   <input
                     type="email" required value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    className="w-full border border-border-color bg-transparent px-4 py-3 text-sm focus:border-foreground transition-colors"
+                    className={fieldClass}
                     placeholder="your@email.com"
                   />
                 </div>
@@ -106,7 +107,7 @@ export default function ContactPage() {
                 <input
                   type="text" required value={form.subject}
                   onChange={(e) => setForm({ ...form, subject: e.target.value })}
-                  className="w-full border border-border-color bg-transparent px-4 py-3 text-sm focus:border-foreground transition-colors"
+                  className={fieldClass}
                   placeholder="How can we help?"
                 />
               </div>
@@ -119,7 +120,7 @@ export default function ContactPage() {
                   required value={form.message}
                   onChange={(e) => setForm({ ...form, message: e.target.value })}
                   rows={6}
-                  className="w-full border border-border-color bg-transparent px-4 py-3 text-sm focus:border-foreground transition-colors resize-none"
+                  className={`${fieldClass} resize-none`}
                   placeholder="Tell us more..."
                 />
               </div>

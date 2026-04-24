@@ -56,7 +56,8 @@ export default function SettingsPage() {
   }, []);
   const requiredLabelClass = "block text-xs text-text-secondary uppercase tracking-wider mb-1.5";
   const requiredFieldErrorClass = "mt-1 text-[10px] uppercase tracking-[0.14em] text-[#430C05]";
-  const invalidFieldClass = "border border-[#430C05] ring-1 ring-[#430C05]/20";
+  const fieldClass = "w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm transition-colors placeholder:text-text-secondary/70 focus:border-foreground focus:outline-none";
+  const invalidFieldClass = "border-0 border-b border-[#430C05] ring-0";
 
   const getFirstMissingFocusableField = useCallback((): ValidationField | null => {
     if (!String(bodyProfile.heightCm || "").trim()) {
@@ -686,8 +687,8 @@ export default function SettingsPage() {
                     required
                     ref={heightRef}
                     placeholder="e.g. 180"
-                    className={`w-full bg-transparent px-4 py-3 text-sm ${
-                      validationField === "heightCm" ? invalidFieldClass : "border border-border-color"
+                    className={`${fieldClass} ${
+                      validationField === "heightCm" ? invalidFieldClass : ""
                     }`}
                   />
                   {validationField === "heightCm" && bodyError && (
@@ -705,8 +706,8 @@ export default function SettingsPage() {
                     required
                     ref={weightRef}
                     placeholder="e.g. 75"
-                    className={`w-full bg-transparent px-4 py-3 text-sm ${
-                      validationField === "weightKg" ? invalidFieldClass : "border border-border-color"
+                    className={`${fieldClass} ${
+                      validationField === "weightKg" ? invalidFieldClass : ""
                     }`}
                   />
                   {validationField === "weightKg" && bodyError && (
@@ -722,8 +723,8 @@ export default function SettingsPage() {
                     onChange={(e) => setBodyProfile({ ...bodyProfile, gender: e.target.value })}
                     required
                     ref={genderRef}
-                    className={`w-full bg-transparent px-4 py-3 text-sm ${
-                      validationField === "gender" ? invalidFieldClass : "border border-border-color"
+                    className={`${fieldClass} ${
+                      validationField === "gender" ? invalidFieldClass : ""
                     }`}
                   >
                     <option value="">Select gender</option>
@@ -745,8 +746,8 @@ export default function SettingsPage() {
                     onChange={(e) => setBodyProfile({ ...bodyProfile, topSize: e.target.value })}
                     required
                     ref={topSizeRef}
-                    className={`w-full bg-transparent px-4 py-3 text-sm ${
-                      validationField === "topSize" ? invalidFieldClass : "border border-border-color"
+                    className={`${fieldClass} ${
+                      validationField === "topSize" ? invalidFieldClass : ""
                     }`}
                   >
                     <option value="">Select size</option>
@@ -770,8 +771,8 @@ export default function SettingsPage() {
                     onChange={(e) => setBodyProfile({ ...bodyProfile, bottomSize: e.target.value })}
                     required
                     ref={bottomSizeRef}
-                    className={`w-full bg-transparent px-4 py-3 text-sm ${
-                      validationField === "bottomSize" ? invalidFieldClass : "border border-border-color"
+                    className={`${fieldClass} ${
+                      validationField === "bottomSize" ? invalidFieldClass : ""
                     }`}
                   >
                     <option value="">Select size</option>
@@ -792,8 +793,8 @@ export default function SettingsPage() {
                     onChange={(e) => setBodyProfile({ ...bodyProfile, shoeSize: e.target.value })}
                     required
                     ref={shoeSizeRef}
-                    className={`w-full bg-transparent px-4 py-3 text-sm ${
-                      validationField === "shoeSize" ? invalidFieldClass : "border border-border-color"
+                    className={`${fieldClass} ${
+                      validationField === "shoeSize" ? invalidFieldClass : ""
                     }`}
                   >
                     <option value="">Select size</option>

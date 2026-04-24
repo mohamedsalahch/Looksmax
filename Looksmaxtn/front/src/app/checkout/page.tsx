@@ -607,7 +607,14 @@ export default function CheckoutPage() {
               </button>
 
               <p className="text-[10px] text-text-secondary text-center mt-3">
-                By placing this order you agree to our Terms & Conditions.
+                By placing this order you agree to our{" "}
+                <Link
+                  href="/terms-and-conditions"
+                  className="text-foreground underline underline-offset-2 hover:text-accent transition-colors"
+                >
+                  Terms & Conditions
+                </Link>
+                .
               </p>
             </div>
           </div>
