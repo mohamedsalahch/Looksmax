@@ -111,39 +111,6 @@ const ZONE_PREVIEW_POSITIONS: Record<
     },
 };
 
-async function copyShareLink(text: string) {
-    if (!text) return false;
-
-    try {
-        if (typeof navigator !== "undefined" && navigator.clipboard && window.isSecureContext) {
-            await navigator.clipboard.writeText(text);
-            return true;
-        }
-    } catch {
-        // Fall through to the legacy copy path below.
-    }
-
-    if (typeof document === "undefined") return false;
-
-    const input = document.createElement("input");
-    input.value = text;
-    input.setAttribute("readonly", "true");
-    input.style.position = "fixed";
-    input.style.left = "-9999px";
-    document.body.appendChild(input);
-    input.select();
-
-    try {
-        const copied = document.execCommand("copy");
-        document.body.removeChild(input);
-        if (copied) return true;
-    } catch {
-        document.body.removeChild(input);
-    }
-
-    return false;
-}
-
 const ZONE_DETAILS: Record<
     (typeof BODY_ZONES)[number]["id"],
     { title: string; type: string; fit: string; season: string; care: string }
@@ -750,6 +717,7 @@ export default function OutfitStudioPage() {
     }, [generatedOutfitJobId, needsGenerationRecovery, outfitNameDraft, user?.id]);
 
     const imageEnhancing = Boolean(user?.bodyProfile?.imageEnhancing);
+    const hasEnhancedProfileImage = Boolean(user?.bodyProfile?.profileImageEnhanced);
 
     useEffect(() => {
         if (!imageEnhancing) return;
@@ -1177,8 +1145,15 @@ export default function OutfitStudioPage() {
     };
 
     const handleSaveOutfit = async () => {
+        if (!hasEnhancedProfileImage) {
+            setGenerationError("You need an enhanced profile picture before saving an outfit.");
+            return;
+        }
         setSavingOutfit(true);
-        await persistGeneratedOutfit();
+        const outfitId = await persistGeneratedOutfit();
+        if (outfitId) {
+            router.push("/studio/outfits");
+        }
         setSavingOutfit(false);
     };
 
@@ -1599,7 +1574,7 @@ export default function OutfitStudioPage() {
                                             <button
                                                 type="button"
                                                 onClick={handleSaveOutfit}
-                                                disabled={savingOutfit || sharingOutfit || generatedOutfitImages.length === 0}
+                                                disabled={savingOutfit || sharingOutfit || generatedOutfitImages.length === 0 || !hasEnhancedProfileImage}
                                                 className="px-0 py-1 text-[11px] uppercase tracking-[0.15em] text-[#666] hover:text-[#1a1a1a] hover:underline hover:underline-offset-[6px] hover:decoration-[1px] disabled:opacity-50 disabled:no-underline"
                                             >
                                                 {savingOutfit ? "Saving..." : "Save"}

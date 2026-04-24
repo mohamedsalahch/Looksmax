@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, use } from "react";
-import Link from "next/link";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { formatStoreDate } from "@/lib/dateFormat";
 import { withAuthRequest } from "@/lib/authClient";
@@ -66,7 +65,8 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         }),
       });
       if (response.ok) {
-        window.location.href = "/account/orders";
+        const data = await response.json();
+        setOrder(data.order);
       }
     } catch {
       // Keep current screen on failure.
@@ -86,9 +86,6 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <Link href="/account/orders" className="text-xs text-text-secondary hover:text-foreground transition-colors mb-2 inline-block">
-            ← Back to Orders
-          </Link>
           <h2 className="text-sm font-semibold uppercase tracking-wider">
             Order #{order._id.slice(-8).toUpperCase()}
           </h2>
@@ -98,30 +95,29 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             })}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {order.isArchived ? (
-            <span className="text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider text-neutral-700 bg-neutral-200">
-              archived
-            </span>
+        <div className="flex flex-col items-end gap-3">
+          {!order.isArchived ? (
+            <button
+              type="button"
+              onClick={() => void handleArchive()}
+              disabled={archiving}
+              className="bg-foreground px-4 py-2 text-[10px] font-medium uppercase tracking-[0.18em] text-background transition-colors hover:bg-accent disabled:opacity-50"
+            >
+              {archiving ? "Archiving..." : "Archive Order"}
+            </button>
           ) : null}
-          <span className={`text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider ${statusColor(order.orderStatus)}`}>
-            {order.orderStatus}
-          </span>
+          <div className="flex items-center gap-2">
+            {order.isArchived ? (
+              <span className="text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider text-neutral-700 bg-neutral-200">
+                archived
+              </span>
+            ) : null}
+            <span className={`text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider ${statusColor(order.orderStatus)}`}>
+              {order.orderStatus}
+            </span>
+          </div>
         </div>
       </div>
-
-      {!order.isArchived ? (
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={() => void handleArchive()}
-            disabled={archiving}
-            className="border border-border-color px-4 py-2 text-[10px] uppercase tracking-[0.18em] text-text-secondary transition-colors hover:text-foreground disabled:opacity-50"
-          >
-            {archiving ? "Archiving..." : "Archive Order"}
-          </button>
-        </div>
-      ) : null}
 
       {/* Progress */}
       {!["canceled", "returned"].includes(order.orderStatus) && (

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import mongoose from "mongoose";
-import dbConnect from "@/store/lib/mongodb";
-import User from "@/store/models/User";
-import { saveEnhancedBodyProfileImage } from "@/store/lib/bodyProfileEnhancement";
+import {
+  clearFailedBodyProfileImage,
+  saveEnhancedBodyProfileImage,
+} from "@/store/lib/bodyProfileEnhancement";
+import { deleteBodyProfileImage } from "@/store/lib/bodyProfileUploads";
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,11 +22,10 @@ export async function POST(req: NextRequest) {
     // Handle error from generation service
     if (typeof body.error === "string" && body.error) {
       if (userId) {
-        await dbConnect();
-        await User.collection.updateOne(
-          { _id: new mongoose.Types.ObjectId(userId) },
-          { $set: { "bodyProfile.imageEnhancing": false } }
-        );
+        await clearFailedBodyProfileImage(userId, "Photo enhancement failed. Please upload another photo.");
+        if (imagePath) {
+          await deleteBodyProfileImage(imagePath);
+        }
         console.warn(`[enhance-webhook] Generation service reported error for user ${userId}: ${body.error}`);
       }
       return NextResponse.json({ ok: true, error: true });

@@ -56,6 +56,18 @@ export async function shareOutfit(id: string): Promise<ShareResult> {
   }
 
   const shareUrl = String(data.shareUrl || "");
+  try {
+    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+      await navigator.share({
+        title: "LOOKSMAX outfit",
+        url: shareUrl,
+      });
+      return { shareUrl, copied: true };
+    }
+  } catch {
+    // Fall back to clipboard copy below.
+  }
+
   const copied = await copyShareLink(shareUrl);
   return { shareUrl, copied };
 }

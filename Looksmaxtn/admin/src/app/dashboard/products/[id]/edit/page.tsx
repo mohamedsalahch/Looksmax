@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { getConditionStatusFromScore } from "@/lib/productCondition";
 import { generateId } from "@/lib/uuid";
 import { withAuthRequest } from "@/lib/authClient";
+import { compressImageFile } from "@/lib/imageCompression";
 
 interface Category {
   _id: string;
@@ -63,6 +64,7 @@ const initialForm = {
   price: "",
   description: "",
   brand: "LOOKSMAX",
+  reference: "",
   stock: "1",
   tag: "",
   sizes: "",
@@ -345,6 +347,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           price: p.price.toString(),
           description: p.description || "",
           brand: p.brand || "LOOKSMAX",
+          reference: p.reference || "",
           stock: String(p.fullStock ?? p.stock ?? 1),
           tag: p.tag || "",
           sizes: (p.sizes || []).join(","),
@@ -865,10 +868,27 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         selectedGreatGrandchildSlug,
       ].filter(Boolean);
 
+      const compressedValidImages = await Promise.all(
+        validImages.map(async (img) => {
+          if (!img.file) return img;
+          return { ...img, file: await compressImageFile(img.file) };
+        })
+      );
+      const compressedOriginPictureFiles = {
+        front: originPictureFiles.front ? await compressImageFile(originPictureFiles.front) : null,
+        back: originPictureFiles.back ? await compressImageFile(originPictureFiles.back) : null,
+        left: originPictureFiles.left ? await compressImageFile(originPictureFiles.left) : null,
+        right: originPictureFiles.right ? await compressImageFile(originPictureFiles.right) : null,
+      };
+      const compressedCloneSourceImageFile = cloneSourceImageFile
+        ? await compressImageFile(cloneSourceImageFile)
+        : null;
+
       const body = new FormData();
       body.append("name", form.name);
       body.append("price", form.price);
       body.append("brand", form.brand);
+      body.append("reference", form.reference);
       body.append("description", form.description);
       body.append("tag", form.tag);
       body.append("productType", form.productType);
@@ -886,13 +906,13 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       body.append("originPictureBack", form.originPictures.back);
       body.append("originPictureLeft", form.originPictures.left);
       body.append("originPictureRight", form.originPictures.right);
-      if (originPictureFiles.front) body.append("originPictureFrontFile", originPictureFiles.front);
-      if (originPictureFiles.back) body.append("originPictureBackFile", originPictureFiles.back);
-      if (originPictureFiles.left) body.append("originPictureLeftFile", originPictureFiles.left);
-      if (originPictureFiles.right) body.append("originPictureRightFile", originPictureFiles.right);
+      if (compressedOriginPictureFiles.front) body.append("originPictureFrontFile", compressedOriginPictureFiles.front);
+      if (compressedOriginPictureFiles.back) body.append("originPictureBackFile", compressedOriginPictureFiles.back);
+      if (compressedOriginPictureFiles.left) body.append("originPictureLeftFile", compressedOriginPictureFiles.left);
+      if (compressedOriginPictureFiles.right) body.append("originPictureRightFile", compressedOriginPictureFiles.right);
       body.append("cloneSourceName", form.cloneSourceName);
       body.append("cloneSourceImage", form.cloneSourceImage);
-      if (cloneSourceImageFile) body.append("cloneSourceImageFile", cloneSourceImageFile);
+      if (compressedCloneSourceImageFile) body.append("cloneSourceImageFile", compressedCloneSourceImageFile);
       body.append("categories", JSON.stringify(productCategories));
       body.append(
         "sizes",
@@ -916,7 +936,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         )
       );
 
-      const newImages = validImages.filter((img) => !img.existing && img.file);
+      const newImages = compressedValidImages.filter((img) => !img.existing && img.file);
       body.append(
         "imageOrder",
         JSON.stringify(
@@ -1006,6 +1026,16 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 onChange={(e) => setForm({ ...form, brand: e.target.value })}
                 className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
                 placeholder="Brand"
+              />
+            </div>
+            <div>
+              <FieldLabel>Reference</FieldLabel>
+              <input
+                type="text"
+                value={form.reference}
+                onChange={(e) => setForm({ ...form, reference: e.target.value })}
+                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                placeholder="Internal product reference"
               />
             </div>
             <div>

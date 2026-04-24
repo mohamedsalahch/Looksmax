@@ -3,9 +3,6 @@ import mongoose from "mongoose";
 import dbConnect from "@/store/lib/mongodb";
 import User from "@/store/models/User";
 import { getSession } from "@/store/lib/auth";
-import {
-  deleteBodyProfileImage,
-} from "@/store/lib/bodyProfileUploads";
 import { logRequestError } from "@/lib/requestLogging";
 
 function normalizeGender(value: FormDataEntryValue | null) {
@@ -52,6 +49,14 @@ export async function PUT(req: NextRequest) {
       );
     }
 
+    const profileImageEnhanced = String(existingUser.bodyProfile?.profileImageEnhanced || "").trim();
+    if (!profileImageEnhanced) {
+      return NextResponse.json(
+        { error: "An enhanced profile picture is required to save your Studio Profile." },
+        { status: 400 }
+      );
+    }
+
     const nextBodyProfile = {
       heightCm,
       weightKg,
@@ -59,7 +64,7 @@ export async function PUT(req: NextRequest) {
       bottomSize,
       shoeSize,
       profileImage: String(formData.get("existingProfileImage") || ""),
-      profileImageEnhanced: existingUser.bodyProfile?.profileImageEnhanced || "",
+      profileImageEnhanced,
       profileImageUploadCount: Number(existingUser.bodyProfile?.profileImageUploadCount || 0),
       outfitGenerationCount: Number(existingUser.bodyProfile?.outfitGenerationCount || 0),
       gender,
