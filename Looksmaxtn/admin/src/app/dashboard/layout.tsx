@@ -19,6 +19,8 @@ interface DashboardOrder {
   createdAt: string;
   user?: { name: string; email: string };
   totalPrice?: number;
+  isArchived?: boolean;
+  items?: { product?: string; name: string; quantity: number }[];
 }
 
 interface OrderNotice {
@@ -39,6 +41,24 @@ interface MessageNotice {
   createdAt: string;
   read: boolean;
 }
+
+type AdminRealtimeEvent =
+  | { type: "connected" }
+  | { type: "order:upsert"; order: DashboardOrder }
+  | { type: "order:delete"; orderId: string }
+  | {
+      type: "message:upsert";
+      message: {
+        _id: string;
+        name: string;
+        email: string;
+        subject: string;
+        message: string;
+        isRead: boolean;
+        createdAt: string;
+      };
+    }
+  | { type: "message:delete"; messageId: string };
 
 const navItems = [
   { name: "Dashboard", href: "/dashboard", icon: "📊" },
@@ -273,8 +293,94 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
     loadProcessingOrders();
     loadUnreadMessages();
-    const interval = window.setInterval(loadProcessingOrders, 20000);
-    const messageInterval = window.setInterval(loadUnreadMessages, 20000);
+    const eventSource = new EventSource("/api/events");
+    eventSource.onmessage = (event) => {
+      const payload = JSON.parse(event.data) as AdminRealtimeEvent;
+      if (payload.type === "connected") return;
+
+      if (payload.type === "order:delete") {
+        setOrderNotifications((current) =>
+          current.filter((notice) => notice.orderId !== payload.orderId)
+        );
+        window.dispatchEvent(new CustomEvent("looksmax-admin-order-event", { detail: payload }));
+        return;
+      }
+
+      if (payload.type === "order:upsert") {
+        const order = payload.order;
+        window.dispatchEvent(new CustomEvent("looksmax-admin-order-event", { detail: payload }));
+
+        if (order.orderStatus !== "processing") {
+          setOrderNotifications((current) =>
+            current.filter((notice) => notice.orderId !== order._id)
+          );
+          return;
+        }
+
+        setOrderNotifications((current) => {
+          const currentById = new Map(current.map((notice) => [notice.orderId, notice]));
+          const existing = currentById.get(order._id);
+          const readOrderIds = readOrderIdsRef.current;
+
+          return [
+            {
+              id: existing?.id || order._id,
+              orderId: order._id,
+              title: `Order #${order._id.slice(-8).toUpperCase()}`,
+              detail:
+                order.user?.name || order.user?.email
+                  ? `${order.user?.name || "Customer"} • ${order.user?.email || "No email"}`
+                  : "Processing order",
+              latestOrderAt: order.createdAt,
+              read: existing?.read ?? readOrderIds.has(order._id),
+              createdAt: order.createdAt,
+            },
+            ...current.filter((notice) => notice.orderId !== order._id),
+          ].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+        });
+        return;
+      }
+
+      if (payload.type === "message:delete") {
+        setMessageNotifications((current) =>
+          current.filter((notice) => notice.messageId !== payload.messageId)
+        );
+        window.dispatchEvent(new CustomEvent("looksmax-admin-message-event", { detail: payload }));
+        return;
+      }
+
+      if (payload.type === "message:upsert") {
+        const message = payload.message;
+        window.dispatchEvent(new CustomEvent("looksmax-admin-message-event", { detail: payload }));
+
+        if (message.isRead) {
+          setMessageNotifications((current) =>
+            current.filter((notice) => notice.messageId !== message._id)
+          );
+          return;
+        }
+
+        setMessageNotifications((current) => {
+          const currentById = new Map(current.map((notice) => [notice.messageId, notice]));
+          const existing = currentById.get(message._id);
+
+          return [
+            {
+              id: existing?.id || message._id,
+              messageId: message._id,
+              title: message.subject || "New message",
+              detail: `${message.name || "Customer"} • ${message.email || "No email"}`,
+              createdAt: message.createdAt,
+              read: existing?.read ?? false,
+            },
+            ...current.filter((notice) => notice.messageId !== message._id),
+          ].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+        });
+      }
+    };
+    eventSource.onerror = () => {
+      // EventSource reconnects automatically.
+    };
     const handlePointerDown = (event: MouseEvent) => {
       if (!showNotificationsRef.current) return;
       if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
@@ -286,8 +392,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
     return () => {
       active = false;
-      window.clearInterval(interval);
-      window.clearInterval(messageInterval);
+      eventSource.close();
       document.removeEventListener("mousedown", handlePointerDown);
       clearRefreshTimer();
     };

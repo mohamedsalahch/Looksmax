@@ -6,6 +6,7 @@ import ProductReservation from "@/store/models/ProductReservation";
 import User from "@/store/models/User";
 import { getSession } from "@/admin/lib/auth";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
+import { broadcastAdminEvent } from "@/admin/lib/adminEvents";
 import { sendOrderStatusEmail } from "@/store/lib/mailer";
 
 const VALID_ORDER_STATUSES = ["processing", "confirmed", "canceled", "shipping", "delivered", "returned"] as const;
@@ -40,6 +41,35 @@ function serializeOrder(order: LeanOrder) {
       ...item,
       productId: item.product.toString(),
     })),
+  };
+}
+
+function getAdminOrderEventPayload(order: Record<string, unknown>) {
+  const id = String(order._id || "");
+  const user =
+    typeof order.user === "object" && order.user !== null
+      ? (order.user as { name?: string; email?: string })
+      : null;
+  const items = Array.isArray(order.items) ? order.items : [];
+
+  return {
+    _id: id,
+    orderStatus: String(order.orderStatus || ""),
+    createdAt:
+      order.createdAt instanceof Date
+        ? order.createdAt.toISOString()
+        : String(order.createdAt || new Date().toISOString()),
+    user,
+    totalPrice: Number(order.totalPrice || 0),
+    isArchived: Boolean(order.isArchived),
+    items: items.map((item) => {
+      const itemRecord = item as Record<string, unknown>;
+      return {
+        product: String(itemRecord.productId || itemRecord.product || ""),
+        name: String(itemRecord.name || ""),
+        quantity: Number(itemRecord.quantity || 0),
+      };
+    }),
   };
 }
 
@@ -143,6 +173,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       .populate("user", "name email")
       .lean();
     if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    broadcastAdminEvent({ type: "order:upsert", order: getAdminOrderEventPayload(order) });
 
     if (orderStatus) {
       try {
@@ -251,6 +283,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     }
 
     await Order.deleteOne({ _id: id });
+
+    broadcastAdminEvent({ type: "order:delete", orderId: id });
 
     return NextResponse.json({ success: true });
   } catch (error) {
