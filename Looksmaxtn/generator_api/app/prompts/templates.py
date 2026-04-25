@@ -84,6 +84,10 @@ STRICT CONSTRAINTS:
 - Do NOT add patterns/logos anywhere
 - Do NOT distort proportions
 - Face must remain clean and undistorted
+
+--------------------------------
+FINAL REQUIREMENT:
+portrait orientation, 2:3 aspect ratio, full-body framing, model centered, feet visible, consistent margins, studio composition
 """
 
 CLOTHES_BOTTOM_PROMPT_TEMPLATE = """
@@ -170,6 +174,10 @@ STRICT CONSTRAINTS:
 - Do NOT add patterns/logos
 - Do NOT distort proportions
 - Avoid hiding key garment areas
+
+--------------------------------
+FINAL REQUIREMENT:
+portrait orientation, 2:3 aspect ratio, full-body framing, model centered, feet visible, consistent margins, studio composition
 """
 
 CLOTHES_PROMPT_TEMPLATE = """
@@ -258,6 +266,10 @@ STRICT CONSTRAINTS:
 - Do NOT generate unrealistic fabric
 - Avoid artifacts or deformities
 - Ensure the face is clearly visible and not distorted
+
+--------------------------------
+FINAL REQUIREMENT:
+portrait orientation, 2:3 aspect ratio, full-body framing, model centered, feet visible, consistent margins, studio composition
 """
 
 SHOES_PROMPT_TEMPLATE = """
