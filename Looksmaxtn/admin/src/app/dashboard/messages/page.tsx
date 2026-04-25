@@ -13,6 +13,10 @@ interface Message {
   createdAt: string;
 }
 
+type AdminMessageRealtimeEvent =
+  | { type: "message:upsert"; message: Message }
+  | { type: "message:delete"; messageId: string };
+
 export default function MessagesPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,6 +28,31 @@ export default function MessagesPage() {
       .then((r) => r.json())
       .then((d) => setMessages(d.messages || []))
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    const handleMessageEvent = (event: Event) => {
+      const detail = (event as CustomEvent<AdminMessageRealtimeEvent>).detail;
+      if (!detail) return;
+
+      if (detail.type === "message:delete") {
+        setMessages((current) => current.filter((message) => message._id !== detail.messageId));
+        return;
+      }
+
+      if (detail.type === "message:upsert") {
+        setMessages((current) => {
+          const exists = current.some((message) => message._id === detail.message._id);
+          if (!exists) return [detail.message, ...current];
+          return current.map((message) =>
+            message._id === detail.message._id ? detail.message : message
+          );
+        });
+      }
+    };
+
+    window.addEventListener("looksmax-admin-message-event", handleMessageEvent);
+    return () => window.removeEventListener("looksmax-admin-message-event", handleMessageEvent);
   }, []);
 
   const toggleRead = async (msg: Message) => {

@@ -1,0 +1,66 @@
+type AdminEventClient = {
+  controller: ReadableStreamDefaultController<Uint8Array>;
+};
+
+export type AdminOrderEventPayload = {
+  _id: string;
+  orderStatus: string;
+  createdAt: string;
+  user?: { name?: string; email?: string } | null;
+  totalPrice?: number;
+  isArchived?: boolean;
+  items?: Array<{ product?: string; name: string; quantity: number }>;
+};
+
+export type AdminMessageEventPayload = {
+  _id: string;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+};
+
+export type AdminEvent =
+  | { type: "order:upsert"; order: AdminOrderEventPayload }
+  | { type: "order:delete"; orderId: string }
+  | { type: "message:upsert"; message: AdminMessageEventPayload }
+  | { type: "message:delete"; messageId: string };
+
+const clients = new Map<string, AdminEventClient>();
+const encoder = new TextEncoder();
+
+export function addAdminEventClient(
+  id: string,
+  controller: ReadableStreamDefaultController<Uint8Array>
+) {
+  clients.set(id, { controller });
+}
+
+export function removeAdminEventClient(id: string) {
+  clients.delete(id);
+}
+
+export function sendAdminEvent(id: string, event: AdminEvent | { type: "connected" }) {
+  const client = clients.get(id);
+  if (!client) return;
+
+  try {
+    client.controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+  } catch {
+    clients.delete(id);
+  }
+}
+
+export function broadcastAdminEvent(event: AdminEvent) {
+  if (clients.size === 0) return;
+
+  for (const [id, client] of clients) {
+    try {
+      client.controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+    } catch {
+      clients.delete(id);
+    }
+  }
+}

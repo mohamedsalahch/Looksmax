@@ -12,6 +12,10 @@ interface Order {
   items: { product?: string; name: string; quantity: number }[];
 }
 
+type AdminOrderRealtimeEvent =
+  | { type: "order:upsert"; order: Order }
+  | { type: "order:delete"; orderId: string };
+
 type SortKey = "order" | "customer" | "items" | "total" | "status" | "archive" | "date";
 type SortDirection = "asc" | "desc";
 
@@ -29,6 +33,29 @@ export default function OrdersPage() {
 
   useEffect(() => {
     fetch("/api/orders", withAuthRequest()).then((r) => r.json()).then((d) => setOrders(d.orders || [])).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    const handleOrderEvent = (event: Event) => {
+      const detail = (event as CustomEvent<AdminOrderRealtimeEvent>).detail;
+      if (!detail) return;
+
+      if (detail.type === "order:delete") {
+        setOrders((current) => current.filter((order) => order._id !== detail.orderId));
+        return;
+      }
+
+      if (detail.type === "order:upsert") {
+        setOrders((current) => {
+          const exists = current.some((order) => order._id === detail.order._id);
+          if (!exists) return [detail.order, ...current];
+          return current.map((order) => (order._id === detail.order._id ? detail.order : order));
+        });
+      }
+    };
+
+    window.addEventListener("looksmax-admin-order-event", handleOrderEvent);
+    return () => window.removeEventListener("looksmax-admin-order-event", handleOrderEvent);
   }, []);
 
   const filtered = useMemo(() => {

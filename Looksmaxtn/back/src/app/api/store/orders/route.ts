@@ -7,6 +7,7 @@ import User from "@/store/models/User";
 import Coupon from "@/store/models/Coupon";
 import { getSession } from "@/store/lib/auth";
 import { getAuditActorFromSession } from "@/store/lib/auditRoute";
+import { broadcastAdminEvent } from "@/admin/lib/adminEvents";
 import { sendOrderStatusEmail } from "@/store/lib/mailer";
 import {
   buildCouponValidationResult,
@@ -288,6 +289,23 @@ export async function POST(req: NextRequest) {
     } catch (reservationCleanupError) {
       console.error("Cleanup order reservations error:", reservationCleanupError);
     }
+
+    broadcastAdminEvent({
+      type: "order:upsert",
+      order: {
+        _id: String(order._id),
+        orderStatus: order.orderStatus,
+        createdAt: order.createdAt.toISOString(),
+        user: null,
+        totalPrice: order.totalPrice,
+        isArchived: Boolean(order.isArchived),
+        items: order.items.map((item) => ({
+          product: String(item.product || ""),
+          name: item.name,
+          quantity: item.quantity,
+        })),
+      },
+    });
 
     const responseBody: Record<string, unknown> = { order };
     if (!session) {
