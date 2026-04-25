@@ -119,7 +119,7 @@ function LoginPageContent() {
       width: googleButtonRef.current.offsetWidth || 384,
       shape: "rectangular",
       text: "signin_with",
-      logo_alignment: "left",
+      logo_alignment: "center",
     });
   }, [googleClientId, googleConfigured, googleReady, loginWithGoogle, nextPath, router]);
 
