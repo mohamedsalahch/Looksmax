@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export default function AboutPage() {
   return (
-    <div className="pt-[72px] min-h-screen">
+    <div className="pt-[80px] min-h-screen">
       <div className="max-w-4xl mx-auto px-4 md:px-8 py-16">
         {/* Hero */}
         <div className="text-center mb-16">

@@ -149,7 +149,7 @@ export default function CheckoutPage() {
 
   if (authLoading) {
     return (
-      <div className="pt-[72px] min-h-screen flex items-center justify-center">
+      <div className="pt-[80px] min-h-screen flex items-center justify-center">
         <p className="text-xs text-text-secondary uppercase tracking-wider">Loading...</p>
       </div>
     );
@@ -157,7 +157,7 @@ export default function CheckoutPage() {
 
   if (items.length === 0 && !orderPlaced) {
     return (
-      <div className="pt-[72px] min-h-screen flex items-center justify-center">
+      <div className="pt-[80px] min-h-screen flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-lg font-semibold tracking-wide uppercase mb-3">Cart is Empty</h1>
           <p className="text-sm text-text-secondary mb-6">
@@ -176,7 +176,7 @@ export default function CheckoutPage() {
 
   if (orderPlaced) {
     return (
-      <div className="pt-[72px] min-h-screen flex items-center justify-center">
+      <div className="pt-[80px] min-h-screen flex items-center justify-center">
         <div className="text-center max-w-md mx-auto px-4">
           <div className="inline-flex h-10 w-10 items-center justify-center border border-[#d8c9b8] bg-[#faf7f2] mb-6">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6b6055" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -287,7 +287,7 @@ export default function CheckoutPage() {
   };
 
   return (
-    <div className="pt-[72px] min-h-screen">
+    <div className="pt-[80px] min-h-screen">
       <div className="max-w-5xl mx-auto px-4 md:px-8 py-8">
         <h1 className="text-lg font-semibold tracking-wide uppercase mb-8">Checkout</h1>
 

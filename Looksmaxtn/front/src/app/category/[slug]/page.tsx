@@ -54,7 +54,7 @@ export default async function CategoryPage({
   const initialData = await loadCategoryData(slug);
 
   return (
-    <div className="pt-[57px]">
+    <div className="pt-[77px]">
       <CategoryNav activeSlug={slug} />
 
       <ProductGrid

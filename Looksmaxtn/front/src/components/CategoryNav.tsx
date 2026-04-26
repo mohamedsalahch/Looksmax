@@ -114,9 +114,9 @@ export default function CategoryNav({
   };
 
   return (
-    <nav className="hidden md:block sticky top-[57px] z-30 border-b border-border-color/70 bg-background/92 backdrop-blur-md shadow-[0_8px_24px_rgba(26,26,26,0.04)]">
+    <nav className="hidden md:block sticky top-[77px] z-30 border-b border-border-color/70 bg-background/92 backdrop-blur-md shadow-[0_8px_24px_rgba(26,26,26,0.04)]">
       <div className="max-w-7xl mx-auto px-4">
-        <div className="flex items-center gap-3 overflow-x-auto px-2 pt-3 pb-1 scrollbar-hide md:px-4">
+        <div className="flex items-center gap-3 overflow-x-auto px-2 pt-3 pb-2 scrollbar-hide md:px-4">
           <Link href="/" className={`hidden whitespace-nowrap px-2 py-2 text-xs transition-colors underline-offset-[6px] decoration-1 md:inline-block ${activeSlug === "home" ? "text-foreground font-medium underline decoration-foreground" : "text-text-secondary hover:text-foreground/60 hover:underline hover:decoration-foreground/60"}`}>
             Home
           </Link>

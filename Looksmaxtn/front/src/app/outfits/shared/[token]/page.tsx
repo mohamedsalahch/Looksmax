@@ -27,7 +27,7 @@ export default async function SharedOutfitPage({
   const images = [outfit.images?.front || "", outfit.images?.back || ""].filter(Boolean);
 
   return (
-    <div className="pt-[72px] min-h-screen">
+    <div className="pt-[80px] min-h-screen">
       <div className="max-w-5xl mx-auto px-4 md:px-8 py-10 space-y-6">
         <div className="text-center space-y-2">
           <p className="text-[10px] uppercase tracking-[0.28em] text-text-secondary">

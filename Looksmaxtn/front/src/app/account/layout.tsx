@@ -25,7 +25,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
 
   if (loading || !user) {
     return (
-      <div className="pt-[72px] min-h-screen">
+      <div className="pt-[80px] min-h-screen">
         <div className="max-w-5xl mx-auto px-4 md:px-8 py-8">
           <div className="h-5 w-36 animate-pulse bg-border-color/50 mb-1" />
           <div className="h-3 w-52 animate-pulse bg-border-color/40 mb-8" />
@@ -47,7 +47,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
   }
 
   return (
-    <div className="pt-[72px] min-h-screen">
+    <div className="pt-[80px] min-h-screen">
       <div className="max-w-5xl mx-auto px-4 md:px-8 py-8">
         <h1 className="text-lg font-semibold tracking-wide uppercase mb-1">My Account</h1>
         <p className="text-xs text-text-secondary mb-8">Welcome back, {user.name}</p>

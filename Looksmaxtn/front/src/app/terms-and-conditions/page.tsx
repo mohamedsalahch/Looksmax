@@ -1,6 +1,6 @@
 export default function TermsAndConditionsPage() {
   return (
-    <div className="pt-[72px] min-h-screen">
+    <div className="pt-[80px] min-h-screen">
       <div className="max-w-3xl mx-auto px-4 md:px-8 py-16">
         <p className="text-xs uppercase tracking-[0.3em] text-text-secondary mb-3">
           Legal

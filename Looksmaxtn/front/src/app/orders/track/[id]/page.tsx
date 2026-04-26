@@ -74,7 +74,7 @@ export default function TrackOrderPage({ params }: { params: Promise<{ id: strin
 
   if (loading) {
     return (
-      <div className="pt-[72px] min-h-screen flex items-center justify-center">
+      <div className="pt-[80px] min-h-screen flex items-center justify-center">
         <p className="text-xs text-text-secondary uppercase tracking-wider">Loading order...</p>
       </div>
     );
@@ -82,7 +82,7 @@ export default function TrackOrderPage({ params }: { params: Promise<{ id: strin
 
   if (error || !order) {
     return (
-      <div className="pt-[72px] min-h-screen flex items-center justify-center">
+      <div className="pt-[80px] min-h-screen flex items-center justify-center">
         <div className="text-center max-w-md mx-auto px-4">
           <h1 className="text-lg font-semibold tracking-wide uppercase mb-3">Order Not Found</h1>
           <p className="text-sm text-text-secondary mb-6">
@@ -102,7 +102,7 @@ export default function TrackOrderPage({ params }: { params: Promise<{ id: strin
   const orderNumber = order._id.slice(-8).toUpperCase();
 
   return (
-    <div className="pt-[72px] min-h-screen">
+    <div className="pt-[80px] min-h-screen">
       <div className="max-w-3xl mx-auto px-4 md:px-8 py-8">
         <div className="flex flex-wrap items-center gap-3 mb-6">
           <h1 className="text-lg font-semibold tracking-wide uppercase">

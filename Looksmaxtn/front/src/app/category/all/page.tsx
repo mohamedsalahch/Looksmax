@@ -24,7 +24,7 @@ export default async function AllCategoriesPage() {
   const initialData = await loadAllCategoriesData();
 
   return (
-    <div className="pt-[57px]">
+    <div className="pt-[77px]">
       <CategoryNav activeSlug="all-categories" />
 
       <ProductGrid

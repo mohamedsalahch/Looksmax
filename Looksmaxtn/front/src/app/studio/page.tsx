@@ -1539,7 +1539,7 @@ export default function OutfitStudioPage() {
 
     if (loading) {
         return (
-            <div className="pt-[72px] min-h-screen flex items-center justify-center">
+            <div className="pt-[80px] min-h-screen flex items-center justify-center">
                 <p className="text-xs text-text-secondary uppercase tracking-wider">Loading studio...</p>
             </div>
         );
@@ -1547,7 +1547,7 @@ export default function OutfitStudioPage() {
 
     if (!user) {
         return (
-            <div className="pt-[72px] min-h-screen flex items-center justify-center px-4">
+            <div className="pt-[80px] min-h-screen flex items-center justify-center px-4">
                 <div className="text-center">
                     <h1 className="text-lg font-semibold tracking-wide uppercase mb-3">Sign In Required</h1>
                     <p className="text-sm text-text-secondary mb-6">
@@ -1585,7 +1585,7 @@ export default function OutfitStudioPage() {
         );
 
     return (
-        <div className="pt-[72px] min-h-screen bg-background">
+        <div className="pt-[80px] min-h-screen bg-background">
             <div className="max-w-7xl mx-auto px-4 md:px-8 py-8 space-y-6">
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 max-w-2xl">
