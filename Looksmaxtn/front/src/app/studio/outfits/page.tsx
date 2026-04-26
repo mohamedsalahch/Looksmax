@@ -131,14 +131,14 @@ export default function SavedOutfitsPage() {
 
   if (loading) {
     return (
-      <div className="pt-[72px] min-h-screen flex items-center justify-center">
+      <div className="pt-[80px] min-h-screen flex items-center justify-center">
         <p className="text-xs text-text-secondary uppercase tracking-wider">Loading saved outfits...</p>
       </div>
     );
   }
 
   return (
-    <div className="pt-[72px] min-h-screen bg-background">
+    <div className="pt-[80px] min-h-screen bg-background">
       <div className="max-w-7xl mx-auto px-4 md:px-8 py-10 space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div>

@@ -2,7 +2,6 @@ import { mkdir, readFile, unlink, writeFile } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
 import { getUploadCategoryDir } from "@/admin/lib/uploadStorage";
-import { compressBase64Image } from "@/lib/imageCompression";
 
 const UPLOAD_DIR = getUploadCategoryDir("models");
 const PUBLIC_PREFIX = "/uploads/models";
@@ -56,5 +55,5 @@ export async function readModelImageAsBase64(imagePath: string) {
   const filename = path.basename(imagePath);
   const fullPath = path.join(UPLOAD_DIR, filename);
   const buffer = await readFile(fullPath);
-  return compressBase64Image(buffer.toString("base64"));
+  return buffer.toString("base64");
 }

@@ -1,6 +1,6 @@
 "use client";
 
-export type StudioZoneId = "headwear" | "outerwear" | "top" | "bottom" | "footwear";
+export type StudioZoneId = "headwear" | "outerwear" | "dress" | "top" | "bottom" | "footwear";
 
 export interface StudioAssignmentItem {
   id: string;
@@ -29,6 +29,7 @@ const EVENT_NAME = "looksmax:studio-assignment-change";
 const ZONE_KEYWORDS: Record<StudioZoneId, string[]> = {
   headwear: ["headwear", "hat", "hats", "cap", "caps", "beanie", "beanies"],
   outerwear: ["outerwear", "jacket", "jackets", "coat", "coats", "blazer", "blazers", "veste", "vestes"],
+  dress: ["dress", "dresses", "robe", "robes", "gown", "gowns"],
   top: ["top", "tops", "shirt", "shirts", "pull", "pulls", "hoodie", "hoodies", "sweater", "sweaters", "tee", "t-shirt", "tshirts", "polo", "polos"],
   bottom: ["bottom", "bottoms", "pant", "pants", "jean", "jeans", "trouser", "trousers", "short", "shorts"],
   footwear: ["shoe", "shoes", "sneaker", "sneakers", "footwear", "boot", "boots", "loafer", "loafers"],
@@ -74,7 +75,7 @@ export function inferStudioAssignmentZone(
 
   const haystack = normalizeText([item.name, ...(item.categories || [])].filter(Boolean).join(" "));
 
-  for (const zoneId of ["headwear", "outerwear", "top", "bottom", "footwear"] as const) {
+  for (const zoneId of ["headwear", "outerwear", "dress", "top", "bottom", "footwear"] as const) {
     if (ZONE_KEYWORDS[zoneId].some((keyword) => matchesKeyword(haystack, keyword))) {
       return zoneId;
     }

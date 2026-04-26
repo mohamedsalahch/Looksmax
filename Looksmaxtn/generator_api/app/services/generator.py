@@ -2,13 +2,12 @@
 
 import base64
 import logging
-from typing import Any
 
 from fastapi import HTTPException
 from google import genai
 from google.genai import types
 
-from app.models.requests import BodyZones
+from app.models.requests import BodyZones, SecondaryColors
 from app.prompts.templates import (
     CLOTHES_TOP_PROMPT_TEMPLATE,
     CLOTHES_BOTTOM_PROMPT_TEMPLATE,
@@ -32,7 +31,10 @@ class ImageGenerator:
         """
         self.client = genai.Client(api_key=api_key)
         self.model = "gemini-3.1-flash-image-preview"
-        self.default_config: dict[str, Any] = {}
+        self.default_config = types.GenerateContentConfig(
+            response_modalities=["IMAGE"],
+            image_config=types.ImageConfig(aspect_ratio="9:16"),
+        )
 
     async def generate_clothes_view(
         self,
@@ -41,7 +43,8 @@ class ImageGenerator:
         model_back: str,
         product_front: str,
         product_back: str,
-        garment_zone: str = "top"
+        garment_zone: str = "top",
+        secondary_colors: SecondaryColors | None = None,
     ) -> str:
         """Generate a single clothes view and return base64 image.
 
@@ -56,8 +59,66 @@ class ImageGenerator:
         Returns:
             Base64 encoded generated image
         """
-        template = CLOTHES_TOP_PROMPT_TEMPLATE if garment_zone == "top" else CLOTHES_BOTTOM_PROMPT_TEMPLATE
-        prompt = template.replace("{VIEW}", view_name.upper())
+        target = secondary_colors.target if secondary_colors is not None else garment_zone
+        template = CLOTHES_BOTTOM_PROMPT_TEMPLATE if target == "bottom" else CLOTHES_TOP_PROMPT_TEMPLATE
+
+        if secondary_colors is not None:
+            top_color = secondary_colors.top or secondary_colors.garment
+            bottom_color = secondary_colors.bottom or secondary_colors.garment
+            shoes_color = secondary_colors.shoes
+            secondary_color = bottom_color if target in ["top", "outerwear"] else top_color
+            secondary_name = secondary_color.name if secondary_color is not None else ("Black" if garment_zone == "top" else "White")
+            secondary_hex = secondary_color.hex if secondary_color is not None else ("#000000" if garment_zone == "top" else "#FFFFFF")
+            top_type = secondary_colors.top_type or "t-shirt"
+            bottom_type = secondary_colors.bottom_type or "pants"
+            footwear_type = secondary_colors.footwear_type or "shoes"
+            top_name = top_color.name if top_color is not None else "White"
+            top_hex = top_color.hex if top_color is not None else "#FFFFFF"
+            bottom_name = bottom_color.name if bottom_color is not None else "Black"
+            bottom_hex = bottom_color.hex if bottom_color is not None else "#000000"
+            shoes_name = shoes_color.name if shoes_color is not None else "White"
+            shoes_hex = shoes_color.hex if shoes_color is not None else "#FFFFFF"
+        else:
+            # Backward-compatible defaults: previous hardcoded values
+            secondary_name = "Black" if garment_zone == "top" else "White"
+            secondary_hex = "#000000" if garment_zone == "top" else "#FFFFFF"
+            top_type = "t-shirt"
+            bottom_type = "pants"
+            footwear_type = "shoes"
+            top_name = "White"
+            top_hex = "#FFFFFF"
+            bottom_name = "Black"
+            bottom_hex = "#000000"
+            shoes_name = "White"
+            shoes_hex = "#FFFFFF"
+
+        companion_instructions = _build_companion_instructions(
+            target=target,
+            top_type=top_type,
+            top_name=top_name,
+            top_hex=top_hex,
+            bottom_type=bottom_type,
+            bottom_name=bottom_name,
+            bottom_hex=bottom_hex,
+        )
+
+        prompt = (
+            template
+            .replace("{VIEW}", view_name.upper())
+            .replace("{GENERATION_TARGET}", target.upper())
+            .replace("{COMPANION_GARMENTS_SECTION}", companion_instructions)
+            .replace("{TOP_TYPE}", top_type)
+            .replace("{BOTTOM_TYPE}", bottom_type)
+            .replace("{TOP_COLOR_NAME}", top_name)
+            .replace("{TOP_COLOR_HEX}", top_hex)
+            .replace("{BOTTOM_COLOR_NAME}", bottom_name)
+            .replace("{BOTTOM_COLOR_HEX}", bottom_hex)
+            .replace("{FOOTWEAR_TYPE}", footwear_type)
+            .replace("{SECONDARY_COLOR_NAME}", secondary_name)
+            .replace("{SECONDARY_COLOR_HEX}", secondary_hex)
+            .replace("{SHOES_COLOR_NAME}", shoes_name)
+            .replace("{SHOES_COLOR_HEX}", shoes_hex)
+        )
 
         logger.info(
             f"generate_clothes_view({view_name}): input sizes - "
@@ -172,11 +233,13 @@ class ImageGenerator:
             shoe_size=shoe_size,
             headwear_status="true" if body_zones.headwear.status else "false",
             outerwear_status="true" if body_zones.outerwear.status else "false",
+            dress_status="true" if body_zones.dress.status else "false",
             top_status="true" if body_zones.top.status else "false",
             bottom_status="true" if body_zones.bottom.status else "false",
             footwear_status="true" if body_zones.footwear.status else "false",
             headwear_piece_size=body_zones.headwear.size or "N/A",
             outerwear_piece_size=body_zones.outerwear.size or "N/A",
+            dress_piece_size=body_zones.dress.size or "N/A",
             top_piece_size=body_zones.top.size or "N/A",
             bottom_piece_size=body_zones.bottom.size or "N/A",
             footwear_piece_size=body_zones.footwear.size or "N/A",
@@ -201,7 +264,8 @@ class ImageGenerator:
         try:
             response = await self.client.aio.models.generate_content(
                 model=self.model,
-                contents=[types.Content(parts=parts)]
+                contents=[types.Content(parts=parts)],
+                config=self.default_config,
             )
         except Exception as e:
             logger.error(f"generate_front_view: Gemini API exception: {type(e).__name__}: {e}")
@@ -253,7 +317,8 @@ class ImageGenerator:
         try:
             response = await self.client.aio.models.generate_content(
                 model=self.model,
-                contents=[types.Content(parts=parts)]
+                contents=[types.Content(parts=parts)],
+                config=self.default_config,
             )
         except Exception as e:
             logger.error(f"generate_back_view: Gemini API exception: {type(e).__name__}: {e}")
@@ -286,7 +351,11 @@ class ImageGenerator:
         Returns:
             Base64 encoded generated image
         """
-        parts = [types.Part(text=prompt)]
+        prompt_with_format = (
+            f"{prompt}\n\nFINAL OUTPUT FORMAT: Generate one portrait image in exact 9:16 aspect ratio. "
+            "Full-body framing when a person is present, centered subject, no extra text."
+        )
+        parts = [types.Part(text=prompt_with_format)]
         parts.extend(b64_to_part(img) for img in images)
 
         response = await self.client.aio.models.generate_content(
@@ -318,6 +387,7 @@ def _get_active_images(body_zones: BodyZones, view: str) -> list[str]:
     zones_map = {
         "headwear": body_zones.headwear,
         "outerwear": body_zones.outerwear,
+        "dress": body_zones.dress,
         "top": body_zones.top,
         "bottom": body_zones.bottom,
         "footwear": body_zones.footwear,
@@ -330,3 +400,78 @@ def _get_active_images(body_zones: BodyZones, view: str) -> list[str]:
                 images.append(image)
 
     return images
+
+
+def _build_companion_instructions(
+    target: str,
+    top_type: str,
+    top_name: str,
+    top_hex: str,
+    bottom_type: str,
+    bottom_name: str,
+    bottom_hex: str,
+) -> str:
+    """Build target-specific companion garment instructions for product generation."""
+    if target == "top":
+        return f"""
+COMPANION GARMENT (BOTTOM = FIXED):
+The bottom is not the hero product, but it MUST visibly match the admin selection.
+
+STRICT RULES:
+- Plain {bottom_name} {bottom_type} ONLY
+- Color: exactly {bottom_hex} ({bottom_name})
+- The visible bottom color must match {bottom_hex}; do not use black, white, gray, or denim unless that exact color was selected.
+- No patterns, no logos, no distressing
+- Straight or slightly relaxed fit
+- Matte fabric
+- Keep the silhouette simple, but keep the selected color clearly visible
+"""
+
+    if target == "bottom":
+        return f"""
+COMPANION GARMENT (TOP = FIXED):
+The top is not the hero product, but it MUST visibly match the admin selection.
+
+STRICT RULES:
+- Plain {top_name} {top_type} ONLY
+- Color: exactly {top_hex} ({top_name})
+- The visible top color must match {top_hex}; do not use black, white, gray, beige, or another neutral unless that exact color was selected.
+- No logos, no graphics, no texture
+- Matte cotton appearance
+- Keep the silhouette simple, but keep the selected color clearly visible
+"""
+
+    if target == "outerwear":
+        return f"""
+COMPANION GARMENTS (TOP + BOTTOM = FIXED):
+The top and bottom are not the hero product, but both MUST visibly match the admin selections.
+
+TOP STRICT RULES:
+- Plain {top_name} {top_type} ONLY
+- Color: exactly {top_hex} ({top_name})
+- Do not use black, white, gray, beige, or another neutral unless {top_hex} is that color
+- No logos, no graphics, no texture
+
+BOTTOM STRICT RULES:
+- Plain {bottom_name} {bottom_type} ONLY
+- Color: exactly {bottom_hex} ({bottom_name})
+- Do not use black, white, gray, denim, or another neutral unless {bottom_hex} is that color
+- No patterns, no logos, no distressing
+
+Keep both companion garments simple, but keep their selected colors clearly visible around the outerwear.
+"""
+
+    if target == "dress":
+        return """
+COMPANION GARMENTS:
+- Do NOT add separate top or bottom garments.
+- The provided DRESS is the complete body garment and must remain the only clothing item above the footwear.
+- Do NOT add black pants, jeans, leggings, or a t-shirt unless such clothing is visibly part of the provided dress reference.
+"""
+
+    return f"""
+COMPANION GARMENT:
+- If a top is needed, use plain {top_name} {top_type}, exactly {top_hex} ({top_name}).
+- If a bottom is needed, use plain {bottom_name} {bottom_type}, exactly {bottom_hex} ({bottom_name}).
+- Do not replace selected colors with black, white, gray, denim, beige, or another neutral unless that exact color was selected.
+"""

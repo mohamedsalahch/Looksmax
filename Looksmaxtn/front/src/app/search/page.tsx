@@ -172,7 +172,7 @@ function SearchContent() {
   );
 
   return (
-    <div className="pt-[57px]">
+    <div className="pt-[77px]">
       <div className="mx-auto max-w-7xl px-4 py-8">
         <div className="max-w-3xl">
           <p className="text-[10px] uppercase tracking-[0.26em] text-text-secondary">Search</p>

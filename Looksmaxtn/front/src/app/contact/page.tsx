@@ -33,7 +33,7 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="pt-[72px] min-h-screen">
+    <div className="pt-[80px] min-h-screen">
       <div className="max-w-4xl mx-auto px-4 md:px-8 py-16">
         {/* Header */}
         <div className="text-center mb-12">

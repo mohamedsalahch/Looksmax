@@ -6,6 +6,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/providers/AuthContext";
 import { withAuthRequest } from "@/lib/authClient";
+import { compressImageFile } from "@/lib/imageCompression";
 
 function normalizeGender(value: string | undefined) {
   const normalized = String(value || "").trim().toLowerCase();
@@ -185,8 +186,9 @@ export default function SettingsPage() {
     setBodyProfile((prev) => ({ ...prev, profileImage: localPreview }));
 
     try {
+      const compressedFile = await compressImageFile(file);
       const formData = new FormData();
-      formData.append("profileImage", file);
+      formData.append("profileImage", compressedFile);
 
       const res = await fetch("/api/users/me/body-profile/photo", {
         ...withAuthRequest({

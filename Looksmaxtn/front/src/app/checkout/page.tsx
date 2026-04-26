@@ -22,11 +22,33 @@ interface AppliedCoupon {
   totalAfterDiscount: number;
 }
 
+interface ShippingSettings {
+  shippingCost: number;
+  freeShippingThreshold: number;
+}
+
+type TikTokWindow = Window & {
+  ttq?: {
+    track?: (eventName: string, payload?: Record<string, unknown>) => void;
+  };
+};
+
+function calculateShippingFee(subtotal: number, settings: ShippingSettings) {
+  const shippingCost = Math.max(0, Number(settings.shippingCost || 0));
+  const freeShippingThreshold = Math.max(0, Number(settings.freeShippingThreshold || 0));
+  if (shippingCost === 0 || freeShippingThreshold === 0 || subtotal >= freeShippingThreshold) return 0;
+  return shippingCost;
+}
+
 export default function CheckoutPage() {
   const router = useRouter();
   const { items, totalPrice, clearCart, removeItem, updateQuantity } = useCart();
   const { user, loading: authLoading } = useAuth();
-  const shippingFee = 0;
+  const [shippingSettings, setShippingSettings] = useState<ShippingSettings>({
+    shippingCost: 0,
+    freeShippingThreshold: 0,
+  });
+  const shippingFee = calculateShippingFee(totalPrice, shippingSettings);
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
   const [couponLoading, setCouponLoading] = useState(false);
@@ -49,6 +71,29 @@ export default function CheckoutPage() {
   const [guestTrackingUrl, setGuestTrackingUrl] = useState<string | null>(null);
   const unavailableItems = items.filter((item) => item.isUnavailable);
   const hasUnavailableItems = unavailableItems.length > 0;
+
+  useEffect(() => {
+    let active = true;
+
+    void (async () => {
+      try {
+        const res = await fetch("/api/shipping-settings");
+        const data = (await res.json()) as { settings?: ShippingSettings };
+        if (!active || !data.settings) return;
+        setShippingSettings({
+          shippingCost: Number(data.settings.shippingCost || 0),
+          freeShippingThreshold: Number(data.settings.freeShippingThreshold || 0),
+        });
+      } catch {
+        if (!active) return;
+        setShippingSettings({ shippingCost: 0, freeShippingThreshold: 0 });
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleRemoveItem = async (itemId: string) => {
     removeItem(itemId);
@@ -149,7 +194,7 @@ export default function CheckoutPage() {
 
   if (authLoading) {
     return (
-      <div className="pt-[72px] min-h-screen flex items-center justify-center">
+      <div className="pt-[80px] min-h-screen flex items-center justify-center">
         <p className="text-xs text-text-secondary uppercase tracking-wider">Loading...</p>
       </div>
     );
@@ -157,7 +202,7 @@ export default function CheckoutPage() {
 
   if (items.length === 0 && !orderPlaced) {
     return (
-      <div className="pt-[72px] min-h-screen flex items-center justify-center">
+      <div className="pt-[80px] min-h-screen flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-lg font-semibold tracking-wide uppercase mb-3">Cart is Empty</h1>
           <p className="text-sm text-text-secondary mb-6">
@@ -176,7 +221,7 @@ export default function CheckoutPage() {
 
   if (orderPlaced) {
     return (
-      <div className="pt-[72px] min-h-screen flex items-center justify-center">
+      <div className="pt-[80px] min-h-screen flex items-center justify-center">
         <div className="text-center max-w-md mx-auto px-4">
           <div className="inline-flex h-10 w-10 items-center justify-center border border-[#d8c9b8] bg-[#faf7f2] mb-6">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6b6055" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -280,6 +325,16 @@ export default function CheckoutPage() {
       setCouponError("");
       setGuestTrackingUrl(typeof data.trackingUrl === "string" ? data.trackingUrl : null);
       setOrderPlaced(data.order._id);
+      (window as TikTokWindow).ttq?.track?.("PlaceAnOrder", {
+        order_id: data.order._id,
+        value: Number(data.order.totalPrice || grandTotal),
+        currency: "TND",
+        contents: orderItems.map((item) => ({
+          content_id: item.productId,
+          content_name: item.name,
+          quantity: item.quantity,
+        })),
+      });
     } catch {
       setError("Network error. Please try again.");
     }
@@ -287,7 +342,7 @@ export default function CheckoutPage() {
   };
 
   return (
-    <div className="pt-[72px] min-h-screen">
+    <div className="pt-[80px] min-h-screen">
       <div className="max-w-5xl mx-auto px-4 md:px-8 py-8">
         <h1 className="text-lg font-semibold tracking-wide uppercase mb-8">Checkout</h1>
 
@@ -544,8 +599,13 @@ export default function CheckoutPage() {
                   )}
                   <div className="flex justify-between text-xs text-text-secondary">
                     <span>Shipping</span>
-                    <span>Free</span>
+                    <span>{shippingFee > 0 ? formatTndPrice(shippingFee) : "Free"}</span>
                   </div>
+                  {shippingSettings.freeShippingThreshold > 0 && totalPrice < shippingSettings.freeShippingThreshold && (
+                    <p className="text-[10px] text-text-secondary">
+                      Free shipping from {formatTndPrice(shippingSettings.freeShippingThreshold)}.
+                    </p>
+                  )}
                   <div className="flex justify-between text-sm font-semibold pt-2 border-t border-border-color">
                     <span>Total</span>
                     <span>{formatTndPrice(grandTotal)}</span>

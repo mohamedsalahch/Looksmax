@@ -46,6 +46,7 @@ async def process_outfit_generation(
     for zone_name, zone in [
         ("headwear", body_zones.headwear),
         ("outerwear", body_zones.outerwear),
+        ("dress", body_zones.dress),
         ("top", body_zones.top),
         ("bottom", body_zones.bottom),
         ("footwear", body_zones.footwear)
@@ -58,6 +59,7 @@ async def process_outfit_generation(
     active_zones = [name for name, zone in [
         ("headwear", body_zones.headwear),
         ("outerwear", body_zones.outerwear),
+        ("dress", body_zones.dress),
         ("top", body_zones.top),
         ("bottom", body_zones.bottom),
         ("footwear", body_zones.footwear)
@@ -145,6 +147,7 @@ async def generate_outfit_image(request: OutfitRequest, background_tasks: Backgr
     for zone_name, zone in [
         ("headwear", request.body_zones.headwear),
         ("outerwear", request.body_zones.outerwear),
+        ("dress", request.body_zones.dress),
         ("top", request.body_zones.top),
         ("bottom", request.body_zones.bottom),
         ("footwear", request.body_zones.footwear),
@@ -159,6 +162,7 @@ async def generate_outfit_image(request: OutfitRequest, background_tasks: Backgr
     for zone_name, zone in [
         ("headwear", request.body_zones.headwear),
         ("outerwear", request.body_zones.outerwear),
+        ("dress", request.body_zones.dress),
         ("top", request.body_zones.top),
         ("bottom", request.body_zones.bottom),
         ("footwear", request.body_zones.footwear),

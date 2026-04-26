@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type TouchEvent as ReactTouchEvent } from "react";
 
 interface ProductImage {
   url: string;
@@ -22,6 +22,7 @@ export default function ProductImageGallery({ images = [] }: { images?: ProductI
   const [zoomPosition, setZoomPosition] = useState({ left: 0, top: 0 });
   const galleryRef = useRef<HTMLDivElement | null>(null);
   const imageShellRef = useRef<HTMLDivElement | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     const media = window.matchMedia("(hover: hover) and (pointer: fine)");
@@ -113,6 +114,37 @@ export default function ProductImageGallery({ images = [] }: { images?: ProductI
     setIsZoomActive(false);
   };
 
+  const showNextImage = () => {
+    setActiveIndex((current) => Math.min(current + 1, displayImages.length - 1));
+  };
+
+  const showPreviousImage = () => {
+    setActiveIndex((current) => Math.max(current - 1, 0));
+  };
+
+  const handleTouchStart = (event: ReactTouchEvent<HTMLDivElement>) => {
+    if (isDesktop || displayImages.length <= 1) return;
+    const touch = event.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+  };
+
+  const handleTouchEnd = (event: ReactTouchEvent<HTMLDivElement>) => {
+    if (isDesktop || displayImages.length <= 1 || !touchStartRef.current) return;
+
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - touchStartRef.current.x;
+    const deltaY = touch.clientY - touchStartRef.current.y;
+    touchStartRef.current = null;
+
+    if (Math.abs(deltaX) < 48 || Math.abs(deltaX) < Math.abs(deltaY) * 1.2) return;
+
+    if (deltaX > 0) {
+      showPreviousImage();
+    } else {
+      showNextImage();
+    }
+  };
+
   return (
     <div ref={galleryRef} className="flex flex-col-reverse md:flex-row gap-3">
       {/* Thumbnails */}
@@ -132,7 +164,7 @@ export default function ProductImageGallery({ images = [] }: { images?: ProductI
                 <img
                   src={img.url}
                   alt={`Thumbnail ${index + 1}`}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-contain"
                   loading="lazy"
                   decoding="async"
                 />
@@ -147,13 +179,15 @@ export default function ProductImageGallery({ images = [] }: { images?: ProductI
       {/* Main Image */}
       <div
         ref={imageShellRef}
-        className={`flex-1 relative aspect-[3/4] md:aspect-auto md:h-[600px] bg-transparent overflow-visible ${
+        className={`flex-1 relative aspect-[3/4] md:aspect-auto md:h-[600px] bg-transparent overflow-visible touch-pan-y ${
           isDesktop && displayImages[activeIndex]?.url ? "cursor-zoom-in" : "cursor-default"
         }`}
         onClick={toggleZoom}
         onMouseEnter={handleMouseEnter}
         onMouseMove={updateZoomState}
         onMouseLeave={handleMouseLeave}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
       >
         {displayImages[activeIndex]?.url ? (
           <>

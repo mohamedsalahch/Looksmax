@@ -1,6 +1,6 @@
 export default function Loading() {
   return (
-    <div className="pt-[57px]">
+    <div className="pt-[77px]">
       {/* Category nav skeleton — matches the horizontal scrolling CategoryNav */}
       <div className="border-b border-border-color">
         <div className="max-w-7xl mx-auto px-4 md:px-8">

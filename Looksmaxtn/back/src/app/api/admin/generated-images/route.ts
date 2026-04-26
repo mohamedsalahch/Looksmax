@@ -1,49 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
 import GeneratedImageAsset from "@/admin/models/GeneratedImageAsset";
+import GeneratedImagePrompt from "@/admin/models/GeneratedImagePrompt";
 import { getSession } from "@/admin/lib/auth";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
-import {
-  saveGeneratedResultBase64,
-  saveGeneratedSourceImage,
-} from "@/admin/lib/generatedImageUploads";
+import { saveGeneratedSourceImage } from "@/admin/lib/generatedImageUploads";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
-import { compressBase64Image } from "@/lib/imageCompression";
-
-function extractImagesFromResponse(data: unknown) {
-  if (typeof data === "string") return [data];
-  if (Array.isArray(data)) return data.filter((item): item is string => typeof item === "string");
-  if (data && typeof data === "object") {
-    const record = data as Record<string, unknown>;
-    if (Array.isArray(record.imagesBase64)) {
-      return record.imagesBase64.filter((item): item is string => typeof item === "string");
-    }
-    if (typeof record.image === "string") {
-      return [record.image];
-    }
-    if (Array.isArray(record.images)) {
-      return record.images
-        .map((item) => {
-          if (typeof item === "string") return item;
-          if (
-            item &&
-            typeof item === "object" &&
-            typeof (item as Record<string, unknown>).base64 === "string"
-          ) {
-            return (item as Record<string, string>).base64;
-          }
-          return null;
-        })
-        .filter((item): item is string => Boolean(item));
-    }
-    if (typeof record.base64 === "string") return [record.base64];
-  }
-  return [];
-}
 
 async function fileToBase64(file: File) {
   const bytes = await file.arrayBuffer();
-  return compressBase64Image(Buffer.from(bytes).toString("base64"));
+  return Buffer.from(bytes).toString("base64");
 }
 
 export async function GET() {
@@ -82,13 +48,27 @@ export async function POST(req: NextRequest) {
     const auditActor = await getAuditActorFromSession(session);
     const formData = await req.formData();
     const name = String(formData.get("name") || "").trim();
-    const prompt = String(formData.get("prompt") || "").trim();
+    const promptId = String(formData.get("promptId") || "").trim();
+    let prompt = String(formData.get("prompt") || "").trim();
+    let promptTitle = String(formData.get("promptTitle") || "").trim();
+    let promptDescription = String(formData.get("promptDescription") || "").trim();
     const sourceFiles = formData
       .getAll("images")
       .filter((value): value is File => value instanceof File && value.size > 0);
 
     if (!name) {
       return NextResponse.json({ error: "Name is required." }, { status: 400 });
+    }
+
+    if (promptId) {
+      const savedPrompt = await GeneratedImagePrompt.findById(promptId).lean();
+      if (!savedPrompt) {
+        return NextResponse.json({ error: "Selected prompt was not found." }, { status: 404 });
+      }
+
+      promptTitle = savedPrompt.title;
+      promptDescription = savedPrompt.description;
+      prompt = `${savedPrompt.title}\n\n${savedPrompt.description}`;
     }
 
     if (!prompt) {
@@ -105,6 +85,9 @@ export async function POST(req: NextRequest) {
     const generatedImage = await GeneratedImageAsset.create({
       name,
       prompt,
+      promptId,
+      promptTitle,
+      promptDescription,
       sourceImages,
       images: [],
       status: "processing",

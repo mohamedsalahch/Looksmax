@@ -10,6 +10,12 @@ import { getConditionColor, getConditionLabel, getConditionPercent } from "@/lib
 import { buildCartItemId } from "@/lib/cartItem";
 import { queueStudioAssignment } from "@/lib/studioAssignment";
 
+type TikTokWindow = Window & {
+  ttq?: {
+    track?: (eventName: string, payload?: Record<string, unknown>) => void;
+  };
+};
+
 type ProductType = "fashion" | "perfume" | "clothing" | "shoes";
 
 type ProductInfoProduct = {
@@ -249,6 +255,14 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
         cartCount: reservation.cartCount,
         quantity: selectedQuantity,
       }, { openCart: false });
+      (window as TikTokWindow).ttq?.track?.("AddToCart", {
+        content_id: product.id || "unknown",
+        content_name: product.name,
+        content_type: "product",
+        value: Number(product.price) * selectedQuantity,
+        quantity: selectedQuantity,
+        currency: "TND",
+      });
       setAddedToCart(true);
       setTimeout(() => setAddedToCart(false), 2000);
     } catch (error) {

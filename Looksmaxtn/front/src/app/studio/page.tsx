@@ -72,6 +72,7 @@ interface OutfitViewItem extends OutfitSlotItem {
 const BODY_ZONES = [
     {id: "headwear", label: "Headwear"},
     {id: "outerwear", label: "Veste"},
+    {id: "dress", label: "Dress"},
     {id: "top", label: "Pull / Top"},
     {id: "bottom", label: "Jeans / Bottom"},
     {id: "footwear", label: "Shoes"},
@@ -80,6 +81,7 @@ const BODY_ZONES = [
 const ZONE_BUTTON_LABELS: Record<(typeof BODY_ZONES)[number]["id"], string> = {
     headwear: "Headwear",
     outerwear: "Outerwear",
+    dress: "Dress",
     top: "Top",
     bottom: "Bottom",
     footwear: "Shoes",
@@ -96,6 +98,10 @@ const ZONE_PREVIEW_POSITIONS: Record<
     outerwear: {
         className: "right-[-8px] top-[112px]",
         label: "Jacket",
+    },
+    dress: {
+        className: "left-[-14px] top-[176px]",
+        label: "Dress",
     },
     top: {
         className: "left-[-14px] top-[176px]",
@@ -129,6 +135,13 @@ const ZONE_DETAILS: Record<
         season: "Cool weather",
         care: "Best with structure",
     },
+    dress: {
+        title: "Dress",
+        type: "One-piece garment",
+        fit: "Full-body silhouette",
+        season: "All seasons",
+        care: "Replaces top and bottom",
+    },
     top: {
         title: "Top",
         type: "Pull / Shirt",
@@ -158,6 +171,7 @@ const ZONE_CATEGORY_KEYWORDS: Record<
 > = {
     headwear: ["headwear", "hat", "hats", "cap", "caps", "beanie", "beanies"],
     outerwear: ["outerwear", "jacket", "jackets", "coat", "coats", "veste", "vestes", "blazer", "blazers"],
+    dress: ["dress", "dresses", "robe", "robes", "gown", "gowns"],
     top: [
         "top",
         "tops",
@@ -204,6 +218,7 @@ const WOMEN_HAND_BAG_KEYWORDS = [
 ];
 
 const WOMEN_OUTERWEAR_COLOR = "#2c3e50";
+const DRESS_CONFLICT_ZONES: StudioZoneId[] = ["top", "bottom"];
 const STORED_GENERATION_KEY = "looksmax-studio-generation-job";
 
 type StoredGenerationState = {
@@ -381,10 +396,14 @@ function extractGeneratedImages(data: unknown) {
 function StudioModel({
     isWomen,
     selectedZoneId,
+    dressVisible,
+    dressSelectable,
     onZoneClick,
 }: {
     isWomen: boolean;
     selectedZoneId: string;
+    dressVisible: boolean;
+    dressSelectable: boolean;
     onZoneClick: (zoneId: (typeof BODY_ZONES)[number]["id"]) => void;
 }) {
     if (isWomen) {
@@ -414,27 +433,87 @@ function StudioModel({
                     <path d="M127 158 L132 200 L122 200 L118 162 Z" fill="#d4a574" />
                 </g>
 
-                <g
-                    style={{ cursor: "pointer" }}
-                    onClick={() => onZoneClick("top")}
-                >
-                    <rect x="66" y="85" width="28" height="108" rx="2" fill={selectedZoneId === "top" ? "#f2d48f" : "#e8e0d5"} />
-                </g>
-                <circle cx="80" cy="100" r="2" fill="#b0a090" />
-                <circle cx="80" cy="113" r="2" fill="#b0a090" />
-                <circle cx="80" cy="126" r="2" fill="#b0a090" />
-                <circle cx="80" cy="139" r="2" fill="#b0a090" />
+                {!dressVisible && (
+                    <>
+                        <g
+                            style={{ cursor: "pointer" }}
+                            onClick={() => onZoneClick("top")}
+                        >
+                            <rect x="66" y="85" width="28" height="108" rx="2" fill={selectedZoneId === "top" ? "#f2d48f" : "#e8e0d5"} />
+                        </g>
+                        <circle cx="80" cy="100" r="2" fill="#b0a090" />
+                        <circle cx="80" cy="113" r="2" fill="#b0a090" />
+                        <circle cx="80" cy="126" r="2" fill="#b0a090" />
+                        <circle cx="80" cy="139" r="2" fill="#b0a090" />
+
+                        <g
+                            style={{ cursor: "pointer" }}
+                            onClick={() => onZoneClick("bottom")}
+                        >
+                            <path
+                                d="M50 195 L110 195 L105 330 L88 330 L80 268 L72 330 L55 330 L50 195 Z"
+                                fill={selectedZoneId === "bottom" ? "#f2d48f" : WOMEN_OUTERWEAR_COLOR}
+                            />
+                        </g>
+                        <line x1="80" y1="195" x2="80" y2="268" stroke="#2d5a4a" strokeWidth="1.5" />
+                    </>
+                )}
 
                 <g
-                    style={{ cursor: "pointer" }}
-                    onClick={() => onZoneClick("bottom")}
+                    style={{
+                        cursor: dressSelectable ? "pointer" : "default",
+                        pointerEvents: dressSelectable ? "auto" : "none",
+                        filter: selectedZoneId === "dress" ? "drop-shadow(rgba(201,169,110,0.8) 0px 0px 7px)" : "none",
+                    }}
+                    onClick={() => {
+                        if (dressSelectable) onZoneClick("dress");
+                    }}
                 >
                     <path
-                        d="M50 195 L110 195 L105 330 L88 330 L80 268 L72 330 L55 330 L50 195 Z"
-                        fill={selectedZoneId === "bottom" ? "#f2d48f" : WOMEN_OUTERWEAR_COLOR}
+                        d="M59 86 L101 86 L113 228 L96 326 L64 326 L47 228 Z"
+                        fill={selectedZoneId === "dress" ? "#f2d48f" : "#e8e0d5"}
+                        opacity={dressVisible || selectedZoneId === "dress" ? 0.94 : 0}
+                    />
+                    <path
+                        d="M65 86 L80 110 L95 86"
+                        fill="none"
+                        stroke={selectedZoneId === "dress" ? "#9b7940" : "#b9a890"}
+                        strokeWidth="1.5"
+                        opacity={dressVisible || selectedZoneId === "dress" ? 1 : 0}
+                    />
+                    <path
+                        d="M58 228 L102 228"
+                        stroke={selectedZoneId === "dress" ? "#9b7940" : "#b9a890"}
+                        strokeWidth="1.5"
+                        opacity={dressVisible || selectedZoneId === "dress" ? 1 : 0}
                     />
                 </g>
-                <line x1="80" y1="195" x2="80" y2="268" stroke="#2d5a4a" strokeWidth="1.5" />
+
+                {dressVisible && selectedZoneId === "top" && (
+                    <rect
+                        x="66"
+                        y="85"
+                        width="28"
+                        height="108"
+                        rx="2"
+                        fill="#f2d48f"
+                        opacity="0.55"
+                        stroke="#9b7940"
+                        strokeWidth="1.5"
+                        pointerEvents="none"
+                    />
+                )}
+
+                {dressVisible && selectedZoneId === "bottom" && (
+                    <path
+                        d="M50 195 L110 195 L105 330 L88 330 L80 268 L72 330 L55 330 L50 195 Z"
+                        fill="#f2d48f"
+                        opacity="0.55"
+                        stroke="#9b7940"
+                        strokeWidth="1.5"
+                        pointerEvents="none"
+                    />
+                )}
 
                 <g
                     style={{ cursor: "pointer" }}
@@ -489,24 +568,73 @@ function StudioModel({
                 <path d="M128 90 L140 170 L122 175 L116 110 Z" fill={selectedZoneId === "outerwear" ? "#f2d48f" : "#2d3436"} />
             </g>
 
-            <g
-                style={{ cursor: "pointer" }}
-                onClick={() => onZoneClick("top")}
-            >
-                <rect x="65" y="84" width="30" height="120" rx="2" fill={selectedZoneId === "top" ? "#f2d48f" : "#e8e0d5"} />
-                <circle cx="80" cy="100" r="2" fill="#b0a090" />
-                <circle cx="80" cy="115" r="2" fill="#b0a090" />
-                <circle cx="80" cy="130" r="2" fill="#b0a090" />
-                <circle cx="80" cy="145" r="2" fill="#b0a090" />
-            </g>
+            {!dressVisible && (
+                <>
+                    <g
+                        style={{ cursor: "pointer" }}
+                        onClick={() => onZoneClick("top")}
+                    >
+                        <rect x="65" y="84" width="30" height="120" rx="2" fill={selectedZoneId === "top" ? "#f2d48f" : "#e8e0d5"} />
+                        <circle cx="80" cy="100" r="2" fill="#b0a090" />
+                        <circle cx="80" cy="115" r="2" fill="#b0a090" />
+                        <circle cx="80" cy="130" r="2" fill="#b0a090" />
+                        <circle cx="80" cy="145" r="2" fill="#b0a090" />
+                    </g>
+
+                    <g
+                        style={{ cursor: "pointer" }}
+                        onClick={() => onZoneClick("bottom")}
+                    >
+                        <path d="M50 210 L110 210 L105 338 L88 338 L80 278 L72 338 L55 338 L50 210 Z" fill={selectedZoneId === "bottom" ? "#f2d48f" : "#2d3436"} />
+                        <line x1="80" y1="210" x2="80" y2="278" stroke="#222" strokeWidth="1.5" />
+                    </g>
+                </>
+            )}
 
             <g
-                style={{ cursor: "pointer" }}
-                onClick={() => onZoneClick("bottom")}
+                style={{
+                    cursor: dressSelectable ? "pointer" : "default",
+                    pointerEvents: dressSelectable ? "auto" : "none",
+                    filter: selectedZoneId === "dress" ? "drop-shadow(rgba(201,169,110,0.8) 0px 0px 7px)" : "none",
+                }}
+                onClick={() => {
+                    if (dressSelectable) onZoneClick("dress");
+                }}
             >
-                <path d="M50 210 L110 210 L105 338 L88 338 L80 278 L72 338 L55 338 L50 210 Z" fill={selectedZoneId === "bottom" ? "#f2d48f" : "#2d3436"} />
-                <line x1="80" y1="210" x2="80" y2="278" stroke="#222" strokeWidth="1.5" />
+                <path
+                    d="M58 84 L102 84 L114 226 L96 338 L64 338 L46 226 Z"
+                    fill={selectedZoneId === "dress" ? "#f2d48f" : "#e8e0d5"}
+                    opacity={dressVisible || selectedZoneId === "dress" ? 0.94 : 0}
+                />
+                <path d="M64 84 L80 112 L96 84" fill="none" stroke={selectedZoneId === "dress" ? "#9b7940" : "#b9a890"} strokeWidth="1.5" opacity={dressVisible || selectedZoneId === "dress" ? 1 : 0} />
+                <path d="M58 226 L102 226" stroke={selectedZoneId === "dress" ? "#9b7940" : "#b9a890"} strokeWidth="1.5" opacity={dressVisible || selectedZoneId === "dress" ? 1 : 0} />
             </g>
+
+            {dressVisible && selectedZoneId === "top" && (
+                <rect
+                    x="65"
+                    y="84"
+                    width="30"
+                    height="120"
+                    rx="2"
+                    fill="#f2d48f"
+                    opacity="0.55"
+                    stroke="#9b7940"
+                    strokeWidth="1.5"
+                    pointerEvents="none"
+                />
+            )}
+
+            {dressVisible && selectedZoneId === "bottom" && (
+                <path
+                    d="M50 210 L110 210 L105 338 L88 338 L80 278 L72 338 L55 338 L50 210 Z"
+                    fill="#f2d48f"
+                    opacity="0.55"
+                    stroke="#9b7940"
+                    strokeWidth="1.5"
+                    pointerEvents="none"
+                />
+            )}
 
             <g
                 style={{ cursor: "pointer" }}
@@ -526,7 +654,7 @@ export default function OutfitStudioPage() {
     const router = useRouter();
     const pathname = usePathname();
     const {user, loading, refreshUser} = useAuth();
-    const { items: cartItems } = useCart();
+    const { items: cartItems, hydrated: cartHydrated } = useCart();
     const isWomen = user?.bodyProfile?.gender === "women";
     const studioTitle = isWomen ? "Outfit Builder" : "Outfit Studio";
     const [categories, setCategories] = useState<CategoryNode[]>([]);
@@ -794,11 +922,12 @@ export default function OutfitStudioPage() {
         if (cartItem.productType === "perfume") return [];
 
         const productId = getCartItemProductId(cartItem.id);
-        const zoneId = inferStudioAssignmentZone({
+        const inferredZoneId = inferStudioAssignmentZone({
             categories: cartItem.categories,
             name: cartItem.name,
             fashionSubtype: cartItem.fashionSubtype,
         });
+        const zoneId = !isWomen && inferredZoneId === "dress" ? "top" : inferredZoneId;
 
         return [{
             id: productId,
@@ -813,13 +942,36 @@ export default function OutfitStudioPage() {
     const selectedZoneHistory: OutfitViewItem[] = showAllSelectedItems
         ? allSelectedOutfitItems
         : allSelectedOutfitItems.filter((item) => item.zoneId === selectedZoneId);
-    const hasSelectedOutfitItems = BODY_ZONES.some((zone) => Boolean(outfit[zone.id]));
+    const visibleBodyZones = isWomen ? BODY_ZONES : BODY_ZONES.filter((zone) => zone.id !== "dress");
+    const hasSelectedOutfitItems = visibleBodyZones.some((zone) => Boolean(outfit[zone.id]));
+    const dressSelected = Boolean(outfit.dress);
+    const dressVisible = isWomen && (selectedZoneId === "dress" || (dressSelected && !DRESS_CONFLICT_ZONES.includes(selectedZoneId as StudioZoneId)));
+    const dressSelectable = isWomen && (dressSelected && dressVisible && selectedZoneId !== "dress");
     const generationLimit = 100;
     const generationRequestsUsed = Math.min(Number(user?.bodyProfile?.outfitGenerationCount || 0), generationLimit);
     const remainingGenerationRequests = Math.max(generationLimit - generationRequestsUsed, 0);
     const generationLimitReached = remainingGenerationRequests <= 0;
     const canGenerateOutfit = profileReady && hasSelectedOutfitItems && !generationLimitReached;
     const shouldOpenProfileSettings = !profileReady;
+
+    useEffect(() => {
+        if (isWomen) return;
+
+        if (selectedZoneId === "dress") {
+            setSelectedZoneId("");
+        }
+
+        if (!outfit.dress && zoneOverrides.dress == null) return;
+
+        setZoneOverrides((current) => ({
+            ...current,
+            dress: null,
+        }));
+        setOutfit((current) => ({
+            ...current,
+            dress: null,
+        }));
+    }, [isWomen, outfit.dress, selectedZoneId, zoneOverrides.dress]);
 
     const applyAssignmentToZone = (zoneId: StudioZoneId, item: StudioAssignmentItem) => {
         const nextItem: OutfitSlotItem = {
@@ -833,14 +985,36 @@ export default function OutfitStudioPage() {
 
         setSelectedZoneId(zoneId);
         setShowAllSelectedItems(false);
-        setZoneOverrides((current) => ({
-            ...current,
-            [zoneId]: nextItem,
-        }));
-        setOutfit((current) => ({
-            ...current,
-            [zoneId]: nextItem,
-        }));
+        setZoneOverrides((current) => {
+            const next = {
+                ...current,
+                [zoneId]: nextItem,
+            };
+
+            if (zoneId === "dress") {
+                next.top = null;
+                next.bottom = null;
+            } else if (DRESS_CONFLICT_ZONES.includes(zoneId)) {
+                next.dress = null;
+            }
+
+            return next;
+        });
+        setOutfit((current) => {
+            const next = {
+                ...current,
+                [zoneId]: nextItem,
+            };
+
+            if (zoneId === "dress") {
+                next.top = null;
+                next.bottom = null;
+            } else if (DRESS_CONFLICT_ZONES.includes(zoneId)) {
+                next.dress = null;
+            }
+
+            return next;
+        });
         setZoneHistory((current) => {
             const currentZoneHistory = current[zoneId] || [];
             const nextZoneHistory = [
@@ -888,6 +1062,50 @@ export default function OutfitStudioPage() {
     }, [zoneOverrides, studioStateHydrated]);
 
     useEffect(() => {
+        if (!dressSelected || (!outfit.top && !outfit.bottom)) return;
+
+        setZoneOverrides((current) => ({
+            ...current,
+            top: null,
+            bottom: null,
+        }));
+        setOutfit((current) => ({
+            ...current,
+            top: null,
+            bottom: null,
+        }));
+    }, [dressSelected, outfit.top, outfit.bottom]);
+
+    useEffect(() => {
+        if (!studioStateHydrated || !cartHydrated) return;
+
+        const cartProductIds = new Set(cartItems.map((item) => getCartItemProductId(item.id)));
+        const staleZoneIds = BODY_ZONES
+            .map((zone) => zone.id)
+            .filter((zoneId) => {
+                const assignedItem = outfit[zoneId];
+                return Boolean(assignedItem?.id && !cartProductIds.has(assignedItem.id));
+            });
+
+        if (staleZoneIds.length === 0) return;
+
+        setZoneOverrides((current) => {
+            const next = { ...current };
+            staleZoneIds.forEach((zoneId) => {
+                next[zoneId] = null;
+            });
+            return next;
+        });
+        setOutfit((current) => {
+            const next = { ...current };
+            staleZoneIds.forEach((zoneId) => {
+                next[zoneId] = null;
+            });
+            return next;
+        });
+    }, [cartHydrated, cartItems, outfit, studioStateHydrated]);
+
+    useEffect(() => {
         if (!studioStateHydrated) return;
 
         const syncPendingAssignments = () => {
@@ -896,7 +1114,8 @@ export default function OutfitStudioPage() {
 
             let lastZoneId: StudioZoneId | null = null;
             for (const item of pendingAssignments) {
-                const zoneId = item.preferredZoneId || inferStudioAssignmentZone(item);
+                const inferredZoneId = item.preferredZoneId || inferStudioAssignmentZone(item);
+                const zoneId = !isWomen && inferredZoneId === "dress" ? "top" : inferredZoneId;
                 applyAssignmentToZone(zoneId, item);
                 lastZoneId = zoneId;
             }
@@ -916,6 +1135,7 @@ export default function OutfitStudioPage() {
     }, [isWomen, studioStateHydrated]);
 
     const handleSelectZone = (zoneId: (typeof BODY_ZONES)[number]["id"]) => {
+        if (!isWomen && zoneId === "dress") return;
         setShowAllSelectedItems(false);
         setSelectedZoneId(zoneId);
     };
@@ -935,6 +1155,7 @@ export default function OutfitStudioPage() {
         item: OutfitViewItem,
         keepAllView = false
     ) => {
+        if (!isWomen && zoneId === "dress") return;
         const normalizedItemId = getCartItemProductId(item.id);
         setShowAllSelectedItems(keepAllView);
         setSelectedZoneId(zoneId);
@@ -950,19 +1171,30 @@ export default function OutfitStudioPage() {
                 };
             }
 
-            setZoneOverrides((currentOverrides) => ({
-                ...currentOverrides,
-                [zoneId]: {
-                    id: normalizedItemId,
-                    name: item.name,
-                    image: item.image,
-                    price: item.price,
-                    fashionSubtype: item.fashionSubtype,
-                    originPictures: item.originPictures,
-                },
-            }));
+            setZoneOverrides((currentOverrides) => {
+                const next = {
+                    ...currentOverrides,
+                    [zoneId]: {
+                        id: normalizedItemId,
+                        name: item.name,
+                        image: item.image,
+                        price: item.price,
+                        fashionSubtype: item.fashionSubtype,
+                        originPictures: item.originPictures,
+                    },
+                };
 
-            return {
+                if (zoneId === "dress") {
+                    next.top = null;
+                    next.bottom = null;
+                } else if (DRESS_CONFLICT_ZONES.includes(zoneId)) {
+                    next.dress = null;
+                }
+
+                return next;
+            });
+
+            const next = {
                 ...current,
                 [zoneId]: {
                     id: normalizedItemId,
@@ -973,6 +1205,15 @@ export default function OutfitStudioPage() {
                     originPictures: item.originPictures,
                 },
             };
+
+            if (zoneId === "dress") {
+                next.top = null;
+                next.bottom = null;
+            } else if (DRESS_CONFLICT_ZONES.includes(zoneId)) {
+                next.dress = null;
+            }
+
+            return next;
         });
     };
 
@@ -1031,13 +1272,13 @@ export default function OutfitStudioPage() {
                         BODY_ZONES.map((zone) => [
                             zone.id,
                             {
-                                status: Boolean(outfit[zone.id]),
+                                status: isWomen || zone.id !== "dress" ? Boolean(outfit[zone.id]) : false,
                                 productId: outfit[zone.id]?.id || "",
                                 fashionSubtype: outfit[zone.id]?.fashionSubtype || "",
                                 size:
                                     zone.id === "headwear"
                                         ? ""
-                                        : zone.id === "outerwear" || zone.id === "top"
+                                        : zone.id === "outerwear" || zone.id === "dress" || zone.id === "top"
                                             ? user?.bodyProfile?.topSize || ""
                                             : zone.id === "bottom"
                                                 ? user?.bodyProfile?.bottomSize || ""
@@ -1322,7 +1563,7 @@ export default function OutfitStudioPage() {
 
     if (loading) {
         return (
-            <div className="pt-[72px] min-h-screen flex items-center justify-center">
+            <div className="pt-[80px] min-h-screen flex items-center justify-center">
                 <p className="text-xs text-text-secondary uppercase tracking-wider">Loading studio...</p>
             </div>
         );
@@ -1330,7 +1571,7 @@ export default function OutfitStudioPage() {
 
     if (!user) {
         return (
-            <div className="pt-[72px] min-h-screen flex items-center justify-center px-4">
+            <div className="pt-[80px] min-h-screen flex items-center justify-center px-4">
                 <div className="text-center">
                     <h1 className="text-lg font-semibold tracking-wide uppercase mb-3">Sign In Required</h1>
                     <p className="text-sm text-text-secondary mb-6">
@@ -1368,7 +1609,7 @@ export default function OutfitStudioPage() {
         );
 
     return (
-        <div className="pt-[72px] min-h-screen bg-background">
+        <div className="pt-[80px] min-h-screen bg-background">
             <div className="max-w-7xl mx-auto px-4 md:px-8 py-8 space-y-6">
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 max-w-2xl">
@@ -1406,12 +1647,12 @@ export default function OutfitStudioPage() {
                                 >
                                     ALL
                                 </button>
-                                {BODY_ZONES.map((zone) => (
+                                {visibleBodyZones.map((zone) => (
                                     <button
                                         key={zone.id}
                                         type="button"
-                                    onClick={() => handleSelectZone(zone.id)}
-                                    className={`px-0 py-1 text-[11px] uppercase tracking-[0.15em] transition-all ${
+                                        onClick={() => handleSelectZone(zone.id)}
+                                        className={`px-0 py-1 text-[11px] uppercase tracking-[0.15em] transition-all ${
                                             activeZoneIdForSelection === zone.id
                                                 ? "font-bold text-[#1a1a1a] underline underline-offset-[6px] decoration-[1px]"
                                                 : "text-[#666] hover:text-[#1a1a1a]"
@@ -1485,9 +1726,11 @@ export default function OutfitStudioPage() {
                                         <StudioModel
                                             isWomen={isWomen}
                                             selectedZoneId={selectedZoneId}
+                                            dressVisible={dressVisible}
+                                            dressSelectable={dressSelectable}
                                             onZoneClick={handleBuilderZoneClick}
                                         />
-                                        {BODY_ZONES.map((zone) => {
+                                        {visibleBodyZones.map((zone) => {
                                             const assignedItem = outfit[zone.id];
                                             if (!assignedItem?.image) return null;
 
@@ -1496,6 +1739,11 @@ export default function OutfitStudioPage() {
                                                     key={zone.id}
                                                     type="button"
                                                     onClick={() => {
+                                                        if (zone.id === "dress" && activeZoneIdForSelection !== "dress") {
+                                                            handleSelectZone("dress");
+                                                            return;
+                                                        }
+
                                                         setZoneOverrides((currentOverrides) => ({
                                                             ...currentOverrides,
                                                             [zone.id]: null,

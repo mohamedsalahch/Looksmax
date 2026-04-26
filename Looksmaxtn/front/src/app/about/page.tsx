@@ -1,8 +1,16 @@
 import Link from "next/link";
+import { buildPageMetadata } from "@/lib/seo";
+
+export const metadata = buildPageMetadata({
+  title: "About LOOKSMAX | LOOKSMAX Tunisia",
+  description:
+    "Learn about LOOKSMAX Tunisia, a curated destination for men's fashion, premium wardrobe essentials, shoes, and perfumes.",
+  path: "/about",
+});
 
 export default function AboutPage() {
   return (
-    <div className="pt-[72px] min-h-screen">
+    <div className="pt-[80px] min-h-screen">
       <div className="max-w-4xl mx-auto px-4 md:px-8 py-16">
         {/* Hero */}
         <div className="text-center mb-16">

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { withAuthRequest } from "@/lib/authClient";
+import { compressImageFile } from "@/lib/imageCompression";
 
 interface ModelAsset {
   _id: string;
@@ -65,7 +66,8 @@ export default function ModelsPage() {
       body.append("name", name);
       body.append("frontImageIndex", String(frontImageIndex));
       body.append("backImageIndex", String(backImageIndex));
-      images.forEach((image) => body.append("images", image));
+      const compressedImages = await Promise.all(images.map((image) => compressImageFile(image)));
+      compressedImages.forEach((image) => body.append("images", image));
 
       const res = await fetch("/api/models", withAuthRequest({ method: "POST", body }));
       const data = await res.json();

@@ -185,6 +185,14 @@ body.outfit-detail-zoom-open header {
 }
 
 /* Product card hover zoom */
+.product-image-wrapper {
+  background: transparent;
+}
+
+.product-image-wrapper > img {
+  object-fit: contain;
+}
+
 .product-image-wrapper:hover .product-image {
   transform: scale(1.03);
 }
