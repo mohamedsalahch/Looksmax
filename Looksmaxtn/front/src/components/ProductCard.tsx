@@ -375,7 +375,7 @@ export default function ProductCard({
           <img
             src={image}
             alt={name}
-            className="absolute inset-0 w-full h-full object-contain"
+            className="absolute inset-0 w-full h-full object-cover"
             loading="lazy"
             decoding="async"
           />
