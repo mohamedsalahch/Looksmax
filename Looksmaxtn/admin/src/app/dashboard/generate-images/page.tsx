@@ -68,6 +68,7 @@ export default function GenerateImagesPage() {
   const [search, setSearch] = useState("");
   const [promptSearch, setPromptSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [viewImage, setViewImage] = useState<{ url: string; title: string } | null>(null);
 
   const selectedPrompt = useMemo(
     () => prompts.find((prompt) => prompt._id === selectedPromptId) || null,
@@ -117,6 +118,17 @@ export default function GenerateImagesPage() {
 
     return () => clearTimeout(timeoutId);
   }, [generatedImages, saving]);
+
+  useEffect(() => {
+    if (!viewImage) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setViewImage(null);
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [viewImage]);
 
   const resetForm = () => {
     setName("");
@@ -362,31 +374,43 @@ export default function GenerateImagesPage() {
       ) : filteredGeneratedImages.length === 0 ? (
         <p className="text-sm text-text-secondary">No generated images yet.</p>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 2xl:grid-cols-4">
           {filteredGeneratedImages.map((item) => (
             <div
               key={item._id}
               className={`bg-bg-card border border-border rounded overflow-hidden ${item.status === "processing" ? "opacity-75" : ""}`}
             >
-              <div className="aspect-[3/4] bg-bg-secondary">
+              <div className="aspect-[4/3] bg-bg-secondary">
                 {item.status === "processing" && item.images.length === 0 ? (
                   <div className="h-full w-full flex flex-col items-center justify-center text-text-secondary">
                     <div className="mb-3 h-8 w-8 rounded-full border-t-2 border-accent animate-spin" />
                     <span className="text-[10px] uppercase tracking-wider">Generating...</span>
                   </div>
                 ) : (
-                  <img
-                    src={item.images[0] || item.sourceImages[0] || ""}
-                    alt={item.name || "Generated image"}
-                    className="w-full h-full object-cover"
-                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setViewImage({
+                        url: item.images[0] || item.sourceImages[0] || "",
+                        title: item.name || "Generated image",
+                      })
+                    }
+                    className="block h-full w-full cursor-zoom-in"
+                    aria-label={`View ${item.name || "generated image"} full size`}
+                  >
+                    <img
+                      src={item.images[0] || item.sourceImages[0] || ""}
+                      alt={item.name || "Generated image"}
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
                 )}
               </div>
-              <div className="p-3 space-y-2">
+              <div className="p-2.5 space-y-1.5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium truncate">{item.name || "Untitled"}</p>
+                      <p className="text-xs font-medium truncate">{item.name || "Untitled"}</p>
                       {item.status === "processing" && (
                         <span className="w-2 h-2 rounded-full bg-accent animate-pulse shrink-0" title="Generating..." />
                       )}
@@ -394,7 +418,7 @@ export default function GenerateImagesPage() {
                     <p className="line-clamp-1 text-[10px] font-semibold uppercase tracking-wider text-text-primary">
                       {item.promptTitle || "One-off prompt"}
                     </p>
-                    <p className="line-clamp-2 text-[10px] text-text-secondary">
+                    <p className="line-clamp-1 text-[10px] text-text-secondary">
                       {item.promptDescription || item.prompt}
                     </p>
                   </div>
@@ -411,7 +435,7 @@ export default function GenerateImagesPage() {
                   {item.status === "processing" && " · PROCESSING"}
                   {item.status === "failed" && ` · FAILED${item.errorMessage ? ` - ${item.errorMessage}` : ""}`}
                 </p>
-                <div className="space-y-1 pt-1 text-[10px] text-text-secondary">
+                <div className="space-y-0.5 pt-0.5 text-[9px] text-text-secondary">
                   <p>Created at: {formatAuditDate(item.createdAt)}</p>
                   <p>Created by: {formatAuditActor(item.createdBy)}</p>
                   <p>Updated at: {formatAuditDate(item.updatedAt)}</p>
@@ -420,6 +444,31 @@ export default function GenerateImagesPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {viewImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={viewImage.title}
+          onClick={() => setViewImage(null)}
+        >
+          <div className="relative max-h-full max-w-6xl" onClick={(event) => event.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setViewImage(null)}
+              className="absolute right-0 top-0 z-10 bg-bg-primary px-3 py-2 text-xs font-semibold uppercase tracking-wider text-text-primary"
+            >
+              Close
+            </button>
+            <img
+              src={viewImage.url}
+              alt={viewImage.title}
+              className="max-h-[90vh] max-w-[92vw] object-contain"
+            />
+          </div>
         </div>
       )}
     </div>

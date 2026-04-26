@@ -5,6 +5,7 @@ import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
 import User from "@/store/models/User";
 import Coupon from "@/store/models/Coupon";
+import ShippingSettings from "@/store/models/ShippingSettings";
 import { getSession } from "@/store/lib/auth";
 import { getAuditActorFromSession } from "@/store/lib/auditRoute";
 import { broadcastAdminEvent } from "@/admin/lib/adminEvents";
@@ -18,6 +19,13 @@ import mongoose from "mongoose";
 import crypto from "crypto";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function calculateShippingFee(subtotal: number, settings?: { shippingCost?: number; freeShippingThreshold?: number } | null) {
+  const shippingCost = Math.max(0, Number(settings?.shippingCost || 0));
+  const freeShippingThreshold = Math.max(0, Number(settings?.freeShippingThreshold || 0));
+  if (shippingCost === 0 || freeShippingThreshold === 0 || subtotal >= freeShippingThreshold) return 0;
+  return Math.round(shippingCost * 100) / 100;
+}
 
 function getSizeStockEntries(
   sizeStock: unknown
@@ -224,7 +232,8 @@ export async function POST(req: NextRequest) {
       couponDiscountAmount = buildCouponValidationResult(couponDoc, subtotalPrice).discountAmount;
     }
 
-    const shippingFee = 0;
+    const shippingSettings = await ShippingSettings.findOne({ key: "shipping" }).lean();
+    const shippingFee = calculateShippingFee(subtotalPrice, shippingSettings);
     const totalPrice = Math.max(0, subtotalPrice - couponDiscountAmount + shippingFee);
 
     const guestAccessToken = session ? "" : crypto.randomBytes(24).toString("hex");
