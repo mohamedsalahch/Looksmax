@@ -27,105 +27,70 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 INPUT_ROOT = ROOT_DIR / "scripts/batch_products"
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}
 GEMINI_MODEL = "gemini-3.1-flash-image-preview"
-SITE_BACKGROUND = "#F3E9D8"
 RESULT_PREFIX = "result-"
 
 PROMPT = f"""
-You are a high-end e-commerce product retouching expert.
+You are a professional e-commerce product retouching assistant.
 
-GOAL:
-Transform the input image into a clean studio product photo while preserving the EXACT garment.
+Task:
 
----
+* Transform the provided product image into a clean, mannequin-free product image suitable for a professional catalog.
 
-CRITICAL INSTRUCTIONS (HIGHEST PRIORITY):
+Main Actions:
 
-- The garment MUST remain 100% identical:
-  • same shape and cut
-  • same proportions
-  • same fabric behavior and folds
-  • same stitching, seams, waistband, drawstrings
-  • same pattern alignment (plaid must NOT shift)
-  • same colors (no tone shift)
-  • no redesign, no reinterpretation
+* Remove the mannequin completely
+* Keep only the garment visible
+* Reconstruct missing parts naturally if needed
 
-- This is NOT generation — this is STRICT retouching.
+View & Layout:
 
----
+* The final image must be a top-down view (flat lay)
+* The garment must be laid flat on a surface
+* Ensure a natural and symmetrical flat presentation
+* Keep proportions accurate and realistic
 
-MANNEQUIN REMOVAL:
+Fabric Preparation:
 
-- Completely remove the mannequin.
-- Replace it with a realistic invisible mannequin effect (ghost mannequin).
-- Preserve the natural garment volume and structure as if worn.
-- Keep waistband shape natural (not floating, not distorted).
-- Inner shadows must look realistic where the body used to be.
-- DO NOT flatten the shorts.
-- DO NOT convert into flat-lay.
+* Ironing clothes removes wrinkles — remove all wrinkles and creases
+* Make the garment look freshly ironed or professionally steamed
+* Keep natural fabric texture (do NOT over-smooth or make it look artificial)
 
----
+Strict Preservation Rules:
 
-GARMENT CLEANUP:
+* Preserve the product EXACTLY:
 
-- Remove wrinkles ONLY if they look accidental.
-- Keep natural fabric folds (do NOT over-smooth).
-- Maintain fabric texture (no plastic or AI look).
-- Keep drawstrings sharp and unchanged.
+  * shape and proportions
+  * color
+  * fabric and texture
+  * stitching and details
+  * logos and branding
+* Do NOT redesign or alter the garment
 
----
+Background:
+- Minimalist studio backdrop
+- Warm off-white seamless background (#F2EFEA)
+- Floor blends seamlessly into backdrop
+- No visible horizon line, no texture
 
-BACKGROUND:
+Lighting:
 
-- Replace background with a smooth, seamless studio background.
-- Color: soft warm cream tone → {SITE_BACKGROUND}
-- No gradients artifacts, no banding.
-- No objects, no props, no text.
+* Soft, even studio lighting
+* Minimal shadows
+* Clean, catalog-style illumination
 
----
+Constraints:
 
-LIGHTING:
+* No mannequin
+* No human model
+* No props
+* No text or graphics
+* No added elements
 
-- Soft professional studio lighting.
-- Subtle natural shadows under the garment.
-- Even exposure, no harsh highlights.
-- Match real e-commerce product photography.
+Output:
 
----
-
-REALISM CONSTRAINTS:
-
-- The result must look like a real photographed product, not AI-generated.
-- No blur, no hallucinated details.
-- No symmetry correction (keep original imperfections if structural).
-
----
-
-OUTPUT STYLE:
-
-- Centered product
-- Straight alignment (no tilt)
-- Clean catalog-style image (Zara / Bershka level)
-
----
-
-FAIL CONDITIONS (STRICTLY FORBIDDEN):
-
-- Changing pattern alignment
-- Changing garment shape
-- Losing fabric texture
-- Over-smoothing
-- Fake AI glossy look
-- Flat-lay conversion
-- Cropping important parts
-
----
-
-FINAL CHECK BEFORE OUTPUT:
-
-Ask yourself:
-"Does this look like the SAME exact product professionally shot without a mannequin?"
-
-If not → fix before output.
+* High-resolution image
+* Clean, ironed, flat-lay garment
+* Professional e-commerce ready (Instagram & catalog quality)
 """.strip()
 
 

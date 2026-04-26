@@ -4,6 +4,7 @@ import EditorialFeature from "@/components/EditorialFeature";
 import ProductCardRow from "@/components/ProductCardRow";
 import BrandStory from "@/components/BrandStory";
 import { DEFAULT_HOME_PAGE } from "@/lib/homePageDefaults";
+import { buildPageMetadata } from "@/lib/seo";
 
 const BACKEND_URL = (
   process.env.BACKEND_PROXY_URL ||
@@ -12,6 +13,15 @@ const BACKEND_URL = (
 ).replace(/\/$/, "");
 
 export const revalidate = 60;
+
+export async function generateMetadata() {
+  return buildPageMetadata({
+    title: "LOOKSMAX Tunisia | Men's Fashion, Shoes & Perfumes",
+    description:
+      "Discover curated men's fashion, premium wardrobe essentials, shoes, perfumes, and outfit inspiration in Tunisia.",
+    path: "/",
+  });
+}
 
 export default async function Home() {
   let content = DEFAULT_HOME_PAGE;

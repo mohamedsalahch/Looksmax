@@ -1,3 +1,11 @@
+import { buildPageMetadata } from "@/lib/seo";
+
+export const metadata = buildPageMetadata({
+  title: "Terms & Conditions | LOOKSMAX Tunisia",
+  description: "Read the LOOKSMAX Tunisia terms and conditions for orders, pricing, payment, delivery, and returns.",
+  path: "/terms-and-conditions",
+});
+
 export default function TermsAndConditionsPage() {
   return (
     <div className="pt-[80px] min-h-screen">

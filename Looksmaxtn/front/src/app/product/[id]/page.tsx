@@ -4,6 +4,14 @@ import RelatedProducts from "@/components/RelatedProducts";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDefaultSelectableSize, getSelectedSizeStock } from "@/lib/sizeAvailability";
+import JsonLd from "@/components/JsonLd";
+import TikTokViewContent from "@/components/TikTokViewContent";
+import {
+  absoluteUrl,
+  buildPageMetadata,
+  productAvailability,
+  truncateDescription,
+} from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +54,35 @@ async function loadProduct(id: string) {
 
   const data = (await response.json()) as ProductResponse;
   return data.product || null;
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const dbProduct = await loadProduct(id);
+  if (!dbProduct) {
+    return buildPageMetadata({
+      title: "Product Not Found | LOOKSMAX Tunisia",
+      description: "This LOOKSMAX product is no longer available.",
+      path: `/product/${id}`,
+      noIndex: true,
+    });
+  }
+
+  const image = dbProduct.images?.find((item) => item.isMain)?.url || dbProduct.images?.[0]?.url || "";
+  const description =
+    dbProduct.description ||
+    `${dbProduct.name} by ${dbProduct.brand || "LOOKSMAX"} available from LOOKSMAX Tunisia.`;
+
+  return buildPageMetadata({
+    title: `${dbProduct.name} | LOOKSMAX Tunisia`,
+    description,
+    path: `/product/${id}`,
+    image,
+  });
 }
 
 export default async function ProductDetailPage({
@@ -106,9 +143,45 @@ export default async function ProductDetailPage({
     cloneSourceImage: dbProduct.cloneSourceImage || "",
   };
   const productId = String(dbProduct._id || id);
+  const productUrl = absoluteUrl(`/product/${productId}`);
+  const productImages = product.images
+    .map((image) => image.url)
+    .filter(Boolean)
+    .map((image) => absoluteUrl(image));
+  const productJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: product.name,
+    description: truncateDescription(product.description || `${product.name} by ${product.brand}`),
+    image: productImages,
+    brand: {
+      "@type": "Brand",
+      name: product.brand,
+    },
+    sku: productId,
+    category: product.categories[0] || undefined,
+    url: productUrl,
+    offers: {
+      "@type": "Offer",
+      url: productUrl,
+      priceCurrency: "TND",
+      price: dbProduct.price.toFixed(2),
+      availability: productAvailability(product.initialSelectedSizeStock),
+      itemCondition:
+        product.conditionStatus === "new"
+          ? "https://schema.org/NewCondition"
+          : "https://schema.org/UsedCondition",
+    },
+  };
 
   return (
     <div className="pt-[80px]">
+      <JsonLd data={productJsonLd} />
+      <TikTokViewContent
+        contentId={productId}
+        contentName={product.name}
+        value={dbProduct.price}
+      />
       <div className="max-w-7xl mx-auto px-4 md:px-8 py-8">
         {/* Breadcrumb */}
         <nav className="mb-6">
