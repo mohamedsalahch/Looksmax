@@ -1,45 +1,86 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { withAuthRequest } from "@/lib/authClient";
 import { compressImageFile } from "@/lib/imageCompression";
+
+interface AuditActor {
+  id: string;
+  name: string;
+  email: string;
+}
 
 interface GeneratedImageAsset {
   _id: string;
   name?: string;
   prompt: string;
+  promptId?: string;
+  promptTitle?: string;
+  promptDescription?: string;
   sourceImages: string[];
   images: string[];
   status: "processing" | "completed" | "failed";
   errorMessage?: string;
   createdAt: string;
   updatedAt?: string;
-  createdBy?: { id: string; name: string; email: string } | null;
-  updatedBy?: { id: string; name: string; email: string } | null;
+  createdBy?: AuditActor | null;
+  updatedBy?: AuditActor | null;
 }
 
-function formatAuditActor(actor?: { id: string; name: string; email: string } | null) {
-  if (!actor) return "—";
-  return actor.name || actor.email || actor.id || "—";
+interface GeneratedImagePrompt {
+  _id: string;
+  title: string;
+  description: string;
+}
+
+type PromptMode = "saved" | "custom";
+
+function formatAuditActor(actor?: AuditActor | null) {
+  if (!actor) return "-";
+  return actor.name || actor.email || actor.id || "-";
 }
 
 function formatAuditDate(value?: string) {
-  if (!value) return "—";
+  if (!value) return "-";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleString();
+}
+
+function previewPromptDescription(description: string) {
+  const normalized = description.trim();
+  if (normalized.length <= 100) return normalized;
+  return `${normalized.slice(0, 100)}...`;
 }
 
 export default function GenerateImagesPage() {
   const [name, setName] = useState("");
-  const [prompt, setPrompt] = useState("");
+  const [promptMode, setPromptMode] = useState<PromptMode>("saved");
+  const [selectedPromptId, setSelectedPromptId] = useState("");
+  const [customPromptDescription, setCustomPromptDescription] = useState("");
   const [images, setImages] = useState<File[]>([]);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImageAsset[]>([]);
+  const [prompts, setPrompts] = useState<GeneratedImagePrompt[]>([]);
   const [loading, setLoading] = useState(true);
+  const [promptsLoading, setPromptsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [promptSearch, setPromptSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
+
+  const selectedPrompt = useMemo(
+    () => prompts.find((prompt) => prompt._id === selectedPromptId) || null,
+    [prompts, selectedPromptId]
+  );
+
+  const filteredPrompts = useMemo(() => {
+    const normalized = promptSearch.trim().toLowerCase();
+    if (!normalized) return prompts;
+    return prompts.filter((prompt) =>
+      [prompt.title, prompt.description].some((value) => value.toLowerCase().includes(normalized))
+    );
+  }, [promptSearch, prompts]);
 
   const loadGeneratedImages = () => {
     fetch("/api/generated-images", withAuthRequest())
@@ -49,17 +90,22 @@ export default function GenerateImagesPage() {
       .finally(() => setLoading(false));
   };
 
+  const loadPrompts = () => {
+    fetch("/api/generated-image-prompts", withAuthRequest())
+      .then((r) => r.json())
+      .then((data) => {
+        const nextPrompts = data.prompts || [];
+        setPrompts(nextPrompts);
+        setSelectedPromptId((current) => current || nextPrompts[0]?._id || "");
+      })
+      .catch(() => {})
+      .finally(() => setPromptsLoading(false));
+  };
+
   useEffect(() => {
     loadGeneratedImages();
+    loadPrompts();
   }, []);
-
-  const resetForm = () => {
-    setName("");
-    setPrompt("");
-    setImages([]);
-    setError("");
-    setShowForm(false);
-  };
 
   useEffect(() => {
     const hasProcessing = generatedImages.some((img) => img.status === "processing");
@@ -72,10 +118,22 @@ export default function GenerateImagesPage() {
     return () => clearTimeout(timeoutId);
   }, [generatedImages, saving]);
 
+  const resetForm = () => {
+    setName("");
+    setImages([]);
+    setError("");
+    setShowForm(false);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !prompt.trim() || images.length === 0) {
-      setError("Please add a name, a prompt, and at least one reference image.");
+
+    const promptTitle = promptMode === "saved" ? selectedPrompt?.title || "" : "One-off prompt";
+    const promptDescription = promptMode === "saved" ? selectedPrompt?.description || "" : customPromptDescription;
+    const prompt = promptMode === "saved" ? `${promptTitle}\n\n${promptDescription}` : promptDescription.trim();
+
+    if (!name.trim() || !prompt || images.length === 0) {
+      setError("Please add a name, choose or write a prompt, and add at least one reference image.");
       return;
     }
 
@@ -86,6 +144,9 @@ export default function GenerateImagesPage() {
       const body = new FormData();
       body.append("name", name);
       body.append("prompt", prompt);
+      body.append("promptTitle", promptTitle);
+      body.append("promptDescription", promptDescription);
+      if (promptMode === "saved" && selectedPromptId) body.append("promptId", selectedPromptId);
       const compressedImages = await Promise.all(images.map((image) => compressImageFile(image)));
       compressedImages.forEach((image) => body.append("images", image));
 
@@ -115,7 +176,9 @@ export default function GenerateImagesPage() {
   const normalizedSearch = search.trim().toLowerCase();
   const filteredGeneratedImages = normalizedSearch
     ? generatedImages.filter((item) =>
-        [item.name || "", item.prompt].some((value) => value.toLowerCase().includes(normalizedSearch))
+        [item.name || "", item.promptTitle || "", item.promptDescription || "", item.prompt].some((value) =>
+          value.toLowerCase().includes(normalizedSearch)
+        )
       )
     : generatedImages;
 
@@ -125,7 +188,7 @@ export default function GenerateImagesPage() {
         <div>
           <h1 className="text-xl font-semibold tracking-wide">Generate Images</h1>
           <p className="text-sm text-text-secondary mt-1">
-            Upload one or more reference images, add a prompt, and save generated results for product import.
+            Choose a saved prompt or write a one-off prompt for this generation.
           </p>
         </div>
         <button
@@ -140,18 +203,16 @@ export default function GenerateImagesPage() {
         </button>
       </div>
 
-      <div>
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search generated images by name..."
-          className="w-full bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
-        />
-      </div>
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search generated images by name or prompt..."
+        className="w-full bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
+      />
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="max-w-2xl space-y-4 bg-bg-card border border-border rounded p-5">
+        <form onSubmit={handleSubmit} className="space-y-4 bg-bg-card border border-border rounded p-5">
           {error && (
             <div className="border border-[#BD3100] bg-[#faf3f2] px-4 py-3 text-xs text-[#BD3100]">
               {error}
@@ -164,35 +225,103 @@ export default function GenerateImagesPage() {
             placeholder="Generated image name"
             className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
           />
-          <textarea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            rows={4}
-            placeholder="Describe the image you want to generate..."
-            className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm resize-none"
-          />
-          <input
-            id="generated-images-upload"
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={(e) => setImages(Array.from(e.target.files || []))}
-            className="hidden"
-          />
-          <div
-            onClick={() => document.getElementById("generated-images-upload")?.click()}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault();
-              setImages(Array.from(e.dataTransfer.files || []));
-            }}
-            className="flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded border border-dashed border-border bg-bg-secondary px-4 py-6 text-center transition-colors hover:border-accent hover:bg-bg-hover"
-          >
-            <span className="text-sm font-medium text-text-primary">Drag or click to add source images</span>
-            <span className="text-[10px] uppercase tracking-wider text-text-secondary">
-              Select files or drop one or more images
-            </span>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPromptMode("saved")}
+                  className={`px-4 py-2 text-[10px] font-semibold uppercase tracking-wider border ${
+                    promptMode === "saved" ? "border-accent bg-bg-hover text-text-primary" : "border-border text-text-secondary"
+                  }`}
+                >
+                  Saved Prompt
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPromptMode("custom")}
+                  className={`px-4 py-2 text-[10px] font-semibold uppercase tracking-wider border ${
+                    promptMode === "custom" ? "border-accent bg-bg-hover text-text-primary" : "border-border text-text-secondary"
+                  }`}
+                >
+                  Own Prompt
+                </button>
+              </div>
+
+              {promptMode === "saved" ? (
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    value={promptSearch}
+                    onChange={(e) => setPromptSearch(e.target.value)}
+                    placeholder="Search saved prompts..."
+                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                  />
+                  <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
+                    {promptsLoading ? (
+                      <p className="text-xs text-text-secondary animate-pulse">Loading prompts...</p>
+                    ) : filteredPrompts.length === 0 ? (
+                      <p className="text-sm text-text-secondary">No saved prompts found.</p>
+                    ) : (
+                      filteredPrompts.map((prompt) => (
+                        <button
+                          key={prompt._id}
+                          type="button"
+                          onClick={() => setSelectedPromptId(prompt._id)}
+                          className={`block w-full rounded border p-3 text-left ${
+                            prompt._id === selectedPromptId ? "border-accent bg-bg-hover" : "border-border bg-bg-secondary"
+                          }`}
+                        >
+                          <span className="block text-sm font-medium text-text-primary">{prompt.title}</span>
+                          <span className="mt-1 block text-xs text-text-secondary">
+                            {previewPromptDescription(prompt.description)}
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <textarea
+                    value={customPromptDescription}
+                    onChange={(e) => setCustomPromptDescription(e.target.value)}
+                    rows={8}
+                    placeholder="Prompt description used only for this generation..."
+                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm resize-none"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-3">
+
+              <input
+                id="generated-images-upload"
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(e) => setImages(Array.from(e.target.files || []))}
+                className="hidden"
+              />
+              <div
+                onClick={() => document.getElementById("generated-images-upload")?.click()}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setImages(Array.from(e.dataTransfer.files || []));
+                }}
+                className="flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded border border-dashed border-border bg-bg-secondary px-4 py-6 text-center transition-colors hover:border-accent hover:bg-bg-hover"
+              >
+                <span className="text-sm font-medium text-text-primary">Drag or click to add source images</span>
+                <span className="text-[10px] uppercase tracking-wider text-text-secondary">
+                  Select files or drop one or more images
+                </span>
+              </div>
+            </div>
           </div>
+
           {images.length > 0 && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {images.map((image, index) => (
@@ -262,7 +391,12 @@ export default function GenerateImagesPage() {
                         <span className="w-2 h-2 rounded-full bg-accent animate-pulse shrink-0" title="Generating..." />
                       )}
                     </div>
-                    <p className="line-clamp-2 text-[10px] text-text-secondary">{item.prompt}</p>
+                    <p className="line-clamp-1 text-[10px] font-semibold uppercase tracking-wider text-text-primary">
+                      {item.promptTitle || "One-off prompt"}
+                    </p>
+                    <p className="line-clamp-2 text-[10px] text-text-secondary">
+                      {item.promptDescription || item.prompt}
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -275,7 +409,7 @@ export default function GenerateImagesPage() {
                 <p className="text-[10px] text-text-secondary uppercase tracking-wider">
                   {item.sourceImages.length} source image{item.sourceImages.length !== 1 ? "s" : ""} · {item.images.length} result{item.images.length !== 1 ? "s" : ""}
                   {item.status === "processing" && " · PROCESSING"}
-                  {item.status === "failed" && ` · FAILED${item.errorMessage ? ` — ${item.errorMessage}` : ""}`}
+                  {item.status === "failed" && ` · FAILED${item.errorMessage ? ` - ${item.errorMessage}` : ""}`}
                 </p>
                 <div className="space-y-1 pt-1 text-[10px] text-text-secondary">
                   <p>Created at: {formatAuditDate(item.createdAt)}</p>

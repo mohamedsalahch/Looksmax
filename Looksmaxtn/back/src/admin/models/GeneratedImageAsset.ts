@@ -4,6 +4,9 @@ import { type IAuditActor, auditActorSchema } from "@/admin/lib/audit";
 export interface IGeneratedImageAsset extends Document {
   name: string;
   prompt: string;
+  promptId?: string;
+  promptTitle?: string;
+  promptDescription?: string;
   sourceImages: string[];
   images: string[];
   status: "processing" | "completed" | "failed";
@@ -18,6 +21,9 @@ const generatedImageAssetSchema = new Schema<IGeneratedImageAsset>(
   {
     name: { type: String, required: true, trim: true },
     prompt: { type: String, required: true, trim: true },
+    promptId: { type: String, default: "", trim: true },
+    promptTitle: { type: String, default: "", trim: true },
+    promptDescription: { type: String, default: "", trim: true },
     sourceImages: [{ type: String, required: true, trim: true }],
     images: [{ type: String, required: true, trim: true }],
     errorMessage: { type: String, default: "" },
