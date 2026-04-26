@@ -922,11 +922,12 @@ export default function OutfitStudioPage() {
         if (cartItem.productType === "perfume") return [];
 
         const productId = getCartItemProductId(cartItem.id);
-        const zoneId = inferStudioAssignmentZone({
+        const inferredZoneId = inferStudioAssignmentZone({
             categories: cartItem.categories,
             name: cartItem.name,
             fashionSubtype: cartItem.fashionSubtype,
         });
+        const zoneId = !isWomen && inferredZoneId === "dress" ? "top" : inferredZoneId;
 
         return [{
             id: productId,
@@ -941,16 +942,36 @@ export default function OutfitStudioPage() {
     const selectedZoneHistory: OutfitViewItem[] = showAllSelectedItems
         ? allSelectedOutfitItems
         : allSelectedOutfitItems.filter((item) => item.zoneId === selectedZoneId);
-    const hasSelectedOutfitItems = BODY_ZONES.some((zone) => Boolean(outfit[zone.id]));
+    const visibleBodyZones = isWomen ? BODY_ZONES : BODY_ZONES.filter((zone) => zone.id !== "dress");
+    const hasSelectedOutfitItems = visibleBodyZones.some((zone) => Boolean(outfit[zone.id]));
     const dressSelected = Boolean(outfit.dress);
-    const dressVisible = selectedZoneId === "dress" || (dressSelected && !DRESS_CONFLICT_ZONES.includes(selectedZoneId as StudioZoneId));
-    const dressSelectable = dressSelected && dressVisible && selectedZoneId !== "dress";
+    const dressVisible = isWomen && (selectedZoneId === "dress" || (dressSelected && !DRESS_CONFLICT_ZONES.includes(selectedZoneId as StudioZoneId)));
+    const dressSelectable = isWomen && (dressSelected && dressVisible && selectedZoneId !== "dress");
     const generationLimit = 100;
     const generationRequestsUsed = Math.min(Number(user?.bodyProfile?.outfitGenerationCount || 0), generationLimit);
     const remainingGenerationRequests = Math.max(generationLimit - generationRequestsUsed, 0);
     const generationLimitReached = remainingGenerationRequests <= 0;
     const canGenerateOutfit = profileReady && hasSelectedOutfitItems && !generationLimitReached;
     const shouldOpenProfileSettings = !profileReady;
+
+    useEffect(() => {
+        if (isWomen) return;
+
+        if (selectedZoneId === "dress") {
+            setSelectedZoneId("");
+        }
+
+        if (!outfit.dress && zoneOverrides.dress == null) return;
+
+        setZoneOverrides((current) => ({
+            ...current,
+            dress: null,
+        }));
+        setOutfit((current) => ({
+            ...current,
+            dress: null,
+        }));
+    }, [isWomen, outfit.dress, selectedZoneId, zoneOverrides.dress]);
 
     const applyAssignmentToZone = (zoneId: StudioZoneId, item: StudioAssignmentItem) => {
         const nextItem: OutfitSlotItem = {
@@ -1093,7 +1114,8 @@ export default function OutfitStudioPage() {
 
             let lastZoneId: StudioZoneId | null = null;
             for (const item of pendingAssignments) {
-                const zoneId = item.preferredZoneId || inferStudioAssignmentZone(item);
+                const inferredZoneId = item.preferredZoneId || inferStudioAssignmentZone(item);
+                const zoneId = !isWomen && inferredZoneId === "dress" ? "top" : inferredZoneId;
                 applyAssignmentToZone(zoneId, item);
                 lastZoneId = zoneId;
             }
@@ -1113,6 +1135,7 @@ export default function OutfitStudioPage() {
     }, [isWomen, studioStateHydrated]);
 
     const handleSelectZone = (zoneId: (typeof BODY_ZONES)[number]["id"]) => {
+        if (!isWomen && zoneId === "dress") return;
         setShowAllSelectedItems(false);
         setSelectedZoneId(zoneId);
     };
@@ -1132,6 +1155,7 @@ export default function OutfitStudioPage() {
         item: OutfitViewItem,
         keepAllView = false
     ) => {
+        if (!isWomen && zoneId === "dress") return;
         const normalizedItemId = getCartItemProductId(item.id);
         setShowAllSelectedItems(keepAllView);
         setSelectedZoneId(zoneId);
@@ -1248,7 +1272,7 @@ export default function OutfitStudioPage() {
                         BODY_ZONES.map((zone) => [
                             zone.id,
                             {
-                                status: Boolean(outfit[zone.id]),
+                                status: isWomen || zone.id !== "dress" ? Boolean(outfit[zone.id]) : false,
                                 productId: outfit[zone.id]?.id || "",
                                 fashionSubtype: outfit[zone.id]?.fashionSubtype || "",
                                 size:
@@ -1623,7 +1647,7 @@ export default function OutfitStudioPage() {
                                 >
                                     ALL
                                 </button>
-                                {BODY_ZONES.map((zone) => (
+                                {visibleBodyZones.map((zone) => (
                                     <button
                                         key={zone.id}
                                         type="button"
@@ -1706,7 +1730,7 @@ export default function OutfitStudioPage() {
                                             dressSelectable={dressSelectable}
                                             onZoneClick={handleBuilderZoneClick}
                                         />
-                                        {BODY_ZONES.map((zone) => {
+                                        {visibleBodyZones.map((zone) => {
                                             const assignedItem = outfit[zone.id];
                                             if (!assignedItem?.image) return null;
 
