@@ -1,6 +1,6 @@
 """Request models for API endpoints."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ModelPictures(BaseModel):
@@ -30,9 +30,15 @@ class ColorChoice(BaseModel):
 
 
 class SecondaryColors(BaseModel):
-    """Colors for the non-hero garment and the shoes."""
-    garment: ColorChoice
-    shoes: ColorChoice
+    """Selected generation target and companion garments."""
+    target: str = ""
+    top_type: str = ""
+    bottom_type: str = ""
+    footwear_type: str = ""
+    top: ColorChoice | None = None
+    bottom: ColorChoice | None = None
+    shoes: ColorChoice | None = None
+    garment: ColorChoice | None = None
 
 
 class ClothesRequest(BaseModel):
@@ -74,6 +80,7 @@ class BodyZones(BaseModel):
     """Collection of all body zones for outfit generation."""
     headwear: BodyZone
     outerwear: BodyZone
+    dress: BodyZone = Field(default_factory=lambda: BodyZone(status=False))
     top: BodyZone
     bottom: BodyZone
     footwear: BodyZone

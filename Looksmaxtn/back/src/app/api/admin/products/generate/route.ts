@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
 import ModelAsset from "@/admin/models/ModelAsset";
+import ProductGenerationJob from "@/admin/models/ProductGenerationJob";
 import { getSession } from "@/admin/lib/auth";
 import { readModelImageAsBase64 } from "@/admin/lib/modelUploads";
 
@@ -13,35 +14,6 @@ function normalizeType(type: string, fashionSubtype: string) {
   if (type === "perfume") return "perfume";
   return fashionSubtype === "shoes" ? "shoes" : "clothes";
 }
-
-function extractImagesFromResponse(data: unknown) {
-  if (typeof data === "string") return [data];
-  if (Array.isArray(data)) return data.filter((item): item is string => typeof item === "string");
-  if (data && typeof data === "object") {
-    const record = data as Record<string, unknown>;
-    if (Array.isArray(record.imagesBase64)) {
-      return record.imagesBase64.filter((item): item is string => typeof item === "string");
-    }
-    if (typeof record.image === "string") {
-      return [record.image];
-    }
-    if (Array.isArray(record.images)) {
-      return record.images
-        .map((item) => {
-          if (typeof item === "string") return item;
-          if (item && typeof item === "object" && typeof (item as Record<string, unknown>).base64 === "string") {
-            return (item as Record<string, string>).base64;
-          }
-          return null;
-        })
-        .filter((item): item is string => Boolean(item));
-    }
-    if (typeof record.base64 === "string") return [record.base64];
-  }
-  return [];
-}
-
-import ProductGenerationJob from "@/admin/models/ProductGenerationJob";
 
 export async function POST(req: NextRequest) {
   try {
@@ -63,9 +35,15 @@ export async function POST(req: NextRequest) {
     const modelId = String(formData.get("modelId") || "");
     const type = String(formData.get("type") || "fashion");
     const fashionSubtype = String(formData.get("fashionSubtype") || "clothes");
+    const generationTarget = String(formData.get("generationTarget") || "");
     const garmentZone = String(formData.get("garmentZone") || "top");
-    const secondaryColorName = String(formData.get("secondaryColorName") || "");
-    const secondaryColorHex = String(formData.get("secondaryColorHex") || "");
+    const companionTopType = String(formData.get("companionTopType") || "");
+    const companionBottomType = String(formData.get("companionBottomType") || "");
+    const topColorName = String(formData.get("topColorName") || "");
+    const topColorHex = String(formData.get("topColorHex") || "");
+    const bottomColorName = String(formData.get("bottomColorName") || "");
+    const bottomColorHex = String(formData.get("bottomColorHex") || "");
+    const footwearType = String(formData.get("footwearType") || "");
     const shoesColorName = String(formData.get("shoesColorName") || "");
     const shoesColorHex = String(formData.get("shoesColorHex") || "");
     const normalizedType = normalizeType(type, fashionSubtype);
@@ -125,13 +103,24 @@ export async function POST(req: NextRequest) {
               back: await fileToBase64(back as File),
             },
             garment_zone: garmentZone,
-            secondary_colors:
-              secondaryColorName && secondaryColorHex && shoesColorName && shoesColorHex
-                ? {
-                    garment: { name: secondaryColorName, hex: secondaryColorHex },
-                    shoes: { name: shoesColorName, hex: shoesColorHex },
-                  }
-                : undefined,
+            secondary_colors: {
+              target: generationTarget,
+              top_type: companionTopType,
+              bottom_type: companionBottomType,
+              footwear_type: footwearType,
+              top:
+                topColorName && topColorHex
+                  ? { name: topColorName, hex: topColorHex }
+                  : undefined,
+              bottom:
+                bottomColorName && bottomColorHex
+                  ? { name: bottomColorName, hex: bottomColorHex }
+                  : undefined,
+              shoes:
+                shoesColorName && shoesColorHex
+                  ? { name: shoesColorName, hex: shoesColorHex }
+                  : undefined,
+            },
           };
 
     const normalizedBaseUrl = baseUrl.replace(/\/$/, "");

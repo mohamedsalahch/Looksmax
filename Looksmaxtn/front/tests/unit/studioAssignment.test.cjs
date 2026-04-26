@@ -25,6 +25,13 @@ test("inferStudioAssignmentZone maps bottoms", () => {
   );
 });
 
+test("inferStudioAssignmentZone maps dresses", () => {
+  assert.equal(
+    inferStudioAssignmentZone({ name: "Silk Dress", categories: ["Dresses"] }),
+    "dress"
+  );
+});
+
 test("inferStudioAssignmentZone maps shoes by subtype", () => {
   assert.equal(
     inferStudioAssignmentZone({ name: "Runner", categories: ["Sneakers"], fashionSubtype: "shoes" }),
@@ -38,4 +45,3 @@ test("inferStudioAssignmentZone defaults to outerwear", () => {
     "outerwear"
   );
 });
-

@@ -3,7 +3,7 @@
 CLOTHES_TOP_PROMPT_TEMPLATE = """
 You are a professional fashion photography generator.
 
-Your task is to generate a high-end, photorealistic image of a model wearing the provided TOP garment.
+Your task is to generate a high-end, photorealistic image of a model wearing the provided {GENERATION_TARGET} garment.
 
 --------------------------------
 MODEL REFERENCE:
@@ -16,8 +16,8 @@ Two images of the same model are provided (front and back views).
 - The person must remain identical across generations
 
 --------------------------------
-GARMENT PRIORITY (TOP = HERO):
-The TOP garment is the primary focus.
+GARMENT PRIORITY ({GENERATION_TARGET} = HERO):
+The provided {GENERATION_TARGET} garment is the primary focus.
 
 REQUIREMENTS:
 - Must match EXACTLY:
@@ -30,27 +30,19 @@ REQUIREMENTS:
 - Ensure realistic fabric behavior (folds, tension)
 
 --------------------------------
-SECONDARY GARMENT (BOTTOM = FIXED):
-The bottom MUST be identical across all generations.
-
-STRICT RULES:
-- Plain {SECONDARY_COLOR_NAME} pants ONLY
-- Color: exactly {SECONDARY_COLOR_HEX} ({SECONDARY_COLOR_NAME})
-- No patterns, no logos, no distressing
-- Straight or slightly relaxed fit
-- Matte fabric (no shine, no texture emphasis)
-- Must not attract attention
+{COMPANION_GARMENTS_SECTION}
 
 --------------------------------
 FOOTWEAR (FIXED):
 The shoes MUST be identical across all generations.
 
 STRICT RULES:
-- Plain {SHOES_COLOR_NAME} shoes ONLY
+- Plain {SHOES_COLOR_NAME} {FOOTWEAR_TYPE} ONLY
 - Color: exactly {SHOES_COLOR_HEX} ({SHOES_COLOR_NAME})
+- The visible footwear color must match {SHOES_COLOR_HEX}; do not use black, white, or gray unless that exact color was selected.
 - Minimalist, low-profile silhouette
 - No logos, no patterns, no contrasting accents
-- Must not attract attention
+- Keep the silhouette simple, but keep the selected color clearly visible.
 
 --------------------------------
 BACKGROUND:
@@ -91,15 +83,16 @@ TARGET VIEW:
 --------------------------------
 STRICT CONSTRAINTS:
 - Do NOT alter garment color or design
-- Do NOT modify the {SECONDARY_COLOR_NAME} pants in any way
-- Do NOT modify the {SHOES_COLOR_NAME} shoes in any way
+- Do NOT replace selected companion colors with black, white, gray, denim, beige, or another neutral unless that exact color was selected
+- Do NOT modify selected companion garments in any way
+- Do NOT modify the {SHOES_COLOR_NAME} {FOOTWEAR_TYPE} in any way
 - Do NOT add patterns/logos anywhere
 - Do NOT distort proportions
 - Face must remain clean and undistorted
 
 --------------------------------
 FINAL REQUIREMENT:
-portrait orientation, 2:3 aspect ratio, full-body framing, model centered, feet visible, consistent margins, studio composition
+portrait orientation, exact 9:16 aspect ratio, full-body framing, model centered, feet visible, consistent margins, studio composition
 """
 
 CLOTHES_BOTTOM_PROMPT_TEMPLATE = """
@@ -132,28 +125,19 @@ REQUIREMENTS:
 - Ensure realistic fabric behavior (folds, drape, tension)
 
 --------------------------------
-SECONDARY GARMENT (TOP = FIXED):
-The top MUST be identical across all generations.
-
-STRICT RULES:
-- Plain {SECONDARY_COLOR_NAME} t-shirt ONLY
-- Color: exactly {SECONDARY_COLOR_HEX} ({SECONDARY_COLOR_NAME})
-- No logos, no graphics, no texture
-- Crew neck
-- Short sleeves
-- Relaxed fit
-- Matte cotton appearance
+{COMPANION_GARMENTS_SECTION}
 
 --------------------------------
 FOOTWEAR (FIXED):
 The shoes MUST be identical across all generations.
 
 STRICT RULES:
-- Plain {SHOES_COLOR_NAME} shoes ONLY
+- Plain {SHOES_COLOR_NAME} {FOOTWEAR_TYPE} ONLY
 - Color: exactly {SHOES_COLOR_HEX} ({SHOES_COLOR_NAME})
+- The visible footwear color must match {SHOES_COLOR_HEX}; do not use black, white, or gray unless that exact color was selected.
 - Minimalist, low-profile silhouette
 - No logos, no patterns, no contrasting accents
-- Must not attract attention
+- Keep the silhouette simple, but keep the selected color clearly visible.
 
 --------------------------------
 BACKGROUND:
@@ -193,15 +177,16 @@ TARGET VIEW:
 --------------------------------
 STRICT CONSTRAINTS:
 - Do NOT alter garment color or structure
-- Do NOT modify the {SECONDARY_COLOR_NAME} t-shirt in any way
-- Do NOT modify the {SHOES_COLOR_NAME} shoes in any way
+- Do NOT replace selected companion colors with black, white, gray, denim, beige, or another neutral unless that exact color was selected
+- Do NOT modify selected companion garments in any way
+- Do NOT modify the {SHOES_COLOR_NAME} {FOOTWEAR_TYPE} in any way
 - Do NOT add patterns/logos
 - Do NOT distort proportions
 - Avoid hiding key garment areas
 
 --------------------------------
 FINAL REQUIREMENT:
-portrait orientation, 2:3 aspect ratio, full-body framing, model centered, feet visible, consistent margins, studio composition
+portrait orientation, exact 9:16 aspect ratio, full-body framing, model centered, feet visible, consistent margins, studio composition
 """
 
 CLOTHES_PROMPT_TEMPLATE = """
@@ -293,7 +278,7 @@ STRICT CONSTRAINTS:
 
 --------------------------------
 FINAL REQUIREMENT:
-portrait orientation, 2:3 aspect ratio, full-body framing, model centered, feet visible, consistent margins, studio composition
+portrait orientation, exact 9:16 aspect ratio, full-body framing, model centered, feet visible, consistent margins, studio composition
 """
 
 SHOES_PROMPT_TEMPLATE = """
@@ -369,6 +354,10 @@ STRICT CONSTRAINTS:
 - No added props
 - No reflections unless explicitly present
 - No artifacts or distortions
+
+--------------------------------
+FINAL REQUIREMENT:
+portrait orientation, exact 9:16 aspect ratio, product centered, consistent margins, clean studio composition
 """
 
 FRONT_VIEW_PROMPT_TEMPLATE = """
@@ -410,17 +399,26 @@ OUTERWEAR:
 - If true: use FRONT view image and reconstruct faithfully
 - If false: do NOT generate anything
 
+DRESS:
+- Status: {dress_status}
+- Size: {dress_piece_size}
+- If true: use FRONT view image and reconstruct faithfully as a one-piece dress covering the torso and lower body
+- If true: do NOT generate separate top or bottom garments unless they are physically visible in the dress reference image
+- If false: continue with TOP and BOTTOM rules
+
 TOP:
 - Status: {top_status}
 - Size: {top_piece_size}
 - If true: use FRONT view image and reconstruct faithfully
-- If false: generate a neutral minimal top (plain, solid color)
+- If false and DRESS is false: generate a neutral minimal top (plain, solid color)
+- If DRESS is true: ignore this section
 
 BOTTOM:
 - Status: {bottom_status}
 - Size: {bottom_piece_size}
 - If true: use FRONT view image and reconstruct faithfully
-- If false: generate neutral pants (clean, no patterns)
+- If false and DRESS is false: generate neutral pants (clean, no patterns)
+- If DRESS is true: ignore this section
 
 FOOTWEAR:
 - Status: {footwear_status}
@@ -504,7 +502,7 @@ STRICT CONSTRAINTS:
 --------------------------------
 FINAL REQUIREMENT:
 
-portrait orientation, 2:3 aspect ratio, full-body framing, model centered, feet visible, consistent margins, studio composition
+portrait orientation, exact 9:16 aspect ratio, full-body framing, model centered, feet visible, consistent margins, studio composition
 
 The output must be a clean, realistic FRONT VIEW product image with accurate garment fit representation.
 """
@@ -610,6 +608,6 @@ STRICT CONSTRAINTS:
 
 --------------------------------
 FINAL REQUIREMENT:
-portrait orientation, 2:3 aspect ratio, full-body framing, model centered, feet visible, consistent margins, studio composition
+portrait orientation, exact 9:16 aspect ratio, full-body framing, model centered, feet visible, consistent margins, studio composition
 The result must look like the back view of the SAME photoshoot as the front image.
 """
