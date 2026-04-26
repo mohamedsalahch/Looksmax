@@ -60,10 +60,10 @@ LIGHTING:
 
 --------------------------------
 POSE:
-- Natural fashion pose
-- Slight 3/4 angle
-- Upper body subtly emphasized
-- Arms positioned to not block the garment
+- Choose a natural fashion pose that looks suitable for the model (gender, build, body language) — do NOT replicate the pose from the reference images
+- Vary the stance, weight distribution, hip angle, head tilt, and arm position so generated images don't look repetitive across runs
+- Keep the upper body subtly emphasized and arms positioned to never block or distort the garment
+- Pose must remain plausible for premium e-commerce (no exaggerated or unnatural posing)
 
 --------------------------------
 CAMERA:
@@ -154,10 +154,10 @@ LIGHTING:
 
 --------------------------------
 POSE:
-- Natural stance
-- Slight 3/4 angle
-- One foot slightly forward to show structure
-- Ensure full visibility of garment
+- Choose a natural standing pose that fits the model (gender, build, body language) — do NOT replicate the pose from the reference images
+- Vary the stance, weight-bearing leg, hip angle, foot placement, and arm position so generated images don't look repetitive across runs
+- Ensure the bottom garment remains fully visible (avoid crossing legs, hands in front pockets blocking detail, etc.)
+- Pose must remain plausible for premium e-commerce (no exaggerated or unnatural posing)
 
 --------------------------------
 CAMERA:
