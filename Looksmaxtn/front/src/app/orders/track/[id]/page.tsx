@@ -33,16 +33,81 @@ interface TrackedOrder {
   }[];
 }
 
-const statusColor = (s: string) => {
-  switch (s) {
-    case "canceled": return "text-red-700 bg-red-100";
-    case "returned": return "text-amber-700 bg-amber-100";
-    case "delivered": return "text-[#6b6055] bg-[#f1ede8]";
-    case "shipping": return "text-blue-700 bg-blue-100";
-    case "confirmed": return "text-[#5d6358] bg-[#ecebe5]";
-    default: return "text-[#7d6e5f] bg-[#f6f2eb]";
+const PIPELINE_STEPS = [
+  { key: "processing", label: "Processing" },
+  { key: "confirmed", label: "Confirmed" },
+  { key: "shipping", label: "Shipping" },
+  { key: "delivered", label: "Delivered" },
+] as const;
+
+function OrderPipeline({ status }: { status: string }) {
+  if (status === "canceled" || status === "returned") {
+    return (
+      <div className="mb-8 border border-red-200 bg-red-50 px-4 py-3 text-xs uppercase tracking-wider text-red-700">
+        Order {status}
+      </div>
+    );
   }
-};
+
+  const currentIndex = PIPELINE_STEPS.findIndex((step) => step.key === status);
+  const safeIndex = currentIndex < 0 ? 0 : currentIndex;
+  const progressPct = PIPELINE_STEPS.length > 1
+    ? (safeIndex / (PIPELINE_STEPS.length - 1)) * 100
+    : 0;
+
+  return (
+    <div className="mb-10">
+      <div className="relative flex items-start justify-between px-1">
+        <div className="absolute left-[14px] right-[14px] top-[13px] h-[3px] rounded-full bg-foreground/10" />
+        <div
+          className="absolute left-[14px] top-[13px] h-[3px] rounded-full bg-foreground transition-[width] duration-700 ease-out"
+          style={{
+            width: `calc((100% - 28px) * ${progressPct / 100})`,
+          }}
+        />
+        {PIPELINE_STEPS.map((step, i) => {
+          const done = i < safeIndex;
+          const current = i === safeIndex;
+          return (
+            <div key={step.key} className="relative z-10 flex flex-col items-center gap-2.5">
+              <div
+                className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors duration-500 ${
+                  done
+                    ? "bg-foreground"
+                    : current
+                    ? "bg-background ring-[3px] ring-foreground shadow-[0_0_0_4px_rgba(0,0,0,0.04)]"
+                    : "bg-foreground/10"
+                }`}
+              >
+                {done && (
+                  <svg
+                    viewBox="0 0 12 12"
+                    className="h-3 w-3 text-background"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="2.5,6.5 5,9 9.5,3.5" />
+                  </svg>
+                )}
+                {current && <div className="h-2 w-2 rounded-full bg-foreground" />}
+              </div>
+              <span
+                className={`text-[10px] uppercase tracking-wider ${
+                  current ? "text-foreground font-semibold" : "text-text-secondary"
+                }`}
+              >
+                {step.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default function TrackOrderPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -108,16 +173,13 @@ export default function TrackOrderPage({ params }: { params: Promise<{ id: strin
           <h1 className="text-lg font-semibold tracking-wide uppercase">
             Order {orderNumber}
           </h1>
-          <span
-            className={`text-[10px] px-2 py-1 uppercase tracking-wider ${statusColor(order.orderStatus)}`}
-          >
-            {order.orderStatus}
-          </span>
         </div>
 
         <p className="text-xs text-text-secondary mb-8">
           Placed on {formatStoreDate(order.createdAt)} · Payment: {order.paymentMethod === "cod" ? "Cash on Delivery" : order.paymentMethod}
         </p>
+
+        <OrderPipeline status={order.orderStatus} />
 
         <section className="mb-8">
           <h2 className="text-xs font-semibold uppercase tracking-wider mb-4 text-text-secondary">
