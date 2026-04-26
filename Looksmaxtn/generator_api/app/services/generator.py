@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from google import genai
 from google.genai import types
 
-from app.models.requests import BodyZones
+from app.models.requests import BodyZones, SecondaryColors
 from app.prompts.templates import (
     CLOTHES_TOP_PROMPT_TEMPLATE,
     CLOTHES_BOTTOM_PROMPT_TEMPLATE,
@@ -41,7 +41,8 @@ class ImageGenerator:
         model_back: str,
         product_front: str,
         product_back: str,
-        garment_zone: str = "top"
+        garment_zone: str = "top",
+        secondary_colors: SecondaryColors | None = None,
     ) -> str:
         """Generate a single clothes view and return base64 image.
 
@@ -57,7 +58,27 @@ class ImageGenerator:
             Base64 encoded generated image
         """
         template = CLOTHES_TOP_PROMPT_TEMPLATE if garment_zone == "top" else CLOTHES_BOTTOM_PROMPT_TEMPLATE
-        prompt = template.replace("{VIEW}", view_name.upper())
+
+        if secondary_colors is not None:
+            secondary_name = secondary_colors.garment.name
+            secondary_hex = secondary_colors.garment.hex
+            shoes_name = secondary_colors.shoes.name
+            shoes_hex = secondary_colors.shoes.hex
+        else:
+            # Backward-compatible defaults: previous hardcoded values
+            secondary_name = "Black" if garment_zone == "top" else "White"
+            secondary_hex = "#000000" if garment_zone == "top" else "#FFFFFF"
+            shoes_name = "White"
+            shoes_hex = "#FFFFFF"
+
+        prompt = (
+            template
+            .replace("{VIEW}", view_name.upper())
+            .replace("{SECONDARY_COLOR_NAME}", secondary_name)
+            .replace("{SECONDARY_COLOR_HEX}", secondary_hex)
+            .replace("{SHOES_COLOR_NAME}", shoes_name)
+            .replace("{SHOES_COLOR_HEX}", shoes_hex)
+        )
 
         logger.info(
             f"generate_clothes_view({view_name}): input sizes - "

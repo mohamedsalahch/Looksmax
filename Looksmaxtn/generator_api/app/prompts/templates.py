@@ -34,11 +34,22 @@ SECONDARY GARMENT (BOTTOM = FIXED):
 The bottom MUST be identical across all generations.
 
 STRICT RULES:
-- Plain black pants ONLY
-- Color: deep black (#111111 to #000000)
+- Plain {SECONDARY_COLOR_NAME} pants ONLY
+- Color: exactly {SECONDARY_COLOR_HEX} ({SECONDARY_COLOR_NAME})
 - No patterns, no logos, no distressing
 - Straight or slightly relaxed fit
 - Matte fabric (no shine, no texture emphasis)
+- Must not attract attention
+
+--------------------------------
+FOOTWEAR (FIXED):
+The shoes MUST be identical across all generations.
+
+STRICT RULES:
+- Plain {SHOES_COLOR_NAME} shoes ONLY
+- Color: exactly {SHOES_COLOR_HEX} ({SHOES_COLOR_NAME})
+- Minimalist, low-profile silhouette
+- No logos, no patterns, no contrasting accents
 - Must not attract attention
 
 --------------------------------
@@ -80,7 +91,8 @@ TARGET VIEW:
 --------------------------------
 STRICT CONSTRAINTS:
 - Do NOT alter garment color or design
-- Do NOT modify the black pants in any way
+- Do NOT modify the {SECONDARY_COLOR_NAME} pants in any way
+- Do NOT modify the {SHOES_COLOR_NAME} shoes in any way
 - Do NOT add patterns/logos anywhere
 - Do NOT distort proportions
 - Face must remain clean and undistorted
@@ -124,13 +136,24 @@ SECONDARY GARMENT (TOP = FIXED):
 The top MUST be identical across all generations.
 
 STRICT RULES:
-- Plain white t-shirt ONLY
-- Color: pure white (#FFFFFF)
+- Plain {SECONDARY_COLOR_NAME} t-shirt ONLY
+- Color: exactly {SECONDARY_COLOR_HEX} ({SECONDARY_COLOR_NAME})
 - No logos, no graphics, no texture
 - Crew neck
 - Short sleeves
 - Relaxed fit
 - Matte cotton appearance
+
+--------------------------------
+FOOTWEAR (FIXED):
+The shoes MUST be identical across all generations.
+
+STRICT RULES:
+- Plain {SHOES_COLOR_NAME} shoes ONLY
+- Color: exactly {SHOES_COLOR_HEX} ({SHOES_COLOR_NAME})
+- Minimalist, low-profile silhouette
+- No logos, no patterns, no contrasting accents
+- Must not attract attention
 
 --------------------------------
 BACKGROUND:
@@ -170,7 +193,8 @@ TARGET VIEW:
 --------------------------------
 STRICT CONSTRAINTS:
 - Do NOT alter garment color or structure
-- Do NOT modify the white t-shirt in any way
+- Do NOT modify the {SECONDARY_COLOR_NAME} t-shirt in any way
+- Do NOT modify the {SHOES_COLOR_NAME} shoes in any way
 - Do NOT add patterns/logos
 - Do NOT distort proportions
 - Avoid hiding key garment areas

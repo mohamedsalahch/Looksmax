@@ -132,7 +132,7 @@ export default function ProductImageGallery({ images = [] }: { images?: ProductI
                 <img
                   src={img.url}
                   alt={`Thumbnail ${index + 1}`}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-contain"
                   loading="lazy"
                   decoding="async"
                 />

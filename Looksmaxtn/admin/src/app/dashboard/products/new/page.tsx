@@ -6,6 +6,14 @@ import { getConditionStatusFromScore } from "@/lib/productCondition";
 import { generateId } from "@/lib/uuid";
 import { withAuthRequest } from "@/lib/authClient";
 import { compressImageFile } from "@/lib/imageCompression";
+import {
+  SECONDARY_GARMENT_PALETTE,
+  SHOES_PALETTE,
+  DEFAULT_TOP_ZONE_PANTS,
+  DEFAULT_BOTTOM_ZONE_TOP,
+  DEFAULT_SHOES,
+  PaletteColor,
+} from "@/lib/generationPalette";
 
 interface Category {
   _id: string;
@@ -246,6 +254,9 @@ export default function NewProductPage() {
   const [draggedImageId, setDraggedImageId] = useState<string | null>(null);
   const [selectedModelId, setSelectedModelId] = useState("");
   const [garmentZone, setGarmentZone] = useState<"top" | "bottom">("top");
+  const [secondaryTopColor, setSecondaryTopColor] = useState<PaletteColor>(DEFAULT_BOTTOM_ZONE_TOP);
+  const [secondaryBottomColor, setSecondaryBottomColor] = useState<PaletteColor>(DEFAULT_TOP_ZONE_PANTS);
+  const [shoesColor, setShoesColor] = useState<PaletteColor>(DEFAULT_SHOES);
   const [generationInputs, setGenerationInputs] = useState<GenerationInputs>(initialGenerationInputs);
   const [importingGeneratedImage, setImportingGeneratedImage] = useState<string | null>(null);
   const [isGeneratedImagesOpen, setIsGeneratedImagesOpen] = useState(false);
@@ -516,11 +527,24 @@ export default function NewProductPage() {
       body.append("modelId", selectedModelId);
       body.append("type", form.productType);
       body.append("fashionSubtype", form.fashionSubtype);
-      if (form.fashionSubtype === "clothes") body.append("garmentZone", garmentZone);
-      body.append("front", generationInputs.front.file);
-      body.append("back", generationInputs.back.file);
-      if (generationInputs.left.file) body.append("left", generationInputs.left.file);
-      if (generationInputs.right.file) body.append("right", generationInputs.right.file);
+      if (form.fashionSubtype === "clothes") {
+        body.append("garmentZone", garmentZone);
+        const secondaryGarment = garmentZone === "top" ? secondaryBottomColor : secondaryTopColor;
+        body.append("secondaryColorName", secondaryGarment.name);
+        body.append("secondaryColorHex", secondaryGarment.hex);
+        body.append("shoesColorName", shoesColor.name);
+        body.append("shoesColorHex", shoesColor.hex);
+      }
+      const [frontFile, backFile, leftFile, rightFile] = await Promise.all([
+        compressImageFile(generationInputs.front.file),
+        compressImageFile(generationInputs.back.file),
+        generationInputs.left.file ? compressImageFile(generationInputs.left.file) : Promise.resolve(null),
+        generationInputs.right.file ? compressImageFile(generationInputs.right.file) : Promise.resolve(null),
+      ]);
+      body.append("front", frontFile);
+      body.append("back", backFile);
+      if (leftFile) body.append("left", leftFile);
+      if (rightFile) body.append("right", rightFile);
 
       // 1. Trigger the job
       const triggerRes = await fetch("/api/products/generate", withAuthRequest({
@@ -1056,7 +1080,7 @@ export default function NewProductPage() {
                   className="flex items-center gap-3 rounded border border-border bg-bg-secondary p-3"
                 >
                   <span className="w-5 text-[10px] text-text-secondary font-mono">{idx + 1}</span>
-                  <img src={img.url} alt={`Preview ${idx + 1}`} className="h-20 w-20 rounded object-cover border border-border" />
+                  <img src={img.url} alt={`Preview ${idx + 1}`} className="h-20 w-20 rounded object-contain bg-bg-primary border border-border" />
                   <div className="flex-1">
                     <p className="text-xs font-medium">{idx === 0 ? "Main image" : `Image ${idx + 1}`}</p>
                     <p className="text-[10px] text-text-secondary">
@@ -1251,6 +1275,63 @@ export default function NewProductPage() {
                     >
                       Bottom
                     </button>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="block min-w-24 text-[10px] text-text-secondary uppercase tracking-wider">
+                      {garmentZone === "top" ? "Pants color" : "Top color"}
+                    </label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {SECONDARY_GARMENT_PALETTE.map((color) => {
+                        const active =
+                          garmentZone === "top"
+                            ? secondaryBottomColor.hex === color.hex
+                            : secondaryTopColor.hex === color.hex;
+                        return (
+                          <button
+                            key={color.hex}
+                            type="button"
+                            title={color.name}
+                            onClick={() =>
+                              garmentZone === "top"
+                                ? setSecondaryBottomColor(color)
+                                : setSecondaryTopColor(color)
+                            }
+                            className={`h-7 w-7 rounded-full border-2 transition-all ${
+                              active ? "border-accent scale-110" : "border-border hover:border-text-secondary"
+                            }`}
+                            style={{ backgroundColor: color.hex }}
+                          />
+                        );
+                      })}
+                    </div>
+                    <span className="text-[10px] text-text-secondary">
+                      {garmentZone === "top" ? secondaryBottomColor.name : secondaryTopColor.name}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="block min-w-24 text-[10px] text-text-secondary uppercase tracking-wider">
+                      Shoes color
+                    </label>
+                    <div className="flex gap-1.5">
+                      {SHOES_PALETTE.map((color) => {
+                        const active = shoesColor.hex === color.hex;
+                        return (
+                          <button
+                            key={color.hex}
+                            type="button"
+                            title={color.name}
+                            onClick={() => setShoesColor(color)}
+                            className={`h-7 w-7 rounded-full border-2 transition-all ${
+                              active ? "border-accent scale-110" : "border-border hover:border-text-secondary"
+                            }`}
+                            style={{ backgroundColor: color.hex }}
+                          />
+                        );
+                      })}
+                    </div>
+                    <span className="text-[10px] text-text-secondary">{shoesColor.name}</span>
                   </div>
                 </div>
                 <div className="grid grid-cols-4 gap-4">

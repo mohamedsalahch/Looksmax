@@ -45,18 +45,18 @@ export default function EditorialFeature({
         <Link
           href="/studio"
           ref={cardRef}
-          className="relative block aspect-[4/5] md:aspect-[16/10] w-full cursor-pointer group overflow-hidden bg-surface"
+          className="relative block w-full cursor-pointer group overflow-hidden bg-surface"
         >
           {image ? (
             <img
               src={image}
               alt={label}
-              className={`w-full h-full object-cover transition-all duration-500 ${
+              className={`block w-full h-auto transition-all duration-500 ${
                 mobileActive ? "scale-[1.03] blur-sm" : "group-hover:scale-[1.03] group-hover:blur-sm"
               }`}
             />
           ) : (
-            <div className="w-full h-full placeholder-img">
+            <div className="w-full aspect-[4/5] md:aspect-[16/10] placeholder-img">
               <span className="relative z-10 text-sm tracking-widest">EDITORIAL</span>
             </div>
           )}

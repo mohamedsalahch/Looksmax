@@ -23,6 +23,18 @@ class ShoesProductPictures(BaseModel):
     right: str
 
 
+class ColorChoice(BaseModel):
+    """A selected color (name + hex)."""
+    name: str
+    hex: str
+
+
+class SecondaryColors(BaseModel):
+    """Colors for the non-hero garment and the shoes."""
+    garment: ColorChoice
+    shoes: ColorChoice
+
+
 class ClothesRequest(BaseModel):
     """Request for clothes image generation."""
     job_id: str | None = None
@@ -30,6 +42,7 @@ class ClothesRequest(BaseModel):
     model_pictures: ModelPictures
     product_pictures: ProductPictures
     garment_zone: str = "top"
+    secondary_colors: SecondaryColors | None = None
 
 
 class ShoesRequest(BaseModel):

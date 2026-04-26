@@ -33,7 +33,8 @@ async def process_clothes_generation(job_id: str, webhook_url: str, request: Clo
             request.model_pictures.back,
             request.product_pictures.front,
             request.product_pictures.back,
-            request.garment_zone
+            request.garment_zone,
+            request.secondary_colors,
         )
         await send_webhook(webhook_url, job_id, "front", front_b64)
 
@@ -44,7 +45,8 @@ async def process_clothes_generation(job_id: str, webhook_url: str, request: Clo
             request.model_pictures.back,
             request.product_pictures.front,
             request.product_pictures.back,
-            request.garment_zone
+            request.garment_zone,
+            request.secondary_colors,
         )
         await send_webhook(webhook_url, job_id, "back", back_b64)
 
@@ -79,7 +81,8 @@ async def generate_clothes_images(request: ClothesRequest, background_tasks: Bac
             request.model_pictures.back,
             request.product_pictures.front,
             request.product_pictures.back,
-            request.garment_zone
+            request.garment_zone,
+            request.secondary_colors,
         )
 
         back_b64 = await _generator.generate_clothes_view(
@@ -88,7 +91,8 @@ async def generate_clothes_images(request: ClothesRequest, background_tasks: Bac
             request.model_pictures.back,
             request.product_pictures.front,
             request.product_pictures.back,
-            request.garment_zone
+            request.garment_zone,
+            request.secondary_colors,
         )
 
         return GenerationResponse(images=[

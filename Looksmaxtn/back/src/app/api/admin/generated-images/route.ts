@@ -8,7 +8,6 @@ import {
   saveGeneratedSourceImage,
 } from "@/admin/lib/generatedImageUploads";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
-import { compressBase64Image } from "@/lib/imageCompression";
 
 function extractImagesFromResponse(data: unknown) {
   if (typeof data === "string") return [data];
@@ -43,7 +42,7 @@ function extractImagesFromResponse(data: unknown) {
 
 async function fileToBase64(file: File) {
   const bytes = await file.arrayBuffer();
-  return compressBase64Image(Buffer.from(bytes).toString("base64"));
+  return Buffer.from(bytes).toString("base64");
 }
 
 export async function GET() {

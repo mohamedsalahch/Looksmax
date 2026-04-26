@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { withAuthRequest } from "@/lib/authClient";
+import { compressImageFile } from "@/lib/imageCompression";
 
 interface GeneratedImageAsset {
   _id: string;
@@ -85,7 +86,8 @@ export default function GenerateImagesPage() {
       const body = new FormData();
       body.append("name", name);
       body.append("prompt", prompt);
-      images.forEach((image) => body.append("images", image));
+      const compressedImages = await Promise.all(images.map((image) => compressImageFile(image)));
+      compressedImages.forEach((image) => body.append("images", image));
 
       const res = await fetch("/api/generated-images", withAuthRequest({ method: "POST", body }));
       const data = await res.json();

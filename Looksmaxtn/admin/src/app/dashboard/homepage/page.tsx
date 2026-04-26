@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import AuditMetaCard from "@/components/AuditMetaCard";
 import { withAuthRequest } from "@/lib/authClient";
+import { compressImageFile } from "@/lib/imageCompression";
 
 interface HomeStat {
   label: string;
@@ -260,13 +261,19 @@ export default function HomePageEditor() {
         return;
       }
 
+      const [compressedHero, compressedEditorial, compressedLookbook] = await Promise.all([
+        heroFile ? compressImageFile(heroFile) : Promise.resolve(null),
+        editorialFile ? compressImageFile(editorialFile) : Promise.resolve(null),
+        Promise.all(lookbookFiles.map((file) => compressImageFile(file))),
+      ]);
+
       const body = new FormData();
       body.append("heroEyebrow", content.hero.eyebrow);
       body.append("heroTitle", content.hero.title);
       body.append("heroSubtitle", content.hero.subtitle);
       body.append("heroLink", content.hero.link);
       body.append("existingHeroImage", content.hero.image || "");
-      if (heroFile) body.append("heroImage", heroFile);
+      if (compressedHero) body.append("heroImage", compressedHero);
 
       body.append("brandEyebrow", content.brandStory.eyebrow);
       body.append("brandTitle", content.brandStory.title);
@@ -277,12 +284,12 @@ export default function HomePageEditor() {
       body.append("lookbookCaption", content.lookbook.caption);
       body.append("existingLookbookImages", JSON.stringify(content.lookbook.images));
       body.append("lookbookCategorySlugs", JSON.stringify(selectedLookbookCategorySlugs));
-      lookbookFiles.forEach((file) => body.append("lookbookImages", file));
+      compressedLookbook.forEach((file) => body.append("lookbookImages", file));
 
       body.append("editorialEyebrow", content.editorial.eyebrow);
       body.append("editorialLabel", content.editorial.label);
       body.append("existingEditorialImage", content.editorial.image || "");
-      if (editorialFile) body.append("editorialImage", editorialFile);
+      if (compressedEditorial) body.append("editorialImage", compressedEditorial);
 
       body.append("featuredTitle", content.featured.title);
 

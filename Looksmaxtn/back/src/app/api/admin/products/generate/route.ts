@@ -3,11 +3,10 @@ import dbConnect from "@/admin/lib/mongodb";
 import ModelAsset from "@/admin/models/ModelAsset";
 import { getSession } from "@/admin/lib/auth";
 import { readModelImageAsBase64 } from "@/admin/lib/modelUploads";
-import { compressBase64Image } from "@/lib/imageCompression";
 
 async function fileToBase64(file: File) {
   const bytes = await file.arrayBuffer();
-  return compressBase64Image(Buffer.from(bytes).toString("base64"));
+  return Buffer.from(bytes).toString("base64");
 }
 
 function normalizeType(type: string, fashionSubtype: string) {
@@ -65,6 +64,10 @@ export async function POST(req: NextRequest) {
     const type = String(formData.get("type") || "fashion");
     const fashionSubtype = String(formData.get("fashionSubtype") || "clothes");
     const garmentZone = String(formData.get("garmentZone") || "top");
+    const secondaryColorName = String(formData.get("secondaryColorName") || "");
+    const secondaryColorHex = String(formData.get("secondaryColorHex") || "");
+    const shoesColorName = String(formData.get("shoesColorName") || "");
+    const shoesColorHex = String(formData.get("shoesColorHex") || "");
     const normalizedType = normalizeType(type, fashionSubtype);
     const model =
       normalizedType === "clothes" ? await ModelAsset.findById(modelId).lean() : null;
@@ -122,6 +125,13 @@ export async function POST(req: NextRequest) {
               back: await fileToBase64(back as File),
             },
             garment_zone: garmentZone,
+            secondary_colors:
+              secondaryColorName && secondaryColorHex && shoesColorName && shoesColorHex
+                ? {
+                    garment: { name: secondaryColorName, hex: secondaryColorHex },
+                    shoes: { name: shoesColorName, hex: shoesColorHex },
+                  }
+                : undefined,
           };
 
     const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
