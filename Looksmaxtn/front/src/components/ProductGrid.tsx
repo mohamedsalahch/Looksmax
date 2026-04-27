@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ProductCard from "./ProductCard";
 import { getStoredReservationKey } from "@/lib/reservations";
 
@@ -71,6 +71,7 @@ export default function ProductGrid({
   const [appliedPriceMin, setAppliedPriceMin] = useState("");
   const [appliedPriceMax, setAppliedPriceMax] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const skipNextFetch = useRef(initialProducts.length > 0 || initialFacets !== null);
 
   const hasActiveFilters = selectedSize || appliedPriceMin || appliedPriceMax;
   const rangeMin = facets ? Math.floor(facets.priceRange.min) : 0;
@@ -79,6 +80,11 @@ export default function ProductGrid({
   const sliderMax = priceMax !== "" ? Number(priceMax) : rangeMax;
 
   useEffect(() => {
+    if (skipNextFetch.current) {
+      skipNextFetch.current = false;
+      return;
+    }
+
     let cancelled = false;
 
     const loadProducts = () => {

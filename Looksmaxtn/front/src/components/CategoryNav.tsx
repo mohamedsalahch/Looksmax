@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-interface Category {
+export interface Category {
   _id: string;
   name: string;
   slug: string;
@@ -14,12 +14,16 @@ interface Category {
 
 export default function CategoryNav({
   activeSlug,
+  initialCategories,
 }: {
   activeSlug: string;
+  initialCategories?: Category[];
 }) {
   const router = useRouter();
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [categoriesLoaded, setCategoriesLoaded] = useState(false);
+  const [categories, setCategories] = useState<Category[]>(initialCategories || []);
+  const [categoriesLoaded, setCategoriesLoaded] = useState(
+    Boolean(initialCategories && initialCategories.length > 0)
+  );
   const findCategoryPath = (items: Category[], slug: string, trail: string[] = []): string[] | null => {
     if (!Array.isArray(items)) return null;
 
@@ -58,6 +62,10 @@ export default function CategoryNav({
   }, [activeSlug]);
 
   useEffect(() => {
+    if (initialCategories && initialCategories.length > 0) {
+      return;
+    }
+
     fetch("/api/categories")
       .then((r) => r.json())
       .then((data) => {
@@ -69,7 +77,7 @@ export default function CategoryNav({
       .finally(() => {
         setCategoriesLoaded(true);
       });
-  }, []);
+  }, [initialCategories]);
 
   useEffect(() => {
     if (!expandedParent) {
