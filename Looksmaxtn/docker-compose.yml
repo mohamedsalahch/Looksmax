@@ -60,6 +60,7 @@ services:
       args:
         APP_PORT: 3000
         NEXT_PUBLIC_BACKEND_URL: http://back:3002
+        NEXT_PUBLIC_R2_PUBLIC_HOST: ${NEXT_PUBLIC_R2_PUBLIC_HOST:-}
     container_name: looksmax-front-dev
     env_file:
       - ./front/.env

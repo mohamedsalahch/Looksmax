@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readFile } from "fs/promises";
 import os from "os";
-import path from "path";
 import mongoose from "mongoose";
 import dbConnect from "@/store/lib/mongodb";
 import { getSession } from "@/store/lib/auth";
 import Product from "@/store/models/Product";
 import User from "@/store/models/User";
 import OutfitGenerationJob from "@/store/models/OutfitGenerationJob";
-import { getUploadCategoryDir } from "@/store/lib/uploadStorage";
+import { loadImageAsBase64 } from "@/lib/imageSource";
 
 type ZonePayload = {
   status?: boolean;
@@ -62,23 +60,10 @@ function hasAnyImage(value: { front: string; back: string; left: string; right: 
 
 async function publicPathToBase64(imagePath: string) {
   if (!imagePath) return "";
-  if (imagePath.startsWith("data:")) return imagePath.split(",")[1] || "";
-
-  let fullPath = "";
-  if (imagePath.startsWith("/uploads/body-profiles/")) {
-    fullPath = path.join(getUploadCategoryDir("body-profiles"), path.basename(imagePath));
-  } else if (imagePath.startsWith("/uploads/products/")) {
-    fullPath = path.join(getUploadCategoryDir("products"), path.basename(imagePath));
-  } else {
-     console.warn("[publicPathToBase64] unrecognized path format:", imagePath);
-    return "";
-  }
-
   try {
-    const buffer = await readFile(fullPath);
-    return buffer.toString("base64");
+    return await loadImageAsBase64(imagePath);
   } catch (err) {
-    console.error("[publicPathToBase64] failed to read file:", fullPath, err);
+    console.error("[publicPathToBase64] failed to load image:", imagePath, err);
     return "";
   }
 }

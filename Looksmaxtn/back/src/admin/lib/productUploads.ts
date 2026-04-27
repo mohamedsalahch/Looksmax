@@ -1,10 +1,11 @@
-import { mkdir, writeFile, unlink } from "fs/promises";
 import path from "path";
+import { unlink } from "fs/promises";
 import { randomUUID } from "crypto";
 import { getUploadCategoryDir } from "@/admin/lib/uploadStorage";
+import { uploadToR2, deleteFromR2, extractKeyFromPublicUrl } from "@/lib/r2";
 
-const UPLOAD_DIR = getUploadCategoryDir("products");
-const PUBLIC_PREFIX = "/uploads/products";
+const R2_PREFIX = "products";
+const LEGACY_PREFIX = "/uploads/products";
 
 function sanitizeBaseName(filename: string) {
   return filename
@@ -23,9 +24,15 @@ function extensionFromType(type: string, fallbackName: string) {
   return path.extname(fallbackName) || ".jpg";
 }
 
-export async function saveProductImages(files: File[]) {
-  await mkdir(UPLOAD_DIR, { recursive: true });
+function contentTypeFromExtension(ext: string) {
+  const e = ext.toLowerCase();
+  if (e === ".png") return "image/png";
+  if (e === ".webp") return "image/webp";
+  if (e === ".gif") return "image/gif";
+  return "image/jpeg";
+}
 
+export async function saveProductImages(files: File[]) {
   return Promise.all(
     files.map(async (file) => {
       const bytes = await file.arrayBuffer();
@@ -33,24 +40,32 @@ export async function saveProductImages(files: File[]) {
       const safeName = sanitizeBaseName(file.name);
       const ext = extensionFromType(file.type, file.name);
       const filename = `${Date.now()}-${randomUUID()}-${safeName}${ext}`;
-      const fullPath = path.join(UPLOAD_DIR, filename);
-
-      await writeFile(fullPath, buffer);
-
-      return `${PUBLIC_PREFIX}/${filename}`;
+      const key = `${R2_PREFIX}/${filename}`;
+      return await uploadToR2(key, buffer, contentTypeFromExtension(ext));
     })
   );
 }
 
 export async function deleteProductImage(imagePath: string) {
-  if (!imagePath.startsWith(`${PUBLIC_PREFIX}/`)) return;
+  if (!imagePath) return;
 
-  const filename = path.basename(imagePath);
-  const fullPath = path.join(UPLOAD_DIR, filename);
+  if (imagePath.startsWith(`${LEGACY_PREFIX}/`)) {
+    const filename = path.basename(imagePath);
+    const fullPath = path.join(getUploadCategoryDir("products"), filename);
+    try {
+      await unlink(fullPath);
+    } catch {
+      // Ignore
+    }
+    return;
+  }
+
+  const key = extractKeyFromPublicUrl(imagePath);
+  if (!key) return;
 
   try {
-    await unlink(fullPath);
-  } catch {
-    // Ignore missing files so product updates don't fail on cleanup.
+    await deleteFromR2(key);
+  } catch (err) {
+    console.error("[products] R2 delete failed:", err);
   }
 }

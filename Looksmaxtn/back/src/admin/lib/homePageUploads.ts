@@ -1,10 +1,11 @@
-import { mkdir, writeFile, unlink } from "fs/promises";
 import path from "path";
+import { unlink } from "fs/promises";
 import { randomUUID } from "crypto";
 import { getUploadCategoryDir } from "@/admin/lib/uploadStorage";
+import { uploadToR2, deleteFromR2, extractKeyFromPublicUrl } from "@/lib/r2";
 
-const UPLOAD_DIR = getUploadCategoryDir("homepage");
-const PUBLIC_PREFIX = "/uploads/homepage";
+const R2_PREFIX = "homepage";
+const LEGACY_PREFIX = "/uploads/homepage";
 
 function sanitizeBaseName(filename: string) {
   return (
@@ -25,9 +26,15 @@ function extensionFromType(type: string, fallbackName: string) {
   return path.extname(fallbackName) || ".jpg";
 }
 
-export async function saveHomePageFiles(files: File[]) {
-  await mkdir(UPLOAD_DIR, { recursive: true });
+function contentTypeFromExtension(ext: string) {
+  const e = ext.toLowerCase();
+  if (e === ".png") return "image/png";
+  if (e === ".webp") return "image/webp";
+  if (e === ".gif") return "image/gif";
+  return "image/jpeg";
+}
 
+export async function saveHomePageFiles(files: File[]) {
   return Promise.all(
     files.map(async (file) => {
       const bytes = await file.arrayBuffer();
@@ -35,17 +42,29 @@ export async function saveHomePageFiles(files: File[]) {
       const safeName = sanitizeBaseName(file.name);
       const ext = extensionFromType(file.type, file.name);
       const filename = `${Date.now()}-${randomUUID()}-${safeName}${ext}`;
-      const fullPath = path.join(UPLOAD_DIR, filename);
-      await writeFile(fullPath, buffer);
-      return `${PUBLIC_PREFIX}/${filename}`;
+      const key = `${R2_PREFIX}/${filename}`;
+      return await uploadToR2(key, buffer, contentTypeFromExtension(ext));
     })
   );
 }
 
 export async function deleteHomePageFile(imagePath: string) {
-  if (!imagePath.startsWith(`${PUBLIC_PREFIX}/`)) return;
-  const filename = path.basename(imagePath);
+  if (!imagePath) return;
+
+  if (imagePath.startsWith(`${LEGACY_PREFIX}/`)) {
+    const filename = path.basename(imagePath);
+    try {
+      await unlink(path.join(getUploadCategoryDir("homepage"), filename));
+    } catch {}
+    return;
+  }
+
+  const key = extractKeyFromPublicUrl(imagePath);
+  if (!key) return;
+
   try {
-    await unlink(path.join(UPLOAD_DIR, filename));
-  } catch {}
+    await deleteFromR2(key);
+  } catch (err) {
+    console.error("[homepage] R2 delete failed:", err);
+  }
 }
