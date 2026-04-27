@@ -26,6 +26,12 @@ export default function Header() {
   }, []);
 
   useEffect(() => {
+    if (mounted && !user) {
+      router.prefetch("/login");
+    }
+  }, [mounted, user, router]);
+
+  useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setShowUserMenu(false);
