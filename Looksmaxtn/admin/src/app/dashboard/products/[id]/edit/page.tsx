@@ -229,7 +229,7 @@ async function base64ToFile(base64: string, index: number) {
 async function productImageToFile(image: ProductImage, label: keyof GenerationInputs) {
   if (image.file) return image.file;
 
-  const blob = await fetch(image.url).then((response) => response.blob());
+  const blob = await fetch(image.url, { cache: "reload" }).then((response) => response.blob());
   const extension = blob.type.split("/")[1] || "png";
   return new File([blob], `${label}-${Date.now()}.${extension}`, {
     type: blob.type || "image/png",
