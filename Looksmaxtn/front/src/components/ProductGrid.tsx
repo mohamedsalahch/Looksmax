@@ -35,11 +35,23 @@ interface Product {
   };
   cloneSourceName?: string;
   cloneSourceImage?: string;
+  store?: StoreFacet | null;
+  storeNameSnapshot?: string;
+}
+
+interface StoreFacet {
+  _id: string;
+  name: string;
+  slug: string;
+  logo?: string;
+  category?: string;
+  isMainStore?: boolean;
 }
 
 interface Facets {
   sizes: string[];
   priceRange: { min: number; max: number };
+  stores?: StoreFacet[];
 }
 
 function getMainImage(images?: ProductImage[]): string | undefined {
@@ -70,9 +82,10 @@ export default function ProductGrid({
   const [priceMax, setPriceMax] = useState("");
   const [appliedPriceMin, setAppliedPriceMin] = useState("");
   const [appliedPriceMax, setAppliedPriceMax] = useState("");
+  const [selectedStore, setSelectedStore] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const hasActiveFilters = selectedSize || appliedPriceMin || appliedPriceMax;
+  const hasActiveFilters = selectedSize || appliedPriceMin || appliedPriceMax || selectedStore;
   const rangeMin = facets ? Math.floor(facets.priceRange.min) : 0;
   const rangeMax = facets ? Math.ceil(facets.priceRange.max) : 1000;
   const sliderMin = priceMin !== "" ? Number(priceMin) : rangeMin;
@@ -85,6 +98,7 @@ export default function ProductGrid({
       const params = new URLSearchParams();
       if (category) params.set("category", category);
       if (selectedSize) params.set("size", selectedSize);
+      if (selectedStore) params.set("store", selectedStore);
       if (appliedPriceMin) params.set("priceMin", appliedPriceMin);
       if (appliedPriceMax) params.set("priceMax", appliedPriceMax);
       params.set("includeFacets", "1");
@@ -101,6 +115,7 @@ export default function ProductGrid({
             setFacets({
               sizes: data.facets.sizes || [],
               priceRange: data.facets.priceRange || { min: 0, max: 0 },
+              stores: data.facets.stores || [],
             });
           }
         })
@@ -119,7 +134,7 @@ export default function ProductGrid({
     return () => {
       cancelled = true;
     };
-  }, [category, selectedSize, appliedPriceMin, appliedPriceMax]);
+  }, [category, selectedSize, selectedStore, appliedPriceMin, appliedPriceMax]);
 
   const clearFilters = () => {
     setSelectedSize("");
@@ -128,6 +143,7 @@ export default function ProductGrid({
     setPriceMax("");
     setAppliedPriceMin("");
     setAppliedPriceMax("");
+    setSelectedStore("");
   };
 
   const applyFilters = () => {
@@ -199,10 +215,31 @@ export default function ProductGrid({
 
       <div
         className={`overflow-hidden transition-all duration-200 ease-out ${
-          filtersOpen ? "max-h-[300px] opacity-100 mb-4" : "max-h-0 opacity-0"
+          filtersOpen ? "max-h-[420px] opacity-100 mb-4" : "max-h-0 opacity-0"
         }`}
       >
         <div className="p-4 space-y-4">
+          {facets && facets.stores && facets.stores.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[10px] uppercase tracking-wider text-text-secondary">Store</p>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {facets.stores.map((store) => (
+                  <button
+                    key={store._id}
+                    onClick={() => setSelectedStore(selectedStore === store.slug ? "" : store.slug)}
+                    className={`px-2.5 py-1 text-[10px] uppercase tracking-wider transition-colors cursor-pointer ${
+                      selectedStore === store.slug
+                        ? "bg-foreground text-background"
+                        : "text-text-secondary hover:text-foreground"
+                    }`}
+                  >
+                    {store.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {facets && facets.sizes.length > 0 && (
             <div className="space-y-2">
               <p className="text-[10px] uppercase tracking-wider text-text-secondary">Size</p>
@@ -316,6 +353,7 @@ export default function ProductGrid({
             originPictures={product.originPictures}
             cloneSourceName={product.cloneSourceName}
             cloneSourceImage={product.cloneSourceImage}
+            storeName={product.store?.name || product.storeNameSnapshot}
           />
         ))}
       </div>

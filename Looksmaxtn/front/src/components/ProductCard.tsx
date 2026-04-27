@@ -39,6 +39,7 @@ interface ProductCardProps {
   };
   cloneSourceName?: string;
   cloneSourceImage?: string;
+  storeName?: string;
 }
 
 const CLONE_PREVIEW_WIDTH = 184;
@@ -66,6 +67,7 @@ export default function ProductCard({
   originPictures,
   cloneSourceName = "",
   cloneSourceImage = "",
+  storeName = "Looksmaxtn",
 }: ProductCardProps) {
   const { addItem } = useCart();
   const router = useRouter();
@@ -531,6 +533,9 @@ export default function ProductCard({
         )}
       </div>
       <div className="mt-2 space-y-0.5">
+        <p className="text-[9px] uppercase tracking-[0.22em] text-text-secondary truncate">
+          Sold by {storeName}
+        </p>
         <p className="text-xs font-semibold text-foreground truncate">{name}</p>
         {isPerfume && cloneSourceName && (
           <p className="text-[10px] text-text-secondary truncate">Clones {cloneSourceName}</p>

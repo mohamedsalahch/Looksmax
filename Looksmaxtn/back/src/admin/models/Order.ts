@@ -3,6 +3,8 @@ import { type IAuditActor, auditActorSchema } from "@/admin/lib/audit";
 
 export interface IOrderItem {
   product: mongoose.Types.ObjectId;
+  store?: mongoose.Types.ObjectId | null;
+  storeNameSnapshot?: string;
   name: string;
   price: number;
   size: string;
@@ -15,6 +17,7 @@ export interface IOrder extends Document {
   guestEmail?: string;
   guestAccessToken?: string;
   items: IOrderItem[];
+  storeIds?: mongoose.Types.ObjectId[];
   isArchived: boolean;
   archivedAt?: Date | null;
   shippingAddress: {
@@ -43,6 +46,8 @@ export interface IOrder extends Document {
 const orderItemSchema = new Schema<IOrderItem>(
   {
     product: { type: Schema.Types.ObjectId, ref: "Product", required: true },
+    store: { type: Schema.Types.ObjectId, ref: "Store", default: null },
+    storeNameSnapshot: { type: String, default: "Looksmaxtn" },
     name: { type: String, required: true },
     price: { type: Number, required: true },
     size: { type: String, default: "" },
@@ -58,6 +63,7 @@ const orderSchema = new Schema<IOrder>(
     guestEmail: { type: String, default: "" },
     guestAccessToken: { type: String, default: "" },
     items: [orderItemSchema],
+    storeIds: [{ type: Schema.Types.ObjectId, ref: "Store", index: true }],
     isArchived: { type: Boolean, default: false },
     archivedAt: { type: Date, default: null },
     shippingAddress: {
@@ -88,6 +94,8 @@ const orderSchema = new Schema<IOrder>(
 );
 
 orderSchema.index({ user: 1, createdAt: -1 });
+orderSchema.index({ storeIds: 1, createdAt: -1 });
+orderSchema.index({ "items.store": 1, createdAt: -1 });
 
 const Order: Model<IOrder> =
   mongoose.models.Order || mongoose.model<IOrder>("Order", orderSchema);

@@ -22,7 +22,9 @@ export async function GET(
     const now = new Date();
     const reservationKey = session?.userId ? `user:${session.userId}` : (req.nextUrl.searchParams.get("rk") || null);
     const [product, activeReservations] = await Promise.all([
-      Product.findById(id).lean(),
+      Product.findById(id)
+        .populate("store", "name slug logo category status isMainStore")
+        .lean(),
       ProductReservation.find({ product: id, reservedUntil: { $gt: now } })
         .select("reservationKey quantity size")
         .lean(),
@@ -30,6 +32,10 @@ export async function GET(
     const activeOrderHoldMap = await getActiveOrderHoldMapByProductIds([id], session?.userId || null);
     const activeOrderHold = activeOrderHoldMap.get(id);
     if (!product) {
+      return NextResponse.json({ error: "Product not found" }, { status: 404 });
+    }
+    const store = product.store as { status?: string } | null | undefined;
+    if (store && store.status !== "approved") {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
     const ownedReservationQuantity = activeReservations

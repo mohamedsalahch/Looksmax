@@ -38,7 +38,9 @@ export async function cleanupProductReservationIndexes(conn: typeof mongoose = m
   );
 
   if (obsoleteIndex) {
-    await collection.dropIndex(obsoleteIndex.name);
+    if (obsoleteIndex.name) {
+      await collection.dropIndex(obsoleteIndex.name);
+    }
   }
 
   await ProductReservation.syncIndexes();

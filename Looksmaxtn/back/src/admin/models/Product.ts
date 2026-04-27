@@ -22,6 +22,8 @@ export interface ISizeStockEntry {
 
 export interface IProduct extends Document {
   name: string;
+  store?: mongoose.Types.ObjectId | null;
+  storeNameSnapshot?: string;
   price: number;
   isActive: boolean;
   categories: string[];
@@ -69,6 +71,8 @@ const originPicturesSchema = new Schema<IOriginPictures>(
 const productSchema = new Schema<IProduct>(
   {
     name: { type: String, required: true, trim: true },
+    store: { type: Schema.Types.ObjectId, ref: "Store", default: null, index: true },
+    storeNameSnapshot: { type: String, default: "Looksmaxtn" },
     price: { type: Number, required: true },
     isActive: { type: Boolean, default: true },
     categories: [{ type: String, lowercase: true, trim: true }],
@@ -112,6 +116,8 @@ const productSchema = new Schema<IProduct>(
 );
 
 productSchema.index({ categories: 1 });
+productSchema.index({ store: 1, createdAt: -1 });
+productSchema.index({ store: 1, isActive: 1 });
 productSchema.index({ name: "text", description: "text" });
 
 if (process.env.NODE_ENV !== "production" && mongoose.models.Product) {

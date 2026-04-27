@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
 import Product from "@/admin/models/Product";
+import Store from "@/admin/models/Store";
 import { getSession } from "@/admin/lib/auth";
 import { deleteProductImage, saveProductImages } from "@/admin/lib/productUploads";
 import { getConditionStatusFromScore } from "@/admin/lib/productCondition";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
 import { getSoldQuantityByProductAndSize, getSoldQuantityByProductIds } from "@/lib/productInventory";
+import mongoose from "mongoose";
 
 function getSizeStockEntries(
   sizeStock: unknown
@@ -193,6 +195,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
       if (typeof body.reference === "string") {
         update.reference = body.reference;
+      }
+
+      if (typeof body.storeId === "string" && mongoose.Types.ObjectId.isValid(body.storeId)) {
+        const store = await Store.findById(body.storeId).select("name");
+        if (!store) return NextResponse.json({ error: "Store not found" }, { status: 400 });
+        update.store = store._id;
+        update.storeNameSnapshot = store.name;
       }
 
       if (body.sizeStock && typeof body.sizeStock === "object") {
@@ -420,6 +429,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       images,
       updatedBy: auditActor,
     };
+    const requestedStoreId = String(formData.get("storeId") || "").trim();
+    if (requestedStoreId && mongoose.Types.ObjectId.isValid(requestedStoreId)) {
+      const store = await Store.findById(requestedStoreId).select("name");
+      if (!store) return NextResponse.json({ error: "Store not found" }, { status: 400 });
+      Object.assign(body, { store: store._id, storeNameSnapshot: store.name });
+    }
 
     if (computedStock > 0) {
       body.isActive = true;
@@ -465,8 +480,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       sizeStockData = {};
       for (const [size, entry] of getSizeStockEntries(product.sizeStock)) {
         sizeStockData[size] = {
-          fullStock: entry.fullStock,
-          stock: entry.stock,
+          fullStock: entry.fullStock ?? 0,
+          stock: entry.stock ?? 0,
           soldQuantity: soldBySize.get(size) || 0,
         };
       }

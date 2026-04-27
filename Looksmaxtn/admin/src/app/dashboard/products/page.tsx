@@ -8,9 +8,11 @@ import { withAuthRequest } from "@/lib/authClient";
 interface Product {
   _id: string; name: string; price: number; categories: string[];
   stock: number; availableStock?: number; soldQuantity?: number; fullStock?: number; tag: string; brand: string; reference?: string; createdAt: string; productType?: "fashion" | "perfume" | "clothing" | "shoes"; availabilityStatus?: string; isActive?: boolean; visibilityStatus?: string;
+  store?: { name?: string; slug?: string } | null;
+  storeNameSnapshot?: string;
 }
 
-type SortKey = "name" | "_id" | "categories" | "productType" | "price" | "stock" | "status" | "visibility" | "tag";
+type SortKey = "name" | "_id" | "categories" | "store" | "productType" | "price" | "stock" | "status" | "visibility" | "tag";
 type SortDirection = "asc" | "desc";
 
 function getProductStatus(product: Product) {
@@ -121,6 +123,8 @@ export default function ProductsPage() {
           product.brand,
           product.reference,
           product.tag,
+          product.store?.name,
+          product.storeNameSnapshot,
           ...(product.categories || []),
         ].some((value) => String(value || "").toLowerCase().includes(normalizedSearch));
 
@@ -148,6 +152,8 @@ export default function ProductsPage() {
           return product._id;
         case "categories":
           return (product.categories || []).join(", ");
+        case "store":
+          return product.store?.name || product.storeNameSnapshot || "Looksmaxtn";
         case "productType":
           return product.productType === "perfume" ? "perfume" : "fashion";
         case "price":
@@ -264,6 +270,11 @@ export default function ProductsPage() {
                   <span className="inline-flex items-center gap-1">Reference</span>
                 </th>
                 <th className="px-4 py-3">
+                  <button type="button" onClick={() => toggleSort("store")} className="inline-flex items-center gap-1 cursor-pointer">
+                    Store {renderSortIndicator("store")}
+                  </button>
+                </th>
+                <th className="px-4 py-3">
                   <button type="button" onClick={() => toggleSort("productType")} className="inline-flex items-center gap-1 cursor-pointer">
                     Type {renderSortIndicator("productType")}
                   </button>
@@ -314,6 +325,7 @@ export default function ProductsPage() {
                   <td className="px-4 py-3 text-[10px] text-text-secondary">{p._id}</td>
                   <td className="px-4 py-3 text-xs text-text-secondary capitalize">{(p.categories || []).join(", ")}</td>
                   <td className="px-4 py-3 text-xs text-text-secondary">{p.reference || "—"}</td>
+                  <td className="px-4 py-3 text-xs text-text-secondary">{p.store?.name || p.storeNameSnapshot || "Looksmaxtn"}</td>
                   <td className="px-4 py-3 text-xs text-text-secondary capitalize">
                     {p.productType === "perfume" ? "Perfume" : "Fashion"}
                   </td>

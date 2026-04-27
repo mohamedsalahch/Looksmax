@@ -49,6 +49,12 @@ type ProductInfoProduct = {
   };
   cloneSourceName?: string;
   cloneSourceImage?: string;
+  store?: {
+    name?: string;
+    slug?: string;
+    logo?: string;
+  } | null;
+  storeNameSnapshot?: string;
 };
 
 export default function ProductInfo({ product }: { product: ProductInfoProduct }) {
@@ -315,6 +321,7 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
   const conditionLabel = getConditionLabel(product.conditionScore ?? 7, product.conditionStatus ?? undefined);
   const conditionColor = getConditionColor(product.conditionScore ?? 7);
   const showNewBadge = !isPerfume && (product.conditionScore ?? 0) >= 10;
+  const storeName = product.store?.name || product.storeNameSnapshot || "Looksmaxtn";
 
   return (
     <div className="space-y-6">
@@ -332,6 +339,18 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
       </div>
 
       <div className="border-t border-border-color" />
+
+      <div className="flex items-center gap-3 border border-border-color bg-surface/40 px-4 py-3">
+        {product.store?.logo ? (
+          <img src={product.store.logo} alt={storeName} className="h-9 w-9 object-cover border border-border-color" />
+        ) : (
+          <div className="h-9 w-9 border border-border-color bg-background" />
+        )}
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.24em] text-text-secondary">Sold by</p>
+          <p className="text-sm font-medium text-foreground">{storeName}</p>
+        </div>
+      </div>
 
       {!isPerfume && (
         <div>

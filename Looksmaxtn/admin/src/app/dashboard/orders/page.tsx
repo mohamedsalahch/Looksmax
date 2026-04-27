@@ -9,7 +9,8 @@ interface Order {
   _id: string; totalPrice: number; orderStatus: string;
   isArchived?: boolean;
   createdAt: string; user?: { name: string; email: string };
-  items: { product?: string; name: string; quantity: number }[];
+  items: { product?: string; name: string; quantity: number; storeNameSnapshot?: string }[];
+  storeIds?: Array<{ name?: string; slug?: string }>;
 }
 
 type AdminOrderRealtimeEvent =
@@ -74,6 +75,8 @@ export default function OrdersPage() {
           o._id,
           o.user?.name || "",
           o.user?.email || "",
+          ...(o.storeIds || []).map((store) => store.name || store.slug || ""),
+          ...o.items.map((item) => item.storeNameSnapshot || ""),
           ...o.items.map((item) => item.name),
           ...o.items.map((item) => item.product || ""),
         ].some((value) => String(value || "").toLowerCase().includes(normalizedSearch));
@@ -234,6 +237,7 @@ export default function OrdersPage() {
                     Items {renderSortIndicator("items")}
                   </button>
                 </th>
+                <th className="px-4 py-3">Stores</th>
                 <th className="px-4 py-3">
                   <button type="button" onClick={() => toggleSort("total")} className="inline-flex items-center gap-1 cursor-pointer">
                     Total {renderSortIndicator("total")}
@@ -278,6 +282,12 @@ export default function OrdersPage() {
                     <p className="text-[10px] text-text-secondary">{o.user?.email || ""}</p>
                   </td>
                   <td className="px-4 py-3 text-xs text-text-secondary">{o.items.length} items</td>
+                  <td className="px-4 py-3 text-xs text-text-secondary">
+                    {[
+                      ...(o.storeIds || []).map((store) => store.name || store.slug || ""),
+                      ...o.items.map((item) => item.storeNameSnapshot || ""),
+                    ].filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join(", ") || "Looksmaxtn"}
+                  </td>
                   <td className="px-4 py-3 text-xs font-medium">${o.totalPrice.toFixed(2)}</td>
                   <td className="px-4 py-3">
                     <span className={`text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider ${statusColor(o.orderStatus)}`}>

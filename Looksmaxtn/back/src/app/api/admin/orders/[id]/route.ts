@@ -81,7 +81,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const { id } = await params;
     const order = await Order.findById(id).populate("user", "name email").lean();
     if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    return NextResponse.json({ order: serializeOrder(order) });
+    return NextResponse.json({ order: serializeOrder(order as unknown as LeanOrder) });
   } catch (error) { console.error(error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }
 
@@ -112,13 +112,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     if (["canceled", "returned"].includes(orderStatus || "") && existingOrder.orderStatus !== orderStatus) {
-      const productIds = existingOrder.items.map((item: LeanOrderItem) => item.product);
+      const productIds = existingOrder.items.map((item) => String(item.product));
       const products = await Product.find({ _id: { $in: productIds } })
         .select("_id stock productType")
         .lean();
       const productMap = new Map(products.map((product) => [product._id.toString(), product]));
 
-      for (const item of existingOrder.items as LeanOrderItem[]) {
+      for (const item of existingOrder.items as unknown as LeanOrderItem[]) {
         const product = productMap.get(item.product.toString());
         if (!product) {
           return NextResponse.json({ error: "Product not found" }, { status: 404 });
@@ -133,7 +133,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
             (update.$inc as Record<string, number>)[sizeStockKey] = quantityToRestore;
           }
           await Product.updateOne(
-            { _id: item.product },
+            { _id: String(item.product) },
             update
           );
         }
@@ -152,7 +152,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     if (orderStatus === "delivered" && existingOrder.orderStatus !== "delivered") {
-      const productIds = existingOrder.items.map((item: LeanOrderItem) => item.product);
+      const productIds = existingOrder.items.map((item) => String(item.product));
       if (productIds.length > 0) {
         await Product.updateMany(
           { _id: { $in: productIds } },
@@ -174,7 +174,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       .lean();
     if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    broadcastAdminEvent({ type: "order:upsert", order: getAdminOrderEventPayload(order) });
+    broadcastAdminEvent({ type: "order:upsert", order: getAdminOrderEventPayload(order as unknown as Record<string, unknown>) });
 
     if (orderStatus) {
       try {
@@ -209,7 +209,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
-    return NextResponse.json({ order: serializeOrder(order) });
+    return NextResponse.json({ order: serializeOrder(order as unknown as LeanOrder) });
   } catch (error) { console.error(error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }
 
@@ -235,13 +235,13 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     }
 
     if (existingOrder.orderStatus !== "canceled") {
-      const productIds = existingOrder.items.map((item: LeanOrderItem) => item.product);
+      const productIds = existingOrder.items.map((item) => String(item.product));
       const products = await Product.find({ _id: { $in: productIds } })
         .select("_id stock productType")
         .lean();
       const productMap = new Map(products.map((product) => [product._id.toString(), product]));
 
-      for (const item of existingOrder.items as LeanOrderItem[]) {
+      for (const item of existingOrder.items as unknown as LeanOrderItem[]) {
         const product = productMap.get(item.product.toString());
         if (!product) {
           continue;
@@ -256,7 +256,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
             (update.$inc as Record<string, number>)[sizeStockKey] = quantityToRestore;
           }
           await Product.updateOne(
-            { _id: item.product },
+            { _id: String(item.product) },
             update
           );
         }
@@ -275,7 +275,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       }
     }
 
-    const productIds = existingOrder.items.map((item: LeanOrderItem) => item.product);
+    const productIds = existingOrder.items.map((item) => String(item.product));
     if (productIds.length > 0) {
       await ProductReservation.deleteMany({
         product: { $in: productIds },

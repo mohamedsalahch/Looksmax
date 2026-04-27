@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
 import Product from "@/admin/models/Product";
+import Store from "@/admin/models/Store";
+import User from "@/admin/models/User";
 import { getSession } from "@/admin/lib/auth";
 import { saveProductImages } from "@/admin/lib/productUploads";
 import { getConditionStatusFromScore } from "@/admin/lib/productCondition";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
 import { getSoldQuantityByProductAndSize, getSoldQuantityByProductIds } from "@/lib/productInventory";
+import { ensureMainStore } from "@/lib/mainStore";
+import mongoose from "mongoose";
 
 function getSizeStockEntries(
   sizeStock: unknown
@@ -153,12 +157,17 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search");
     const category = searchParams.get("category");
+    const storeId = searchParams.get("storeId");
 
     const filter: Record<string, unknown> = {};
     if (category) filter.categories = category;
     if (search) filter.name = { $regex: search, $options: "i" };
+    if (storeId && mongoose.Types.ObjectId.isValid(storeId)) filter.store = storeId;
 
-    const products = await Product.find(filter).sort({ createdAt: -1 }).lean();
+    const products = await Product.find(filter)
+      .populate("store", "name slug logo category status isMainStore")
+      .sort({ createdAt: -1 })
+      .lean();
     const productIds = products.map((product) => product._id.toString());
     const soldQuantityMap = await getSoldQuantityByProductIds(productIds);
     const soldBySizeMap = await getSoldQuantityByProductAndSize(productIds);
@@ -257,6 +266,13 @@ export async function POST(req: NextRequest) {
       cloneSourceImagePath,
       originPictures
     );
+    const requestedStoreId = String(formData.get("storeId") || "").trim();
+    const store = requestedStoreId && mongoose.Types.ObjectId.isValid(requestedStoreId)
+      ? await Store.findById(requestedStoreId)
+      : await ensureMainStore(Store, User);
+    if (!store) {
+      return NextResponse.json({ error: "Store not found" }, { status: 400 });
+    }
     const rawFullStock = String(formData.get("fullStock") ?? formData.get("stock") ?? "").trim();
     if (rawFullStock.length === 0) {
       return NextResponse.json({ error: "Please enter a full stock value." }, { status: 400 });
@@ -277,6 +293,8 @@ export async function POST(req: NextRequest) {
       ...body,
       stock,
       fullStock: body.sizeStock ? stock : fullStock,
+      store: store._id,
+      storeNameSnapshot: store.name,
       createdBy: auditActor,
       updatedBy: auditActor,
     });

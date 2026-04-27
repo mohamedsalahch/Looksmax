@@ -44,6 +44,12 @@ type ProductResponse = {
     };
     cloneSourceName?: string;
     cloneSourceImage?: string;
+    store?: {
+      name?: string;
+      slug?: string;
+      logo?: string;
+    } | null;
+    storeNameSnapshot?: string;
   };
 };
 
@@ -141,6 +147,8 @@ export default async function ProductDetailPage({
     },
     cloneSourceName: dbProduct.cloneSourceName || "",
     cloneSourceImage: dbProduct.cloneSourceImage || "",
+    store: dbProduct.store || null,
+    storeNameSnapshot: dbProduct.storeNameSnapshot || "Looksmaxtn",
   };
   const productId = String(dbProduct._id || id);
   const productUrl = absoluteUrl(`/product/${productId}`);

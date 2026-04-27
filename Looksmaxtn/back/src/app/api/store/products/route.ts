@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/store/lib/mongodb";
 import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
+import Store from "@/store/models/Store";
 import { getSession } from "@/store/lib/auth";
 import { filterAndRankProducts } from "@/store/lib/productSearch";
 import { getActiveOrderHoldMapByProductIds } from "@/lib/productInventory";
+import mongoose from "mongoose";
 import {
   buildSizeAvailability,
   getDisplayStock,
@@ -26,6 +28,7 @@ export async function GET(req: NextRequest) {
     const size = searchParams.get("size");
     const color = searchParams.get("color");
     const availability = searchParams.get("availability");
+    const storeParam = searchParams.get("store");
     const priceMin = Number(searchParams.get("priceMin") || "");
     const priceMax = Number(searchParams.get("priceMax") || "");
     const page = parseInt(searchParams.get("page") || "1");
@@ -33,6 +36,27 @@ export async function GET(req: NextRequest) {
     const includeFacets = searchParams.get("includeFacets") === "1";
 
     const filter: Record<string, unknown> = {};
+    let selectedStoreId = "";
+    if (storeParam) {
+      const store = await Store.findOne({
+        status: "approved",
+        $or: [
+          ...(mongoose.Types.ObjectId.isValid(storeParam)
+            ? [{ _id: new mongoose.Types.ObjectId(storeParam) }]
+            : []),
+          { slug: storeParam },
+        ],
+      })
+        .select("_id")
+        .lean();
+
+      if (!store) {
+        return NextResponse.json({ products: [], total: 0, page, totalPages: 0, facets: undefined });
+      }
+      selectedStoreId = store._id.toString();
+      filter.store = store._id;
+    }
+
     if (category === "new-arrivals" || category === "new") {
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
@@ -44,6 +68,7 @@ export async function GET(req: NextRequest) {
     const skip = (page - 1) * limit;
 
     const products = await Product.find(filter)
+      .populate("store", "name slug logo category status isMainStore")
       .sort(category === "new" ? { createdAt: -1 } : { createdAt: -1 })
       .lean();
     const now = new Date();
@@ -114,6 +139,8 @@ export async function GET(req: NextRequest) {
 
     const filteredProducts = searchMatchedProducts.filter((product) => {
       if (product.isActive === false) return false;
+      const store = product.store as { status?: string } | null | undefined;
+      if (store && store.status !== "approved") return false;
       const stock = Math.max(product.stock ?? 0, 0);
       const hasSelectableSize = product.sizeAvailability
         ? Object.values(product.sizeAvailability).some((sizeInfo) => sizeInfo.available)
@@ -139,6 +166,10 @@ export async function GET(req: NextRequest) {
             min: facetsSource.length > 0 ? Math.min(...facetsSource.map((product) => product.price || 0)) : 0,
             max: facetsSource.length > 0 ? Math.max(...facetsSource.map((product) => product.price || 0)) : 0,
           },
+          stores: await Store.find({ status: "approved" })
+            .select("name slug logo category isMainStore")
+            .sort({ isMainStore: -1, name: 1 })
+            .lean(),
         }
       : undefined;
 
@@ -150,6 +181,7 @@ export async function GET(req: NextRequest) {
       total,
       page,
       totalPages: Math.ceil(total / limit),
+      selectedStoreId,
       facets,
     });
   } catch (error: unknown) {

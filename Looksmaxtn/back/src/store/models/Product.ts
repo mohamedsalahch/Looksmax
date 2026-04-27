@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
+import { type IAuditActor, auditActorSchema } from "@/store/lib/audit";
 
 export interface IProductImage {
   url: string;
@@ -21,6 +22,8 @@ export interface ISizeStockEntry {
 
 export interface IProduct extends Document {
   name: string;
+  store?: mongoose.Types.ObjectId | null;
+  storeNameSnapshot?: string;
   price: number;
   isActive: boolean;
   categories: string[];
@@ -41,6 +44,8 @@ export interface IProduct extends Document {
   originPictures?: IOriginPictures;
   cloneSourceName?: string;
   cloneSourceImage?: string;
+  createdBy?: IAuditActor | null;
+  updatedBy?: IAuditActor | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -66,6 +71,8 @@ const originPicturesSchema = new Schema<IOriginPictures>(
 const productSchema = new Schema<IProduct>(
   {
     name: { type: String, required: true, trim: true },
+    store: { type: Schema.Types.ObjectId, ref: "Store", default: null, index: true },
+    storeNameSnapshot: { type: String, default: "Looksmaxtn" },
     price: { type: Number, required: true },
     isActive: { type: Boolean, default: true },
     categories: [{ type: String, lowercase: true, trim: true }],
@@ -102,11 +109,15 @@ const productSchema = new Schema<IProduct>(
     originPictures: { type: originPicturesSchema, default: () => ({}) },
     cloneSourceName: { type: String, default: "" },
     cloneSourceImage: { type: String, default: "" },
+    createdBy: { type: auditActorSchema, default: null },
+    updatedBy: { type: auditActorSchema, default: null },
   },
   { timestamps: true }
 );
 
 productSchema.index({ categories: 1 });
+productSchema.index({ store: 1, createdAt: -1 });
+productSchema.index({ store: 1, isActive: 1 });
 productSchema.index({ name: "text", description: "text" });
 
 if (process.env.NODE_ENV !== "production" && mongoose.models.Product) {

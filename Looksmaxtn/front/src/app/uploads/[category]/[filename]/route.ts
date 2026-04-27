@@ -9,6 +9,7 @@ const ALLOWED_CATEGORIES = new Set([
   "models",
   "generated-images",
   "body-profiles",
+  "stores",
 ]);
 
 function getContentType(filename: string) {

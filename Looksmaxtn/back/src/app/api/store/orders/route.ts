@@ -4,6 +4,7 @@ import Order from "@/store/models/Order";
 import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
 import User from "@/store/models/User";
+import Store from "@/store/models/Store";
 import Coupon from "@/store/models/Coupon";
 import ShippingSettings from "@/store/models/ShippingSettings";
 import { getSession } from "@/store/lib/auth";
@@ -17,6 +18,7 @@ import {
 } from "@/lib/coupons";
 import mongoose from "mongoose";
 import crypto from "crypto";
+import { ensureMainStore } from "@/lib/mainStore";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -95,7 +97,9 @@ export async function POST(req: NextRequest) {
 
     let subtotalPrice = 0;
     const orderItems = [];
+    const orderStoreIds = new Set<string>();
     const seenVariantKeys = new Set<string>();
+    const mainStore = await ensureMainStore(Store, User);
     for (const item of items) {
       if (!mongoose.Types.ObjectId.isValid(item.productId)) {
         return NextResponse.json(
@@ -182,9 +186,13 @@ export async function POST(req: NextRequest) {
 
       const itemTotal = product.price * item.quantity;
       subtotalPrice += itemTotal;
+      const productStoreId = product.store || mainStore._id;
+      orderStoreIds.add(productStoreId.toString());
 
       orderItems.push({
         product: product._id,
+        store: productStoreId,
+        storeNameSnapshot: product.storeNameSnapshot || mainStore.name,
         name: product.name,
         price: product.price,
         size: item.size || "",
@@ -243,6 +251,7 @@ export async function POST(req: NextRequest) {
       guestEmail: session ? "" : normalizedGuestEmail,
       guestAccessToken,
       items: orderItems,
+      storeIds: Array.from(orderStoreIds),
       shippingAddress,
       paymentMethod: "cod",
       orderStatus: "processing",
