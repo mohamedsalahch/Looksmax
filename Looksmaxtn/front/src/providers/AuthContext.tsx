@@ -185,7 +185,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     reconnectAvailabilityStream();
   }, [user?.id]);
 
-  const login = async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     logoutInProgressRef.current = false;
     try {
       const res = await fetch("/api/auth/login", {
@@ -208,9 +208,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       return { error: "Network error" };
     }
-  };
+  }, [scheduleTokenRefresh]);
 
-  const loginWithGoogle = async (credential: string) => {
+  const loginWithGoogle = useCallback(async (credential: string) => {
     logoutInProgressRef.current = false;
     try {
       const res = await fetch("/api/auth/google", {
@@ -233,9 +233,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       return { error: "Network error" };
     }
-  };
+  }, [scheduleTokenRefresh]);
 
-  const signup = async (name: string, email: string, password: string, gender: string) => {
+  const signup = useCallback(async (name: string, email: string, password: string, gender: string) => {
     try {
       const res = await fetch("/api/auth/signup", {
         method: "POST",
@@ -252,9 +252,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       return { error: "Network error" };
     }
-  };
+  }, []);
 
-  const forgotPassword = async (email: string) => {
+  const forgotPassword = useCallback(async (email: string) => {
     try {
       const res = await fetch("/api/auth/forgot-password", {
         method: "POST",
@@ -268,9 +268,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       return { error: "Network error" };
     }
-  };
+  }, []);
 
-  const resendVerification = async (email: string) => {
+  const resendVerification = useCallback(async (email: string) => {
     try {
       const res = await fetch("/api/auth/resend-verification", {
         method: "POST",
@@ -284,9 +284,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       return { error: "Network error" };
     }
-  };
+  }, []);
 
-  const resetPassword = async (email: string, token: string, password: string) => {
+  const resetPassword = useCallback(async (email: string, token: string, password: string) => {
     try {
       const res = await fetch("/api/auth/reset-password", {
         method: "POST",
@@ -300,9 +300,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       return { error: "Network error" };
     }
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     logoutInProgressRef.current = true;
     clearRefreshTimer();
     clearAuthToken();
@@ -314,7 +314,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       logoutInProgressRef.current = false;
     }
-  };
+  }, [clearRefreshTimer]);
 
   return (
     <AuthContext.Provider
