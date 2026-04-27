@@ -136,7 +136,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (res.status === 401) {
           clearAuthToken();
           clearAuthUser();
-          redirectToLogin(pathname);
+          if (!pathname.startsWith("/studio")) {
+            redirectToLogin(pathname);
+          }
         }
         setUser(null);
         return;
