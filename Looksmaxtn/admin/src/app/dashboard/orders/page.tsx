@@ -278,7 +278,7 @@ export default function OrdersPage() {
                     <p className="text-[10px] text-text-secondary">{o.user?.email || ""}</p>
                   </td>
                   <td className="px-4 py-3 text-xs text-text-secondary">{o.items.length} items</td>
-                  <td className="px-4 py-3 text-xs font-medium">${o.totalPrice.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-xs font-medium">{o.totalPrice.toFixed(2)} TND</td>
                   <td className="px-4 py-3">
                     <span className={`text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider ${statusColor(o.orderStatus)}`}>
                       {o.orderStatus}

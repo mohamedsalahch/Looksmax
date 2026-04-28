@@ -67,9 +67,19 @@ export async function GET(
       reservationKey,
     );
 
+    let effectiveTag = typeof product.tag === "string" ? product.tag : "";
+    if (effectiveTag.toUpperCase() === "NEW") {
+      const durationDays = Math.max(1, Number(product.newTagDurationDays) || 3);
+      const createdMs = product.createdAt ? new Date(product.createdAt).getTime() : 0;
+      if (createdMs > 0 && Date.now() - createdMs > durationDays * 86400000) {
+        effectiveTag = "";
+      }
+    }
+
     return NextResponse.json({
       product: {
         ...product,
+        tag: effectiveTag,
         stock: displayStock,
         cartCount: 0,
         blockedByOrder,

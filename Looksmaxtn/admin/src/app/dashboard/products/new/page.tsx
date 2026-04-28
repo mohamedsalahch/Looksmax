@@ -74,9 +74,10 @@ const initialForm = {
   reference: "",
   stock: "1",
   tag: "",
-  sizes: "S,M,L,XL",
+  newTagDurationDays: "3",
+  sizes: "",
   colors: "",
-  conditionScore: "7",
+  conditionScore: "9",
   productType: "fashion" as ProductType,
   fashionSubtype: "" as FashionSubtype,
   sizeStock: {} as Record<string, string>,
@@ -302,6 +303,7 @@ export default function NewProductPage() {
   const [secondaryTopColor, setSecondaryTopColor] = useState<PaletteColor | null>(null);
   const [secondaryBottomColor, setSecondaryBottomColor] = useState<PaletteColor | null>(null);
   const [shoesColor, setShoesColor] = useState<PaletteColor | null>(null);
+  const [newSizeInput, setNewSizeInput] = useState("");
   const [generationInputs, setGenerationInputs] = useState<GenerationInputs>(initialGenerationInputs);
   const [importingGeneratedImage, setImportingGeneratedImage] = useState<string | null>(null);
   const [isGeneratedImagesOpen, setIsGeneratedImagesOpen] = useState(false);
@@ -776,6 +778,7 @@ export default function NewProductPage() {
       body.append("reference", form.reference);
       body.append("description", form.description);
       body.append("tag", form.tag);
+      body.append("newTagDurationDays", form.newTagDurationDays || "3");
       body.append("productType", form.productType);
       body.append("fashionSubtype", form.fashionSubtype);
       body.append("stock", form.stock);
@@ -916,7 +919,7 @@ export default function NewProductPage() {
             </div>
             <div>
               <FieldLabel>Stock</FieldLabel>
-              {form.productType !== "perfume" && form.sizes.trim() ? (
+              {form.productType !== "perfume" ? (
                 <div className="space-y-2">
                   {form.sizes.split(",").map((s) => s.trim()).filter(Boolean).map((size) => (
                     <div key={size} className="flex items-center gap-2">
@@ -934,10 +937,81 @@ export default function NewProductPage() {
                         className="flex-1 bg-bg-secondary border border-border px-3 py-2 text-sm focus:border-accent transition-colors"
                         placeholder={`Stock for ${size}`}
                       />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const remaining = form.sizes
+                            .split(",")
+                            .map((s) => s.trim())
+                            .filter(Boolean)
+                            .filter((s) => s !== size);
+                          const nextSizeStock = { ...form.sizeStock };
+                          delete nextSizeStock[size];
+                          setForm({ ...form, sizes: remaining.join(","), sizeStock: nextSizeStock });
+                        }}
+                        className="shrink-0 border border-border px-3 py-2 text-xs text-text-secondary transition-colors hover:border-accent hover:text-accent"
+                        aria-label={`Remove size ${size}`}
+                      >
+                        ×
+                      </button>
                     </div>
                   ))}
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="text"
+                      value={newSizeInput}
+                      onChange={(e) => setNewSizeInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const trimmed = newSizeInput.trim();
+                          if (!trimmed) return;
+                          const existing = form.sizes
+                            .split(",")
+                            .map((s) => s.trim())
+                            .filter(Boolean);
+                          if (existing.includes(trimmed)) {
+                            setNewSizeInput("");
+                            return;
+                          }
+                          setForm({
+                            ...form,
+                            sizes: [...existing, trimmed].join(","),
+                            sizeStock: { ...form.sizeStock, [trimmed]: form.sizeStock[trimmed] || "0" },
+                          });
+                          setNewSizeInput("");
+                        }
+                      }}
+                      className="flex-1 bg-bg-secondary border border-border px-3 py-2 text-sm focus:border-accent transition-colors"
+                      placeholder="New size (e.g. M, 42)"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const trimmed = newSizeInput.trim();
+                        if (!trimmed) return;
+                        const existing = form.sizes
+                          .split(",")
+                          .map((s) => s.trim())
+                          .filter(Boolean);
+                        if (existing.includes(trimmed)) {
+                          setNewSizeInput("");
+                          return;
+                        }
+                        setForm({
+                          ...form,
+                          sizes: [...existing, trimmed].join(","),
+                          sizeStock: { ...form.sizeStock, [trimmed]: form.sizeStock[trimmed] || "0" },
+                        });
+                        setNewSizeInput("");
+                      }}
+                      className="shrink-0 border border-border px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-text-primary transition-colors hover:border-accent hover:text-accent"
+                    >
+                      Add size
+                    </button>
+                  </div>
                   <p className="text-[10px] text-text-secondary">
-                    Set stock per size. Total stock will be computed automatically.
+                    Add a size and set its stock. Total stock is computed automatically.
                   </p>
                 </div>
               ) : (
@@ -1076,16 +1150,6 @@ export default function NewProductPage() {
           <SectionCard title="Fashion Details" description="Keep the clothing or shoes data aligned in a compact horizontal layout.">
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
               <div>
-                <FieldLabel>Sizes</FieldLabel>
-                <input
-                  type="text"
-                  value={form.sizes}
-                  onChange={(e) => setForm({ ...form, sizes: e.target.value })}
-                  className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-                  placeholder="Sizes: S,M,L,XL or 40,41,42"
-                />
-              </div>
-              <div>
                 <FieldLabel>Colors</FieldLabel>
                 <input
                   type="text"
@@ -1120,13 +1184,28 @@ export default function NewProductPage() {
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
             <div>
               <FieldLabel>Tag</FieldLabel>
-              <input
-                type="text"
+              <select
                 value={form.tag}
                 onChange={(e) => setForm({ ...form, tag: e.target.value })}
                 className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-                placeholder="Tag"
-              />
+              >
+                <option value="">None</option>
+                <option value="NEW">NEW</option>
+                <option value="FAVORITE">FAVORITE</option>
+              </select>
+              {form.tag === "NEW" && (
+                <div className="mt-3">
+                  <FieldLabel>NEW tag duration (days)</FieldLabel>
+                  <input
+                    type="number"
+                    min={1}
+                    value={form.newTagDurationDays}
+                    onChange={(e) => setForm({ ...form, newTagDurationDays: e.target.value })}
+                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                    placeholder="3"
+                  />
+                </div>
+              )}
             </div>
             <div>
               <FieldLabel>Product Images</FieldLabel>

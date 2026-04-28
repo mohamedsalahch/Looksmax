@@ -170,9 +170,8 @@ export default function Footer() {
             <h3 className="text-xs font-semibold uppercase tracking-wider mb-4">Social Media</h3>
             <div className="space-y-2">
               {[
-                { name: "Instagram", href: "https://instagram.com" },
-                { name: "TikTok", href: "https://tiktok.com" },
-                { name: "Facebook", href: "https://facebook.com" },
+                { name: "Instagram", href: "https://www.instagram.com/looksmaxtn/" },
+                { name: "Facebook", href: "https://www.facebook.com/looksmaxtn/" },
               ].map((social) => (
                 <a
                   key={social.name}

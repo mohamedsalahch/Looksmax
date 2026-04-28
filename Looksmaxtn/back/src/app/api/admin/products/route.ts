@@ -95,7 +95,7 @@ function getProductPayload(
   const rawStockValue = String(formData.get("fullStock") ?? formData.get("stock") ?? "").trim();
   const rawStock = rawStockValue.length > 0 ? Number(rawStockValue) : NaN;
   const conditionScore =
-    productType === "perfume" ? null : Number(formData.get("conditionScore") || 7);
+    productType === "perfume" ? null : Number(formData.get("conditionScore") || 9);
   const sizes = productType === "perfume" ? [] : parseStringArray(formData.get("sizes"));
   const colors = productType === "perfume" ? [] : parseStringArray(formData.get("colors"));
 
@@ -126,6 +126,7 @@ function getProductPayload(
     stock: Number.isNaN(rawStock) ? 0 : Math.max(0, rawStock),
     sizeStock: sizeStockMap,
     tag: String(formData.get("tag") || ""),
+    newTagDurationDays: Math.max(1, Math.floor(Number(formData.get("newTagDurationDays") || 3)) || 3),
     productType,
     fashionSubtype,
     conditionStatus:

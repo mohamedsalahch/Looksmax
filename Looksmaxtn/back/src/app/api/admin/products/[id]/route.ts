@@ -322,7 +322,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const fashionSubtype =
       productType === "fashion" ? String(formData.get("fashionSubtype") || "clothes") : null;
     const conditionScore =
-      productType === "perfume" ? null : Number(formData.get("conditionScore") || 7);
+      productType === "perfume" ? null : Number(formData.get("conditionScore") || 9);
     const rawFullStock = String(formData.get("fullStock") ?? formData.get("stock") ?? "").trim();
     if (rawFullStock.length === 0) {
       return NextResponse.json({ error: "Please enter a full stock value." }, { status: 400 });
@@ -401,6 +401,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       brand: String(formData.get("brand") || "LOOKSMAX"),
       reference: String(formData.get("reference") || ""),
       tag: String(formData.get("tag") || ""),
+      newTagDurationDays: Math.max(1, Math.floor(Number(formData.get("newTagDurationDays") || 3)) || 3),
       productType,
       fashionSubtype,
       conditionStatus:

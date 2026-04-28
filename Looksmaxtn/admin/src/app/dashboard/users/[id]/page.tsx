@@ -253,7 +253,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
                   <td className="px-4 py-3 text-xs text-text-secondary">
                     {order.items.reduce((total, item) => total + item.quantity, 0)}
                   </td>
-                  <td className="px-4 py-3 text-xs font-medium">${order.totalPrice.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-xs font-medium">{order.totalPrice.toFixed(2)} TND</td>
                   <td className="px-4 py-3">
                     <span className={`text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider ${statusColor(order.orderStatus)}`}>
                       {order.orderStatus}
