@@ -53,9 +53,9 @@ export default function EditorialFeature({
   alt={label}
   className={`block w-full h-auto transition-all duration-500 ${
     mobileActive
-      ? "scale-[1.03] blur-0"
+      ? "scale-[1.03] blur-none"
       : "scale-100 blur-sm"
-  } md:scale-100 md:blur-0 md:group-hover:scale-[1.03] md:group-hover:blur-sm`}
+  } md:scale-100 md:blur-none md:group-hover:scale-[1.03] md:group-hover:blur-sm`}
 />
           ) : (
             <div className="w-full aspect-[4/5] md:aspect-[16/10] placeholder-img">

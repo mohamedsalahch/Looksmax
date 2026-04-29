@@ -95,10 +95,10 @@ export default function LookbookGrid({
                   className={`w-full h-full object-cover transition-all duration-500
                     ${
                       mobileActiveIndexes.includes(index)
-                        ? "blur-0 scale-[1.03]"
+                        ? "blur-none scale-[1.03]"
                         : "blur-sm scale-100"
                     }
-                    md:blur-0 md:scale-100 md:group-hover:blur-sm md:group-hover:scale-[1.03]
+                    md:blur-none md:scale-100 md:group-hover:blur-sm md:group-hover:scale-[1.03]
                   `}
                 />
               ) : (

@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
 import User from "@/admin/models/User";
 import { comparePassword, createToken, getTokenCookieOptions } from "@/admin/lib/auth";
+import { verifyTurnstileToken } from "@/store/lib/turnstile";
 
 export async function POST(req: NextRequest) {
   try {
     await dbConnect();
-    let body: { email?: string; password?: string };
+    let body: { email?: string; password?: string; turnstileToken?: string };
     try {
       body = await req.json();
     } catch {
@@ -16,6 +17,11 @@ export async function POST(req: NextRequest) {
     const email = String(body.email || "").trim().toLowerCase();
     const password = String(body.password || "");
     if (!email || !password) return NextResponse.json({ error: "Email and password required" }, { status: 400 });
+
+    const turnstile = await verifyTurnstileToken(req, body.turnstileToken, "admin_login");
+    if (!turnstile.ok) {
+      return NextResponse.json({ error: turnstile.error }, { status: 400 });
+    }
 
     const user = await User.findOne({ email });
     if (!user) return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
