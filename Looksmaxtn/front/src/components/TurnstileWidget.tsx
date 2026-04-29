@@ -13,6 +13,7 @@ type TurnstileWindow = Window & {
         callback?: (token: string) => void;
         "expired-callback"?: () => void;
         "error-callback"?: () => void;
+        size?: "normal" | "flexible" | "compact";
       }
     ) => string;
     reset: (widgetId?: string) => void;
@@ -69,6 +70,7 @@ export default function TurnstileWidget({
       callback: onVerify,
       "expired-callback": () => onVerify(""),
       "error-callback": () => onVerify(""),
+      size: "flexible",
     });
   }, [action, onVerify, siteKey]);
 
@@ -106,8 +108,8 @@ export default function TurnstileWidget({
         onLoad={() => setScriptReady(true)}
         onReady={() => setScriptReady(true)}
       />
-      <div className="min-h-[65px]">
-        <div ref={containerRef} className="cf-turnstile" />
+      <div className="min-h-[65px] w-full">
+        <div ref={containerRef} className="cf-turnstile w-full" />
       </div>
     </>
   );
