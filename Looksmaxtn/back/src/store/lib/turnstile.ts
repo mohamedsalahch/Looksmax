@@ -12,11 +12,31 @@ function getClientIp(req: NextRequest) {
   return req.headers.get("cf-connecting-ip") || req.headers.get("x-real-ip") || "";
 }
 
+function isLocalUrl(value: string | undefined) {
+  if (!value) return false;
+
+  try {
+    const url = new URL(value);
+    return url.hostname === "localhost" || url.hostname === "127.0.0.1";
+  } catch {
+    return false;
+  }
+}
+
 export async function verifyTurnstileToken(
   req: NextRequest,
   token: string | undefined,
   expectedAction: string
 ) {
+  const localTurnstileEnabled = process.env.TURNSTILE_ENABLE_LOCAL === "true";
+  const localBackend =
+    isLocalUrl(process.env.BACKEND_BASE_URL) ||
+    isLocalUrl(process.env.FRONTEND_BASE_URL);
+
+  if (!localTurnstileEnabled && (process.env.NODE_ENV !== "production" || localBackend)) {
+    return { ok: true };
+  }
+
   const secret = process.env.TURNSTILE_SECRET_KEY || "";
   if (!secret) return { ok: true };
 

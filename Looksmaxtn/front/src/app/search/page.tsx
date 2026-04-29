@@ -227,7 +227,7 @@ function SearchContent() {
                 strokeWidth="1.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary"
+                className="pointer-events-none absolute left-1 top-1/2 -translate-y-1/2 text-text-secondary"
               >
                 <circle cx="11" cy="11" r="8" />
                 <path d="m21 21-4.35-4.35" />
@@ -237,7 +237,7 @@ function SearchContent() {
                 value={queryInput}
                 onChange={(event) => setQueryInput(event.target.value)}
                 placeholder="Search shoes, jackets, hats..."
-                className="h-14 w-full rounded-full border border-border-color bg-background pl-12 pr-12 text-sm text-foreground outline-none transition-all focus:border-foreground focus:shadow-[0_0_0_3px_rgba(0,0,0,0.05)]"
+                className="h-12 w-full border-0 border-b border-border-color bg-transparent pl-9 pr-9 text-sm text-foreground outline-none transition-colors placeholder:text-text-secondary/50 focus:border-foreground"
               />
               {queryInput && (
                 <button
@@ -246,7 +246,7 @@ function SearchContent() {
                     setQueryInput("");
                     router.replace(pathname, { scroll: false });
                   }}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary hover:text-foreground"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 text-text-secondary hover:text-foreground"
                   aria-label="Clear search"
                 >
                   ×
@@ -274,7 +274,7 @@ function SearchContent() {
             <select
               value={draftCategory}
               onChange={(event) => setDraftCategory(event.target.value)}
-              className="w-full border border-border-color bg-background px-4 py-3 text-sm"
+              className="w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm text-foreground transition-colors focus:border-foreground focus:outline-none"
             >
               <option value="">All categories</option>
               {facets.categories.map((value) => (
@@ -287,7 +287,7 @@ function SearchContent() {
             <select
               value={draftBrand}
               onChange={(event) => setDraftBrand(event.target.value)}
-              className="w-full border border-border-color bg-background px-4 py-3 text-sm"
+              className="w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm text-foreground transition-colors focus:border-foreground focus:outline-none"
             >
               <option value="">All brands</option>
               {facets.brands.map((value) => (
@@ -300,7 +300,7 @@ function SearchContent() {
             <select
               value={draftSize}
               onChange={(event) => setDraftSize(event.target.value)}
-              className="w-full border border-border-color bg-background px-4 py-3 text-sm"
+              className="w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm text-foreground transition-colors focus:border-foreground focus:outline-none"
             >
               <option value="">All sizes</option>
               {facets.sizes.map((value) => (
@@ -313,7 +313,7 @@ function SearchContent() {
             <select
               value={draftColor}
               onChange={(event) => setDraftColor(event.target.value)}
-              className="w-full border border-border-color bg-background px-4 py-3 text-sm"
+              className="w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm text-foreground transition-colors focus:border-foreground focus:outline-none"
             >
               <option value="">All colors</option>
               {facets.colors.map((value) => (
@@ -326,7 +326,7 @@ function SearchContent() {
             <select
               value={draftAvailability}
               onChange={(event) => setDraftAvailability(event.target.value)}
-              className="w-full border border-border-color bg-background px-4 py-3 text-sm"
+              className="w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm text-foreground transition-colors focus:border-foreground focus:outline-none"
             >
               <option value="">All availability</option>
               <option value="in-stock">In stock</option>
@@ -340,7 +340,7 @@ function SearchContent() {
                 value={draftPriceMin}
                 onChange={(event) => setDraftPriceMin(event.target.value)}
                 placeholder={`Min ${facets.priceRange.min || 0}`}
-                className="w-full border border-border-color bg-background px-4 py-3 text-sm"
+                className="w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm text-foreground transition-colors focus:border-foreground focus:outline-none"
               />
               <input
                 type="number"
@@ -348,7 +348,7 @@ function SearchContent() {
                 value={draftPriceMax}
                 onChange={(event) => setDraftPriceMax(event.target.value)}
                 placeholder={`Max ${facets.priceRange.max || 0}`}
-                className="w-full border border-border-color bg-background px-4 py-3 text-sm"
+                className="w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm text-foreground transition-colors focus:border-foreground focus:outline-none"
               />
             </div>
 

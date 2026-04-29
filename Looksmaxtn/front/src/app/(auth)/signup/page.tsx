@@ -159,7 +159,7 @@ export default function SignupPage() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
-            className="w-full border border-border-color bg-transparent px-4 py-3 text-sm text-foreground focus:border-foreground transition-colors placeholder:text-text-secondary/50"
+            className="w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm text-foreground transition-colors placeholder:text-text-secondary/50 focus:border-foreground focus:outline-none"
             placeholder="John Doe"
           />
         </div>
@@ -173,7 +173,7 @@ export default function SignupPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full border border-border-color bg-transparent px-4 py-3 text-sm text-foreground focus:border-foreground transition-colors placeholder:text-text-secondary/50"
+            className="w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm text-foreground transition-colors placeholder:text-text-secondary/50 focus:border-foreground focus:outline-none"
             placeholder="your@email.com"
           />
         </div>
@@ -186,7 +186,7 @@ export default function SignupPage() {
             value={gender}
             onChange={(e) => setGender(e.target.value)}
             required
-            className="w-full border border-border-color bg-transparent px-4 py-3 text-sm text-foreground focus:border-foreground transition-colors"
+            className="w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm text-foreground transition-colors focus:border-foreground focus:outline-none"
           >
             <option value="" disabled>
               Select gender
@@ -205,7 +205,7 @@ export default function SignupPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="w-full border border-border-color bg-transparent px-4 py-3 text-sm text-foreground focus:border-foreground transition-colors placeholder:text-text-secondary/50"
+            className="w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm text-foreground transition-colors placeholder:text-text-secondary/50 focus:border-foreground focus:outline-none"
             placeholder="Min. 6 characters"
           />
         </div>
@@ -219,7 +219,7 @@ export default function SignupPage() {
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             required
-            className="w-full border border-border-color bg-transparent px-4 py-3 text-sm text-foreground focus:border-foreground transition-colors placeholder:text-text-secondary/50"
+            className="w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm text-foreground transition-colors placeholder:text-text-secondary/50 focus:border-foreground focus:outline-none"
             placeholder="••••••••"
           />
         </div>

@@ -63,13 +63,16 @@ export default function ProductGrid({
   const [loaded, setLoaded] = useState(initialProducts.length > 0 || initialTotal > 0 || initialFacets !== null);
   const [facets, setFacets] = useState<Facets | null>(initialFacets);
 
-  const [selectedSize, setSelectedSize] = useState("");
+  const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
   const [priceMin, setPriceMin] = useState("");
   const [priceMax, setPriceMax] = useState("");
+  const [appliedPriceMin, setAppliedPriceMin] = useState("");
+  const [appliedPriceMax, setAppliedPriceMax] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const skipNextFetch = useRef(initialProducts.length > 0 || initialFacets !== null);
 
-  const hasActiveFilters = selectedSize || priceMin || priceMax;
+  const hasActiveFilters = selectedSizes.length > 0 || appliedPriceMin || appliedPriceMax;
+  const hasDraftPriceChanges = priceMin !== appliedPriceMin || priceMax !== appliedPriceMax;
   const rangeMin = facets ? Math.floor(facets.priceRange.min) : 0;
   const rangeMax = facets ? Math.ceil(facets.priceRange.max) : 1000;
   const sliderMin = priceMin !== "" ? Number(priceMin) : rangeMin;
@@ -86,9 +89,9 @@ export default function ProductGrid({
     const loadProducts = () => {
       const params = new URLSearchParams();
       if (category) params.set("category", category);
-      if (selectedSize) params.set("size", selectedSize);
-      if (priceMin) params.set("priceMin", priceMin);
-      if (priceMax) params.set("priceMax", priceMax);
+      if (selectedSizes.length > 0) params.set("size", selectedSizes.join(","));
+      if (appliedPriceMin) params.set("priceMin", appliedPriceMin);
+      if (appliedPriceMax) params.set("priceMax", appliedPriceMax);
       params.set("includeFacets", "1");
       const rk = getStoredReservationKey();
       if (rk) params.set("rk", rk);
@@ -119,12 +122,25 @@ export default function ProductGrid({
     return () => {
       cancelled = true;
     };
-  }, [category, selectedSize, priceMin, priceMax]);
+  }, [category, selectedSizes, appliedPriceMin, appliedPriceMax]);
 
   const clearFilters = () => {
-    setSelectedSize("");
+    setSelectedSizes([]);
     setPriceMin("");
     setPriceMax("");
+    setAppliedPriceMin("");
+    setAppliedPriceMax("");
+  };
+
+  const toggleSize = (size: string) => {
+    setSelectedSizes((current) =>
+      current.includes(size) ? current.filter((entry) => entry !== size) : [...current, size]
+    );
+  };
+
+  const applyPriceFilters = () => {
+    setAppliedPriceMin(priceMin);
+    setAppliedPriceMax(priceMax);
   };
 
   if (!loaded) {
@@ -196,9 +212,9 @@ export default function ProductGrid({
                 {facets.sizes.map((size) => (
                   <button
                     key={size}
-                    onClick={() => setSelectedSize(selectedSize === size ? "" : size)}
+                    onClick={() => toggleSize(size)}
                     className={`px-2.5 py-1 text-[10px] uppercase tracking-wider transition-colors cursor-pointer ${
-                      selectedSize === size
+                      selectedSizes.includes(size)
                         ? "bg-foreground text-background"
                         : "text-text-secondary hover:text-foreground"
                     }`}
@@ -251,6 +267,14 @@ export default function ProductGrid({
               <span className="text-[10px] text-text-secondary">{sliderMin} TND</span>
               <span className="text-[10px] text-text-secondary">{sliderMax} TND</span>
             </div>
+            <button
+              type="button"
+              onClick={applyPriceFilters}
+              disabled={!hasDraftPriceChanges}
+              className="text-[10px] uppercase tracking-wider text-foreground underline underline-offset-2 transition-colors hover:text-text-secondary disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Apply price
+            </button>
           </div>
         </div>
       </div>

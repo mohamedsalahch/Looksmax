@@ -24,6 +24,9 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get("search");
     const brand = searchParams.get("brand");
     const size = searchParams.get("size");
+    const sizes = size
+      ? size.split(",").map((value) => value.trim()).filter(Boolean)
+      : [];
     const color = searchParams.get("color");
     const availability = searchParams.get("availability");
     const priceMin = Number(searchParams.get("priceMin") || "");
@@ -119,7 +122,7 @@ export async function GET(req: NextRequest) {
         ? Object.values(product.sizeAvailability).some((sizeInfo) => sizeInfo.available)
         : stock > 0;
       if (brand && product.brand !== brand) return false;
-      if (size && !(product.sizes || []).includes(size)) return false;
+      if (sizes.length > 0 && !sizes.some((sizeValue) => (product.sizes || []).includes(sizeValue))) return false;
       if (color && !(product.colors || []).includes(color)) return false;
       if (availability === "out-of-stock") return !hasSelectableSize;
       if (availability === "in-stock") return hasSelectableSize;
