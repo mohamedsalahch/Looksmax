@@ -48,13 +48,15 @@ export default function EditorialFeature({
           className="relative block w-full cursor-pointer group overflow-hidden bg-surface"
         >
           {image ? (
-            <img
-              src={image}
-              alt={label}
-              className={`block w-full h-auto transition-all duration-500 ${
-                mobileActive ? "scale-[1.03]" : "blur-sm md:blur-0 md:group-hover:scale-[1.03] md:group-hover:blur-sm"
-              }`}
-            />
+          <img
+  src={image}
+  alt={label}
+  className={`block w-full h-auto transition-all duration-500 ${
+    mobileActive
+      ? "scale-[1.03] blur-0"
+      : "scale-100 blur-sm"
+  } md:scale-100 md:blur-0 md:group-hover:scale-[1.03] md:group-hover:blur-sm`}
+/>
           ) : (
             <div className="w-full aspect-[4/5] md:aspect-[16/10] placeholder-img">
               <span className="relative z-10 text-sm tracking-widest">EDITORIAL</span>

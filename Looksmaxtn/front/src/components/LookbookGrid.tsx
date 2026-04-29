@@ -20,17 +20,24 @@ export default function LookbookGrid({
 }) {
   const itemRefs = useRef<(HTMLAnchorElement | null)[]>([]);
   const [mobileActiveIndexes, setMobileActiveIndexes] = useState<number[]>([]);
+
   const safeImages = images || [];
   const displayCategories = categories || [];
+
   const displayItems = safeImages.map((image, index) => ({
     _id: displayCategories[index]?._id || `fallback-${index}`,
-    name: displayCategories[index]?.name || `Look ${String(index + 1).padStart(2, "0")}`,
+    name:
+      displayCategories[index]?.name ||
+      `Look ${String(index + 1).padStart(2, "0")}`,
     slug: displayCategories[index]?.slug || "all",
     image,
   }));
 
   useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia("(max-width: 767px)").matches) {
+    if (
+      typeof window === "undefined" ||
+      !window.matchMedia("(max-width: 767px)").matches
+    ) {
       return;
     }
 
@@ -38,8 +45,11 @@ export default function LookbookGrid({
       (entries) => {
         setMobileActiveIndexes((current) => {
           const next = new Set(current);
+
           entries.forEach((entry) => {
-            const index = Number((entry.target as HTMLElement).dataset.index);
+            const index = Number(
+              (entry.target as HTMLElement).dataset.index
+            );
             if (Number.isNaN(index)) return;
 
             if (entry.isIntersecting) {
@@ -48,6 +58,7 @@ export default function LookbookGrid({
               next.delete(index);
             }
           });
+
           return Array.from(next);
         });
       },
@@ -61,9 +72,7 @@ export default function LookbookGrid({
     return () => observer.disconnect();
   }, [displayItems.length]);
 
-  if (displayItems.length === 0) {
-    return null;
-  }
+  if (displayItems.length === 0) return null;
 
   return (
     <section className="px-4 md:px-8 py-8">
@@ -83,11 +92,14 @@ export default function LookbookGrid({
                 <img
                   src={item.image}
                   alt={item.name}
-                  className={`w-full h-full object-cover transition-all duration-500 ${
-                    mobileActiveIndexes.includes(index)
-                      ? "scale-[1.03]"
-                      : "blur-sm md:blur-0 md:group-hover:scale-[1.03] md:group-hover:blur-sm"
-                  }`}
+                  className={`w-full h-full object-cover transition-all duration-500
+                    ${
+                      mobileActiveIndexes.includes(index)
+                        ? "blur-0 scale-[1.03]"
+                        : "blur-sm scale-100"
+                    }
+                    md:blur-0 md:scale-100 md:group-hover:blur-sm md:group-hover:scale-[1.03]
+                  `}
                 />
               ) : (
                 <div className="w-full h-full placeholder-img">
@@ -96,6 +108,8 @@ export default function LookbookGrid({
                   </span>
                 </div>
               )}
+
+              {/* Overlay */}
               <div
                 className={`absolute inset-0 transition-colors duration-300 z-10 ${
                   mobileActiveIndexes.includes(index)
@@ -103,6 +117,8 @@ export default function LookbookGrid({
                     : "bg-foreground/0 group-hover:bg-foreground/30"
                 }`}
               />
+
+              {/* Center text */}
               <div
                 className={`absolute inset-0 z-20 flex items-center justify-center px-6 transition-all duration-300 ${
                   mobileActiveIndexes.includes(index)
@@ -119,9 +135,13 @@ export default function LookbookGrid({
                   </p>
                 </div>
               </div>
+
+              {/* Bottom label */}
               <div
                 className={`absolute inset-x-0 bottom-0 z-20 bg-background/88 px-3 py-3 backdrop-blur-sm transition-opacity duration-300 ${
-                  mobileActiveIndexes.includes(index) ? "opacity-0" : "group-hover:opacity-0"
+                  mobileActiveIndexes.includes(index)
+                    ? "opacity-0"
+                    : "group-hover:opacity-0"
                 }`}
               >
                 <p className="text-[10px] uppercase tracking-[0.22em] text-text-secondary">
@@ -132,8 +152,11 @@ export default function LookbookGrid({
             </Link>
           ))}
         </div>
+
         <div className="text-right mt-2">
-          <p className="text-xs text-text-secondary tracking-wider">{caption}</p>
+          <p className="text-xs text-text-secondary tracking-wider">
+            {caption}
+          </p>
         </div>
       </div>
     </section>
