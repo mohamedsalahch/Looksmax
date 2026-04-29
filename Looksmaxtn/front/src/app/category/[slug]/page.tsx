@@ -1,4 +1,4 @@
-import CategoryNav from "@/components/CategoryNav";
+import CategoryNav, { type Category } from "@/components/CategoryNav";
 import ProductGrid from "@/components/ProductGrid";
 import { buildPageMetadata } from "@/lib/seo";
 
@@ -36,6 +36,18 @@ export async function generateMetadata({
   });
 }
 
+async function loadCategoryTree(): Promise<Category[]> {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+  try {
+    const res = await fetch(`${baseUrl}/api/categories`, { cache: "no-store" });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.tree || [];
+  } catch {
+    return [];
+  }
+}
+
 async function loadCategoryData(slug: string) {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
   const params = new URLSearchParams();
@@ -63,11 +75,14 @@ export default async function CategoryPage({
 }) {
   const { slug } = await params;
 
-  const initialData = await loadCategoryData(slug);
+  const [initialData, categoryTree] = await Promise.all([
+    loadCategoryData(slug),
+    loadCategoryTree(),
+  ]);
 
   return (
     <div className="pt-[77px]">
-      <CategoryNav activeSlug={slug} />
+      <CategoryNav activeSlug={slug} initialCategories={categoryTree} />
 
       <ProductGrid
         category={slug}

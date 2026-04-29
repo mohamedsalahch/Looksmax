@@ -1,4 +1,4 @@
-import CategoryNav from "@/components/CategoryNav";
+import CategoryNav, { type Category } from "@/components/CategoryNav";
 import ProductGrid from "@/components/ProductGrid";
 import { buildPageMetadata } from "@/lib/seo";
 
@@ -8,6 +8,18 @@ export const metadata = buildPageMetadata({
     "Browse all LOOKSMAX Tunisia collections, including men's clothing, shoes, perfumes, and curated fashion essentials.",
   path: "/category/all",
 });
+
+async function loadCategoryTree(): Promise<Category[]> {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+  try {
+    const res = await fetch(`${baseUrl}/api/categories`, { cache: "no-store" });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.tree || [];
+  } catch {
+    return [];
+  }
+}
 
 async function loadAllCategoriesData() {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
@@ -29,11 +41,14 @@ async function loadAllCategoriesData() {
 }
 
 export default async function AllCategoriesPage() {
-  const initialData = await loadAllCategoriesData();
+  const [initialData, categoryTree] = await Promise.all([
+    loadAllCategoriesData(),
+    loadCategoryTree(),
+  ]);
 
   return (
     <div className="pt-[77px]">
-      <CategoryNav activeSlug="all-categories" />
+      <CategoryNav activeSlug="all-categories" initialCategories={categoryTree} />
 
       <ProductGrid
         initialProducts={initialData.products}

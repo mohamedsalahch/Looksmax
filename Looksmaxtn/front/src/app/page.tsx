@@ -1,7 +1,7 @@
 import HeroSection from "@/components/HeroSection";
 import LookbookGrid from "@/components/LookbookGrid";
 import EditorialFeature from "@/components/EditorialFeature";
-import ProductCardRow from "@/components/ProductCardRow";
+import ProductCardRow, { type ProductCardRowItem } from "@/components/ProductCardRow";
 import BrandStory from "@/components/BrandStory";
 import { DEFAULT_HOME_PAGE } from "@/lib/homePageDefaults";
 import { buildPageMetadata } from "@/lib/seo";
@@ -26,12 +26,16 @@ export async function generateMetadata() {
 export default async function Home() {
   let content = DEFAULT_HOME_PAGE;
   let categoriesBySlug = new Map<string, { _id: string; name: string; slug: string }>();
+  let featuredProducts: ProductCardRowItem[] = [];
 
   try {
-    const [{ content: stored }, { categories: categoryDocs }] = await Promise.all([
+    const [{ content: stored }, { categories: categoryDocs }, productsData] = await Promise.all([
       fetch(`${BACKEND_URL}/api/store/homepage`).then((r) => r.json()),
       fetch(`${BACKEND_URL}/api/store/categories`).then((r) => r.json()),
+      fetch(`${BACKEND_URL}/api/store/products?limit=4`).then((r) => r.json()),
     ]);
+
+    featuredProducts = productsData?.products || [];
 
     categoriesBySlug = new Map(
       (categoryDocs || []).map((category: { _id: string; name: string; slug: string }) => [
@@ -97,7 +101,7 @@ export default async function Home() {
         label={content.editorial.label}
         eyebrow={content.editorial.eyebrow}
       />
-      <ProductCardRow title={content.featured.title} />
+      <ProductCardRow title={content.featured.title} products={featuredProducts} />
     </>
   );
 }

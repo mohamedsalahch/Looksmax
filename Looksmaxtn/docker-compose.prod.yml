@@ -59,6 +59,7 @@ services:
         APP_PORT: 3000
         NEXT_PUBLIC_BACKEND_URL: http://back:3002
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: 587877553271-cdg0m72ja81a55h0avd786of0oivve0l.apps.googleusercontent.com
+        NEXT_PUBLIC_R2_PUBLIC_HOST: cdn.looksmaxtn.com
     container_name: looksmax-front
     env_file:
       - ./front/.env.production

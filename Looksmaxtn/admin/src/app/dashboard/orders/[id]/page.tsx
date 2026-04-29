@@ -285,12 +285,12 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                 </td>
                 <td className="px-4 py-3 text-xs text-text-secondary">{item.size}</td>
                 <td className="px-4 py-3 text-xs">{item.quantity}</td>
-                <td className="px-4 py-3 text-xs text-right font-medium">${(item.price * item.quantity).toFixed(2)}</td>
+                <td className="px-4 py-3 text-xs text-right font-medium">{(item.price * item.quantity).toFixed(2)} TND</td>
               </tr>
             ))}
           </tbody>
           <tfoot className="border-t border-border">
-            <tr><td colSpan={4} className="px-4 py-3 text-xs font-semibold text-right">Total</td><td className="px-4 py-3 text-sm font-bold text-right text-accent">${order.totalPrice.toFixed(2)}</td></tr>
+            <tr><td colSpan={4} className="px-4 py-3 text-xs font-semibold text-right">Total</td><td className="px-4 py-3 text-sm font-bold text-right text-accent">{order.totalPrice.toFixed(2)} TND</td></tr>
           </tfoot>
         </table>
       </div>

@@ -33,6 +33,7 @@ export interface IProduct extends Document {
   sizeStock?: Map<string, ISizeStockEntry> | null;
   images: IProductImage[];
   tag?: string;
+  newTagDurationDays?: number;
   brand: string;
   reference?: string;
   productType: ProductType;
@@ -84,6 +85,7 @@ const productSchema = new Schema<IProduct>(
     },
     images: [productImageSchema],
     tag: { type: String, default: "" },
+    newTagDurationDays: { type: Number, default: 3, min: 1 },
     brand: { type: String, default: "LOOKSMAX" },
     reference: { type: String, default: "" },
     productType: {

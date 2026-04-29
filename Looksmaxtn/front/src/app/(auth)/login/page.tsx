@@ -1,10 +1,16 @@
 "use client";
 
 import Script from "next/script";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/providers/AuthContext";
+
+function getNextPath() {
+  if (typeof window === "undefined") return "/";
+  const next = new URLSearchParams(window.location.search).get("next");
+  return next && next.startsWith("/") ? next : "/";
+}
 
 interface GoogleIdentityServices {
   accounts?: {
@@ -28,7 +34,7 @@ interface GoogleIdentityServices {
   };
 }
 
-function LoginPageContent() {
+export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -39,8 +45,6 @@ function LoginPageContent() {
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
   const { login, loginWithGoogle, resendVerification } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const nextPath = searchParams.get("next") || "/";
   const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
   const googleConfigured = Boolean(googleClientId);
 
@@ -108,7 +112,7 @@ function LoginPageContent() {
           return;
         }
 
-        router.push(nextPath.startsWith("/") ? nextPath : "/");
+        router.push(getNextPath());
       },
     });
 
@@ -121,7 +125,7 @@ function LoginPageContent() {
       text: "signin_with",
       logo_alignment: "center",
     });
-  }, [googleClientId, googleConfigured, googleReady, loginWithGoogle, nextPath, router]);
+  }, [googleClientId, googleConfigured, googleReady, loginWithGoogle, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,7 +140,7 @@ function LoginPageContent() {
         setResendCooldown((current) => (current > 0 ? current : 60));
       }
     } else {
-      router.push(nextPath.startsWith("/") ? nextPath : "/");
+      router.push(getNextPath());
     }
   };
 
@@ -289,33 +293,3 @@ function LoginPageContent() {
   );
 }
 
-function LoginPageFallback() {
-  return (
-    <div className="w-full max-w-sm animate-pulse">
-      <div className="text-center mb-10">
-        <div className="mx-auto h-5 w-36 rounded bg-border-color/60" />
-        <div className="mx-auto mt-3 h-3 w-48 rounded bg-border-color/40" />
-      </div>
-
-      <div className="space-y-4">
-        <div className="h-12 rounded border border-border-color bg-border-color/30" />
-        <div className="h-12 rounded border border-border-color bg-border-color/30" />
-        <div className="h-12 rounded bg-foreground/80" />
-      </div>
-
-      <div className="mt-6 space-y-4">
-        <div className="h-12 rounded border border-border-color bg-border-color/20" />
-        <div className="mx-auto h-3 w-56 rounded bg-border-color/30" />
-        <div className="mx-auto h-3 w-44 rounded bg-border-color/20" />
-      </div>
-    </div>
-  );
-}
-
-export default function LoginPage() {
-  return (
-    <Suspense fallback={<LoginPageFallback />}>
-      <LoginPageContent />
-    </Suspense>
-  );
-}

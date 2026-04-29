@@ -1,6 +1,6 @@
 import ProductImageGallery from "@/components/ProductImageGallery";
 import ProductInfo from "@/components/ProductInfo";
-import RelatedProducts from "@/components/RelatedProducts";
+import RelatedProducts, { type RelatedProduct } from "@/components/RelatedProducts";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDefaultSelectableSize, getSelectedSizeStock } from "@/lib/sizeAvailability";
@@ -56,6 +56,18 @@ async function loadProduct(id: string) {
   return data.product || null;
 }
 
+async function loadRelatedProducts(): Promise<RelatedProduct[]> {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+  try {
+    const response = await fetch(`${baseUrl}/api/products?limit=4`, { cache: "no-store" });
+    if (!response.ok) return [];
+    const data = await response.json();
+    return data.products || [];
+  } catch {
+    return [];
+  }
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -96,7 +108,10 @@ export default async function ProductDetailPage({
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const requestedSize = resolvedSearchParams?.size || "";
 
-  const dbProduct = await loadProduct(id);
+  const [dbProduct, relatedProducts] = await Promise.all([
+    loadProduct(id),
+    loadRelatedProducts(),
+  ]);
   if (!dbProduct) {
     notFound();
   }
@@ -218,7 +233,7 @@ export default async function ProductDetailPage({
       </div>
 
       {/* Related Products */}
-      <RelatedProducts />
+      <RelatedProducts products={relatedProducts} />
     </div>
   );
 }

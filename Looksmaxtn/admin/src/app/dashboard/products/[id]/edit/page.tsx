@@ -75,9 +75,10 @@ const initialForm = {
   reference: "",
   stock: "1",
   tag: "",
+  newTagDurationDays: "3",
   sizes: "",
   colors: "",
-  conditionScore: "7",
+  conditionScore: "9",
   productType: "fashion" as ProductType,
   fashionSubtype: "" as FashionSubtype,
   sizeStock: {} as Record<string, string>,
@@ -229,7 +230,7 @@ async function base64ToFile(base64: string, index: number) {
 async function productImageToFile(image: ProductImage, label: keyof GenerationInputs) {
   if (image.file) return image.file;
 
-  const blob = await fetch(image.url).then((response) => response.blob());
+  const blob = await fetch(image.url, { cache: "reload" }).then((response) => response.blob());
   const extension = blob.type.split("/")[1] || "png";
   return new File([blob], `${label}-${Date.now()}.${extension}`, {
     type: blob.type || "image/png",
@@ -347,6 +348,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const [savingSizeStockFor, setSavingSizeStockFor] = useState<string>("");
   const [restockAmount, setRestockAmount] = useState("0");
   const [restocking, setRestocking] = useState(false);
+  const [newSizeInput, setNewSizeInput] = useState("");
   const generationAbortRef = useRef<AbortController | null>(null);
   const allowStockEditing = true;
   const sizeList = useMemo(
@@ -407,9 +409,10 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           reference: p.reference || "",
           stock: String(p.fullStock ?? p.stock ?? 1),
           tag: p.tag || "",
+          newTagDurationDays: String(p.newTagDurationDays ?? 3),
           sizes: (p.sizes || []).join(","),
           colors: (p.colors || []).join(","),
-          conditionScore: String(p.conditionScore ?? 7),
+          conditionScore: String(p.conditionScore ?? 9),
           productType: p.productType === "perfume" ? "perfume" : "fashion",
           fashionSubtype: "",
           sizeStock: nextSizeStock,
@@ -1023,6 +1026,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       body.append("reference", form.reference);
       body.append("description", form.description);
       body.append("tag", form.tag);
+      body.append("newTagDurationDays", form.newTagDurationDays || "3");
       body.append("productType", form.productType);
       body.append("fashionSubtype", form.fashionSubtype || savedFashionSubtype || "clothes");
       body.append("fullStock", form.stock);
@@ -1227,6 +1231,45 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                   Select a size. New sizes can receive an initial full stock once, existing sizes can be restocked.
                 </p>
               </div>
+              {form.productType !== "perfume" && (() => {
+                const addSize = () => {
+                  const trimmed = newSizeInput.trim();
+                  if (!trimmed) return;
+                  const existing = normalizeSizeList(form.sizes);
+                  if (existing.includes(trimmed)) {
+                    setNewSizeInput("");
+                    setSelectedStockSize(trimmed);
+                    return;
+                  }
+                  setForm({ ...form, sizes: [...existing, trimmed].join(",") });
+                  setSelectedStockSize(trimmed);
+                  setNewSizeInput("");
+                };
+                return (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newSizeInput}
+                      onChange={(e) => setNewSizeInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addSize();
+                        }
+                      }}
+                      className="flex-1 bg-bg-card border border-border px-3 py-2 text-sm focus:border-accent transition-colors"
+                      placeholder="New size (e.g. M, 42)"
+                    />
+                    <button
+                      type="button"
+                      onClick={addSize}
+                      className="shrink-0 border border-border px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-text-primary transition-colors hover:border-accent hover:text-accent"
+                    >
+                      Add size
+                    </button>
+                  </div>
+                );
+              })()}
               {sizeList.length > 0 ? (
                 <div className="space-y-3">
                   <div>
@@ -1456,16 +1499,6 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           <SectionCard title="Fashion Details" description="Align subtype, sizes, colors, and condition in a cleaner horizontal layout.">
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
               <div>
-                <FieldLabel>Sizes</FieldLabel>
-                <input
-                  type="text"
-                  value={form.sizes}
-                  onChange={(e) => setForm({ ...form, sizes: e.target.value })}
-                  className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-                  placeholder="Sizes: S,M,L,XL or 40,41,42"
-                />
-              </div>
-              <div>
                 <FieldLabel>Colors</FieldLabel>
                 <input
                   type="text"
@@ -1500,13 +1533,31 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
             <div>
               <FieldLabel>Tag</FieldLabel>
-              <input
-                type="text"
+              <select
                 value={form.tag}
                 onChange={(e) => setForm({ ...form, tag: e.target.value })}
                 className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-                placeholder="Tag"
-              />
+              >
+                <option value="">None</option>
+                <option value="NEW">NEW</option>
+                <option value="FAVORITE">FAVORITE</option>
+                {form.tag && !["", "NEW", "FAVORITE"].includes(form.tag) && (
+                  <option value={form.tag}>{form.tag}</option>
+                )}
+              </select>
+              {form.tag === "NEW" && (
+                <div className="mt-3">
+                  <FieldLabel>NEW tag duration (days)</FieldLabel>
+                  <input
+                    type="number"
+                    min={1}
+                    value={form.newTagDurationDays}
+                    onChange={(e) => setForm({ ...form, newTagDurationDays: e.target.value })}
+                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                    placeholder="3"
+                  />
+                </div>
+              )}
             </div>
             <div>
               <FieldLabel>Product Images</FieldLabel>

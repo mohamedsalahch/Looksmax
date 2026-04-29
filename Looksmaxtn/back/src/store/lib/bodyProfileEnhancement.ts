@@ -1,11 +1,13 @@
-import { readFile, writeFile, unlink } from "fs/promises";
 import path from "path";
 import os from "os";
 import mongoose from "mongoose";
 import dbConnect from "@/store/lib/mongodb";
 import User from "@/store/models/User";
-import { getUploadCategoryDir } from "@/store/lib/uploadStorage";
-import { deleteBodyProfileImage } from "@/store/lib/bodyProfileUploads";
+import {
+  deleteBodyProfileImage,
+  saveBodyProfileImageBuffer,
+} from "@/store/lib/bodyProfileUploads";
+import { loadImageAsBase64 } from "@/lib/imageSource";
 
 const STUDIO_PORTRAIT_PROMPT = `Transform this image into a professional studio portrait.
 
@@ -72,10 +74,7 @@ export async function queueBodyProfileEnhancement(userId: string, imagePath: str
   }
 
   try {
-    const uploadDir = getUploadCategoryDir("body-profiles");
-    const fullPath = path.join(uploadDir, path.basename(imagePath));
-    const fileBuffer = await readFile(fullPath);
-    const base64 = fileBuffer.toString("base64");
+    const base64 = await loadImageAsBase64(imagePath);
 
     // Step 1: Validate the photo with LLM before enhancing
     try {
@@ -175,16 +174,15 @@ export async function saveEnhancedBodyProfileImage(
   imagePath: string,
   imageBase64: string
 ) {
-  const uploadDir = getUploadCategoryDir("body-profiles");
-  const originalBasename = path.basename(imagePath);
-  const ext = path.extname(originalBasename);
-  const nameWithoutExt = path.basename(originalBasename, ext);
+  // Derive a key based on the source file's basename so the enhanced image is paired with the original.
+  const sourceBasename = imagePath.startsWith("/uploads/body-profiles/")
+    ? path.basename(imagePath)
+    : path.basename(new URL(imagePath).pathname);
+  const ext = path.extname(sourceBasename) || ".jpg";
+  const nameWithoutExt = path.basename(sourceBasename, ext);
   const enhancedFilename = `${nameWithoutExt}-enhanced${ext}`;
-  const enhancedFullPath = path.join(uploadDir, enhancedFilename);
-  const enhancedImagePath = `/uploads/body-profiles/${enhancedFilename}`;
 
   const enhancedBuffer = Buffer.from(imageBase64, "base64");
-  await writeFile(enhancedFullPath, enhancedBuffer);
 
   await dbConnect();
   const currentUser = await User.collection.findOne(
@@ -193,22 +191,21 @@ export async function saveEnhancedBodyProfileImage(
   );
   const currentProfileImage = currentUser?.bodyProfile?.profileImage || "";
   if (currentProfileImage !== imagePath) {
-    try {
-      await unlink(enhancedFullPath);
-    } catch {}
     return null;
   }
+
+  const enhancedImageUrl = await saveBodyProfileImageBuffer(enhancedBuffer, enhancedFilename);
 
   await User.collection.updateOne(
     { _id: new mongoose.Types.ObjectId(userId) },
     {
       $set: {
-        "bodyProfile.profileImageEnhanced": enhancedImagePath,
+        "bodyProfile.profileImageEnhanced": enhancedImageUrl,
         "bodyProfile.imageEnhancing": false,
         "bodyProfile.profileImageRequiresGeneration": false,
       },
     }
   );
 
-  return enhancedImagePath;
+  return enhancedImageUrl;
 }

@@ -697,12 +697,6 @@ export default function OutfitStudioPage() {
     const ignoredGenerationJobIdRef = useRef("");
 
     useEffect(() => {
-        if (!loading && !user) {
-            router.replace(`/login?next=${encodeURIComponent(pathname)}`);
-        }
-    }, [loading, pathname, router, user]);
-
-    useEffect(() => {
         if (!user?.id) return;
 
         let cancelled = false;
@@ -1578,7 +1572,7 @@ export default function OutfitStudioPage() {
                         Sign in to build looks around your body profile.
                     </p>
                     <Link
-                        href="/login"
+                        href={`/login?next=${encodeURIComponent(pathname)}`}
                         className="bg-foreground text-background px-8 py-3 text-sm font-medium tracking-wide uppercase"
                     >
                         Sign In

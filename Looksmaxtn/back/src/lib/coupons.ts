@@ -49,7 +49,7 @@ export function getCouponValidationError(coupon: CouponLike, subtotal: number, n
   }
 
   if (typeof coupon.minimumOrderAmount === "number" && subtotal < coupon.minimumOrderAmount) {
-    return `Minimum order amount of ${coupon.minimumOrderAmount.toFixed(2)} is required.`;
+    return `Minimum order amount of ${coupon.minimumOrderAmount.toFixed(2)} TND is required.`;
   }
 
   if (typeof coupon.maxUses === "number" && coupon.maxUses >= 0) {

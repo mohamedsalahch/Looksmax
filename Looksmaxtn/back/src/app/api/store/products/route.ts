@@ -142,8 +142,34 @@ export async function GET(req: NextRequest) {
         }
       : undefined;
 
-    const total = filteredProducts.length;
-    const paginatedProducts = filteredProducts.slice(skip, skip + limit);
+    const nowMs = Date.now();
+    const productsWithEffectiveTag = filteredProducts.map((product) => {
+      const rawTag = typeof product.tag === "string" ? product.tag : "";
+      if (rawTag.toUpperCase() === "NEW") {
+        const durationDays = Math.max(1, Number(product.newTagDurationDays) || 3);
+        const createdMs = product.createdAt ? new Date(product.createdAt).getTime() : 0;
+        const expired = createdMs > 0 && nowMs - createdMs > durationDays * 86400000;
+        if (expired) return { ...product, tag: "" };
+      }
+      return product;
+    });
+
+    const tagRank = (tag: unknown) => {
+      const value = typeof tag === "string" ? tag.toUpperCase() : "";
+      if (value === "NEW") return 0;
+      if (value === "FAVORITE") return 1;
+      return 2;
+    };
+    const sortedProducts = [...productsWithEffectiveTag].sort((a, b) => {
+      const rankDiff = tagRank(a.tag) - tagRank(b.tag);
+      if (rankDiff !== 0) return rankDiff;
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return bTime - aTime;
+    });
+
+    const total = sortedProducts.length;
+    const paginatedProducts = sortedProducts.slice(skip, skip + limit);
 
     return NextResponse.json({
       products: paginatedProducts,

@@ -21,7 +21,7 @@ export default function DashboardPage() {
   if (!stats) return <p className="text-xs text-text-secondary animate-pulse">Loading dashboard...</p>;
 
   const cards = [
-    { label: "Total Revenue", value: `$${stats.totalRevenue.toFixed(2)}`, icon: "💰", color: "text-[#6b6055]" },
+    { label: "Total Revenue", value: `${stats.totalRevenue.toFixed(2)} TND`, icon: "💰", color: "text-[#6b6055]" },
     { label: "Total Orders", value: stats.totalOrders, icon: "🛒", color: "text-info" },
     { label: "Pending Orders", value: stats.pendingOrders, icon: "⏳", color: "text-warning" },
     { label: "Products", value: stats.totalProducts, icon: "📦", color: "text-accent" },
