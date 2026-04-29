@@ -14,8 +14,8 @@ Runs on [http://localhost:3000](http://localhost:3000).
 ## Required Env
 
 - `NEXT_PUBLIC_BACKEND_URL=http://localhost:3002`
+- `BACKEND_PROXY_URL=http://127.0.0.1:3002`
 - `NEXT_PUBLIC_BASE_URL=http://localhost:3000`
-- `MONGODB_URI=mongodb://localhost:27017/looksmax`
 - `JWT_SECRET=...`
 
 ## Production
