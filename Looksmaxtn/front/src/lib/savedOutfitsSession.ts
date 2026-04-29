@@ -54,3 +54,10 @@ export function upsertSavedOutfitSession(userId: string, outfit: SavedOutfitSess
   writeSavedOutfitsSession(userId, nextOutfits);
   return nextOutfits;
 }
+
+export function removeSavedOutfitSession(userId: string, outfitId: string) {
+  const existing = readSavedOutfitsSession(userId) || [];
+  const nextOutfits = existing.filter((entry) => entry.id !== outfitId);
+  writeSavedOutfitsSession(userId, nextOutfits);
+  return nextOutfits;
+}

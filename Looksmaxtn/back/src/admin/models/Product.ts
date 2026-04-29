@@ -86,7 +86,7 @@ const productSchema = new Schema<IProduct>(
     images: [productImageSchema],
     tag: { type: String, default: "" },
     newTagDurationDays: { type: Number, default: 3, min: 1 },
-    brand: { type: String, default: "LOOKSMAX" },
+    brand: { type: String, default: "" },
     reference: { type: String, default: "" },
     productType: {
       type: String,

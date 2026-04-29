@@ -5,7 +5,11 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/providers/AuthContext";
 import { redirectToLogin, withAuthRequest } from "@/lib/authClient";
 import { shareOutfit } from "@/lib/share";
-import { readSavedOutfitsSession, writeSavedOutfitsSession } from "@/lib/savedOutfitsSession";
+import {
+  readSavedOutfitsSession,
+  removeSavedOutfitSession,
+  writeSavedOutfitsSession,
+} from "@/lib/savedOutfitsSession";
 
 interface SavedOutfitItem {
   id: string;
@@ -40,6 +44,7 @@ export default function SavedOutfitsPage() {
   const [loading, setLoading] = useState(true);
   const [sharingOutfitId, setSharingOutfitId] = useState("");
   const [sharedOutfitId, setSharedOutfitId] = useState("");
+  const [deletingOutfitId, setDeletingOutfitId] = useState("");
   const shareResetTimerRef = useRef<number | null>(null);
 
   const clearShareResetTimer = () => {
@@ -61,15 +66,12 @@ export default function SavedOutfitsPage() {
         setOutfits(cachedOutfits);
         setLoading(false);
       });
-      return () => {
-        cancelled = true;
-      };
+    } else {
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setLoading(true);
+      });
     }
-
-    queueMicrotask(() => {
-      if (cancelled) return;
-      setLoading(true);
-    });
 
     fetch("/api/outfits?ts=" + Date.now(), withAuthRequest({ cache: "no-store" }))
       .then((response) => {
@@ -127,6 +129,23 @@ export default function SavedOutfitsPage() {
       setSharedOutfitId("");
     }
     setSharingOutfitId("");
+  };
+
+  const handleDeleteOutfit = async (id: string) => {
+    setDeletingOutfitId(id);
+    try {
+      const response = await fetch(`/api/outfits/${id}`, withAuthRequest({ method: "DELETE" }));
+      if (!response.ok) return;
+
+      setOutfits((current) => current.filter((outfit) => outfit.id !== id));
+      if (user?.id) {
+        removeSavedOutfitSession(user.id, id);
+      }
+    } catch {
+      // Keep the outfit visible if deletion fails.
+    } finally {
+      setDeletingOutfitId("");
+    }
   };
 
   if (loading) {
@@ -206,6 +225,15 @@ export default function SavedOutfitsPage() {
                           }`}
                         >
                           {sharedOutfitId === outfit.id ? "Copied" : "Share"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteOutfit(outfit.id)}
+                          disabled={deletingOutfitId === outfit.id}
+                          aria-busy={deletingOutfitId === outfit.id}
+                          className="text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-[#430C05] hover:decoration-[#430C05] disabled:opacity-50"
+                        >
+                          {deletingOutfitId === outfit.id ? "Deleting" : "Delete"}
                         </button>
                       </div>
                     </div>

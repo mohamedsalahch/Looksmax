@@ -15,6 +15,7 @@ type ProductType = "fashion" | "perfume" | "clothing" | "shoes";
 interface ProductCardProps {
   id: string;
   name: string;
+  brand?: string;
   categories?: string[];
   price: string;
   tag?: string;
@@ -48,6 +49,7 @@ const CLONE_PREVIEW_OFFSET = 24;
 export default function ProductCard({
   id,
   name,
+  brand = "",
   categories = [],
   price,
   tag,
@@ -218,7 +220,7 @@ export default function ProductCard({
         id,
         name,
         price,
-        brand: "LOOKSMAX",
+        brand,
         size: isPerfume ? undefined : selectedSize,
         maxStock: Math.max(1, selectedSizeStock),
         image,
@@ -249,7 +251,7 @@ export default function ProductCard({
         name,
         categories,
         price,
-        brand: "LOOKSMAX",
+        brand,
         size: isPerfume ? undefined : selectedSize,
         maxStock: Math.max(1, selectedSizeStock),
         image,
@@ -265,7 +267,7 @@ export default function ProductCard({
         categories,
         image,
         price,
-        brand: "LOOKSMAX",
+        brand,
         quantity: 1,
         maxStock: Math.max(1, selectedSizeStock),
         productType,

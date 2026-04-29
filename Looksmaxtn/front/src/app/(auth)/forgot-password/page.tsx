@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/providers/AuthContext";
+import TurnstileWidget from "@/components/TurnstileWidget";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -10,6 +11,9 @@ export default function ForgotPasswordPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileRequired, setTurnstileRequired] = useState(false);
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
   const { forgotPassword } = useAuth();
 
   useEffect(() => {
@@ -27,8 +31,15 @@ export default function ForgotPasswordPage() {
     setError("");
     setMessage("");
 
+    if (turnstileRequired && !turnstileToken) {
+      setError("Please complete the security check.");
+      setLoading(false);
+      return;
+    }
+
     try {
-      const result = await forgotPassword(email);
+      const result = await forgotPassword(email, turnstileToken);
+      setTurnstileResetKey((current) => current + 1);
       if (result.error) {
         setError(result.error);
         if (typeof result.retryAfterSeconds === "number") {
@@ -87,6 +98,13 @@ export default function ForgotPasswordPage() {
             placeholder="your@email.com"
           />
         </div>
+
+        <TurnstileWidget
+          action="store_forgot_password"
+          resetKey={turnstileResetKey}
+          onVerify={setTurnstileToken}
+          onConfiguredChange={setTurnstileRequired}
+        />
 
         <button
           type="submit"

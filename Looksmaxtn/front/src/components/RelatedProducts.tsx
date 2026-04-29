@@ -8,6 +8,7 @@ interface ProductImage {
 export interface RelatedProduct {
   _id: string;
   name: string;
+  brand?: string;
   categories?: string[];
   price: number;
   stock: number;
@@ -53,6 +54,7 @@ export default function RelatedProducts({ products }: { products: RelatedProduct
               key={product._id}
               id={product._id}
               name={product.name}
+              brand={product.brand}
               categories={product.categories}
               price={product.price.toFixed(2)}
               stock={product.stock}

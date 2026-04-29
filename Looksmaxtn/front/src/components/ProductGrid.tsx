@@ -60,20 +60,16 @@ export default function ProductGrid({
   initialFacets?: Facets | null;
 }) {
   const [products, setProducts] = useState<Product[]>(initialProducts);
-  const [total, setTotal] = useState(initialTotal);
   const [loaded, setLoaded] = useState(initialProducts.length > 0 || initialTotal > 0 || initialFacets !== null);
   const [facets, setFacets] = useState<Facets | null>(initialFacets);
 
   const [selectedSize, setSelectedSize] = useState("");
-  const [draftSelectedSize, setDraftSelectedSize] = useState("");
   const [priceMin, setPriceMin] = useState("");
   const [priceMax, setPriceMax] = useState("");
-  const [appliedPriceMin, setAppliedPriceMin] = useState("");
-  const [appliedPriceMax, setAppliedPriceMax] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const skipNextFetch = useRef(initialProducts.length > 0 || initialFacets !== null);
 
-  const hasActiveFilters = selectedSize || appliedPriceMin || appliedPriceMax;
+  const hasActiveFilters = selectedSize || priceMin || priceMax;
   const rangeMin = facets ? Math.floor(facets.priceRange.min) : 0;
   const rangeMax = facets ? Math.ceil(facets.priceRange.max) : 1000;
   const sliderMin = priceMin !== "" ? Number(priceMin) : rangeMin;
@@ -91,8 +87,8 @@ export default function ProductGrid({
       const params = new URLSearchParams();
       if (category) params.set("category", category);
       if (selectedSize) params.set("size", selectedSize);
-      if (appliedPriceMin) params.set("priceMin", appliedPriceMin);
-      if (appliedPriceMax) params.set("priceMax", appliedPriceMax);
+      if (priceMin) params.set("priceMin", priceMin);
+      if (priceMax) params.set("priceMax", priceMax);
       params.set("includeFacets", "1");
       const rk = getStoredReservationKey();
       if (rk) params.set("rk", rk);
@@ -102,7 +98,6 @@ export default function ProductGrid({
         .then((data) => {
           if (cancelled) return;
           setProducts(data.products || []);
-          setTotal(data.total || 0);
           if (data.facets) {
             setFacets({
               sizes: data.facets.sizes || [],
@@ -113,7 +108,6 @@ export default function ProductGrid({
         .catch(() => {
           if (cancelled) return;
           setProducts([]);
-          setTotal(0);
         })
         .finally(() => {
           if (!cancelled) setLoaded(true);
@@ -125,21 +119,12 @@ export default function ProductGrid({
     return () => {
       cancelled = true;
     };
-  }, [category, selectedSize, appliedPriceMin, appliedPriceMax]);
+  }, [category, selectedSize, priceMin, priceMax]);
 
   const clearFilters = () => {
     setSelectedSize("");
-    setDraftSelectedSize("");
     setPriceMin("");
     setPriceMax("");
-    setAppliedPriceMin("");
-    setAppliedPriceMax("");
-  };
-
-  const applyFilters = () => {
-    setSelectedSize(draftSelectedSize);
-    setAppliedPriceMin(priceMin);
-    setAppliedPriceMax(priceMax);
   };
 
   if (!loaded) {
@@ -168,12 +153,7 @@ export default function ProductGrid({
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
-      <div className="flex items-center gap-4 mb-4">
-        {total > 0 && (
-          <p className="text-[10px] text-text-secondary uppercase tracking-wider">
-            {total} product{total !== 1 ? "s" : ""}
-          </p>
-        )}
+      <div className="mb-4 flex items-center justify-between gap-4">
         <button
           onClick={() => setFiltersOpen(!filtersOpen)}
           className="text-[10px] uppercase tracking-wider text-text-secondary hover:text-foreground cursor-pointer flex items-center gap-1"
@@ -193,12 +173,12 @@ export default function ProductGrid({
             <path d="m6 9 6 6 6-6" />
           </svg>
         </button>
-        {hasActiveFilters && !filtersOpen && (
+        {hasActiveFilters && (
           <button
             onClick={clearFilters}
             className="text-[10px] uppercase tracking-wider text-text-secondary hover:text-foreground underline underline-offset-2 cursor-pointer"
           >
-            Clear
+            Clear filters
           </button>
         )}
       </div>
@@ -216,9 +196,9 @@ export default function ProductGrid({
                 {facets.sizes.map((size) => (
                   <button
                     key={size}
-                    onClick={() => setDraftSelectedSize(draftSelectedSize === size ? "" : size)}
+                    onClick={() => setSelectedSize(selectedSize === size ? "" : size)}
                     className={`px-2.5 py-1 text-[10px] uppercase tracking-wider transition-colors cursor-pointer ${
-                      draftSelectedSize === size
+                      selectedSize === size
                         ? "bg-foreground text-background"
                         : "text-text-secondary hover:text-foreground"
                     }`}
@@ -271,24 +251,6 @@ export default function ProductGrid({
               <span className="text-[10px] text-text-secondary">{sliderMin} TND</span>
               <span className="text-[10px] text-text-secondary">{sliderMax} TND</span>
             </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 pt-1">
-            <button
-              onClick={applyFilters}
-              className="text-[10px] uppercase tracking-wider text-foreground underline underline-offset-2 cursor-pointer"
-            >
-              Apply filters
-            </button>
-
-            {hasActiveFilters && (
-              <button
-                onClick={clearFilters}
-                className="text-[10px] uppercase tracking-wider text-text-secondary hover:text-foreground underline underline-offset-2 cursor-pointer"
-              >
-                Clear all filters
-              </button>
-            )}
           </div>
         </div>
       </div>

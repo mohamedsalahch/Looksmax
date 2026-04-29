@@ -153,6 +153,40 @@ function SearchContent() {
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams();
+      if (queryInput.trim()) params.set("q", queryInput.trim());
+      if (category) params.set("category", category);
+      if (brand) params.set("brand", brand);
+      if (size) params.set("size", size);
+      if (color) params.set("color", color);
+      if (availability) params.set("availability", availability);
+      if (priceMin) params.set("priceMin", priceMin);
+      if (priceMax) params.set("priceMax", priceMax);
+
+      const nextSearch = params.toString();
+      const currentSearch = searchParams.toString();
+      if (nextSearch !== currentSearch) {
+        router.replace(nextSearch ? `${pathname}?${nextSearch}` : pathname, { scroll: false });
+      }
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    availability,
+    brand,
+    category,
+    color,
+    pathname,
+    priceMax,
+    priceMin,
+    queryInput,
+    router,
+    searchParams,
+    size,
+  ]);
+
   const clearFilters = () => {
     const params = new URLSearchParams();
     if (q) params.set("q", q);
@@ -328,7 +362,7 @@ function SearchContent() {
           </aside>
 
           <section>
-            <div className="mb-6 flex items-end justify-between gap-4">
+            <div className="mb-6">
               <div>
                 <h1 className="text-sm font-semibold uppercase tracking-[0.2em] text-foreground">
                   {q ? `Results for “${q}”` : "All results"}
@@ -337,11 +371,6 @@ function SearchContent() {
                   Refine by category, size, color, price, brand, or availability.
                 </p>
               </div>
-              {!loading && (
-                <p className="text-[10px] uppercase tracking-[0.22em] text-text-secondary">
-                  {products.length} result{products.length === 1 ? "" : "s"}
-                </p>
-              )}
             </div>
 
             {loading ? (
@@ -357,6 +386,7 @@ function SearchContent() {
                     key={product._id}
                     id={product._id}
                     name={product.name}
+                    brand={product.brand}
                     categories={product.categories}
                     price={product.price.toFixed(2)}
                     stock={product.stock}

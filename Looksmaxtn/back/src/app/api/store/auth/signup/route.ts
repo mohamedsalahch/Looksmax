@@ -5,6 +5,7 @@ import { hashPassword } from "@/store/lib/auth";
 import { createEmailVerificationToken } from "@/store/lib/emailVerification";
 import { sendVerificationEmail } from "@/store/lib/mailer";
 import { getEmailBaseUrl } from "@/store/lib/emailLinks";
+import { verifyTurnstileToken } from "@/store/lib/turnstile";
 
 function normalizeGender(value: unknown) {
   const normalized = String(value || "").trim().toLowerCase();
@@ -19,7 +20,6 @@ function normalizeGender(value: unknown) {
 
 export async function POST(req: NextRequest) {
   try {
-    await dbConnect();
     const body = await req.json();
     const name = String(body?.name || "").trim();
     const email = String(body?.email || "").trim().toLowerCase();
@@ -43,6 +43,13 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    const turnstile = await verifyTurnstileToken(req, body?.turnstileToken, "store_signup");
+    if (!turnstile.ok) {
+      return NextResponse.json({ error: turnstile.error }, { status: 400 });
+    }
+
+    await dbConnect();
 
     const existing = await User.findOne({ email });
     if (existing) {

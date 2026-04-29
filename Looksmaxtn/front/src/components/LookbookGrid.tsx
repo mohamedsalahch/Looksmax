@@ -29,10 +29,6 @@ export default function LookbookGrid({
     image,
   }));
 
-  if (displayItems.length === 0) {
-    return null;
-  }
-
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia("(max-width: 767px)").matches) {
       return;
@@ -65,6 +61,10 @@ export default function LookbookGrid({
     return () => observer.disconnect();
   }, [displayItems.length]);
 
+  if (displayItems.length === 0) {
+    return null;
+  }
+
   return (
     <section className="px-4 md:px-8 py-8">
       <div className="max-w-6xl mx-auto">
@@ -85,8 +85,8 @@ export default function LookbookGrid({
                   alt={item.name}
                   className={`w-full h-full object-cover transition-all duration-500 ${
                     mobileActiveIndexes.includes(index)
-                      ? "scale-[1.03] blur-sm"
-                      : "group-hover:scale-[1.03] group-hover:blur-sm"
+                      ? "scale-[1.03]"
+                      : "blur-sm md:blur-0 md:group-hover:scale-[1.03] md:group-hover:blur-sm"
                   }`}
                 />
               ) : (

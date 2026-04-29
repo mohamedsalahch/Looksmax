@@ -70,7 +70,7 @@ const initialForm = {
   name: "",
   price: "",
   description: "",
-  brand: "LOOKSMAX",
+  brand: "",
   reference: "",
   stock: "1",
   tag: "",

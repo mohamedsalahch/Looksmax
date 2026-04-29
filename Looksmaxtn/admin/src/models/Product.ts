@@ -66,7 +66,7 @@ const productSchema = new Schema<IProduct>(
     fullStock: { type: Number, default: 1, min: 0 },
     images: [productImageSchema],
     tag: { type: String, default: "" },
-    brand: { type: String, default: "LOOKSMAX" },
+    brand: { type: String, default: "" },
     reference: { type: String, default: "" },
     productType: {
       type: String,

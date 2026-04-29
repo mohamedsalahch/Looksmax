@@ -49,16 +49,18 @@ interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<{ error?: string }>;
+  login: (email: string, password: string, turnstileToken?: string) => Promise<{ error?: string }>;
   loginWithGoogle: (credential: string) => Promise<{ error?: string }>;
   signup: (
     name: string,
     email: string,
     password: string,
-    gender: string
+    gender: string,
+    turnstileToken?: string
   ) => Promise<{ error?: string; verificationRequired?: boolean; message?: string }>;
   forgotPassword: (
-    email: string
+    email: string,
+    turnstileToken?: string
   ) => Promise<{ error?: string; message?: string; retryAfterSeconds?: number }>;
   resendVerification: (
     email: string
@@ -185,14 +187,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     reconnectAvailabilityStream();
   }, [user?.id]);
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string, turnstileToken?: string) => {
     logoutInProgressRef.current = false;
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, turnstileToken }),
       });
       const data = await res.json();
       if (!res.ok) return { error: data.error };
@@ -235,13 +237,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [scheduleTokenRefresh]);
 
-  const signup = useCallback(async (name: string, email: string, password: string, gender: string) => {
+  const signup = useCallback(async (name: string, email: string, password: string, gender: string, turnstileToken?: string) => {
     try {
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ name, email, password, gender }),
+        body: JSON.stringify({ name, email, password, gender, turnstileToken }),
       });
       const data = await res.json();
       if (!res.ok) return { error: data.error };
@@ -254,13 +256,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const forgotPassword = useCallback(async (email: string) => {
+  const forgotPassword = useCallback(async (email: string, turnstileToken?: string) => {
     try {
       const res = await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, turnstileToken }),
       });
       const data = await res.json();
       if (!res.ok) return { error: data.error, retryAfterSeconds: data.retryAfterSeconds };

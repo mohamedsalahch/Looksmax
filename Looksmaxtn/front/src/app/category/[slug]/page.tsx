@@ -48,10 +48,17 @@ async function loadCategoryTree(): Promise<Category[]> {
   }
 }
 
+function categoryExists(categories: Category[], slug: string): boolean {
+  return categories.some((category) => {
+    if (category.slug === slug) return true;
+    return category.children ? categoryExists(category.children, slug) : false;
+  });
+}
+
 async function loadCategoryData(slug: string) {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
   const params = new URLSearchParams();
-  params.set("category", slug);
+  if (slug) params.set("category", slug);
   params.set("includeFacets", "1");
   params.set("limit", "24");
 
@@ -75,17 +82,16 @@ export default async function CategoryPage({
 }) {
   const { slug } = await params;
 
-  const [initialData, categoryTree] = await Promise.all([
-    loadCategoryData(slug),
-    loadCategoryTree(),
-  ]);
+  const categoryTree = await loadCategoryTree();
+  const resolvedSlug = categoryExists(categoryTree, slug) ? slug : "";
+  const initialData = await loadCategoryData(resolvedSlug);
 
   return (
     <div className="pt-[77px]">
-      <CategoryNav activeSlug={slug} initialCategories={categoryTree} />
+      <CategoryNav activeSlug={resolvedSlug || "all-categories"} initialCategories={categoryTree} />
 
       <ProductGrid
-        category={slug}
+        category={resolvedSlug || undefined}
         initialProducts={initialData.products}
         initialTotal={initialData.total}
         initialFacets={initialData.facets}

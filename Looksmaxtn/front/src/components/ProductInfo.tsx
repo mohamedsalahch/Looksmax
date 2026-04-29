@@ -318,8 +318,6 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
 
   return (
     <div className="space-y-6">
-      <p className="text-xs text-text-secondary uppercase tracking-widest">{product.brand}</p>
-
       <h1 className="text-2xl md:text-3xl font-semibold tracking-tight leading-tight">{product.name}</h1>
 
       <div className="flex items-center gap-3">
@@ -347,6 +345,11 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
           </div>
         </div>
       )}
+
+      <div>
+        <p className="text-xs text-text-secondary uppercase tracking-wider">BRAND</p>
+        <p className="mt-2 text-sm text-foreground">{product.brand}</p>
+      </div>
 
       {isPerfume && product.cloneSourceName && (
         <div className="grid grid-cols-[96px_1fr] gap-4 border border-border-color bg-surface/40 p-4">

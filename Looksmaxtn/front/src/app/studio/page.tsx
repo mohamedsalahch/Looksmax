@@ -938,6 +938,10 @@ export default function OutfitStudioPage() {
         : allSelectedOutfitItems.filter((item) => item.zoneId === selectedZoneId);
     const visibleBodyZones = isWomen ? BODY_ZONES : BODY_ZONES.filter((zone) => zone.id !== "dress");
     const hasSelectedOutfitItems = visibleBodyZones.some((zone) => Boolean(outfit[zone.id]));
+    const selectedOutfitTotalPrice = visibleBodyZones.reduce((total, zone) => {
+        const amount = Number(outfit[zone.id]?.price || 0);
+        return Number.isFinite(amount) ? total + amount : total;
+    }, 0);
     const dressSelected = Boolean(outfit.dress);
     const dressVisible = isWomen && (selectedZoneId === "dress" || (dressSelected && !DRESS_CONFLICT_ZONES.includes(selectedZoneId as StudioZoneId)));
     const dressSelectable = isWomen && (dressSelected && dressVisible && selectedZoneId !== "dress");
@@ -1610,12 +1614,20 @@ export default function OutfitStudioPage() {
                         <p className="text-[10px] uppercase tracking-[0.28em] text-text-secondary">New Feature</p>
                         <h1 className="mt-2 text-2xl font-semibold tracking-wide uppercase leading-tight">{studioTitle}</h1>
                     </div>
-                    <Link
-                        href="/account/settings"
-                        className="mt-1 inline-flex h-10 shrink-0 items-center text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-foreground hover:decoration-foreground md:mt-0"
-                    >
-                        Edit Profile
-                    </Link>
+                    <div className="mt-1 flex shrink-0 items-center gap-6 md:mt-0">
+                        <Link
+                            href="/studio/outfits"
+                            className="inline-flex h-10 items-center text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-foreground hover:decoration-foreground"
+                        >
+                            SEE ALL
+                        </Link>
+                        <Link
+                            href="/account/settings"
+                            className="inline-flex h-10 items-center text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-foreground hover:decoration-foreground"
+                        >
+                            Edit Profile
+                        </Link>
+                    </div>
                 </div>
 
                 <section className="mx-auto w-full max-w-[1320px] bg-transparent">
@@ -1782,15 +1794,9 @@ export default function OutfitStudioPage() {
                                         : generationLimitReached
                                             ? "Generation limit reached"
                                         : hasSelectedOutfitItems
-                                            ? "Generate outfit"
+                                            ? `Generate outfit - ${formatTndPrice(selectedOutfitTotalPrice)}`
                                             : "Select at least one item"}
                                 </button>
-                                <Link
-                                    href="/studio/outfits"
-                                    className="mt-3 inline-flex w-full items-center justify-center rounded-none border border-border-color bg-surface/40 px-3.5 py-2 text-[11px] uppercase tracking-[0.15em] text-foreground transition-colors hover:bg-surface/70"
-                                >
-                                    SEE ALL OUTFITS
-                                </Link>
                                 <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-[#999]">
                                     {remainingGenerationRequests > 0
                                         ? `${remainingGenerationRequests} generation${remainingGenerationRequests === 1 ? "" : "s"} left`
@@ -1961,6 +1967,7 @@ export default function OutfitStudioPage() {
                                 <ProductCard
                                     id={product._id}
                                     name={product.name}
+                                    brand={product.brand}
                                     categories={product.categories}
                                     price={product.price.toFixed(2)}
                                     stock={product.stock}

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/store/lib/mongodb";
 import User from "@/store/models/User";
 import { comparePassword, createToken, getTokenCookieOptions } from "@/store/lib/auth";
+import { verifyTurnstileToken } from "@/store/lib/turnstile";
 
 function normalizeGender(value: unknown) {
   const normalized = String(value || "").trim().toLowerCase();
@@ -16,8 +17,7 @@ function normalizeGender(value: unknown) {
 
 export async function POST(req: NextRequest) {
   try {
-    await dbConnect();
-    let body: { email?: string; password?: string };
+    let body: { email?: string; password?: string; turnstileToken?: string };
     try {
       body = await req.json();
     } catch {
@@ -36,6 +36,13 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    const turnstile = await verifyTurnstileToken(req, body.turnstileToken, "store_login");
+    if (!turnstile.ok) {
+      return NextResponse.json({ error: turnstile.error }, { status: 400 });
+    }
+
+    await dbConnect();
 
     const user = await User.findOne({ email }).select("name email role address bodyProfile password isBlocked emailVerified googleId");
     if (!user) {

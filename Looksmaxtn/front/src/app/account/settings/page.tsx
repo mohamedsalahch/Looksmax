@@ -52,6 +52,7 @@ export default function SettingsPage() {
   const shoeSizeRef = useRef<HTMLSelectElement | null>(null);
   const enhanceAbortRef = useRef<AbortController | null>(null);
   const enhanceCancelledRef = useRef(false);
+  const handledEnhanceErrorRef = useRef("");
   const openZoom = useCallback((src: string, alt: string) => {
     setZoomedImage({ src, alt });
   }, []);
@@ -59,6 +60,16 @@ export default function SettingsPage() {
   const requiredFieldErrorClass = "mt-1 text-[10px] uppercase tracking-[0.14em] text-[#430C05]";
   const fieldClass = "w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm transition-colors placeholder:text-text-secondary/70 focus:border-foreground focus:outline-none";
   const invalidFieldClass = "border-0 border-b border-[#430C05] ring-0";
+
+  const resetPhotoUploadForRetry = useCallback(() => {
+    setImageEnhancing(false);
+    setEnhancedImage("");
+    setBodyProfile((prev) => ({
+      ...prev,
+      profileImage: "",
+      profileImageRequiresGeneration: false,
+    }));
+  }, []);
 
   const getFirstMissingFocusableField = useCallback((): ValidationField | null => {
     if (!String(bodyProfile.heightCm || "").trim()) {
@@ -98,6 +109,7 @@ export default function SettingsPage() {
     const nextEnhancing = Boolean(user?.bodyProfile?.imageEnhancing);
     const nextEnhancedImage = user?.bodyProfile?.profileImageEnhanced || "";
     const validationError = user?.bodyProfile?.profileImageValidationError || "";
+    const cancelledPendingEnhancement = enhanceCancelledRef.current && nextEnhancing && !nextEnhancedImage;
 
     setBodyProfile({
       heightCm: user?.bodyProfile?.heightCm || "",
@@ -105,13 +117,15 @@ export default function SettingsPage() {
       topSize: user?.bodyProfile?.topSize || "",
       bottomSize: user?.bodyProfile?.bottomSize || "",
       shoeSize: user?.bodyProfile?.shoeSize || "",
-      profileImage: user?.bodyProfile?.profileImage || "",
+      profileImage: cancelledPendingEnhancement ? "" : user?.bodyProfile?.profileImage || "",
       profileImageUploadCount: Number(user?.bodyProfile?.profileImageUploadCount || 0),
       outfitGenerationCount: Number(user?.bodyProfile?.outfitGenerationCount || 0),
       gender: normalizeGender(user?.bodyProfile?.gender),
-      profileImageRequiresGeneration: Boolean(user?.bodyProfile?.profileImageRequiresGeneration),
+      profileImageRequiresGeneration: cancelledPendingEnhancement
+        ? false
+        : Boolean(user?.bodyProfile?.profileImageRequiresGeneration),
     });
-    if (enhanceCancelledRef.current && nextEnhancing && !nextEnhancedImage) {
+    if (cancelledPendingEnhancement) {
       setImageEnhancing(false);
     } else {
       setImageEnhancing(nextEnhancing);
@@ -126,21 +140,24 @@ export default function SettingsPage() {
 
     // Show validation error from LLM if present
     if (validationError) {
+      if (handledEnhanceErrorRef.current !== validationError) {
+        handledEnhanceErrorRef.current = validationError;
+        void fetch("/api/users/me/body-profile/photo?target=original", {
+          ...withAuthRequest({ method: "DELETE" }),
+        }).finally(() => {
+          void refreshUser();
+        });
+      }
       setEnhanceError(validationError);
-      setBodyProfile((prev) => ({
-        ...prev,
-        profileImage: "",
-        profileImageRequiresGeneration: false,
-      }));
+      resetPhotoUploadForRetry();
     } else if (wasEnhancing && !nextEnhancing && !nextEnhancedImage) {
+      handledEnhanceErrorRef.current = "";
       setEnhanceError("Photo enhancement failed. Please try uploading again.");
-      setBodyProfile((prev) => ({
-        ...prev,
-        profileImage: "",
-        profileImageRequiresGeneration: false,
-      }));
+      resetPhotoUploadForRetry();
+    } else if (!validationError) {
+      handledEnhanceErrorRef.current = "";
     }
-  }, [user]);
+  }, [refreshUser, resetPhotoUploadForRetry, user]);
 
   // Poll while enhancing
   useEffect(() => {
@@ -200,7 +217,7 @@ export default function SettingsPage() {
 
       if (!res.ok) {
         setBodyError(data.error || "Failed to upload photo.");
-        setImageEnhancing(false);
+        resetPhotoUploadForRetry();
         return;
       }
 
@@ -215,9 +232,9 @@ export default function SettingsPage() {
       setImageEnhancing(Boolean(data.imageEnhancing));
     } catch {
       setBodyError("Failed to upload photo.");
-      setImageEnhancing(false);
+      resetPhotoUploadForRetry();
     }
-  }, []);
+  }, [resetPhotoUploadForRetry]);
 
   const handleGeneratePhoto = useCallback(async () => {
     if (!hasOriginal || hasEnhanced || imageEnhancing) return;
@@ -239,12 +256,7 @@ export default function SettingsPage() {
       if (!res.ok) {
         setImageEnhancing(false);
         setBodyError(data.error || "Failed to generate enhanced photo.");
-        setBodyProfile((prev) => ({
-          ...prev,
-          profileImage: "",
-          profileImageRequiresGeneration: false,
-        }));
-        setEnhancedImage("");
+        resetPhotoUploadForRetry();
         if (enhanceAbortRef.current === controller) {
           enhanceAbortRef.current = null;
         }
@@ -258,21 +270,15 @@ export default function SettingsPage() {
       await refreshUser();
     } catch {
       if (!controller.signal.aborted) {
-        setImageEnhancing(false);
         setBodyError("Failed to generate enhanced photo.");
-        setBodyProfile((prev) => ({
-          ...prev,
-          profileImage: "",
-          profileImageRequiresGeneration: false,
-        }));
-        setEnhancedImage("");
+        resetPhotoUploadForRetry();
       }
     } finally {
       if (enhanceAbortRef.current === controller) {
         enhanceAbortRef.current = null;
       }
     }
-  }, [hasEnhanced, hasOriginal, imageEnhancing, refreshUser]);
+  }, [hasEnhanced, hasOriginal, imageEnhancing, refreshUser, resetPhotoUploadForRetry]);
 
   const handleCancelGeneratePhoto = useCallback(() => {
     enhanceCancelledRef.current = true;
@@ -283,6 +289,11 @@ export default function SettingsPage() {
     setEnhanceError("");
     setBodyError("");
     setValidationField(null);
+    setBodyProfile((prev) => ({
+      ...prev,
+      profileImage: "",
+      profileImageRequiresGeneration: false,
+    }));
 
     const discardUploadedPhoto = async () => {
       if (!bodyProfile.profileImage) return;

@@ -8,6 +8,7 @@ interface ProductImage {
 export interface ProductCardRowItem {
   _id: string;
   name: string;
+  brand?: string;
   categories?: string[];
   price: number;
   stock: number;
@@ -59,6 +60,7 @@ export default function ProductCardRow({
               key={product._id}
               id={product._id}
               name={product.name}
+              brand={product.brand}
               categories={product.categories}
               price={product.price.toFixed(2)}
               stock={product.stock}

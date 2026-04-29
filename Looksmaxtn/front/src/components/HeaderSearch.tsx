@@ -99,15 +99,7 @@ export default function HeaderSearch() {
     <div className="relative" ref={containerRef}>
       <button
         type="button"
-        onClick={() => {
-          setOpen((current) => {
-            const nextOpen = !current;
-            if (nextOpen && query.trim().length >= 2) {
-              setLoading(true);
-            }
-            return nextOpen;
-          });
-        }}
+        onClick={() => router.push("/search")}
         className="inline-flex h-9 w-9 shrink-0 items-center justify-center text-foreground hover:text-text-secondary transition-colors cursor-pointer"
         aria-label="Search"
       >

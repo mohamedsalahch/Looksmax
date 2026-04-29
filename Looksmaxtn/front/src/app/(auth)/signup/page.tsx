@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/providers/AuthContext";
+import TurnstileWidget from "@/components/TurnstileWidget";
 
 export default function SignupPage() {
   const [name, setName] = useState("");
@@ -16,6 +17,9 @@ export default function SignupPage() {
   const [resendCooldown, setResendCooldown] = useState(0);
   const [resendLoading, setResendLoading] = useState(false);
   const [resendMessage, setResendMessage] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileRequired, setTurnstileRequired] = useState(false);
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
   const { signup, resendVerification } = useAuth();
 
   useEffect(() => {
@@ -48,9 +52,15 @@ export default function SignupPage() {
       return;
     }
 
+    if (turnstileRequired && !turnstileToken) {
+      setError("Please complete the security check.");
+      return;
+    }
+
     setLoading(true);
-    const result = await signup(name, email, password, gender);
+    const result = await signup(name, email, password, gender, turnstileToken);
     setLoading(false);
+    setTurnstileResetKey((current) => current + 1);
     if (result.error) {
       setError(result.error);
     } else {
@@ -213,6 +223,13 @@ export default function SignupPage() {
             placeholder="••••••••"
           />
         </div>
+
+        <TurnstileWidget
+          action="store_signup"
+          resetKey={turnstileResetKey}
+          onVerify={setTurnstileToken}
+          onConfiguredChange={setTurnstileRequired}
+        />
 
         <button
           type="submit"

@@ -4,19 +4,25 @@ import User from "@/store/models/User";
 import { createPasswordResetToken } from "@/store/lib/emailVerification";
 import { sendPasswordResetEmail } from "@/store/lib/mailer";
 import { getEmailBaseUrl } from "@/store/lib/emailLinks";
+import { verifyTurnstileToken } from "@/store/lib/turnstile";
 
 const RESET_COOLDOWN_MS = 60 * 1000;
 
 export async function POST(req: NextRequest) {
   try {
-    await dbConnect();
-
     const body = await req.json().catch(() => null);
     const email = String(body?.email || "").trim().toLowerCase();
 
     if (!email) {
       return NextResponse.json({ error: "Email is required" }, { status: 400 });
     }
+
+    const turnstile = await verifyTurnstileToken(req, body?.turnstileToken, "store_forgot_password");
+    if (!turnstile.ok) {
+      return NextResponse.json({ error: turnstile.error }, { status: 400 });
+    }
+
+    await dbConnect();
 
     const user = await User.findOne({ email });
     if (!user) {

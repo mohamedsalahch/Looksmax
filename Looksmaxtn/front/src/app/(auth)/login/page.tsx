@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/providers/AuthContext";
+import TurnstileWidget from "@/components/TurnstileWidget";
 
 function getNextPath() {
   if (typeof window === "undefined") return "/";
@@ -42,6 +43,9 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [googleReady, setGoogleReady] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileRequired, setTurnstileRequired] = useState(false);
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
   const { login, loginWithGoogle, resendVerification } = useAuth();
   const router = useRouter();
@@ -131,9 +135,14 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setInfo("");
+    if (turnstileRequired && !turnstileToken) {
+      setError("Please complete the security check.");
+      return;
+    }
     setLoading(true);
-    const result = await login(email, password);
+    const result = await login(email, password, turnstileToken);
     setLoading(false);
+    setTurnstileResetKey((current) => current + 1);
     if (result.error) {
       setError(result.error);
       if (result.error.toLowerCase().includes("verify your email")) {
@@ -219,6 +228,13 @@ export default function LoginPage() {
           />
         </div>
 
+        <TurnstileWidget
+          action="store_login"
+          resetKey={turnstileResetKey}
+          onVerify={setTurnstileToken}
+          onConfiguredChange={setTurnstileRequired}
+        />
+
         <button
           type="submit"
           disabled={loading}
@@ -292,4 +308,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

@@ -52,7 +52,7 @@ export default function EditorialFeature({
               src={image}
               alt={label}
               className={`block w-full h-auto transition-all duration-500 ${
-                mobileActive ? "scale-[1.03] blur-sm" : "group-hover:scale-[1.03] group-hover:blur-sm"
+                mobileActive ? "scale-[1.03]" : "blur-sm md:blur-0 md:group-hover:scale-[1.03] md:group-hover:blur-sm"
               }`}
             />
           ) : (
