@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { withAuthRequest } from "@/lib/authClient";
 
 interface Product {
-  _id: string; name: string; price: number; categories: string[];
+  _id: string; store?: string; name: string; price: number; categories: string[];
   stock: number; availableStock?: number; soldQuantity?: number; fullStock?: number; tag: string; brand: string; reference?: string; createdAt: string; productType?: "fashion" | "perfume" | "clothing" | "shoes"; availabilityStatus?: string; isActive?: boolean; visibilityStatus?: string;
 }
 
@@ -264,6 +264,9 @@ export default function ProductsPage() {
                   <span className="inline-flex items-center gap-1">Reference</span>
                 </th>
                 <th className="px-4 py-3">
+                  <span className="inline-flex items-center gap-1">Store</span>
+                </th>
+                <th className="px-4 py-3">
                   <button type="button" onClick={() => toggleSort("productType")} className="inline-flex items-center gap-1 cursor-pointer">
                     Type {renderSortIndicator("productType")}
                   </button>
@@ -314,6 +317,7 @@ export default function ProductsPage() {
                   <td className="px-4 py-3 text-[10px] text-text-secondary">{p._id}</td>
                   <td className="px-4 py-3 text-xs text-text-secondary capitalize">{(p.categories || []).join(", ")}</td>
                   <td className="px-4 py-3 text-xs text-text-secondary">{p.reference || "—"}</td>
+                  <td className="px-4 py-3 text-xs text-text-secondary">{p.store || "—"}</td>
                   <td className="px-4 py-3 text-xs text-text-secondary capitalize">
                     {p.productType === "perfume" ? "Perfume" : "Fashion"}
                   </td>

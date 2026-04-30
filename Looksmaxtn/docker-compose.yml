@@ -72,6 +72,21 @@ services:
       - back
     restart: unless-stopped
 
+  store:
+    build:
+      context: ./store
+      args:
+        APP_PORT: 3004
+        NEXT_PUBLIC_BACKEND_URL: http://back:3002
+    container_name: looksmax-store-dev
+    env_file:
+      - ./store/.env
+    ports:
+      - "3004:3004"
+    depends_on:
+      - back
+    restart: unless-stopped
+
 volumes:
   mongodb_data:
   shared_uploads:

@@ -15,6 +15,8 @@ export interface IOriginPictures {
 export type ProductType = "fashion" | "perfume" | "clothing" | "shoes";
 
 export interface IProduct extends Document {
+  store?: string;
+  storeId?: string;
   name: string;
   price: number;
   categories: string[];
@@ -57,6 +59,8 @@ const originPicturesSchema = new Schema<IOriginPictures>(
 
 const productSchema = new Schema<IProduct>(
   {
+    store: { type: String, default: "" },
+    storeId: { type: String, default: "" },
     name: { type: String, required: true, trim: true },
     price: { type: Number, required: true },
     categories: [{ type: String, lowercase: true, trim: true }],

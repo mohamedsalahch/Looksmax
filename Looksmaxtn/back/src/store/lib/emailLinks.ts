@@ -12,3 +12,12 @@ export function getEmailBaseUrl() {
       "http://localhost:3000"
   );
 }
+
+export function getStoreOwnerEmailBaseUrl() {
+  return cleanUrl(
+    process.env.STORE_BASE_URL ||
+      process.env.STORE_OWNER_BASE_URL ||
+      process.env.EMAIL_STORE_BASE_URL ||
+      "http://localhost:3004"
+  );
+}

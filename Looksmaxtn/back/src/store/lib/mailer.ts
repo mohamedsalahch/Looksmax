@@ -44,6 +44,73 @@ function createTransporter() {
   };
 }
 
+function renderLooksmaxEmail({
+  title,
+  name,
+  body,
+  meta,
+  action,
+  panelTitle,
+  panelBody,
+  fallbackUrl,
+  footer,
+}: {
+  title: string;
+  name: string;
+  body: string;
+  meta?: string;
+  action?: { label: string; url: string };
+  panelTitle: string;
+  panelBody: string;
+  fallbackUrl?: string;
+  footer: string;
+}) {
+  return `
+    <div style="background:#f6f1e7;padding:24px">
+      <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e5dccd;border-radius:0;overflow:hidden;font-family:Arial,sans-serif;color:#1a1a1a">
+        <div style="padding:28px 28px 20px;border-bottom:1px solid #eee3d1">
+          <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#6b6258">LOOKSMAX</div>
+          <h1 style="margin:12px 0 0;font-size:24px;line-height:1.2;font-weight:700">${title}</h1>
+        </div>
+
+        <div style="padding:28px">
+          <p style="margin:0 0 16px;font-size:15px;line-height:1.7">Hi ${name},</p>
+          <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#3a332d">
+            ${body}
+          </p>
+          ${meta ? `<p style="margin:0 0 22px;font-size:14px;line-height:1.7;color:#6b6258">${meta}</p>` : ""}
+
+          ${
+            action
+              ? `<div style="margin:28px 0">
+            <a href="${action.url}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:14px 22px;border-radius:0;font-size:13px;font-weight:700;letter-spacing:.16em;text-transform:uppercase">
+              ${action.label}
+            </a>
+          </div>`
+              : ""
+          }
+
+          <div style="padding:16px 18px;background:#f8f5ef;border:1px solid #eee0cc;border-radius:0">
+            <p style="margin:0 0 6px;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#6b6258">${panelTitle}</p>
+            <p style="margin:0;font-size:14px;line-height:1.6;color:#3a332d">${panelBody}</p>
+          </div>
+
+          ${
+            fallbackUrl
+              ? `<p style="margin:22px 0 8px;font-size:12px;color:#6b6258">If the button does not work, paste this URL into your browser:</p>
+          <p style="margin:0;font-size:12px;word-break:break-all;line-height:1.6;color:#3a332d">${fallbackUrl}</p>`
+              : ""
+          }
+        </div>
+
+        <div style="padding:18px 28px 24px;border-top:1px solid #eee3d1;font-size:11px;line-height:1.6;color:#847b70">
+          ${footer}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 export async function sendVerificationEmail({
   to,
   name,
@@ -176,6 +243,132 @@ export async function sendPasswordResetEmail({
   });
 }
 
+export async function sendStoreCreatedEmail({
+  to,
+  ownerName,
+  storeName,
+  password,
+  storeLoginUrl,
+}: {
+  to: string;
+  ownerName: string;
+  storeName: string;
+  password: string;
+  storeLoginUrl: string;
+}) {
+  const { from, transporter } = createTransporter();
+  const subject = `Your ${storeName} store was created`;
+  const title = "Store approved";
+  const body = `Your store <strong>${storeName}</strong> has been approved and created.`;
+  const detail = "After your first sign in, confirm your store name and upload your logo.";
+  const text = [
+    `Hi ${ownerName},`,
+    "",
+    `Your store "${storeName}" has been approved and created.`,
+    `Sign in here: ${storeLoginUrl}`,
+    `Temporary password: ${password}`,
+    "",
+    "After your first sign in, confirm your store name and upload your logo.",
+  ].join("\n");
+
+  await transporter.sendMail({
+    from,
+    to,
+    subject,
+    text,
+    html: renderLooksmaxEmail({
+      title,
+      name: ownerName,
+      body,
+      meta: `Store <strong style="color:#1a1a1a">${storeName}</strong>`,
+      action: { label: "Sign In", url: storeLoginUrl },
+      panelTitle: "Temporary password",
+      panelBody: `<strong style="color:#1a1a1a">${password}</strong><br>${detail}`,
+      fallbackUrl: storeLoginUrl,
+      footer: "If you need help with your store account, reply to this email and our team will assist you.",
+    }),
+  });
+}
+
+export async function sendStoreRejectedEmail({
+  to,
+  ownerName,
+  storeName,
+}: {
+  to: string;
+  ownerName: string;
+  storeName: string;
+}) {
+  const { from, transporter } = createTransporter();
+  const subject = `Your ${storeName} store request was rejected`;
+  const title = "Store request rejected";
+  const body = `Your request to create <strong>${storeName}</strong> was rejected.`;
+  const text = [
+    `Hi ${ownerName},`,
+    "",
+    `Your request to create "${storeName}" was rejected.`,
+    "You can reply to this email if you need more information.",
+  ].join("\n");
+
+  await transporter.sendMail({
+    from,
+    to,
+    subject,
+    text,
+    html: renderLooksmaxEmail({
+      title,
+      name: ownerName,
+      body,
+      meta: `Store <strong style="color:#1a1a1a">${storeName}</strong>`,
+      panelTitle: "Update",
+      panelBody: "You can reply to this email if you need more information.",
+      footer: "If you need help with your store request, reply to this email and our team will assist you.",
+    }),
+  });
+}
+
+export async function sendStorePasswordResetEmail({
+  to,
+  ownerName,
+  storeName,
+  resetUrl,
+}: {
+  to: string;
+  ownerName: string;
+  storeName: string;
+  resetUrl: string;
+}) {
+  const { from, transporter } = createTransporter();
+
+  const subject = `Reset your ${storeName} store password`;
+  const text = [
+    `Hi ${ownerName},`,
+    "",
+    `Reset the password for your "${storeName}" store account by opening this link:`,
+    resetUrl,
+    "",
+    "This link expires in 1 hour.",
+  ].join("\n");
+
+  await transporter.sendMail({
+    from,
+    to,
+    subject,
+    text,
+    html: renderLooksmaxEmail({
+      title: "Reset store password",
+      name: ownerName,
+      body: `We received a request to reset the password for your <strong>${storeName}</strong> store account.`,
+      meta: `Store <strong style="color:#1a1a1a">${storeName}</strong>`,
+      action: { label: "Reset Password", url: resetUrl },
+      panelTitle: "Link expires",
+      panelBody: "This password reset link is valid for 1 hour.",
+      fallbackUrl: resetUrl,
+      footer: "If you did not request this reset, you can ignore this message.",
+    }),
+  });
+}
+
 type OrderStatus = "processing" | "confirmed" | "shipping" | "delivered" | "canceled" | "returned";
 
 function getOrderStatusCopy(orderStatus: OrderStatus) {
@@ -252,44 +445,17 @@ export async function sendOrderStatusEmail({
     `View your order: ${orderUrl}`,
   ].join("\n");
 
-  const html = `
-    <div style="background:#f6f1e7;padding:24px">
-      <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e5dccd;border-radius:0;overflow:hidden;font-family:Arial,sans-serif;color:#1a1a1a">
-        <div style="padding:28px 28px 20px;border-bottom:1px solid #eee3d1">
-          <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#6b6258">LOOKSMAX</div>
-          <h1 style="margin:12px 0 0;font-size:24px;line-height:1.2;font-weight:700">${copy.title}</h1>
-        </div>
-
-        <div style="padding:28px">
-          <p style="margin:0 0 16px;font-size:15px;line-height:1.7">Hi ${name},</p>
-          <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#3a332d">
-            ${copy.body}
-          </p>
-          <p style="margin:0 0 22px;font-size:14px;line-height:1.7;color:#6b6258">
-            Order <strong style="color:#1a1a1a">${orderNumber}</strong>
-          </p>
-
-          <div style="margin:28px 0">
-            <a href="${orderUrl}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:14px 22px;border-radius:0;font-size:13px;font-weight:700;letter-spacing:.16em;text-transform:uppercase">
-              View Order
-            </a>
-          </div>
-
-          <div style="padding:16px 18px;background:#f8f5ef;border:1px solid #eee0cc;border-radius:0">
-            <p style="margin:0 0 6px;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#6b6258">Update</p>
-            <p style="margin:0;font-size:14px;line-height:1.6;color:#3a332d">${copy.detail}</p>
-          </div>
-
-          <p style="margin:22px 0 8px;font-size:12px;color:#6b6258">If the button does not work, paste this URL into your browser:</p>
-          <p style="margin:0;font-size:12px;word-break:break-all;line-height:1.6;color:#3a332d">${orderUrl}</p>
-        </div>
-
-        <div style="padding:18px 28px 24px;border-top:1px solid #eee3d1;font-size:11px;line-height:1.6;color:#847b70">
-          If you need help with your order, reply to this email and our team will assist you.
-        </div>
-      </div>
-    </div>
-  `;
+  const html = renderLooksmaxEmail({
+    title: copy.title,
+    name,
+    body: copy.body,
+    meta: `Order <strong style="color:#1a1a1a">${orderNumber}</strong>`,
+    action: { label: "View Order", url: orderUrl },
+    panelTitle: "Update",
+    panelBody: copy.detail,
+    fallbackUrl: orderUrl,
+    footer: "If you need help with your order, reply to this email and our team will assist you.",
+  });
 
   await transporter.sendMail({
     from,

@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "dev": "concurrently \"npm run dev --prefix front\" \"npm run dev --prefix admin\" \"npm run dev --prefix back\"",
+    "dev": "concurrently \"npm run dev --prefix front\" \"npm run dev --prefix admin\" \"npm run dev --prefix back\" \"npm run dev --prefix store\"",
     "test": "npm run test:unit --prefix front && npm run test:unit --prefix admin && npm run test:unit --prefix back"
   },
   "dependencies": {

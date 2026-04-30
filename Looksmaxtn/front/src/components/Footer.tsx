@@ -149,6 +149,9 @@ export default function Footer() {
               <Link href="/terms-and-conditions" className="block text-xs text-text-secondary hover:text-foreground transition-colors">
                 Terms & Conditions
               </Link>
+              <Link href="/create-store" className="block text-xs text-text-secondary hover:text-foreground transition-colors">
+                Create Store
+              </Link>
             </div>
           </div>
 
@@ -202,6 +205,9 @@ export default function Footer() {
           </Link>
           <Link href="/terms-and-conditions" className="text-[10px] text-text-secondary hover:text-foreground transition-colors">
             Terms
+          </Link>
+          <Link href="/create-store" className="text-[10px] text-text-secondary hover:text-foreground transition-colors">
+            Create Store
           </Link>
         </div>
       </div>

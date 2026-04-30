@@ -20,6 +20,8 @@ export interface ISizeStockEntry {
 }
 
 export interface IProduct extends Document {
+  store?: string;
+  storeId?: string;
   name: string;
   price: number;
   isActive: boolean;
@@ -66,6 +68,8 @@ const originPicturesSchema = new Schema<IOriginPictures>(
 
 const productSchema = new Schema<IProduct>(
   {
+    store: { type: String, default: "" },
+    storeId: { type: String, default: "" },
     name: { type: String, required: true, trim: true },
     price: { type: Number, required: true },
     isActive: { type: Boolean, default: true },

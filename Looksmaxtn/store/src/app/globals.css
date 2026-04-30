@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+:root {
+  --background: #F3E9D8;
+  --surface: #EDE1CE;
+  --foreground: #1A1A1A;
+  --text-secondary: #6B6055;
+  --border-color: #DDD3C2;
+  --panel: #ffffff;
+  --hover: #E8DCCB;
+  --cream-dark: #E0D4C1;
+  --muted: var(--text-secondary);
+  --border: var(--border-color);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-text-secondary: var(--text-secondary);
+  --color-border-color: var(--border-color);
+  --color-accent: #2D2D2D;
+  --color-hover: var(--hover);
+  --color-cream-dark: var(--cream-dark);
+  --font-sans: "House Minimalist", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-serif: "House Minimalist", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "House Minimalist", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  border-radius: 0;
+}
+
+button {
+  cursor: pointer;
+}
+
+input:focus {
+  outline: none;
+}

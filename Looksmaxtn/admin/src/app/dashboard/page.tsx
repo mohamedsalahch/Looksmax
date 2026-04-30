@@ -7,6 +7,7 @@ interface Stats {
   totalProducts: number;
   totalOrders: number;
   totalUsers: number;
+  totalStores: number;
   totalRevenue: number;
   pendingOrders: number;
 }
@@ -25,6 +26,7 @@ export default function DashboardPage() {
     { label: "Total Orders", value: stats.totalOrders, icon: "🛒", color: "text-info" },
     { label: "Pending Orders", value: stats.pendingOrders, icon: "⏳", color: "text-warning" },
     { label: "Products", value: stats.totalProducts, icon: "📦", color: "text-accent" },
+    { label: "Stores", value: stats.totalStores, icon: "🏬", color: "text-[#6b6055]" },
     { label: "Users", value: stats.totalUsers, icon: "👥", color: "text-info" },
   ];
 
@@ -32,7 +34,7 @@ export default function DashboardPage() {
     <div>
       <h1 className="text-xl font-semibold tracking-wide mb-6">Dashboard</h1>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {cards.map((card) => (
           <div key={card.label} className="stat-card border border-border p-5">
             <div className="flex items-center justify-between mb-3">
