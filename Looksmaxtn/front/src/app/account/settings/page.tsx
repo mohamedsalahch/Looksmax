@@ -53,6 +53,7 @@ export default function SettingsPage() {
   const enhanceAbortRef = useRef<AbortController | null>(null);
   const enhanceCancelledRef = useRef(false);
   const handledEnhanceErrorRef = useRef("");
+  const uploadInFlightRef = useRef(false);
   const openZoom = useCallback((src: string, alt: string) => {
     setZoomedImage({ src, alt });
   }, []);
@@ -105,6 +106,7 @@ export default function SettingsPage() {
   }, [refreshUser]);
 
   useEffect(() => {
+    if (uploadInFlightRef.current) return;
     const wasEnhancing = imageEnhancing;
     const nextEnhancing = Boolean(user?.bodyProfile?.imageEnhancing);
     const nextEnhancedImage = user?.bodyProfile?.profileImageEnhanced || "";
@@ -198,6 +200,8 @@ export default function SettingsPage() {
     setValidationField(null);
     setImageEnhancing(true);
     enhanceCancelledRef.current = false;
+    handledEnhanceErrorRef.current = "";
+    uploadInFlightRef.current = true;
 
     const localPreview = URL.createObjectURL(file);
     setBodyProfile((prev) => ({ ...prev, profileImage: localPreview }));
@@ -233,6 +237,8 @@ export default function SettingsPage() {
     } catch {
       setBodyError("Failed to upload photo.");
       resetPhotoUploadForRetry();
+    } finally {
+      uploadInFlightRef.current = false;
     }
   }, [resetPhotoUploadForRetry]);
 
