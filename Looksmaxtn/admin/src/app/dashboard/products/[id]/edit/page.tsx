@@ -10,6 +10,13 @@ import {
   SECONDARY_GARMENT_PALETTE,
   PaletteColor,
 } from "@/lib/generationPalette";
+import {
+  getCategoryGender,
+  getCategoryZone,
+  getCompanionZonesForCategory,
+  getLeavesForZone,
+  getZoneRequirements,
+} from "@/lib/categoryClassification";
 
 interface Category {
   _id: string;
@@ -33,6 +40,7 @@ interface GenerationSlot {
 interface ModelAsset {
   _id: string;
   name: string;
+  gender: "male" | "female" | "unisex";
   images: string[];
   frontImage: string;
   backImage: string;
@@ -51,6 +59,7 @@ type GenerationTarget = "" | "outerwear" | "top" | "bottom" | "dress";
 type CompanionTopType = "" | "croptop" | "t-shirt";
 type CompanionBottomType = "" | "shorts" | "pants";
 type FootwearType = "" | "shoes" | "slides";
+type CompanionZone = "top" | "bottom" | "footwear";
 type OriginPictureKey = "front" | "back" | "left" | "right";
 type GenerationInputs = {
   front: GenerationSlot;
@@ -325,7 +334,6 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const [originPictureFiles, setOriginPictureFiles] =
     useState<OriginPictureFiles>(emptyOriginPictureFiles);
   const [cloneSourceImageFile, setCloneSourceImageFile] = useState<File | null>(null);
-  const [draggedImageId, setDraggedImageId] = useState<string | null>(null);
   const [zoomedImage, setZoomedImage] = useState<ProductImage | null>(null);
   const [initialCategorySlugs, setInitialCategorySlugs] = useState<string[]>([]);
   const [savedFashionSubtype, setSavedFashionSubtype] = useState<FashionSubtype>("");
@@ -471,22 +479,65 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 
   const selectedCategorySlug =
     selectedGreatGrandchildSlug || selectedGrandchildSlug || selectedChildSlug || selectedParentSlug;
+  const selectedCategoryZone = useMemo(
+    () => getCategoryZone(categories, selectedCategorySlug),
+    [categories, selectedCategorySlug]
+  );
+  const selectedCategoryGender = useMemo(
+    () => getCategoryGender(categories, selectedCategorySlug),
+    [categories, selectedCategorySlug]
+  );
+  const selectedModelGender: "male" | "female" | "unisex" =
+    selectedCategoryGender === "men"
+      ? "male"
+      : selectedCategoryGender === "women"
+        ? "female"
+        : "unisex";
+  const generationRequirements = useMemo(
+    () => getZoneRequirements(selectedCategoryZone),
+    [selectedCategoryZone]
+  );
+  const companionZones = useMemo(
+    () => getCompanionZonesForCategory(selectedCategoryZone),
+    [selectedCategoryZone]
+  );
+  const companionTypeOptions = useMemo(
+    () => ({
+      top: getLeavesForZone(categories, "top", selectedCategoryGender),
+      bottom: getLeavesForZone(categories, "bottom", selectedCategoryGender),
+      footwear: getLeavesForZone(categories, "footwear", selectedCategoryGender),
+    }),
+    [categories, selectedCategoryGender]
+  );
   const categoryOptions = useMemo(() => {
     const visible = isStoreOwner
       ? categories.filter(
-          (category) => !categories.some((other) => other.parentSlug === category.slug)
-        )
+        (category) => !categories.some((other) => other.parentSlug === category.slug)
+      )
       : categories;
     return visible.map((category) => ({
       slug: category.slug,
       label: getCategoryPathLabel(categories, category),
     }));
   }, [categories, isStoreOwner]);
-  const selectedModel = models.find((model) => model._id === selectedModelId);
-  const originPictureKeys =
-    form.fashionSubtype === "shoes"
-      ? (["front", "back", "left", "right"] as OriginPictureKey[])
-      : (["front", "back"] as OriginPictureKey[]);
+  const filteredModels = useMemo(
+    () =>
+      selectedModelGender === "unisex"
+        ? models
+        : models.filter(
+            (model) => model.gender === selectedModelGender || model.gender === "unisex"
+          ),
+    [models, selectedModelGender]
+  );
+  const selectedModel = filteredModels.find((model) => model._id === selectedModelId);
+  const requiredOriginPictureKeys = useMemo(
+    () =>
+      selectedCategoryZone === "footwear"
+        ? (["front", "back", "left", "right"] as OriginPictureKey[])
+        : (["front", "back"] as OriginPictureKey[]),
+    [selectedCategoryZone]
+  );
+  const hasRequiredOriginPictures = requiredOriginPictureKeys.every((key) => Boolean(generationInputs[key].file));
   const fullStock = Math.max(Number(form.stock || 0), 0);
   const availableStock = Math.max(fullStock - soldQuantity, 0);
   const normalizedSizeStock = useMemo(
@@ -622,19 +673,6 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     setImages((current) => [...current, ...newImages]);
   };
 
-  const moveImage = (draggedId: string, targetId: string) => {
-    if (draggedId === targetId) return;
-    setImages((current) => {
-      const next = [...current];
-      const draggedIndex = next.findIndex((image) => image.id === draggedId);
-      const targetIndex = next.findIndex((image) => image.id === targetId);
-      if (draggedIndex === -1 || targetIndex === -1) return current;
-      const [draggedImage] = next.splice(draggedIndex, 1);
-      next.splice(targetIndex, 0, draggedImage);
-      return next;
-    });
-  };
-
   const removeImage = (imageId: string | undefined) => {
     setImages((current) => current.filter((image) => image.id !== imageId));
   };
@@ -668,45 +706,13 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     try {
       const file = await productImageToFile(image, key);
       handleOriginPictureSelect(key, file);
+      setGenerationInputs((current) => ({
+        ...current,
+        [key]: { file, previewUrl: image.url },
+      }));
     } catch {
       setError(`Unable to use this image for the ${key} origin picture.`);
     }
-  };
-
-  const assignOriginPictureToGenerationSlot = async (
-    slotKey: keyof GenerationInputs,
-    originKey: OriginPictureKey
-  ) => {
-    const previewUrl = form.originPictures[originKey];
-    if (!previewUrl) return;
-
-    try {
-      const file =
-        originPictureFiles[originKey] ?? (await originPictureToFile(previewUrl, originKey));
-      setGenerationInputs((current) => ({
-        ...current,
-        [slotKey]: { file, previewUrl },
-      }));
-    } catch {
-      setError(`Unable to use the ${originKey} origin picture for ${slotKey}.`);
-    }
-  };
-
-  const handleOriginPictureDrop = async (
-    key: OriginPictureKey,
-    event: React.DragEvent<HTMLDivElement>
-  ) => {
-    event.preventDefault();
-    const imageId = event.dataTransfer.getData("text/product-image-id");
-
-    if (imageId) {
-      await assignProductImageToOriginPicture(key, imageId);
-      setDraggedImageId(null);
-      return;
-    }
-
-    handleOriginPictureSelect(key, event.dataTransfer.files?.[0] || null);
-    setDraggedImageId(null);
   };
 
   const importGeneratedImage = async (imageUrl: string) => {
@@ -746,6 +752,17 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       ...current,
       [key]: createEmptySlot(),
     }));
+    setOriginPictureFiles((current) => ({
+      ...current,
+      [key]: null,
+    }));
+    setForm((current) => ({
+      ...current,
+      originPictures: {
+        ...current.originPictures,
+        [key]: "",
+      },
+    }));
   };
 
   const assignProductImageToGenerationSlot = async (key: keyof GenerationInputs, imageId: string) => {
@@ -758,61 +775,195 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         ...current,
         [key]: { file, previewUrl: image.url },
       }));
+      if (key in emptyOriginPictureFiles) {
+        handleOriginPictureSelect(key as OriginPictureKey, file);
+      }
     } catch {
       setError(`Unable to use this image for the ${key} slot.`);
     }
   };
 
-  const handleGenerationDrop = async (key: keyof GenerationInputs, imageId: string) => {
-    await assignProductImageToGenerationSlot(key, imageId);
-    setDraggedImageId(null);
-  };
-
-  const handleGenerationSlotDrop = async (
-    key: keyof GenerationInputs,
-    event: React.DragEvent<HTMLDivElement>
-  ) => {
-    event.preventDefault();
-    const imageId = event.dataTransfer.getData("text/product-image-id");
-    const originKey = event.dataTransfer.getData("text/origin-picture-key") as OriginPictureKey;
-
-    if (imageId) {
-      await handleGenerationDrop(key, imageId);
+  useEffect(() => {
+    if (form.productType !== "fashion") {
+      setGenerationTarget("");
+      setSelectedModelId("");
+      setCompanionTopType("");
+      setCompanionBottomType("");
+      setFootwearType("");
+      setSecondaryTopColor(null);
+      setSecondaryBottomColor(null);
+      setShoesColor(null);
+      setGenerationInputs(initialGenerationInputs);
+      setOriginPictureFiles(emptyOriginPictureFiles);
+      setForm((current) =>
+        current.fashionSubtype === "" ? current : { ...current, fashionSubtype: "" }
+      );
       return;
     }
 
-    if (originKey) {
-      await assignOriginPictureToGenerationSlot(key, originKey);
-      setDraggedImageId(null);
-      return;
-    }
+    setGenerationTarget(generationRequirements.generationTarget);
+    setForm((current) => {
+      if (current.fashionSubtype === generationRequirements.fashionSubtype) return current;
+      return { ...current, fashionSubtype: generationRequirements.fashionSubtype as FashionSubtype };
+    });
+    setSelectedModelId("");
+    setCompanionTopType("");
+    setCompanionBottomType("");
+    setFootwearType("");
+    setSecondaryTopColor(null);
+    setSecondaryBottomColor(null);
+    setShoesColor(null);
+    setGenerationInputs(initialGenerationInputs);
+    setOriginPictureFiles(emptyOriginPictureFiles);
+    setForm((current) => ({
+      ...current,
+      originPictures: {
+        front: "",
+        back: "",
+        left: "",
+        right: "",
+      },
+    }));
+  }, [form.productType, generationRequirements.fashionSubtype, generationRequirements.generationTarget]);
 
-    const droppedFile = event.dataTransfer.files?.[0] || null;
-    if (droppedFile) {
-      handleGenerationInput(key, droppedFile);
-      setDraggedImageId(null);
-    }
-  };
-
-  const generationSlotsForSubtype =
-    form.fashionSubtype === "shoes"
-      ? (["front", "back", "left", "right"] as Array<keyof GenerationInputs>)
-      : (["front", "back"] as Array<keyof GenerationInputs>);
-  const requiresCompanionTop = generationTarget === "bottom" || generationTarget === "outerwear";
-  const requiresCompanionBottom = generationTarget === "top" || generationTarget === "outerwear";
   const canGenerate =
     Boolean(form.fashionSubtype) &&
+    hasRequiredOriginPictures &&
     (form.fashionSubtype !== "clothes" ||
-      (Boolean(selectedModelId) &&
-        Boolean(generationTarget) &&
-        Boolean(footwearType) &&
-        Boolean(shoesColor) &&
-        (!requiresCompanionTop || (Boolean(companionTopType) && Boolean(secondaryTopColor))) &&
-        (!requiresCompanionBottom || (Boolean(companionBottomType) && Boolean(secondaryBottomColor))))) &&
-    Boolean(generationInputs.front.file) &&
-    Boolean(generationInputs.back.file) &&
-    (form.fashionSubtype !== "shoes" ||
-      (Boolean(generationInputs.left.file) && Boolean(generationInputs.right.file)));
+      (generationRequirements.needsModel ? Boolean(selectedModelId) : true) &&
+      (!companionZones.includes("top") || (Boolean(companionTopType) && Boolean(secondaryTopColor))) &&
+      (!companionZones.includes("bottom") || (Boolean(companionBottomType) && Boolean(secondaryBottomColor))) &&
+      (!companionZones.includes("footwear") || (Boolean(footwearType) && Boolean(shoesColor))));
+
+  const renderCompanionZoneCard = (zone: CompanionZone) => {
+    if (!companionZones.includes(zone)) return null;
+
+    const options = companionTypeOptions[zone];
+
+    if (zone === "top") {
+      return (
+        <div key={zone} className="space-y-3 rounded border border-border bg-bg-secondary p-3">
+          <FieldLabel>Top</FieldLabel>
+          <select
+            value={companionTopType}
+            onChange={(e) => setCompanionTopType(e.target.value as CompanionTopType)}
+            className="w-full bg-bg-card border border-border px-3 py-2 text-sm"
+          >
+            <option value="">Select top type</option>
+            {options.map((category) => (
+              <option key={category.slug} value={category.slug}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+          <div className="flex flex-wrap items-center gap-2">
+            {SECONDARY_GARMENT_PALETTE.map((color) => (
+              <button
+                key={color.hex}
+                type="button"
+                title={color.name}
+                onClick={() => setSecondaryTopColor(color)}
+                className={`h-7 w-7 rounded-full border-2 transition-all ${
+                  secondaryTopColor?.hex === color.hex ? "border-accent scale-110" : "border-border hover:border-text-secondary"
+                }`}
+                style={{ backgroundColor: color.hex }}
+              />
+            ))}
+            <input
+              type="color"
+              value={secondaryTopColor?.hex || "#000000"}
+              onChange={(e) => setSecondaryTopColor(customPaletteColor(e.target.value))}
+              title="Custom top color"
+              className="h-8 w-10 cursor-pointer rounded border border-border bg-bg-secondary p-0.5"
+            />
+            <span className="text-[10px] text-text-secondary">{secondaryTopColor?.name || "Select color"}</span>
+          </div>
+        </div>
+      );
+    }
+
+    if (zone === "bottom") {
+      return (
+        <div key={zone} className="space-y-3 rounded border border-border bg-bg-secondary p-3">
+          <FieldLabel>Bottom</FieldLabel>
+          <select
+            value={companionBottomType}
+            onChange={(e) => setCompanionBottomType(e.target.value as CompanionBottomType)}
+            className="w-full bg-bg-card border border-border px-3 py-2 text-sm"
+          >
+            <option value="">Select bottom type</option>
+            {options.map((category) => (
+              <option key={category.slug} value={category.slug}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+          <div className="flex flex-wrap items-center gap-2">
+            {SECONDARY_GARMENT_PALETTE.map((color) => (
+              <button
+                key={color.hex}
+                type="button"
+                title={color.name}
+                onClick={() => setSecondaryBottomColor(color)}
+                className={`h-7 w-7 rounded-full border-2 transition-all ${
+                  secondaryBottomColor?.hex === color.hex ? "border-accent scale-110" : "border-border hover:border-text-secondary"
+                }`}
+                style={{ backgroundColor: color.hex }}
+              />
+            ))}
+            <input
+              type="color"
+              value={secondaryBottomColor?.hex || "#000000"}
+              onChange={(e) => setSecondaryBottomColor(customPaletteColor(e.target.value))}
+              title="Custom bottom color"
+              className="h-8 w-10 cursor-pointer rounded border border-border bg-bg-secondary p-0.5"
+            />
+            <span className="text-[10px] text-text-secondary">{secondaryBottomColor?.name || "Select color"}</span>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div key={zone} className="space-y-3 rounded border border-border bg-bg-secondary p-3">
+        <FieldLabel>Footwear</FieldLabel>
+        <select
+          value={footwearType}
+          onChange={(e) => setFootwearType(e.target.value as FootwearType)}
+          className="w-full bg-bg-card border border-border px-3 py-2 text-sm"
+        >
+          <option value="">Select footwear type</option>
+          {options.map((category) => (
+            <option key={category.slug} value={category.slug}>
+              {category.name}
+            </option>
+          ))}
+        </select>
+        <div className="flex flex-wrap items-center gap-2">
+          {SECONDARY_GARMENT_PALETTE.map((color) => (
+            <button
+              key={color.hex}
+              type="button"
+              title={color.name}
+              onClick={() => setShoesColor(color)}
+              className={`h-7 w-7 rounded-full border-2 transition-all ${
+                shoesColor?.hex === color.hex ? "border-accent scale-110" : "border-border hover:border-text-secondary"
+              }`}
+              style={{ backgroundColor: color.hex }}
+            />
+          ))}
+          <input
+            type="color"
+            value={shoesColor?.hex || "#000000"}
+            onChange={(e) => setShoesColor(customPaletteColor(e.target.value))}
+            title="Custom footwear color"
+            className="h-8 w-10 cursor-pointer rounded border border-border bg-bg-secondary p-0.5"
+          />
+          <span className="text-[10px] text-text-secondary">{shoesColor?.name || "Select color"}</span>
+        </div>
+      </div>
+    );
+  };
 
   const handleCancelGenerate = () => {
     generationAbortRef.current?.abort();
@@ -834,28 +985,18 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     }
 
     if (form.fashionSubtype === "clothes") {
-      if (!generationTarget) {
-        setError("Please select whether you want to generate outerwear, top, bottom, or dress.");
-        return;
-      }
-
-      if (!shoesColor) {
-        setError("Please select a footwear color.");
-        return;
-      }
-
-      if (!footwearType) {
-        setError("Please select shoes or slides.");
-        return;
-      }
-
-      if (requiresCompanionTop && (!companionTopType || !secondaryTopColor)) {
+      if (companionZones.includes("top") && (!companionTopType || !secondaryTopColor)) {
         setError("Please select the top type and color.");
         return;
       }
 
-      if (requiresCompanionBottom && (!companionBottomType || !secondaryBottomColor)) {
+      if (companionZones.includes("bottom") && (!companionBottomType || !secondaryBottomColor)) {
         setError("Please select the bottom type and color.");
+        return;
+      }
+
+      if (companionZones.includes("footwear") && (!footwearType || !shoesColor)) {
+        setError("Please select the footwear type and color.");
         return;
       }
     }
@@ -885,25 +1026,29 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       body.append("fashionSubtype", form.fashionSubtype);
       if (form.fashionSubtype === "clothes") {
         const selectedShoesColor = shoesColor;
-        if (!selectedShoesColor) {
-          setError("Please select a footwear color.");
-          return;
-        }
-        body.append("generationTarget", generationTarget);
-        body.append("garmentZone", generationTarget === "bottom" ? "bottom" : "top");
-        body.append("companionTopType", companionTopType);
-        body.append("companionBottomType", companionBottomType);
-        body.append("footwearType", footwearType);
-        if (secondaryTopColor) {
+        body.append("generationTarget", generationRequirements.generationTarget);
+        body.append(
+          "garmentZone",
+          generationRequirements.generationTarget === "bottom" ? "bottom" : "top"
+        );
+        body.append("companionTopType", companionZones.includes("top") ? companionTopType : "");
+        body.append(
+          "companionBottomType",
+          companionZones.includes("bottom") ? companionBottomType : ""
+        );
+        body.append("footwearType", companionZones.includes("footwear") ? footwearType : "");
+        if (companionZones.includes("top") && secondaryTopColor) {
           body.append("topColorName", secondaryTopColor.name);
           body.append("topColorHex", secondaryTopColor.hex);
         }
-        if (secondaryBottomColor) {
+        if (companionZones.includes("bottom") && secondaryBottomColor) {
           body.append("bottomColorName", secondaryBottomColor.name);
           body.append("bottomColorHex", secondaryBottomColor.hex);
         }
-        body.append("shoesColorName", selectedShoesColor.name);
-        body.append("shoesColorHex", selectedShoesColor.hex);
+        if (companionZones.includes("footwear") && selectedShoesColor) {
+          body.append("shoesColorName", selectedShoesColor.name);
+          body.append("shoesColorHex", selectedShoesColor.hex);
+        }
       }
       const [frontFile, backFile, leftFile, rightFile] = await Promise.all([
         compressImageFile(generationInputs.front.file),
@@ -1562,111 +1707,6 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           </SectionCard>
         )}
 
-        <SectionCard title="Product Media" description="Keep tags and gallery management together while editing.">
-          <div className={`grid grid-cols-1 gap-4 ${isStoreOwner ? "" : "xl:grid-cols-[280px_minmax(0,1fr)]"}`}>
-            {!isStoreOwner && (
-              <div>
-                <FieldLabel>Tag</FieldLabel>
-                <select
-                  value={form.tag}
-                  onChange={(e) => setForm({ ...form, tag: e.target.value })}
-                  className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-                >
-                  <option value="">None</option>
-                  <option value="NEW">NEW</option>
-                  <option value="FAVORITE">FAVORITE</option>
-                  {form.tag && !["", "NEW", "FAVORITE"].includes(form.tag) && (
-                    <option value={form.tag}>{form.tag}</option>
-                  )}
-                </select>
-                {form.tag === "NEW" && (
-                  <div className="mt-3">
-                    <FieldLabel>NEW tag duration (days)</FieldLabel>
-                    <input
-                      type="number"
-                      min={1}
-                      value={form.newTagDurationDays}
-                      onChange={(e) => setForm({ ...form, newTagDurationDays: e.target.value })}
-                      className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-                      placeholder="3"
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-            <div>
-              <FieldLabel>Product Images</FieldLabel>
-          <input
-            id="product-images-upload-edit"
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={(e) => handleImageSelect(e.target.files)}
-            className="hidden"
-          />
-          <div
-            onClick={() => document.getElementById("product-images-upload-edit")?.click()}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault();
-              handleImageSelect(e.dataTransfer.files);
-            }}
-            className="flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded border border-dashed border-border bg-bg-secondary px-4 py-6 text-center transition-colors hover:border-accent hover:bg-bg-hover"
-          >
-            <span className="text-sm font-medium text-text-primary">Drag or click to add product images</span>
-            <span className="text-[10px] uppercase tracking-wider text-text-secondary">
-              Select files or drop one or more images
-            </span>
-          </div>
-            </div>
-          </div>
-          {images.length > 0 && (
-            <div className="mt-4 space-y-3">
-              {images.map((img, idx) => (
-                <div
-                  key={img.id}
-                  draggable
-                  onDragStart={(e) => {
-                    if (!img.id) return;
-                    setDraggedImageId(img.id);
-                    e.dataTransfer.setData("text/product-image-id", img.id);
-                  }}
-                  onDragEnd={() => setDraggedImageId(null)}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={() => {
-                    if (draggedImageId && img.id) moveImage(draggedImageId, img.id);
-                    setDraggedImageId(null);
-                  }}
-                  className="flex items-center gap-3 rounded border border-border bg-bg-secondary p-3"
-                >
-                  <span className="w-5 text-[10px] text-text-secondary font-mono">{idx + 1}</span>
-                  <button
-                    type="button"
-                    onClick={() => setZoomedImage(img)}
-                    className="group h-20 w-20 shrink-0 rounded border border-border bg-bg-primary p-1 transition-colors hover:border-accent"
-                  >
-                    <img
-                      src={img.url}
-                      alt={`Preview ${idx + 1}`}
-                      className="h-full w-full object-contain transition-transform group-hover:scale-[1.03]"
-                    />
-                  </button>
-                  <div className="flex-1">
-                    <p className="text-xs font-medium">{idx === 0 ? "Main image" : `Image ${idx + 1}`}</p>
-                    <p className="text-[10px] text-text-secondary">{img.existing ? "Saved image" : "New upload"}</p>
-                    <p className="text-[10px] text-text-secondary">
-                      Drag this image into a generation slot above if you want to reuse it.
-                    </p>
-                  </div>
-                  <button type="button" onClick={() => removeImage(img.id)} className="text-[10px] text-danger uppercase font-medium">
-                    Remove
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </SectionCard>
-
         {zoomedImage && (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
@@ -1773,36 +1813,153 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         {form.productType === "fashion" && (
           <SectionCard
             title="Origin Pictures"
-            description="Manage the product or body reference angles in one place."
+            description="Upload source images, assign the views, and let the selected category drive the generation flow."
           >
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-              {originPictureKeys.map((key) => {
-                const preview = form.originPictures[key];
+            {!isStoreOwner && (
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+                <div>
+                  <FieldLabel>Tag</FieldLabel>
+                  <select
+                    value={form.tag}
+                    onChange={(e) => setForm({ ...form, tag: e.target.value })}
+                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                  >
+                    <option value="">None</option>
+                    <option value="NEW">NEW</option>
+                    <option value="FAVORITE">FAVORITE</option>
+                  </select>
+                  {form.tag === "NEW" && (
+                    <div className="mt-3">
+                      <FieldLabel>NEW tag duration (days)</FieldLabel>
+                      <input
+                        type="number"
+                        min={1}
+                        value={form.newTagDurationDays}
+                        onChange={(e) => setForm({ ...form, newTagDurationDays: e.target.value })}
+                        className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                        placeholder="3"
+                      />
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <FieldLabel>Upload Pictures</FieldLabel>
+                  <input
+                    id="product-images-upload-edit"
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => handleImageSelect(e.target.files)}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById("product-images-upload-edit")?.click()}
+                    className="flex min-h-28 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded border border-dashed border-border bg-bg-secondary px-4 py-6 text-center transition-colors hover:border-accent hover:bg-bg-hover"
+                  >
+                    <span className="text-sm font-medium text-text-primary">Upload pictures</span>
+                    <span className="text-[10px] uppercase tracking-wider text-text-secondary">
+                      Files only, no drag and drop
+                    </span>
+                  </button>
+                </div>
+              </div>
+            )}
+            {isStoreOwner && (
+              <div>
+                <FieldLabel>Upload Pictures</FieldLabel>
+                <input
+                  id="product-images-upload-edit"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => handleImageSelect(e.target.files)}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => document.getElementById("product-images-upload-edit")?.click()}
+                  className="flex min-h-28 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded border border-dashed border-border bg-bg-secondary px-4 py-6 text-center transition-colors hover:border-accent hover:bg-bg-hover"
+                >
+                  <span className="text-sm font-medium text-text-primary">Upload pictures</span>
+                  <span className="text-[10px] uppercase tracking-wider text-text-secondary">
+                    Files only, no drag and drop
+                  </span>
+                </button>
+              </div>
+            )}
+
+            {images.length > 0 && (
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {images.map((img, idx) => (
+                  <div key={img.id} className="space-y-3 rounded border border-border bg-bg-secondary p-3">
+                    <button
+                      type="button"
+                      onClick={() => setZoomedImage(img)}
+                      className="group block w-full overflow-hidden rounded border border-border bg-bg-primary p-1 transition-colors hover:border-accent"
+                    >
+                      <img
+                        src={img.url}
+                        alt={`Preview ${idx + 1}`}
+                        className="aspect-square h-full w-full object-contain transition-transform group-hover:scale-[1.02]"
+                      />
+                    </button>
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium">Image {idx + 1}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {requiredOriginPictureKeys.map((key) => (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => void assignProductImageToOriginPicture(key, img.id || "")}
+                            className={`rounded border px-3 py-1 text-[10px] uppercase tracking-wider transition-colors ${
+                              form.originPictures[key]
+                                ? "border-accent text-accent"
+                                : "border-border text-text-secondary hover:border-accent hover:text-accent"
+                            }`}
+                          >
+                            Set {key}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => removeImage(img.id)}
+                          className="rounded border border-border px-3 py-1 text-[10px] uppercase tracking-wider text-danger transition-colors hover:border-danger"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-5 grid grid-cols-2 gap-4 md:grid-cols-4">
+              {requiredOriginPictureKeys.map((key) => {
+                const preview = generationInputs[key].previewUrl || form.originPictures[key];
                 return (
                   <div key={key} className="space-y-2">
-                    <p className="text-[10px] text-text-secondary uppercase tracking-wider">{key}</p>
-                    <div
-                      draggable={!!preview}
-                      onDragStart={(e) => {
-                        if (!preview) return;
-                        e.dataTransfer.setData("text/origin-picture-key", key);
-                        e.dataTransfer.effectAllowed = "copy";
-                      }}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => void handleOriginPictureDrop(key, e)}
-                      className="aspect-square max-h-[180px] bg-bg-secondary overflow-hidden rounded border border-dashed border-border"
-                    >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] text-text-secondary uppercase tracking-wider">{key}</p>
+                      {preview && (
+                        <button
+                          type="button"
+                          onClick={() => clearGenerationInput(key)}
+                          className="text-[10px] text-danger uppercase tracking-wider"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <div className="aspect-square max-h-[180px] overflow-hidden rounded border border-dashed border-border bg-bg-secondary">
                       {preview ? (
-                        <img
-                          src={preview}
-                          alt={`${key} origin`}
-                          className="h-full w-full object-cover"
-                        />
+                        <img src={preview} alt={`${key} origin`} className="h-full w-full object-cover" />
                       ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-[10px] text-text-secondary uppercase tracking-wider">
+                        <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[10px] text-text-secondary uppercase tracking-wider">
                           <span>{key}</span>
                           <span className="text-[8px] tracking-normal normal-case text-text-secondary/80">
-                            Drop from product images
+                            Assign a picture
                           </span>
                         </div>
                       )}
@@ -1811,326 +1968,95 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 );
               })}
             </div>
-          </SectionCard>
-        )}
 
-        {form.productType === "fashion" && (
-          <section className="bg-bg-card border border-border rounded p-5 space-y-5">
-            <div>
-              <h2 className="text-sm font-semibold">Generate Model Photos</h2>
-              <p className="mt-1 text-[11px] text-text-secondary">
-                Drag product images above into these slots, then generate.
-              </p>
-            </div>
-
-            <div>
-              <FieldLabel>Subtype</FieldLabel>
-              <select
-                value={form.fashionSubtype}
-                onChange={(e) => {
-                  setForm({ ...form, fashionSubtype: e.target.value as FashionSubtype });
-                  setGenerationTarget("");
-                  setCompanionTopType("");
-                  setCompanionBottomType("");
-                  setFootwearType("");
-                  setSecondaryTopColor(null);
-                  setSecondaryBottomColor(null);
-                  setShoesColor(null);
-                }}
-                className="w-full max-w-xs bg-bg-secondary border border-border px-4 py-3 text-sm"
-              >
-                <option value="">Select subtype</option>
-                <option value="clothes">Clothes</option>
-                <option value="shoes">Shoes</option>
-              </select>
-            </div>
-
-            {form.fashionSubtype === "clothes" && (
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 min-h-[48px]">
-                  <label className="block min-w-10 text-[10px] text-text-secondary uppercase tracking-wider">
-                    Model
-                  </label>
-                  <select
-                    value={selectedModelId}
-                    onChange={(e) => setSelectedModelId(e.target.value)}
-                    className="w-full max-w-xs bg-bg-secondary border border-border px-4 py-3 text-sm"
-                  >
-                    <option value="">Select model</option>
-                    {models.map((model) => (
-                      <option key={model._id} value={model._id}>
-                        {model.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {selectedCategoryZone !== "other" && (generationRequirements.needsModel || selectedCategoryZone === "footwear") && (
+              <div className="mt-6 space-y-5 border-t border-border pt-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <FieldLabel>Generate</FieldLabel>
-                    <select
-                      value={generationTarget}
-                      onChange={(e) => {
-                        setGenerationTarget(e.target.value as GenerationTarget);
-                        setCompanionTopType("");
-                        setCompanionBottomType("");
-                        setSecondaryTopColor(null);
-                        setSecondaryBottomColor(null);
-                      }}
-                      className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-                    >
-                      <option value="">Select target</option>
-                      <option value="outerwear">Outerwear</option>
-                      <option value="top">Top</option>
-                      <option value="bottom">Bottom</option>
-                      <option value="dress">Dress</option>
-                    </select>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
+                      Generation
+                    </h3>
+                    <p className="mt-1 text-[11px] text-text-secondary">
+                      Target auto-detected from category: {generationTarget || "unknown"}.
+                    </p>
                   </div>
-                  <div className="space-y-3 rounded border border-border bg-bg-secondary p-3">
-                    <FieldLabel>Footwear</FieldLabel>
-                    <select
-                      value={footwearType}
-                      onChange={(e) => setFootwearType(e.target.value as FootwearType)}
-                      className="w-full bg-bg-card border border-border px-3 py-2 text-sm"
-                    >
-                      <option value="">Select footwear</option>
-                      <option value="shoes">Shoes</option>
-                      <option value="slides">Slides</option>
-                    </select>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {SECONDARY_GARMENT_PALETTE.map((color) => (
-                        <button
-                          key={color.hex}
-                          type="button"
-                          title={color.name}
-                          onClick={() => setShoesColor(color)}
-                          className={`h-7 w-7 rounded-full border-2 transition-all ${
-                            shoesColor?.hex === color.hex ? "border-accent scale-110" : "border-border hover:border-text-secondary"
-                          }`}
-                          style={{ backgroundColor: color.hex }}
-                        />
-                      ))}
-                      <input
-                        type="color"
-                        value={shoesColor?.hex || "#000000"}
-                        onChange={(e) =>
-                          setShoesColor(customPaletteColor(e.target.value))
-                        }
-                        title="Custom footwear color"
-                        className="h-8 w-10 cursor-pointer rounded border border-border bg-bg-secondary p-0.5"
-                      />
-                      <span className="text-[10px] text-text-secondary">{shoesColor?.name || "Select"}</span>
-                    </div>
-                  </div>
-                  {requiresCompanionTop && (
-                    <div className="space-y-3 rounded border border-border bg-bg-secondary p-3">
-                      <FieldLabel>Top</FieldLabel>
-                      <select
-                        value={companionTopType}
-                        onChange={(e) => setCompanionTopType(e.target.value as CompanionTopType)}
-                        className="w-full bg-bg-card border border-border px-3 py-2 text-sm"
-                      >
-                        <option value="">Select top type</option>
-                        <option value="croptop">Croptop</option>
-                        <option value="t-shirt">T-shirt</option>
-                      </select>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {SECONDARY_GARMENT_PALETTE.map((color) => (
-                          <button
-                            key={color.hex}
-                            type="button"
-                            title={color.name}
-                            onClick={() => setSecondaryTopColor(color)}
-                            className={`h-7 w-7 rounded-full border-2 transition-all ${
-                              secondaryTopColor?.hex === color.hex ? "border-accent scale-110" : "border-border hover:border-text-secondary"
-                            }`}
-                            style={{ backgroundColor: color.hex }}
-                          />
-                        ))}
-                        <input
-                          type="color"
-                          value={secondaryTopColor?.hex || "#000000"}
-                          onChange={(e) =>
-                            setSecondaryTopColor(customPaletteColor(e.target.value))
-                          }
-                          title="Custom top color"
-                          className="h-8 w-10 cursor-pointer rounded border border-border bg-bg-secondary p-0.5"
-                        />
-                        <span className="text-[10px] text-text-secondary">{secondaryTopColor?.name || "Select color"}</span>
-                      </div>
-                    </div>
-                  )}
-                  {requiresCompanionBottom && (
-                    <div className="space-y-3 rounded border border-border bg-bg-secondary p-3">
-                      <FieldLabel>Bottom</FieldLabel>
-                      <select
-                        value={companionBottomType}
-                        onChange={(e) => setCompanionBottomType(e.target.value as CompanionBottomType)}
-                        className="w-full bg-bg-card border border-border px-3 py-2 text-sm"
-                      >
-                        <option value="">Select bottom type</option>
-                        <option value="shorts">Shorts</option>
-                        <option value="pants">Pants</option>
-                      </select>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {SECONDARY_GARMENT_PALETTE.map((color) => (
-                          <button
-                            key={color.hex}
-                            type="button"
-                            title={color.name}
-                            onClick={() => setSecondaryBottomColor(color)}
-                            className={`h-7 w-7 rounded-full border-2 transition-all ${
-                              secondaryBottomColor?.hex === color.hex ? "border-accent scale-110" : "border-border hover:border-text-secondary"
-                            }`}
-                            style={{ backgroundColor: color.hex }}
-                          />
-                        ))}
-                        <input
-                          type="color"
-                          value={secondaryBottomColor?.hex || "#000000"}
-                          onChange={(e) =>
-                            setSecondaryBottomColor(customPaletteColor(e.target.value))
-                          }
-                          title="Custom bottom color"
-                          className="h-8 w-10 cursor-pointer rounded border border-border bg-bg-secondary p-0.5"
-                        />
-                        <span className="text-[10px] text-text-secondary">{secondaryBottomColor?.name || "Select color"}</span>
-                      </div>
-                    </div>
-                  )}
+                  <span className="text-[10px] uppercase tracking-wider text-text-secondary">
+                    Gender: {selectedCategoryGender}
+                  </span>
                 </div>
-                <div className="grid grid-cols-4 gap-4">
-                  <div className="space-y-2">
-                    <p className="text-[10px] text-text-secondary uppercase tracking-wider">Front</p>
-                    <div className="aspect-[3/4] max-h-[180px] bg-bg-secondary overflow-hidden rounded border border-border">
-                      {selectedModel ? (
-                        <img src={selectedModel.frontImage || selectedModel.images?.[0] || ""} alt={`${selectedModel.name} front`} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-[10px] text-text-secondary uppercase tracking-wider">
-                          Front
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-[10px] text-text-secondary uppercase tracking-wider">Back</p>
-                    <div className="aspect-[3/4] max-h-[180px] bg-bg-secondary overflow-hidden rounded border border-border">
-                      {selectedModel ? (
-                        <img src={selectedModel.backImage || selectedModel.images?.[1] || selectedModel.frontImage || ""} alt={`${selectedModel.name} back`} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-[10px] text-text-secondary uppercase tracking-wider">
-                          Back
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  {(["front", "back"] as Array<keyof GenerationInputs>).map((key) => (
-                    <div key={key} className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2 min-h-[20px]">
-                        <label className="text-[10px] text-text-secondary uppercase tracking-wider">
-                          {key}
-                        </label>
-                        {generationInputs[key].previewUrl ? (
-                          <button
-                            type="button"
-                            onClick={() => clearGenerationInput(key)}
-                            className="text-[10px] text-danger uppercase tracking-wider"
-                          >
-                            Remove
-                          </button>
-                        ) : (
-                          <span className="text-[10px] text-text-secondary uppercase tracking-wider">
-                            Drop only
-                          </span>
-                        )}
-                      </div>
-                      <div
-                        className="aspect-[4/5] max-h-[180px] bg-bg-secondary overflow-hidden rounded border border-dashed border-border"
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => void handleGenerationSlotDrop(key, e)}
-                      >
-                        {generationInputs[key].previewUrl ? (
-                          <img src={generationInputs[key].previewUrl} alt={`${key} preview`} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-[10px] text-text-secondary uppercase tracking-wider">
-                            <span>{key}</span>
-                            <span className="text-[8px] tracking-normal normal-case text-text-secondary/80">
-                              Drop from product images
-                            </span>
-                          </div>
-                        )}
+
+                {generationRequirements.needsModel ? (
+                  <div className="space-y-5">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-text-secondary">
+                        Select a model
+                      </p>
+                      <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+                        {filteredModels.map((model) => {
+                          const active = selectedModelId === model._id;
+                          return (
+                            <button
+                              key={model._id}
+                              type="button"
+                              onClick={() => setSelectedModelId(model._id)}
+                              className={`overflow-hidden rounded border text-left transition-colors ${
+                                active ? "border-accent" : "border-border hover:border-accent"
+                              }`}
+                            >
+                              <div className="aspect-[3/4] bg-bg-secondary">
+                                <img
+                                  src={model.frontImage || model.images?.[0] || ""}
+                                  alt={model.name}
+                                  className="h-full w-full object-cover"
+                                />
+                              </div>
+                              <div className="space-y-1 p-2">
+                                <p className="text-xs font-medium">{model.name}</p>
+                                <p className="text-[10px] uppercase tracking-wider text-text-secondary">
+                                  Front view
+                                </p>
+                              </div>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
-                  ))}
+
+                    {selectedModelId && companionZones.length > 0 && (
+                      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+                        {companionZones.map((zone) => renderCompanionZoneCard(zone))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="rounded border border-border bg-bg-secondary p-4 text-xs text-text-secondary">
+                    Shoes generation uses the uploaded origin pictures only.
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2">
+                  {generating && (
+                    <button
+                      type="button"
+                      onClick={handleCancelGenerate}
+                      aria-label="Cancel generation"
+                      className="inline-flex h-9 w-9 items-center justify-center border border-border text-xs text-text-secondary hover:bg-bg-hover"
+                    >
+                      ×
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleGenerate}
+                    disabled={generating || !canGenerate}
+                    className="bg-accent px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50"
+                  >
+                    {generating ? "Generating..." : "Generate"}
+                  </button>
                 </div>
               </div>
             )}
-
-            {form.fashionSubtype === "shoes" && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {(["front", "back", "left", "right"] as Array<keyof GenerationInputs>).map((key) => (
-                    <div key={key} className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2 min-h-[20px]">
-                        <label className="text-[10px] text-text-secondary uppercase tracking-wider">
-                          {key}
-                        </label>
-                        {generationInputs[key].previewUrl ? (
-                          <button
-                            type="button"
-                            onClick={() => clearGenerationInput(key)}
-                            className="text-[10px] text-danger uppercase tracking-wider"
-                          >
-                            Remove
-                          </button>
-                        ) : (
-                          <span className="text-[10px] text-text-secondary uppercase tracking-wider">
-                            Drop only
-                          </span>
-                        )}
-                      </div>
-                      <div
-                        className="aspect-square max-h-[180px] bg-bg-secondary overflow-hidden rounded border border-dashed border-border"
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => void handleGenerationSlotDrop(key, e)}
-                      >
-                        {generationInputs[key].previewUrl ? (
-                          <img src={generationInputs[key].previewUrl} alt={`${key} preview`} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-[10px] text-text-secondary uppercase tracking-wider">
-                            <span>{key}</span>
-                            <span className="text-[8px] tracking-normal normal-case text-text-secondary/80">
-                              Drop from product images
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-end gap-2">
-              {generating && (
-                <button
-                  type="button"
-                  onClick={handleCancelGenerate}
-                  aria-label="Cancel generation"
-                  className="inline-flex h-9 w-9 items-center justify-center border border-border text-xs text-text-secondary hover:bg-bg-hover"
-                >
-                  ×
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={handleGenerate}
-                disabled={generating || !canGenerate}
-                className="bg-accent text-bg-primary px-5 py-2.5 text-xs font-semibold uppercase tracking-wide disabled:opacity-50"
-              >
-                {generating ? "Generating..." : "Generate"}
-              </button>
-            </div>
-          </section>
+          </SectionCard>
         )}
 
         <div className="flex gap-3">

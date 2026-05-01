@@ -8,6 +8,7 @@ export type CategoryZone =
   | "headwear"
   | "handbag"
   | "other";
+export type CompanionZone = "top" | "bottom" | "footwear";
 
 export interface ClassifiableCategory {
   _id?: string;
@@ -90,11 +91,27 @@ export interface ZoneRequirements {
   generationTarget: "" | "outerwear" | "top" | "bottom" | "dress";
   fashionSubtype: "clothes" | "shoes" | "";
   needsModel: boolean;
+  companionZones: CompanionZone[];
   needsTopCompanion: boolean;
   needsBottomCompanion: boolean;
   needsFootwearCompanion: boolean;
   needsLeftRightUploads: boolean;
   canGenerate: boolean;
+}
+
+function getCompanionZonesForTarget(zone: CategoryZone): CompanionZone[] {
+  switch (zone) {
+    case "top":
+      return ["bottom", "footwear"];
+    case "bottom":
+      return ["top", "footwear"];
+    case "outerwear":
+      return ["top", "bottom", "footwear"];
+    case "dress":
+      return ["footwear"];
+    default:
+      return [];
+  }
 }
 
 export function getZoneRequirements(zone: CategoryZone): ZoneRequirements {
@@ -104,6 +121,7 @@ export function getZoneRequirements(zone: CategoryZone): ZoneRequirements {
         generationTarget: "top",
         fashionSubtype: "clothes",
         needsModel: true,
+        companionZones: getCompanionZonesForTarget("top"),
         needsTopCompanion: false,
         needsBottomCompanion: true,
         needsFootwearCompanion: true,
@@ -115,6 +133,7 @@ export function getZoneRequirements(zone: CategoryZone): ZoneRequirements {
         generationTarget: "bottom",
         fashionSubtype: "clothes",
         needsModel: true,
+        companionZones: getCompanionZonesForTarget("bottom"),
         needsTopCompanion: true,
         needsBottomCompanion: false,
         needsFootwearCompanion: true,
@@ -126,6 +145,7 @@ export function getZoneRequirements(zone: CategoryZone): ZoneRequirements {
         generationTarget: "outerwear",
         fashionSubtype: "clothes",
         needsModel: true,
+        companionZones: getCompanionZonesForTarget("outerwear"),
         needsTopCompanion: true,
         needsBottomCompanion: true,
         needsFootwearCompanion: true,
@@ -137,6 +157,7 @@ export function getZoneRequirements(zone: CategoryZone): ZoneRequirements {
         generationTarget: "dress",
         fashionSubtype: "clothes",
         needsModel: true,
+        companionZones: getCompanionZonesForTarget("dress"),
         needsTopCompanion: false,
         needsBottomCompanion: false,
         needsFootwearCompanion: true,
@@ -148,6 +169,7 @@ export function getZoneRequirements(zone: CategoryZone): ZoneRequirements {
         generationTarget: "",
         fashionSubtype: "shoes",
         needsModel: false,
+        companionZones: [],
         needsTopCompanion: false,
         needsBottomCompanion: false,
         needsFootwearCompanion: false,
@@ -159,6 +181,7 @@ export function getZoneRequirements(zone: CategoryZone): ZoneRequirements {
         generationTarget: "",
         fashionSubtype: "clothes",
         needsModel: false,
+        companionZones: [],
         needsTopCompanion: false,
         needsBottomCompanion: false,
         needsFootwearCompanion: false,
@@ -166,4 +189,8 @@ export function getZoneRequirements(zone: CategoryZone): ZoneRequirements {
         canGenerate: false,
       };
   }
+}
+
+export function getCompanionZonesForCategory(zone: CategoryZone): CompanionZone[] {
+  return getCompanionZonesForTarget(zone);
 }
