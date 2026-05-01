@@ -2,22 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
 import Category from "@/admin/models/Category";
 import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
-import { DEFAULT_CATEGORY_TREE } from "@/admin/lib/categoryDefaults";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
-import { getSystemAuditActor } from "@/admin/lib/audit";
-
-async function ensureDefaultCategories() {
-  const count = await Category.countDocuments();
-  if (count > 0) return;
-  const systemActor = getSystemAuditActor();
-  await Category.insertMany(
-    DEFAULT_CATEGORY_TREE.map((category) => ({
-      ...category,
-      createdBy: systemActor,
-      updatedBy: systemActor,
-    }))
-  );
-}
 
 // Admin — get all categories (including inactive)
 export async function GET() {
@@ -27,7 +12,6 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
 
     await dbConnect();
-    await ensureDefaultCategories();
     const categories = await Category.find().sort({ parentSlug: 1, order: 1, name: 1 }).lean();
     return NextResponse.json({ categories });
   } catch (error) {

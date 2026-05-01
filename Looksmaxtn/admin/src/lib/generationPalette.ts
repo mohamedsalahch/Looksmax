@@ -6,14 +6,9 @@ export interface PaletteColor {
 export const SECONDARY_GARMENT_PALETTE: PaletteColor[] = [
   { name: "Black", hex: "#000000" },
   { name: "White", hex: "#FFFFFF" },
-  { name: "Sand Beige", hex: "#D6C9B0" },
-  { name: "Warm Taupe", hex: "#B8A48A" },
-  { name: "Camel", hex: "#A87E5A" },
-  { name: "Khaki", hex: "#8C7B5B" },
-  { name: "Olive", hex: "#5C6233" },
-  { name: "Clay Brown", hex: "#7A4E3B" },
-  { name: "Cocoa", hex: "#4A2E1F" },
-  { name: "Stone Gray", hex: "#9A9286" },
+  { name: "Red", hex: "#D32F2F" },
+  { name: "Green", hex: "#2E7D32" },
+  { name: "Blue", hex: "#1565C0" },
 ];
 
 export const SHOES_PALETTE: PaletteColor[] = [

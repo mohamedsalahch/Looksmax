@@ -36,3 +36,9 @@ class ValidatePhotoResponse(BaseModel):
     """Response from photo validation endpoint."""
     valid: bool
     reason: str | None = None
+
+
+class CompareFrontBackResponse(BaseModel):
+    """Response from product view comparison endpoint."""
+    valid: bool
+    reason: str | None = None

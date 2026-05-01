@@ -68,6 +68,7 @@ async def root():
             "outfit": "/api/generate_outfit",
             "proxy": "/api/proxy",
             "validate-photo": "/api/validate-photo",
+            "compare-front-back": "/api/compare-front-back",
         }
     }
 

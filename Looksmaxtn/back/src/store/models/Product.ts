@@ -19,6 +19,7 @@ export type ProductApprovalStatus = "pending" | "approved" | "rejected";
 export interface ISizeStockEntry {
   fullStock: number;
   stock: number;
+  conditionScore?: number | null;
 }
 
 export interface IProduct extends Document {
@@ -87,7 +88,11 @@ const productSchema = new Schema<IProduct>(
     fullStock: { type: Number, default: 1, min: 0 },
     sizeStock: {
       type: Map,
-      of: new Schema({ fullStock: { type: Number, default: 0, min: 0 }, stock: { type: Number, default: 0, min: 0 } }, { _id: false }),
+      of: new Schema({
+        fullStock: { type: Number, default: 0, min: 0 },
+        stock: { type: Number, default: 0, min: 0 },
+        conditionScore: { type: Number, min: 0, max: 10, default: null },
+      }, { _id: false }),
       default: null,
     },
     images: [productImageSchema],

@@ -10,14 +10,14 @@ import { getSoldQuantityByProductAndSize, getSoldQuantityByProductIds } from "@/
 
 function getSizeStockEntries(
   sizeStock: unknown
-): Array<[string, { fullStock?: number; stock?: number }]> {
+): Array<[string, { fullStock?: number; stock?: number; conditionScore?: number | null }]> {
   if (sizeStock instanceof Map) {
     return Array.from(sizeStock.entries());
   }
 
   if (!sizeStock || typeof sizeStock !== "object") return [];
 
-  return Object.entries(sizeStock as Record<string, { fullStock?: number; stock?: number }>);
+  return Object.entries(sizeStock as Record<string, { fullStock?: number; stock?: number; conditionScore?: number | null }>);
 }
 
 function getAvailabilityStatus(params: {
@@ -103,7 +103,7 @@ function buildSizeStockSnapshot(params: {
   const { sizeStock, sizes, soldBySize } = params;
   if (!sizeStock && sizes.length === 0) return null;
 
-  const snapshot: Record<string, { fullStock: number; stock: number; soldQuantity: number }> = {};
+  const snapshot: Record<string, { fullStock: number; stock: number; soldQuantity: number; conditionScore: number | null }> = {};
   const sizeStockEntries = new Map(getSizeStockEntries(sizeStock));
   const orderedSizes = Array.from(
     new Set([
@@ -120,6 +120,9 @@ function buildSizeStockSnapshot(params: {
       fullStock: Math.max(entry?.fullStock ?? 0, 0),
       stock: Math.max(entry?.stock ?? 0, 0),
       soldQuantity: Math.max(soldBySize.get(size) || 0, 0),
+      conditionScore: typeof entry?.conditionScore === "number"
+        ? Math.max(0, Math.min(10, Number(entry.conditionScore) || 0))
+        : null,
     };
   }
 
@@ -209,26 +212,41 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }
 
       if (body.sizeStock && typeof body.sizeStock === "object") {
-        const sizeStockMap = new Map<string, { fullStock: number; stock: number }>();
+        const sizeStockMap = new Map<string, { fullStock: number; stock: number; conditionScore: number | null }>();
         for (const size of declaredSizes) {
-          sizeStockMap.set(size, { fullStock: 0, stock: 0 });
+          sizeStockMap.set(size, { fullStock: 0, stock: 0, conditionScore: null });
         }
 
         for (const [size, entry] of getSizeStockEntries(existingProduct.sizeStock)) {
           sizeStockMap.set(size, {
             fullStock: Math.max(entry.fullStock ?? 0, 0),
             stock: Math.max(entry.stock ?? 0, 0),
+            conditionScore: typeof (entry as { conditionScore?: number | null }).conditionScore === "number"
+              ? Math.max(0, Math.min(10, Number((entry as { conditionScore?: number | null }).conditionScore) || 0))
+              : null,
           });
         }
 
-        for (const [size, qty] of Object.entries(body.sizeStock as Record<string, number>)) {
-          const nextValue = Math.max(0, Number(qty) || 0);
-          const currentEntry = sizeStockMap.get(size) || { fullStock: 0, stock: 0 };
+        for (const [size, qty] of Object.entries(
+          body.sizeStock as Record<string, number | { fullStock?: number; stock?: number; conditionScore?: number }>
+        )) {
+          const nextValue =
+            typeof qty === "object" && qty !== null
+              ? Math.max(0, Number(qty.fullStock ?? qty.stock ?? 0) || 0)
+              : Math.max(0, Number(qty) || 0);
+          const currentEntry = sizeStockMap.get(size) || { fullStock: 0, stock: 0, conditionScore: null };
           const currentFullStock = Math.max(currentEntry.fullStock ?? currentEntry.stock ?? 0, 0);
           const fullStockForSize = sizeStockMode === "restock" ? currentFullStock + nextValue : nextValue;
           const sizeSold = soldBySize.get(size) || 0;
           const availableForSize = Math.max(0, fullStockForSize - sizeSold);
-          sizeStockMap.set(size, { fullStock: fullStockForSize, stock: availableForSize });
+          sizeStockMap.set(size, {
+            fullStock: fullStockForSize,
+            stock: availableForSize,
+            conditionScore:
+              typeof qty === "object" && qty !== null && qty.conditionScore !== undefined
+                ? Math.max(0, Math.min(10, Number(qty.conditionScore) || 0))
+                : currentEntry.conditionScore ?? null,
+          });
         }
 
         const sizeFilter = declaredSizes.length > 0 ? new Set(declaredSizes) : null;
@@ -336,7 +354,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const fashionSubtype =
       productType === "fashion" ? String(formData.get("fashionSubtype") || "clothes") : null;
     const conditionScore =
-      productType === "perfume" ? null : Number(formData.get("conditionScore") || 9);
+      productType === "perfume" ? Number(formData.get("conditionScore") || 9) : null;
     const rawFullStock = String(formData.get("fullStock") ?? formData.get("stock") ?? "").trim();
     if (rawFullStock.length === 0) {
       return NextResponse.json({ error: "Please enter a full stock value." }, { status: 400 });
@@ -376,21 +394,28 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const sizes = productType === "perfume" ? [] : parseStringArray(formData.get("sizes"));
     const rawSizeStock = String(formData.get("sizeStock") || "").trim();
-    let sizeStockMap: Map<string, { fullStock: number; stock: number }> | null = null;
+    let sizeStockMap: Map<string, { fullStock: number; stock: number; conditionScore: number | null }> | null = null;
     let computedStock: number;
     let computedFullStock: number;
 
     if (productType !== "perfume" && rawSizeStock && rawSizeStock !== "{}") {
       try {
-        const parsed = JSON.parse(rawSizeStock) as Record<string, number>;
+        const parsed = JSON.parse(rawSizeStock) as Record<string, number | { fullStock?: number; stock?: number; conditionScore?: number }>;
         sizeStockMap = new Map();
         computedStock = 0;
         computedFullStock = 0;
         for (const [size, qty] of Object.entries(parsed)) {
-          const fullStockForSize = Math.max(0, Number(qty) || 0);
+          const fullStockForSize =
+            typeof qty === "object" && qty !== null
+              ? Math.max(0, Number(qty.fullStock ?? qty.stock ?? 0) || 0)
+              : Math.max(0, Number(qty) || 0);
           const sizeSold = soldBySize.get(size) || 0;
           const availableForSize = Math.max(0, fullStockForSize - sizeSold);
-          sizeStockMap.set(size, { fullStock: fullStockForSize, stock: availableForSize });
+          const conditionScore =
+            typeof qty === "object" && qty !== null && qty.conditionScore !== undefined
+              ? Math.max(0, Math.min(10, Number(qty.conditionScore) || 0))
+              : null;
+          sizeStockMap.set(size, { fullStock: fullStockForSize, stock: availableForSize, conditionScore });
           computedStock += availableForSize;
           computedFullStock += fullStockForSize;
         }
@@ -476,7 +501,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const inventory = getInventorySnapshot(product, soldQuantity);
 
-    let sizeStockData: Record<string, { fullStock: number; stock: number; soldQuantity: number }> | null = null;
+    let sizeStockData: Record<string, { fullStock: number; stock: number; soldQuantity: number; conditionScore: number | null }> | null = null;
     if (product.sizeStock) {
       sizeStockData = {};
       for (const [size, entry] of getSizeStockEntries(product.sizeStock)) {
@@ -484,6 +509,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           fullStock: entry.fullStock ?? 0,
           stock: entry.stock ?? 0,
           soldQuantity: soldBySize.get(size) || 0,
+          conditionScore: typeof entry.conditionScore === "number"
+            ? Math.max(0, Math.min(10, Number(entry.conditionScore) || 0))
+            : null,
         };
       }
     }

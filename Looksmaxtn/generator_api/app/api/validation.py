@@ -3,11 +3,14 @@
 import json
 import logging
 import re
+import asyncio
 
 from fastapi import APIRouter, HTTPException
 from google.genai import types
 
+from app.models.requests import CompareFrontBackRequest
 from app.models.requests import ValidatePhotoRequest
+from app.models.responses import CompareFrontBackResponse
 from app.models.responses import ValidatePhotoResponse
 from app.services.generator import ImageGenerator
 from app.utils.image import b64_to_part
@@ -31,6 +34,17 @@ Respond with ONLY valid JSON:
 {"valid": true} if the primary subject meets these standards.
 {"valid": false, "reason": "one short sentence explaining the specific issue"}"""
 
+COMPARE_FRONT_BACK_PROMPT = """Classify this product photo view.
+
+Return ONLY valid JSON:
+{"view": "front" | "back" | "left" | "right" | "unknown", "reason": "short explanation"}
+
+Rules:
+- Use the actual image content, not the label.
+- If the view is unclear or ambiguous, return "unknown".
+- The response must be strict and conservative.
+"""
+
 
 def set_generator(generator: ImageGenerator | None) -> None:
     """Set the global image generator instance."""
@@ -44,6 +58,70 @@ def _parse_validation_response(text: str) -> dict:
     if not match:
         return {"valid": False, "reason": "Could not parse validation response."}
     return json.loads(match.group(0))
+
+
+async def _classify_product_view(image_base64: str, label: str) -> dict:
+    if _generator is None:
+        raise HTTPException(status_code=500, detail="Generator not initialized")
+
+    parts = [
+        types.Part(text=COMPARE_FRONT_BACK_PROMPT),
+        types.Part(text=f"Label: {label.strip() or 'front'}"),
+        b64_to_part(image_base64),
+    ]
+
+    response = await _generator.client.aio.models.generate_content(
+        model=_VALIDATION_MODEL,
+        contents=[types.Content(parts=parts)],
+    )
+
+    if not response.candidates:
+        raise HTTPException(status_code=502, detail="No response from comparison model")
+
+    text = response.candidates[0].content.parts[0].text
+    logger.info(f"compare-front-back classification raw response ({label}): {text}")
+    result = _parse_validation_response(text)
+    view = str(result.get("view", "unknown")).strip().lower()
+    reason = result.get("reason")
+    if view not in {"front", "back", "left", "right", "unknown"}:
+        view = "unknown"
+    return {"view": view, "reason": reason}
+
+
+@router.post("/compare-front-back", response_model=CompareFrontBackResponse)
+async def compare_front_back(request: CompareFrontBackRequest):
+    """Compare front and back product photos and confirm they are different."""
+    if _generator is None:
+        raise HTTPException(status_code=500, detail="Generator not initialized")
+
+    if not request.front or not request.front.strip() or not request.back or not request.back.strip():
+        raise HTTPException(status_code=400, detail="front and back images are required and cannot be empty")
+
+    try:
+        front_result, back_result = await asyncio.gather(
+            _classify_product_view(request.front, request.front_label or "front"),
+            _classify_product_view(request.back, request.back_label or "back"),
+        )
+    except Exception as e:
+        logger.error(f"compare-front-back: Gemini API error: {e}")
+        raise HTTPException(status_code=502, detail=f"Comparison request failed: {e}")
+
+    front_view = front_result.get("view", "unknown")
+    back_view = back_result.get("view", "unknown")
+
+    if front_view == "unknown" or back_view == "unknown":
+        return CompareFrontBackResponse(
+            valid=False,
+            reason=front_result.get("reason") or back_result.get("reason") or "Could not confidently identify both product views.",
+        )
+
+    if front_view != "front" or back_view != "back":
+        return CompareFrontBackResponse(
+            valid=False,
+            reason=f"Expected front/back order but detected {front_view} and {back_view}.",
+        )
+
+    return CompareFrontBackResponse(valid=True, reason=None)
 
 
 @router.post("/validate-photo", response_model=ValidatePhotoResponse)

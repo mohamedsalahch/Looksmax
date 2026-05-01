@@ -95,20 +95,24 @@ function getProductPayload(
   const rawStockValue = String(formData.get("fullStock") ?? formData.get("stock") ?? "").trim();
   const rawStock = rawStockValue.length > 0 ? Number(rawStockValue) : NaN;
   const conditionScore =
-    productType === "perfume" ? null : Number(formData.get("conditionScore") || 9);
+    productType === "perfume" ? Number(formData.get("conditionScore") || 9) : null;
   const sizes = productType === "perfume" ? [] : parseStringArray(formData.get("sizes"));
   const colors = productType === "perfume" ? [] : parseStringArray(formData.get("colors"));
 
   const rawSizeStock = String(formData.get("sizeStock") || "").trim();
-  let sizeStockMap: Map<string, { fullStock: number; stock: number }> | null = null;
+  let sizeStockMap: Map<string, { fullStock: number; stock: number; conditionScore: number | null }> | null = null;
   if (productType !== "perfume" && rawSizeStock && rawSizeStock !== "{}") {
     try {
-      const parsed = JSON.parse(rawSizeStock) as Record<string, number>;
+      const parsed = JSON.parse(rawSizeStock) as Record<string, number | { fullStock?: number; stock?: number; conditionScore?: number }>;
       sizeStockMap = new Map(
-        Object.entries(parsed).map(([size, qty]) => [
-          size,
-          { fullStock: Math.max(0, Number(qty) || 0), stock: Math.max(0, Number(qty) || 0) },
-        ])
+        Object.entries(parsed).map(([size, qty]) => {
+          const fullStock = typeof qty === "object" && qty !== null ? Number(qty.fullStock ?? qty.stock ?? 0) : Number(qty) || 0;
+          const stock = typeof qty === "object" && qty !== null ? Number(qty.stock ?? qty.fullStock ?? 0) : Number(qty) || 0;
+          const conditionScore = typeof qty === "object" && qty !== null && qty.conditionScore !== undefined
+            ? Math.max(0, Math.min(10, Number(qty.conditionScore) || 0))
+            : null;
+          return [size, { fullStock: Math.max(0, fullStock), stock: Math.max(0, stock), conditionScore }];
+        })
       );
     } catch {
       sizeStockMap = null;

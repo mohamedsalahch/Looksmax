@@ -145,33 +145,30 @@ export async function POST(req: NextRequest) {
       Object.entries(bodyZones).map(async ([zone, value]) => {
         const status = Boolean(value?.status);
         const product = value?.productId ? productMap.get(value.productId) : null;
-        const fallbackImage =
-          Array.isArray(product?.images) && product.images.length > 0
-            ? (product.images.find((image) => Boolean(image?.isMain)) || product.images[0] || null)?.url || ""
-            : "";
-        const originPictures = {
-          front:
-            product?.originPictures?.front ||
-            value?.originPictures?.front ||
-            product?.originPictures?.left ||
-            value?.originPictures?.left ||
-            fallbackImage,
-          back:
-            product?.originPictures?.back ||
-            value?.originPictures?.back ||
-            product?.originPictures?.right ||
-            value?.originPictures?.right ||
-            fallbackImage,
-          left: product?.originPictures?.left || value?.originPictures?.left || fallbackImage,
-          right: product?.originPictures?.right || value?.originPictures?.right || fallbackImage,
-        };
         const fashionSubtype = product?.fashionSubtype || value?.fashionSubtype || "";
         const isShoes = fashionSubtype === "shoes";
         const usesFourViews = zone === "footwear" && isShoes;
-        const frontImage = originPictures.front;
-        const backImage = originPictures.back;
-        const leftImage = usesFourViews ? originPictures.left : "";
-        const rightImage = usesFourViews ? originPictures.right : "";
+        const savedImages = Array.isArray(product?.images) ? product.images : [];
+        const viewCount = usesFourViews ? 4 : 2;
+        const enhancedViews = savedImages.slice(Math.max(savedImages.length - viewCount, 0));
+        const enhancedFront = enhancedViews[0]?.url || "";
+        const enhancedBack = enhancedViews[1]?.url || "";
+        const enhancedLeft = usesFourViews ? enhancedViews[2]?.url || "" : "";
+        const enhancedRight = usesFourViews ? enhancedViews[3]?.url || "" : "";
+        const fallbackImage =
+          (savedImages.find((image) => Boolean(image?.isMain)) || savedImages[0] || null)?.url || "";
+        const frontImage =
+          enhancedFront ||
+          value?.originPictures?.front ||
+          value?.originPictures?.left ||
+          fallbackImage;
+        const backImage =
+          enhancedBack ||
+          value?.originPictures?.back ||
+          value?.originPictures?.right ||
+          fallbackImage;
+        const leftImage = usesFourViews ? (enhancedLeft || value?.originPictures?.left || fallbackImage) : "";
+        const rightImage = usesFourViews ? (enhancedRight || value?.originPictures?.right || fallbackImage) : "";
 
         return [
           zone,

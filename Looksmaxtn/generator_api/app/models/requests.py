@@ -102,3 +102,11 @@ class OutfitRequest(BaseModel):
 class ValidatePhotoRequest(BaseModel):
     """Request for profile photo validation."""
     image: str  # base64 encoded image
+
+
+class CompareFrontBackRequest(BaseModel):
+    """Request for comparing front and back product photos."""
+    front: str
+    back: str
+    front_label: str = "front"
+    back_label: str = "back"

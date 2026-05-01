@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/store/lib/mongodb";
 import Category from "@/store/models/Category";
-import { DEFAULT_CATEGORY_TREE } from "@/store/lib/categoryDefaults";
 
 type CategoryNode = {
   _id: unknown;
@@ -12,12 +11,6 @@ type CategoryNode = {
   parentSlug?: string | null;
   children: CategoryNode[];
 };
-
-async function ensureDefaultCategories() {
-  const count = await Category.countDocuments();
-  if (count > 0) return;
-  await Category.insertMany(DEFAULT_CATEGORY_TREE);
-}
 
 function buildCategoryTree(
   categories: Array<{
@@ -45,7 +38,6 @@ function buildCategoryTree(
 export async function GET() {
   try {
     await dbConnect();
-    await ensureDefaultCategories();
     const categories = await Category.find({ isActive: true })
       .sort({ parentSlug: 1, order: 1, name: 1 })
       .lean();

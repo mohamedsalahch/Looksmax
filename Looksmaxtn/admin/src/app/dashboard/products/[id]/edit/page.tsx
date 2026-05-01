@@ -30,6 +30,8 @@ interface ProductImage {
   url: string;
   file?: File | null;
   existing?: boolean;
+  kind?: "source" | "generated";
+  slot?: OriginPictureKey;
 }
 
 interface GenerationSlot {
@@ -75,6 +77,86 @@ type CategoryPath = {
   grandchild: string;
   greatGrandchild: string;
 };
+
+type ProductMediaStatus = "idle" | "processing" | "completed" | "failed";
+
+type FashionVariantRow = {
+  id: string;
+  size: string;
+  colors: string;
+  stock: string;
+  conditionScore: string;
+};
+
+function buildVariantLabel(row: FashionVariantRow) {
+  const size = row.size.trim();
+  const color = row.colors.trim();
+  return color ? `${size} / ${color}` : size;
+}
+
+const PRODUCT_MEDIA_ENHANCEMENT_PROMPT = `You are a professional e-commerce product retouching assistant.
+
+Task:
+
+* Transform the provided product image into a clean, mannequin-free product image suitable for a professional catalog.
+
+Main Actions:
+
+* Remove the mannequin completely
+* Keep only the garment visible
+* Reconstruct missing parts naturally if needed
+
+View & Layout:
+
+* The final image must be a top-down view (flat lay)
+* The garment must be laid flat on a surface
+* Ensure a natural and symmetrical flat presentation
+* Keep proportions accurate and realistic
+
+Fabric Preparation:
+
+* Ironing clothes removes wrinkles — remove all wrinkles and creases
+* Make the garment look freshly ironed or professionally steamed
+* Keep natural fabric texture (do NOT over-smooth or make it look artificial)
+
+Strict Preservation Rules:
+
+* Preserve the product EXACTLY:
+
+  * shape and proportions
+  * color
+  * fabric and texture
+  * stitching and details
+  * logos and branding
+* Do NOT redesign or alter the garment
+
+Background:
+
+* Use a clean solid background with color #EAE9E7
+* Flat surface, smooth and uniform
+* No gradients, no texture, no distractions
+
+Lighting:
+
+* Soft, even studio lighting
+* Minimal shadows
+* Clean, catalog-style illumination
+
+Constraints:
+
+* No mannequin
+* No human model
+* No props
+* No text or graphics
+* No added elements
+
+Output:
+
+* High-resolution image
+* Clean, ironed, flat-lay garment
+* Professional e-commerce ready (Instagram & catalog quality)
+
+- Background color must remain exactly #EAE9E7 with no variation`;
 
 const initialForm = {
   name: "",
@@ -148,6 +230,16 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
       {children}
     </label>
   );
+}
+
+function getPrimaryColor(value: unknown) {
+  if (Array.isArray(value)) {
+    return String(value[0] || "").trim();
+  }
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)[0] || "";
 }
 
 function SectionCard({
@@ -246,6 +338,14 @@ async function productImageToFile(image: ProductImage, label: keyof GenerationIn
   });
 }
 
+async function imageUrlToFile(url: string, label: string) {
+  const blob = await fetch(url, { cache: "reload" }).then((response) => response.blob());
+  const extension = blob.type.split("/")[1] || "png";
+  return new File([blob], `${label}-${Date.now()}.${extension}`, {
+    type: blob.type || "image/png",
+  });
+}
+
 async function originPictureToFile(url: string, label: OriginPictureKey) {
   const blob = await fetch(url).then((response) => response.blob());
   const extension = blob.type.split("/")[1] || "png";
@@ -315,12 +415,49 @@ function customPaletteColor(hex: string): PaletteColor {
   return { name: getCustomColorName(normalized), hex: normalized };
 }
 
+async function pickScreenColor() {
+  if (typeof window === "undefined") return null;
+  const EyeDropperCtor = (window as Window & {
+    EyeDropper?: new () => { open: () => Promise<{ sRGBHex: string }> };
+  }).EyeDropper;
+  if (!EyeDropperCtor) return null;
+
+  try {
+    const eyeDropper = new EyeDropperCtor();
+    const result = await eyeDropper.open();
+    return customPaletteColor(result.sRGBHex);
+  } catch {
+    return null;
+  }
+}
+
+function toggleColorToken(value: string, token: string) {
+  const nextToken = token.trim();
+  if (!nextToken) return value;
+
+  const colors = value
+    .split(",")
+    .map((color) => color.trim())
+    .filter(Boolean);
+  const existingIndex = colors.findIndex((color) => color.toLowerCase() === nextToken.toLowerCase());
+  if (existingIndex >= 0) {
+    colors.splice(existingIndex, 1);
+  } else {
+    colors.push(nextToken);
+  }
+  return colors.join(", ");
+}
+
 export default function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [productMediaStatus, setProductMediaStatus] = useState<ProductMediaStatus>("idle");
+  const [productMediaJobId, setProductMediaJobId] = useState("");
+  const [productMediaError, setProductMediaError] = useState("");
+  const [showProductMediaSection, setShowProductMediaSection] = useState(false);
   const [error, setError] = useState("");
   const [categories, setCategories] = useState<Category[]>([]);
   const [models, setModels] = useState<ModelAsset[]>([]);
@@ -346,20 +483,29 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const [secondaryBottomColor, setSecondaryBottomColor] = useState<PaletteColor | null>(null);
   const [shoesColor, setShoesColor] = useState<PaletteColor | null>(null);
   const [generationInputs, setGenerationInputs] = useState<GenerationInputs>(initialGenerationInputs);
+  const [generatedModelMedia, setGeneratedModelMedia] = useState<ProductImage[]>([]);
   const [importingGeneratedImage, setImportingGeneratedImage] = useState<string | null>(null);
   const [isGeneratedImagesOpen, setIsGeneratedImagesOpen] = useState(false);
   const [generatedImagesSearch, setGeneratedImagesSearch] = useState("");
   const [userRole, setUserRole] = useState("");
   const [userStoreName, setUserStoreName] = useState("");
   const [userStoreType, setUserStoreType] = useState<"thrift" | "retail" | "">("");
+  const categorySelectRef = useRef<HTMLSelectElement | null>(null);
   const [soldQuantity, setSoldQuantity] = useState(0);
   const [soldQuantityBySize, setSoldQuantityBySize] = useState<Record<string, number>>({});
+  const [sizeStockConditionBySize, setSizeStockConditionBySize] = useState<Record<string, number | null>>({});
   const [restockAmounts, setRestockAmounts] = useState<Record<string, string>>({});
-  const [selectedStockSize, setSelectedStockSize] = useState("");
   const [savingSizeStockFor, setSavingSizeStockFor] = useState<string>("");
   const [restockAmount, setRestockAmount] = useState("0");
   const [restocking, setRestocking] = useState(false);
-  const [newSizeInput, setNewSizeInput] = useState("");
+  const [variantRows, setVariantRows] = useState<FashionVariantRow[]>([]);
+  const [variantDraft, setVariantDraft] = useState<FashionVariantRow>({
+    id: "draft",
+    size: "",
+    colors: "",
+    stock: "",
+    conditionScore: "9",
+  });
   const generationAbortRef = useRef<AbortController | null>(null);
   const allowStockEditing = true;
   const isStoreOwner = userRole === "store_owner";
@@ -372,17 +518,124 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         : [],
     [form.productType, form.sizes]
   );
+  const activeVariantRows = useMemo(
+    () =>
+      variantRows.filter(
+        (row) => row.size.trim() || row.stock.trim() || row.colors.trim() || row.conditionScore.trim()
+      ),
+    [variantRows]
+  );
+  const completeVariantRows = useMemo(
+    () =>
+      activeVariantRows.filter(
+        (row) => row.size.trim() && row.stock.trim() && row.colors.trim() && row.conditionScore.trim()
+      ),
+    [activeVariantRows]
+  );
+  const newVariantStockTotal = useMemo(
+    () =>
+      completeVariantRows.reduce((sum, row) => sum + Math.max(0, Number(row.stock || 0)), 0),
+    [completeVariantRows]
+  );
+  const existingStockTotal = useMemo(
+    () => sizeList.reduce((sum, size) => sum + Math.max(0, Number(form.sizeStock[size] || 0)), 0),
+    [form.sizeStock, sizeList]
+  );
 
   useEffect(() => {
-    if (sizeList.length === 0) {
-      setSelectedStockSize("");
+    if (!error) return;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [error]);
+
+  useEffect(() => {
+    if (form.productType !== "fashion" || form.fashionSubtype !== "clothes") {
+      clearProductMediaEnhancement();
       return;
     }
+  }, [form.productType, form.fashionSubtype]);
 
-    if (!selectedStockSize || !sizeList.includes(selectedStockSize)) {
-      setSelectedStockSize(sizeList[0]);
-    }
-  }, [selectedStockSize, sizeList]);
+  useEffect(() => {
+    if (productMediaStatus !== "processing" || !productMediaJobId) return;
+
+    const intervalId = window.setInterval(() => {
+      fetch(`/api/products/enhance?job_id=${productMediaJobId}`, withAuthRequest())
+        .then((response) => response.json().then((data) => ({ ok: response.ok, data })))
+        .then(({ ok, data }) => {
+          if (!ok) {
+            setProductMediaStatus("failed");
+            setProductMediaError(data.error || "Unable to load enhanced product media.");
+            return;
+          }
+
+          if (data.status === "completed") {
+            const frontUrl = data.images?.front || "";
+            const backUrl = data.images?.back || "";
+            Promise.all([
+              frontUrl ? imageUrlToFile(frontUrl, "front-enhanced") : Promise.resolve(null),
+              backUrl ? imageUrlToFile(backUrl, "back-enhanced") : Promise.resolve(null),
+            ])
+              .then(([frontFile, backFile]) => {
+                if (frontUrl) {
+                  setForm((current) => ({
+                    ...current,
+                    originPictures: {
+                      ...current.originPictures,
+                      front: frontUrl,
+                    },
+                  }));
+                  setOriginPictureFiles((current) => ({
+                    ...current,
+                    front: null,
+                  }));
+                  if (frontFile) {
+                    setGenerationInputs((current) => ({
+                      ...current,
+                      front: { file: frontFile, previewUrl: frontUrl },
+                    }));
+                  }
+                }
+                if (backUrl) {
+                  setForm((current) => ({
+                    ...current,
+                    originPictures: {
+                      ...current.originPictures,
+                      back: backUrl,
+                    },
+                  }));
+                  setOriginPictureFiles((current) => ({
+                    ...current,
+                    back: null,
+                  }));
+                  if (backFile) {
+                    setGenerationInputs((current) => ({
+                      ...current,
+                      back: { file: backFile, previewUrl: backUrl },
+                    }));
+                  }
+                }
+              })
+              .finally(() => {
+                setProductMediaStatus("completed");
+                setProductMediaError("");
+                setProductMediaJobId("");
+              });
+            return;
+          }
+
+          if (data.status === "failed") {
+            setProductMediaStatus("failed");
+            setProductMediaError(data.error || "Product media enhancement failed.");
+            setProductMediaJobId("");
+          }
+        })
+        .catch(() => {
+          setProductMediaStatus("failed");
+          setProductMediaError("Unable to load enhanced product media.");
+        });
+    }, 4000);
+
+    return () => window.clearInterval(intervalId);
+  }, [productMediaJobId, productMediaStatus]);
 
   useEffect(() => {
     fetch("/api/categories", withAuthRequest())
@@ -416,7 +669,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         const p = d.product;
         const nextSizeStockEntries =
           p.sizeStock && typeof p.sizeStock === "object"
-            ? (p.sizeStock as Record<string, { fullStock: number; stock: number; soldQuantity: number }>)
+            ? (p.sizeStock as Record<string, { fullStock: number; stock: number; soldQuantity: number; conditionScore: number | null }>)
             : null;
         const nextSizes = Array.from(
           new Set([
@@ -435,8 +688,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           stock: String(p.fullStock ?? p.stock ?? 1),
           tag: p.tag || "",
           newTagDurationDays: String(p.newTagDurationDays ?? 3),
-          sizes: (p.sizes || []).join(","),
-          colors: (p.colors || []).join(","),
+          sizes: nextSizes.join(","),
+          colors: getPrimaryColor(p.colors),
           conditionScore: String(p.conditionScore ?? 9),
           productType: p.productType === "perfume" ? "perfume" : "fashion",
           fashionSubtype: "",
@@ -453,14 +706,36 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         setSoldQuantity(Math.max(Number(p.soldQuantity ?? 0), 0));
         setSavedFashionSubtype(p.fashionSubtype || "clothes");
         setSoldQuantityBySize(nextSoldQuantityBySize);
+        setSizeStockConditionBySize(
+          nextSizeStockEntries
+            ? Object.fromEntries(
+                Object.entries(nextSizeStockEntries).map(([size, entry]) => [
+                  size,
+                  typeof entry.conditionScore === "number"
+                    ? Math.max(0, Math.min(10, Number(entry.conditionScore) || 0))
+                    : null,
+                ])
+              )
+            : {}
+        );
         setRestockAmounts(Object.fromEntries(nextSizes.map((size) => [size, "0"])));
         setInitialCategorySlugs(p.categories || []);
+        setGeneratedModelMedia(
+          (p.images || []).map((image: ProductImage) => ({
+            ...image,
+            id: generateId(),
+            file: null,
+            kind: "generated",
+          }))
+        );
+        setShowProductMediaSection((p.images || []).length > 0);
         setImages(
           (p.images || []).map((image: ProductImage) => ({
             ...image,
             id: generateId(),
             existing: true,
             file: null,
+            kind: "source",
           }))
         );
       })
@@ -538,6 +813,35 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     [selectedCategoryZone]
   );
   const hasRequiredOriginPictures = requiredOriginPictureKeys.every((key) => Boolean(generationInputs[key].file));
+  const hasPendingEnhanceOriginPictures = requiredOriginPictureKeys.some((key) => Boolean(originPictureFiles[key]));
+  const hasRequiredEnhanceInputs = Boolean(selectedCategorySlug) && form.productType === "fashion";
+  const canSelectOriginPictures = Boolean(selectedCategorySlug);
+  const enhanceButtonLabel =
+    productMediaStatus === "processing"
+      ? "Enhancing..."
+      : !selectedCategorySlug
+        ? "Select category"
+        : "Enhance";
+  const productMediaItems = useMemo(
+    () => [
+      ...generatedModelMedia.map((image, index) => ({
+        label:
+          index === 0
+            ? "Front generated model"
+            : index === 1
+              ? "Back generated model"
+              : `Generated view ${index + 1}`,
+        url: image.url,
+      })),
+      ...(generationInputs.front.previewUrl
+        ? [{ label: "Enhanced front", url: generationInputs.front.previewUrl }]
+        : []),
+      ...(generationInputs.back.previewUrl
+        ? [{ label: "Enhanced back", url: generationInputs.back.previewUrl }]
+        : []),
+    ],
+    [generatedModelMedia, generationInputs.front.previewUrl, generationInputs.back.previewUrl]
+  );
   const fullStock = Math.max(Number(form.stock || 0), 0);
   const availableStock = Math.max(fullStock - soldQuantity, 0);
   const normalizedSizeStock = useMemo(
@@ -552,7 +856,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     stock?: number;
     fullStock?: number;
     soldQuantity?: number;
-    sizeStock?: Record<string, { fullStock: number; stock: number; soldQuantity: number }> | null;
+    sizeStock?: Record<string, { fullStock: number; stock: number; soldQuantity: number; conditionScore: number | null }> | null;
   }) => {
     if (typeof product.fullStock === "number" || typeof product.stock === "number") {
       const nextFullStock = Math.max(Number(product.fullStock ?? product.stock ?? 0), 0);
@@ -569,10 +873,15 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     if (product.sizeStock && typeof product.sizeStock === "object") {
       const nextSizeStock: Record<string, string> = {};
       const nextSoldBySize: Record<string, number> = {};
+      const nextConditionBySize: Record<string, number | null> = {};
 
       for (const [size, entry] of Object.entries(product.sizeStock)) {
         nextSizeStock[size] = String(entry.fullStock ?? 0);
         nextSoldBySize[size] = Math.max(Number(entry.soldQuantity ?? 0), 0);
+        nextConditionBySize[size] =
+          typeof entry.conditionScore === "number"
+            ? Math.max(0, Math.min(10, Number(entry.conditionScore) || 0))
+            : null;
       }
 
       setForm((current) => ({
@@ -580,24 +889,17 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         sizeStock: nextSizeStock,
       }));
       setSoldQuantityBySize(nextSoldBySize);
+      setSizeStockConditionBySize(nextConditionBySize);
       setRestockAmounts(Object.fromEntries(Object.keys(nextSizeStock).map((size) => [size, "0"])));
-      setSelectedStockSize((current) => {
-        const nextSizeKeys = Object.keys(nextSizeStock);
-        if (nextSizeKeys.length === 0) return "";
-        return current && nextSizeKeys.includes(current) ? current : nextSizeKeys[0];
-      });
     }
   };
 
-  const handleSubmitSelectedSizeStock = async () => {
-    if (!selectedStockSize) return;
-
-    const amount = Math.max(0, Number(restockAmounts[selectedStockSize] || 0));
+  const handleSubmitSelectedSizeStock = async (size: string) => {
+    const amount = Math.max(0, Number(restockAmounts[size] || 0));
     if (amount <= 0) return;
-    const isNewSize = form.sizeStock[selectedStockSize] === undefined;
 
     setError("");
-    setSavingSizeStockFor(selectedStockSize);
+    setSavingSizeStockFor(size);
 
     try {
       const response = await fetch(
@@ -607,8 +909,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             sizes: sizeList,
-            sizeStock: { [selectedStockSize]: amount },
-            sizeStockMode: isNewSize ? "full" : "restock",
+            sizeStock: { [size]: amount },
+            sizeStockMode: "restock",
           }),
         })
       );
@@ -619,6 +921,69 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       }
 
       syncInventoryState(data.product);
+      setRestockAmounts((current) => ({ ...current, [size]: "0" }));
+    } catch {
+      setError("Network error");
+    } finally {
+      setSavingSizeStockFor("");
+    }
+  };
+
+  const handleRemoveExistingSize = async (size: string) => {
+    const remainingSizes = sizeList.filter((item) => item !== size);
+    const remainingSizeStock = Object.fromEntries(
+      remainingSizes.map((item) => [
+        item,
+        {
+          fullStock: Math.max(0, Number(form.sizeStock[item] || 0)),
+          stock: Math.max(0, Number(form.sizeStock[item] || 0)),
+          conditionScore: sizeStockConditionBySize[item] ?? null,
+        },
+      ])
+    );
+
+    setError("");
+    setSavingSizeStockFor(size);
+
+    try {
+      const response = await fetch(
+        `/api/products/${id}`,
+        withAuthRequest({
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sizes: remainingSizes,
+            sizeStock: remainingSizeStock,
+            sizeStockMode: "full",
+          }),
+        })
+      );
+      const data = await response.json();
+      if (!response.ok || !data.product) {
+        setError(data.error || "Unable to remove size.");
+        return;
+      }
+
+      syncInventoryState(data.product);
+      setForm((current) => ({
+        ...current,
+        sizes: remainingSizes.join(","),
+      }));
+      setRestockAmounts((current) => {
+        const next = { ...current };
+        delete next[size];
+        return next;
+      });
+      setSoldQuantityBySize((current) => {
+        const next = { ...current };
+        delete next[size];
+        return next;
+      });
+      setSizeStockConditionBySize((current) => {
+        const next = { ...current };
+        delete next[size];
+        return next;
+      });
     } catch {
       setError("Network error");
     } finally {
@@ -690,6 +1055,15 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       ...current,
       [key]: file,
     }));
+    setGenerationInputs((current) => ({
+      ...current,
+      [key]: file ? { file, previewUrl: URL.createObjectURL(file) } : createEmptySlot(),
+    }));
+    if (key === "front" || key === "back") {
+      clearProductMediaEnhancement();
+      setShowProductMediaSection(false);
+      setGeneratedModelMedia([]);
+    }
     setForm((current) => ({
       ...current,
       originPictures: {
@@ -697,6 +1071,22 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         [key]: file ? URL.createObjectURL(file) : "",
       },
     }));
+    setImages((current) => {
+      const next = current.filter((image) => !(image.kind === "source" && image.slot === key));
+      if (!file) return next;
+
+      return [
+        ...next,
+        {
+          id: generateId(),
+          url: URL.createObjectURL(file),
+          file,
+          existing: false,
+          kind: "source",
+          slot: key,
+        },
+      ];
+    });
   };
 
   const assignProductImageToOriginPicture = async (key: OriginPictureKey, imageId: string) => {
@@ -706,10 +1096,6 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     try {
       const file = await productImageToFile(image, key);
       handleOriginPictureSelect(key, file);
-      setGenerationInputs((current) => ({
-        ...current,
-        [key]: { file, previewUrl: image.url },
-      }));
     } catch {
       setError(`Unable to use this image for the ${key} origin picture.`);
     }
@@ -731,6 +1117,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           url: URL.createObjectURL(file),
           file,
           existing: false,
+          kind: "generated",
         },
       ]);
     } catch {
@@ -741,6 +1128,9 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   };
 
   const handleGenerationInput = (key: keyof GenerationInputs, file: File | null) => {
+    if (key === "front" || key === "back") {
+      clearProductMediaEnhancement();
+    }
     setGenerationInputs((current) => ({
       ...current,
       [key]: file ? { file, previewUrl: URL.createObjectURL(file) } : createEmptySlot(),
@@ -752,6 +1142,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       ...current,
       [key]: createEmptySlot(),
     }));
+    setImages((current) => current.filter((image) => !(image.kind === "source" && image.slot === key)));
     setOriginPictureFiles((current) => ({
       ...current,
       [key]: null,
@@ -763,6 +1154,10 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         [key]: "",
       },
     }));
+    if (key === "front" || key === "back") {
+      setShowProductMediaSection(false);
+      setGeneratedModelMedia([]);
+    }
   };
 
   const assignProductImageToGenerationSlot = async (key: keyof GenerationInputs, imageId: string) => {
@@ -834,7 +1229,6 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       (!companionZones.includes("top") || (Boolean(companionTopType) && Boolean(secondaryTopColor))) &&
       (!companionZones.includes("bottom") || (Boolean(companionBottomType) && Boolean(secondaryBottomColor))) &&
       (!companionZones.includes("footwear") || (Boolean(footwearType) && Boolean(shoesColor))));
-
   const renderCompanionZoneCard = (zone: CompanionZone) => {
     if (!companionZones.includes(zone)) return null;
 
@@ -969,6 +1363,72 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     generationAbortRef.current?.abort();
     generationAbortRef.current = null;
     setGenerating(false);
+  };
+
+  const handleRegenerateModel = () => {
+    setShowProductMediaSection(false);
+    setGeneratedModelMedia([]);
+  };
+
+  const clearProductMediaEnhancement = () => {
+    setProductMediaStatus("idle");
+    setProductMediaJobId("");
+    setProductMediaError("");
+  };
+
+  const handleCancelEnhance = () => {
+    clearProductMediaEnhancement();
+  };
+
+  const handleEnhanceButtonClick = () => {
+    if (!selectedCategorySlug) {
+      categorySelectRef.current?.focus();
+      categorySelectRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+
+    void handleEnhanceProductMedia();
+  };
+
+  const handleEnhanceProductMedia = async () => {
+    if (!hasRequiredEnhanceInputs) {
+      setProductMediaError("Please choose categories first.");
+      return;
+    }
+
+    if (!generationInputs.front.file || !generationInputs.back.file) {
+      setProductMediaError("Please upload front and back images first.");
+      return;
+    }
+
+    setProductMediaError("");
+    setProductMediaStatus("processing");
+
+    try {
+      const [frontFile, backFile] = await Promise.all([
+        compressImageFile(generationInputs.front.file),
+        compressImageFile(generationInputs.back.file),
+      ]);
+
+      const body = new FormData();
+      body.append("front", frontFile);
+      body.append("back", backFile);
+
+      const res = await fetch("/api/products/enhance", withAuthRequest({ method: "POST", body }));
+      const data = await res.json();
+
+      if (!res.ok) {
+        setProductMediaStatus("failed");
+        setProductMediaError(data.error || "Unable to start product media enhancement.");
+        return;
+      }
+
+      setProductMediaJobId(data.job_id || "");
+      setProductMediaStatus(data.status || "processing");
+    } catch {
+      setProductMediaStatus("failed");
+      setProductMediaError("Network error");
+    }
   };
 
   const handleGenerate = async () => {
@@ -1113,11 +1573,15 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
             url: URL.createObjectURL(file),
             file,
             existing: false,
+            kind: "generated" as const,
           };
         })
       );
 
-      setImages((current) => [...current, ...generatedImages.filter((img): img is any => !!img)]);
+      const nextGeneratedImages = generatedImages.filter((img): img is any => !!img);
+      setImages((current) => [...current, ...nextGeneratedImages]);
+      setGeneratedModelMedia(nextGeneratedImages);
+      setShowProductMediaSection(true);
     } catch {
       if (!controller.signal.aborted) {
         setError("Generation request failed.");
@@ -1137,13 +1601,6 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 
     if (!selectedCategorySlug) {
       setError("Please select a product category.");
-      setLoading(false);
-      return;
-    }
-
-    const validImages = images.filter((img) => img.url.trim() !== "");
-    if (validImages.length === 0) {
-      setError("Please keep or upload at least one product image.");
       setLoading(false);
       return;
     }
@@ -1176,11 +1633,36 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         selectedGreatGrandchildSlug,
       ].filter(Boolean);
 
-      const compressedValidImages = await Promise.all(
-        validImages.map(async (img) => {
-          if (!img.file) return img;
-          return { ...img, file: await compressImageFile(img.file) };
-        })
+      const currentProductMedia =
+        generatedModelMedia.length > 0
+          ? generatedModelMedia
+          : images.filter((image) => image.kind === "source");
+      if (currentProductMedia.length === 0) {
+        setError("Please keep or upload at least one product image.");
+        setLoading(false);
+        return;
+      }
+      const existingImages = currentProductMedia
+        .filter((image) => !image.file)
+        .map((image) => ({ url: image.url }));
+      const newMediaFiles = currentProductMedia
+        .filter((image): image is ProductImage & { file: File } => Boolean(image.file))
+        .map((image) => image.file);
+      const imageOrder: string[] = [];
+      let newImageIndex = 0;
+      let mainImageKey = "";
+      for (const image of currentProductMedia) {
+        const key = image.file ? `new:${newImageIndex++}` : `existing:${image.url}`;
+        imageOrder.push(key);
+        if (!mainImageKey && (image as { isMain?: boolean }).isMain) {
+          mainImageKey = key;
+        }
+      }
+      if (!mainImageKey && imageOrder.length > 0) {
+        mainImageKey = imageOrder[0];
+      }
+      const compressedProductMediaFiles = await Promise.all(
+        newMediaFiles.map(async (file) => await compressImageFile(file))
       );
       const compressedOriginPictureFiles = {
         front: originPictureFiles.front ? await compressImageFile(originPictureFiles.front) : null,
@@ -1203,14 +1685,34 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       body.append("productType", form.productType);
       body.append("fashionSubtype", form.fashionSubtype || savedFashionSubtype || "clothes");
       body.append("fullStock", form.stock);
-      const sizes = sizeList;
-      if (sizes.length > 0) {
-        const sizeStockPayload = Object.fromEntries(
-          sizes.map((size) => [size, Math.max(0, Number(form.sizeStock[size] || 0))])
-        );
+      const existingSizes = sizeList;
+      const newVariantLabels = completeVariantRows.map((row) => buildVariantLabel(row));
+      const sizeStockPayload = Object.fromEntries(
+        [
+          ...existingSizes.map((size) => [
+            size,
+            {
+              fullStock: Math.max(0, Number(form.sizeStock[size] || 0)),
+              stock: Math.max(0, Number(form.sizeStock[size] || 0)),
+              conditionScore: null,
+            },
+          ]),
+          ...completeVariantRows.map((row) => [
+            buildVariantLabel(row),
+            {
+              fullStock: Math.max(0, Number(row.stock || 0)),
+              stock: Math.max(0, Number(row.stock || 0)),
+              conditionScore: Math.max(0, Math.min(10, Number(row.conditionScore || 9) || 9)),
+            },
+          ]),
+        ]
+      );
+      if (Object.keys(sizeStockPayload).length > 0) {
         body.append("sizeStock", JSON.stringify(sizeStockPayload));
       }
-      body.append("conditionScore", form.conditionScore);
+      if (form.productType === "perfume") {
+        body.append("conditionScore", form.conditionScore);
+      }
       body.append("originPictureFront", form.originPictures.front);
       body.append("originPictureBack", form.originPictures.back);
       body.append("originPictureLeft", form.originPictures.left);
@@ -1225,44 +1727,31 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       body.append("categories", JSON.stringify(productCategories));
       body.append(
         "sizes",
-        JSON.stringify(sizeList)
+        JSON.stringify([...existingSizes, ...newVariantLabels])
       );
       body.append(
         "colors",
         JSON.stringify(
           form.productType === "perfume"
             ? []
-            : form.colors
-                .split(",")
-                .map((color) => color.trim())
-                .filter(Boolean)
+            : Array.from(
+                new Set(
+                  [
+                    ...form.colors
+                      .split(",")
+                      .map((color) => color.trim())
+                      .filter(Boolean),
+                    ...completeVariantRows.map((row) => row.colors.trim()).filter(Boolean),
+                  ]
+                )
+              )
         )
       );
-      body.append(
-        "existingImages",
-        JSON.stringify(
-          validImages.filter((img) => img.existing).map((img) => ({ url: img.url }))
-        )
-      );
-
-      const newImages = compressedValidImages.filter((img) => !img.existing && img.file);
-      body.append(
-        "imageOrder",
-        JSON.stringify(
-          validImages.map((img) => {
-            if (img.existing) return `existing:${img.url}`;
-            const newIndex = newImages.findIndex((candidate) => candidate.id === img.id);
-            return `new:${newIndex}`;
-          })
-        )
-      );
-
-      const firstImage = validImages[0];
-      if (firstImage?.existing) body.append("mainImageKey", `existing:${firstImage.url}`);
-      else body.append("mainImageKey", "new:0");
-
-      newImages.forEach((img) => {
-        if (img.file) body.append("images", img.file);
+      body.append("existingImages", JSON.stringify(existingImages));
+      body.append("imageOrder", JSON.stringify(imageOrder));
+      body.append("mainImageKey", mainImageKey);
+      compressedProductMediaFiles.forEach((file) => {
+        body.append("images", file);
       });
 
       const res = await fetch(`/api/products/${id}`, withAuthRequest({
@@ -1290,15 +1779,12 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold tracking-wide">Edit Product</h1>
-        <p className="mt-1 text-sm text-text-secondary">
-          Update the product with a wider, cleaner editing layout and keep related fields side by side.
-        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {error && <div className="border border-[#BD3100] bg-[#faf3f2] px-4 py-3 text-xs text-[#BD3100]">{error}</div>}
 
-        <SectionCard title="Product Basics" description="Edit the main fields in one horizontal section instead of a long vertical stack.">
+        <SectionCard title="Product Basics" description="">
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             <div className="xl:col-span-2">
               <FieldLabel>Product Name</FieldLabel>
@@ -1308,7 +1794,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-                placeholder="Product name"
+                placeholder="e.g. Vintage Denim Jacket"
               />
             </div>
             {!isStoreOwner && (
@@ -1338,7 +1824,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                   value={form.brand}
                   onChange={(e) => setForm({ ...form, brand: e.target.value })}
                   className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-                  placeholder={isThriftStoreOwner ? "Original brand of the item" : "Brand"}
+                  placeholder={isThriftStoreOwner ? "Original brand, e.g. Zara" : "Brand name, e.g. Nike"}
                 />
               </div>
             )}
@@ -1349,7 +1835,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 value={form.reference}
                 onChange={(e) => setForm({ ...form, reference: e.target.value })}
                 className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-                placeholder="Internal product reference"
+                placeholder="SKU or internal reference"
               />
             </div>
             <div>
@@ -1361,212 +1847,13 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 value={form.price}
                 onChange={(e) => setForm({ ...form, price: e.target.value })}
                 className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-                placeholder="Price"
+                placeholder="0.00"
               />
-            </div>
-            <div>
-              <FieldLabel>Stock</FieldLabel>
-              {form.productType !== "perfume" && sizeList.length > 0 ? (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                    <div className="rounded border border-border bg-bg-secondary p-3">
-                      <p className="text-[10px] uppercase tracking-wider text-text-secondary">Full</p>
-                      <p className="mt-1 text-lg font-semibold">{fullStock}</p>
-                    </div>
-                    <div className="rounded border border-border bg-bg-secondary p-3">
-                      <p className="text-[10px] uppercase tracking-wider text-text-secondary">Available</p>
-                      <p className="mt-1 text-lg font-semibold">{availableStock}</p>
-                    </div>
-                    <div className="rounded border border-border bg-bg-secondary p-3">
-                      <p className="text-[10px] uppercase tracking-wider text-text-secondary">Sold</p>
-                      <p className="mt-1 text-lg font-semibold">{soldQuantity}</p>
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-text-secondary">
-                    Use the stock panel below to restock each size. Full stock is fixed after creation.
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <input
-                    type="number"
-                    min="0"
-                    value={form.stock}
-                    onChange={(e) => setForm({ ...form, stock: e.target.value })}
-                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-                    placeholder="Full stock"
-                  />
-                  <p className="mt-1 text-[10px] text-text-secondary">
-                    Full stock is the total inventory you set. Sold units are shown in the stock panel.
-                  </p>
-                </>
-              )}
-            </div>
-            <div className="rounded-2xl border border-border bg-bg-secondary p-4 space-y-3 xl:col-span-3">
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">Stock Panel</p>
-                <p className="mt-1 text-[11px] text-text-secondary">
-                  Select a size. New sizes can receive an initial full stock once, existing sizes can be restocked.
-                </p>
-              </div>
-              {form.productType !== "perfume" && (() => {
-                const addSize = () => {
-                  const trimmed = newSizeInput.trim();
-                  if (!trimmed) return;
-                  const existing = normalizeSizeList(form.sizes);
-                  if (existing.includes(trimmed)) {
-                    setNewSizeInput("");
-                    setSelectedStockSize(trimmed);
-                    return;
-                  }
-                  setForm({ ...form, sizes: [...existing, trimmed].join(",") });
-                  setSelectedStockSize(trimmed);
-                  setNewSizeInput("");
-                };
-                return (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={newSizeInput}
-                      onChange={(e) => setNewSizeInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          addSize();
-                        }
-                      }}
-                      className="flex-1 bg-bg-card border border-border px-3 py-2 text-sm focus:border-accent transition-colors"
-                      placeholder="New size (e.g. M, 42)"
-                    />
-                    <button
-                      type="button"
-                      onClick={addSize}
-                      className="shrink-0 border border-border px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-text-primary transition-colors hover:border-accent hover:text-accent"
-                    >
-                      Add size
-                    </button>
-                  </div>
-                );
-              })()}
-              {sizeList.length > 0 ? (
-                <div className="space-y-3">
-                  <div>
-                    <FieldLabel>Size</FieldLabel>
-                    <select
-                      value={selectedStockSize}
-                      onChange={(e) => setSelectedStockSize(e.target.value)}
-                      className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-                    >
-                      {sizeList.map((size) => (
-                        <option key={size} value={size}>
-                          {size}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {selectedStockSize ? (() => {
-                    const sizeFull = Math.max(Number(normalizedSizeStock[selectedStockSize] || 0), 0);
-                    const sizeSold = Math.max(Number(soldQuantityBySize[selectedStockSize] || 0), 0);
-                    const sizeAvailable = Math.max(sizeFull - sizeSold, 0);
-                    const restockValue = restockAmounts[selectedStockSize] || "0";
-                    const isSaving = savingSizeStockFor === selectedStockSize;
-                    const isNewSize = form.sizeStock[selectedStockSize] === undefined;
-
-                    return (
-                      <div className="grid grid-cols-1 gap-3 rounded border border-border bg-bg-card p-3 lg:grid-cols-[68px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(220px,1.1fr)] lg:items-stretch">
-                        <div className="flex items-center justify-between gap-3 rounded border border-border bg-bg-secondary px-3 py-2 lg:justify-center">
-                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-primary">{selectedStockSize}</p>
-                          <p className="text-[10px] text-text-secondary lg:hidden">Initial full / restock / available / sold</p>
-                        </div>
-
-                        <div className="rounded border border-border bg-bg-secondary px-3 py-2 h-full">
-                          <FieldLabel>Full Stock</FieldLabel>
-                          <div className="flex h-[calc(100%-22px)] items-center">
-                            <p className="text-sm font-semibold text-text-primary">{sizeFull}</p>
-                          </div>
-                        </div>
-
-                        <div className="rounded border border-border bg-bg-secondary px-3 py-2 h-full">
-                          <FieldLabel>Available</FieldLabel>
-                          <div className="flex h-[calc(100%-22px)] items-center">
-                            <p className="text-sm font-semibold text-text-primary">{sizeAvailable}</p>
-                          </div>
-                        </div>
-
-                        <div className="rounded border border-border bg-bg-secondary px-3 py-2 h-full">
-                          <FieldLabel>Sold</FieldLabel>
-                          <div className="flex h-[calc(100%-22px)] items-center">
-                            <p className="text-sm font-semibold text-text-primary">{sizeSold}</p>
-                          </div>
-                        </div>
-
-                        <div className="rounded border border-border bg-bg-secondary px-3 py-2 h-full">
-                          <FieldLabel>{isNewSize ? "Initial Stock" : "Restock"}</FieldLabel>
-                          <div className="flex flex-row items-end gap-2">
-                            <input
-                              type="number"
-                              min="0"
-                              value={restockValue}
-                              onChange={(e) =>
-                                setRestockAmounts((current) => ({
-                                  ...current,
-                                  [selectedStockSize]: e.target.value,
-                                }))
-                              }
-                              className="w-full min-w-0 flex-1 bg-bg-card border border-border px-3 py-2 text-sm focus:border-accent transition-colors"
-                              placeholder={isNewSize ? "Initial stock" : "Restock"}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => void handleSubmitSelectedSizeStock()}
-                              disabled={isSaving}
-                              className="shrink-0 border border-border px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-text-primary transition-colors hover:border-accent hover:text-accent disabled:opacity-60"
-                            >
-                              {isSaving ? "Saving..." : isNewSize ? "Create Stock" : "Restock"}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })() : null}
-                </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <div className="rounded border border-border bg-bg-card p-3">
-                      <p className="text-[10px] uppercase tracking-wider text-text-secondary">Full</p>
-                      <p className="mt-1 text-lg font-semibold">{fullStock}</p>
-                    </div>
-                    <div className="rounded border border-border bg-bg-card p-3">
-                      <p className="text-[10px] uppercase tracking-wider text-text-secondary">Available</p>
-                      <p className="mt-1 text-lg font-semibold">{availableStock}</p>
-                    </div>
-                    <div className="rounded border border-border bg-bg-card p-3">
-                      <p className="text-[10px] uppercase tracking-wider text-text-secondary">Sold</p>
-                      <p className="mt-1 text-lg font-semibold">{soldQuantity}</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <div className="w-full sm:w-32 rounded border border-border bg-bg-secondary px-3 py-2">
-                      <p className="text-[10px] uppercase tracking-[0.16em] text-text-secondary">Full</p>
-                      <p className="mt-1 text-sm font-semibold text-text-primary">{form.stock}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleAddStock}
-                      disabled={restocking}
-                      className="w-full sm:w-auto border border-foreground bg-foreground px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-background transition-colors hover:bg-accent disabled:opacity-60"
-                    >
-                      {restocking ? "Saving..." : "ADD STOCK"}
-                    </button>
-                  </div>
-                </>
-              )}
             </div>
             <div className="xl:col-span-3">
               <FieldLabel>Category</FieldLabel>
               <select
+                ref={categorySelectRef}
                 value={selectedCategorySlug}
                 onChange={(e) => {
                   const value = e.target.value;
@@ -1601,7 +1888,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                 rows={4}
                 className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm resize-none"
-                placeholder="Description"
+                placeholder="Describe fit, materials, condition, and any notable details"
               />
             </div>
           </div>
@@ -1618,7 +1905,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                     value={form.cloneSourceName}
                     onChange={(e) => setForm({ ...form, cloneSourceName: e.target.value })}
                     className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-                    placeholder="Original fragrance name"
+                    placeholder="e.g. Bleu de Chanel"
                   />
                 </div>
               </div>
@@ -1674,34 +1961,287 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
             </div>
           </SectionCard>
         ) : (
-          <SectionCard title="Fashion Details" description="Align subtype, sizes, colors, and condition in a cleaner horizontal layout.">
+          <SectionCard title="Fashion Details" description="">
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-              <div>
-                <FieldLabel>Colors</FieldLabel>
-                <input
-                  type="text"
-                  value={form.colors}
-                  onChange={(e) => setForm({ ...form, colors: e.target.value })}
-                  className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-                  placeholder="Colors: Black, White, Olive"
-                />
+              <div className="xl:col-span-2 rounded-2xl border border-border bg-bg-secondary p-4 space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">Existing Stock</p>
+
+                  </div>
+                  <div className="rounded border border-border bg-bg-card px-3 py-2 text-right">
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">Total stock</p>
+                    <p className="mt-1 text-sm font-semibold text-text-primary">{existingStockTotal}</p>
+                  </div>
+                </div>
+                {sizeList.length > 0 ? (
+                  <div className="space-y-2">
+                    {sizeList.map((size) => {
+                      const fullStockForSize = Math.max(Number(normalizedSizeStock[size] || 0), 0);
+                      const soldForSize = Math.max(Number(soldQuantityBySize[size] || 0), 0);
+                      const availableForSize = Math.max(fullStockForSize - soldForSize, 0);
+                      const conditionScore = sizeStockConditionBySize[size];
+                      const restockValue = restockAmounts[size] || "0";
+                      const isSaving = savingSizeStockFor === size;
+                      return (
+                        <div
+                          key={size}
+                          className="flex flex-col gap-2 rounded border border-border bg-bg-card p-3 xl:flex-row xl:flex-nowrap xl:items-stretch"
+                        >
+                          <div className="flex items-center justify-between gap-3 xl:min-w-[90px] xl:flex-1">
+                            <p className="text-sm font-semibold text-text-primary">{size}</p>
+                          </div>
+                          <div className="rounded border border-border bg-bg-secondary px-3 py-2 xl:w-[110px] xl:flex-none">
+                            <p className="text-[10px] uppercase tracking-[0.16em] text-text-secondary">Full</p>
+                            <p className="mt-1 text-sm font-semibold text-text-primary">{fullStockForSize}</p>
+                          </div>
+                          <div className="rounded border border-border bg-bg-secondary px-3 py-2 xl:w-[110px] xl:flex-none">
+                            <p className="text-[10px] uppercase tracking-[0.16em] text-text-secondary">Available</p>
+                            <p className="mt-1 text-sm font-semibold text-text-primary">{availableForSize}</p>
+                          </div>
+                          <div className="rounded border border-border bg-bg-secondary px-3 py-2 xl:w-[110px] xl:flex-none">
+                            <p className="text-[10px] uppercase tracking-[0.16em] text-text-secondary">Sold</p>
+                            <p className="mt-1 text-sm font-semibold text-text-primary">{soldForSize}</p>
+                          </div>
+                          <div className="rounded border border-border bg-bg-secondary px-3 py-2 xl:min-w-[280px] xl:flex-1">
+                            <FieldLabel>Restock</FieldLabel>
+                            <div className="flex gap-2">
+                              <input
+                                type="number"
+                                min="0"
+                                value={restockValue}
+                                onChange={(e) =>
+                                  setRestockAmounts((current) => ({
+                                    ...current,
+                                    [size]: e.target.value,
+                                  }))
+                                }
+                                className="min-w-0 flex-1 bg-bg-card border border-border px-3 py-2 text-sm focus:border-accent transition-colors"
+                                placeholder="Restock amount"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => void handleSubmitSelectedSizeStock(size)}
+                                disabled={isSaving}
+                                className="shrink-0 border border-border px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-text-primary transition-colors hover:border-accent hover:text-accent disabled:opacity-60"
+                              >
+                                {isSaving ? "Saving..." : "Restock"}
+                              </button>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => void handleRemoveExistingSize(size)}
+                            disabled={isSaving}
+                            className="shrink-0 border border-border px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-danger transition-colors hover:border-danger hover:text-danger disabled:opacity-60 xl:self-center"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-text-secondary">No existing stock rows yet.</p>
+                )}
               </div>
-              <div className="xl:col-span-3">
-              <div className="flex items-center justify-between gap-4 mb-2">
-                <FieldLabel>Condition</FieldLabel>
-                <span className="text-xs text-text-primary uppercase tracking-wider font-medium">
-                  {form.conditionScore}/10 · {getConditionStatusFromScore(Number(form.conditionScore || 0))}
-                </span>
-              </div>
-              <input
-                type="range"
-                min="1"
-                max="10"
-                step="1"
-                value={form.conditionScore}
-                onChange={(e) => setForm({ ...form, conditionScore: e.target.value })}
-                className="w-full accent-accent cursor-pointer"
-              />
+              <div className="xl:col-span-2 rounded-2xl border border-border bg-bg-secondary p-4 space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">New Variants</p>
+
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_140px_minmax(0,1.5fr)_120px]">
+                  <input
+                    type="text"
+                    value={variantDraft.size}
+                    onChange={(e) => setVariantDraft((current) => ({ ...current, size: e.target.value }))}
+                    className="w-full bg-bg-card border border-border px-3 py-2 text-sm focus:border-accent transition-colors"
+                    placeholder="Size, e.g. 42"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    value={variantDraft.stock}
+                    onChange={(e) => setVariantDraft((current) => ({ ...current, stock: e.target.value }))}
+                    className="w-full bg-bg-card border border-border px-3 py-2 text-sm focus:border-accent transition-colors"
+                    placeholder="Stock"
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">Color</span>
+                    <span className="text-[10px] text-text-secondary">
+                      {variantDraft.colors ? variantDraft.colors : "Pick from palette"}
+                    </span>
+                    {SECONDARY_GARMENT_PALETTE.map((color) => {
+                      const active = variantDraft.colors.trim().toLowerCase() === color.name.toLowerCase();
+                      return (
+                        <button
+                          key={color.hex}
+                          type="button"
+                          title={color.name}
+                          onClick={() => setVariantDraft((current) => ({ ...current, colors: color.name }))}
+                          className={`h-7 w-7 rounded-full border-2 transition-all ${
+                            active ? "border-accent scale-110" : "border-border hover:border-text-secondary"
+                          }`}
+                          style={{ backgroundColor: color.hex }}
+                        />
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const picked = await pickScreenColor();
+                        if (!picked) return;
+                        setVariantDraft((current) => ({ ...current, colors: picked.name }));
+                      }}
+                      className="rounded-full border border-border px-3 py-1.5 text-[10px] uppercase tracking-[0.22em] text-text-secondary transition-colors hover:border-accent hover:text-accent"
+                    >
+                      Inspector
+                    </button>
+                  </div>
+                  <div className="rounded border border-border bg-bg-card px-3 py-2">
+                    <FieldLabel>Condition</FieldLabel>
+                    <input
+                      type="range"
+                      min="1"
+                      max="10"
+                      step="1"
+                      value={variantDraft.conditionScore}
+                      onChange={(e) => setVariantDraft((current) => ({ ...current, conditionScore: e.target.value }))}
+                      className="w-full accent-accent cursor-pointer"
+                    />
+                  </div>
+                  <div className="md:col-span-4 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!variantDraft.size.trim() || !variantDraft.stock.trim() || !variantDraft.colors.trim() || !variantDraft.conditionScore.trim()) return;
+                        const stockValue = Math.max(0, Number(variantDraft.stock || 0));
+                        setVariantRows((current) => [
+                          ...current,
+                          {
+                            id: generateId(),
+                            size: variantDraft.size.trim(),
+                            colors: variantDraft.colors.trim(),
+                            stock: String(stockValue),
+                            conditionScore: String(Math.max(1, Math.min(10, Number(variantDraft.conditionScore || 9) || 9))),
+                          },
+                        ]);
+                        setVariantDraft({
+                          id: "draft",
+                          size: "",
+                          colors: "",
+                          stock: "",
+                          conditionScore: "9",
+                        });
+                      }}
+                      disabled={!variantDraft.size.trim() || !variantDraft.stock.trim() || !variantDraft.colors.trim() || !variantDraft.conditionScore.trim()}
+                      className="border border-border bg-foreground px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-background transition-colors hover:bg-accent disabled:opacity-60"
+                    >
+                      ADD
+                    </button>
+                  </div>
+                </div>
+                {activeVariantRows.length > 0 && (
+                  <div className="space-y-2">
+                    {activeVariantRows.map((row, index) => (
+                      <div key={row.id} className="grid grid-cols-1 gap-2 rounded border border-border bg-bg-card p-3 md:grid-cols-[minmax(0,1fr)_140px_minmax(0,1.5fr)_120px_auto] md:items-center">
+                        <input
+                          type="text"
+                          value={row.size}
+                          onChange={(e) =>
+                            setVariantRows((current) =>
+                              current.map((item) => (item.id === row.id ? { ...item, size: e.target.value } : item))
+                            )
+                          }
+                          className="w-full bg-bg-secondary border border-border px-3 py-2 text-sm focus:border-accent transition-colors"
+                          placeholder="Size"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          value={row.stock}
+                          onChange={(e) =>
+                            setVariantRows((current) =>
+                              current.map((item) => (item.id === row.id ? { ...item, stock: e.target.value } : item))
+                            )
+                          }
+                          className="w-full bg-bg-secondary border border-border px-3 py-2 text-sm focus:border-accent transition-colors"
+                          placeholder="Stock"
+                        />
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">Color</span>
+                          <span className="text-[10px] text-text-secondary">
+                            {row.colors ? row.colors : "Pick from palette"}
+                          </span>
+                          {SECONDARY_GARMENT_PALETTE.map((color) => {
+                            const active = row.colors.trim().toLowerCase() === color.name.toLowerCase();
+                            return (
+                              <button
+                                key={color.hex}
+                                type="button"
+                                title={color.name}
+                                onClick={() =>
+                                  setVariantRows((current) =>
+                                    current.map((item) =>
+                                      item.id === row.id ? { ...item, colors: color.name } : item
+                                    )
+                                  )
+                                }
+                                className={`h-7 w-7 rounded-full border-2 transition-all ${
+                                  active ? "border-accent scale-110" : "border-border hover:border-text-secondary"
+                                }`}
+                                style={{ backgroundColor: color.hex }}
+                              />
+                            );
+                          })}
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const picked = await pickScreenColor();
+                              if (!picked) return;
+                              setVariantRows((current) =>
+                                current.map((item) =>
+                                  item.id === row.id ? { ...item, colors: picked.name } : item
+                                )
+                              );
+                            }}
+                            className="rounded-full border border-border px-3 py-1.5 text-[10px] uppercase tracking-[0.22em] text-text-secondary transition-colors hover:border-accent hover:text-accent"
+                          >
+                            Inspector
+                          </button>
+                        </div>
+                        <div className="rounded border border-border bg-bg-secondary px-3 py-2">
+                          <FieldLabel>Condition</FieldLabel>
+                          <input
+                            type="range"
+                            min="1"
+                            max="10"
+                            step="1"
+                            value={row.conditionScore}
+                            onChange={(e) =>
+                              setVariantRows((current) =>
+                                current.map((item) =>
+                                  item.id === row.id ? { ...item, conditionScore: e.target.value } : item
+                                )
+                              )
+                            }
+                            className="w-full accent-accent cursor-pointer"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setVariantRows((current) => current.filter((item) => item.id !== row.id))}
+                          className="shrink-0 border border-border px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-text-secondary transition-colors hover:border-accent hover:text-accent"
+                          aria-label={`Remove variant ${index + 1}`}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </SectionCard>
@@ -1758,7 +2298,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                     type="text"
                     value={generatedImagesSearch}
                     onChange={(e) => setGeneratedImagesSearch(e.target.value)}
-                    placeholder="Search by name or prompt..."
+                    placeholder="Search generated images by name or prompt"
                     className="w-full max-w-xs bg-bg-secondary border border-border px-3 py-2 text-xs placeholder:text-text-secondary/50"
                   />
                   <span className="text-[10px] text-text-secondary">
@@ -1813,7 +2353,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         {form.productType === "fashion" && (
           <SectionCard
             title="Origin Pictures"
-            description="Upload source images, assign the views, and let the selected category drive the generation flow."
+
           >
             {!isStoreOwner && (
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
@@ -1837,111 +2377,20 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                         value={form.newTagDurationDays}
                         onChange={(e) => setForm({ ...form, newTagDurationDays: e.target.value })}
                         className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-                        placeholder="3"
+                        placeholder="3 days"
                       />
                     </div>
                   )}
                 </div>
-                <div>
-                  <FieldLabel>Upload Pictures</FieldLabel>
-                  <input
-                    id="product-images-upload-edit"
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={(e) => handleImageSelect(e.target.files)}
-                    className="hidden"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => document.getElementById("product-images-upload-edit")?.click()}
-                    className="flex min-h-28 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded border border-dashed border-border bg-bg-secondary px-4 py-6 text-center transition-colors hover:border-accent hover:bg-bg-hover"
-                  >
-                    <span className="text-sm font-medium text-text-primary">Upload pictures</span>
-                    <span className="text-[10px] uppercase tracking-wider text-text-secondary">
-                      Files only, no drag and drop
-                    </span>
-                  </button>
-                </div>
               </div>
             )}
-            {isStoreOwner && (
-              <div>
-                <FieldLabel>Upload Pictures</FieldLabel>
-                <input
-                  id="product-images-upload-edit"
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={(e) => handleImageSelect(e.target.files)}
-                  className="hidden"
-                />
-                <button
-                  type="button"
-                  onClick={() => document.getElementById("product-images-upload-edit")?.click()}
-                  className="flex min-h-28 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded border border-dashed border-border bg-bg-secondary px-4 py-6 text-center transition-colors hover:border-accent hover:bg-bg-hover"
-                >
-                  <span className="text-sm font-medium text-text-primary">Upload pictures</span>
-                  <span className="text-[10px] uppercase tracking-wider text-text-secondary">
-                    Files only, no drag and drop
-                  </span>
-                </button>
-              </div>
-            )}
-
-            {images.length > 0 && (
-              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {images.map((img, idx) => (
-                  <div key={img.id} className="space-y-3 rounded border border-border bg-bg-secondary p-3">
-                    <button
-                      type="button"
-                      onClick={() => setZoomedImage(img)}
-                      className="group block w-full overflow-hidden rounded border border-border bg-bg-primary p-1 transition-colors hover:border-accent"
-                    >
-                      <img
-                        src={img.url}
-                        alt={`Preview ${idx + 1}`}
-                        className="aspect-square h-full w-full object-contain transition-transform group-hover:scale-[1.02]"
-                      />
-                    </button>
-                    <div className="space-y-2">
-                      <p className="text-xs font-medium">Image {idx + 1}</p>
-                      <div className="flex flex-wrap gap-2">
-                        {requiredOriginPictureKeys.map((key) => (
-                          <button
-                            key={key}
-                            type="button"
-                            onClick={() => void assignProductImageToOriginPicture(key, img.id || "")}
-                            className={`rounded border px-3 py-1 text-[10px] uppercase tracking-wider transition-colors ${
-                              form.originPictures[key]
-                                ? "border-accent text-accent"
-                                : "border-border text-text-secondary hover:border-accent hover:text-accent"
-                            }`}
-                          >
-                            Set {key}
-                          </button>
-                        ))}
-                        <button
-                          type="button"
-                          onClick={() => removeImage(img.id)}
-                          className="rounded border border-border px-3 py-1 text-[10px] uppercase tracking-wider text-danger transition-colors hover:border-danger"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="mt-5 grid grid-cols-2 gap-4 md:grid-cols-4">
+            <div className={`mt-4 grid justify-items-center gap-4 ${requiredOriginPictureKeys.length === 4 ? "md:grid-cols-2 xl:grid-cols-4" : "md:grid-cols-2"}`}>
               {requiredOriginPictureKeys.map((key) => {
                 const preview = generationInputs[key].previewUrl || form.originPictures[key];
                 return (
-                  <div key={key} className="space-y-2">
+                  <div key={key} className="mx-auto w-full max-w-[260px] justify-self-center space-y-3 rounded border border-border bg-bg-secondary p-3">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-[10px] text-text-secondary uppercase tracking-wider">{key}</p>
+                      <p className="text-[10px] text-text-secondary uppercase tracking-wider">{key} view</p>
                       {preview && (
                         <button
                           type="button"
@@ -1952,24 +2401,86 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                         </button>
                       )}
                     </div>
-                    <div className="aspect-square max-h-[180px] overflow-hidden rounded border border-dashed border-border bg-bg-secondary">
+                    <div className="aspect-[4/5] max-h-56 overflow-hidden rounded bg-bg-secondary flex">
                       {preview ? (
-                        <img src={preview} alt={`${key} origin`} className="h-full w-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setZoomedImage({ id: key, url: preview, file: null, existing: false, kind: "source", slot: key })}
+                          className="flex h-full w-full cursor-zoom-in items-center justify-center p-2"
+                        >
+                          <img src={preview} alt={`${key} origin`} className="max-h-full max-w-full object-contain" />
+                        </button>
                       ) : (
                         <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[10px] text-text-secondary uppercase tracking-wider">
-                          <span>{key}</span>
+                          <span>Upload {key}</span>
                           <span className="text-[8px] tracking-normal normal-case text-text-secondary/80">
-                            Assign a picture
+                            One image only
                           </span>
                         </div>
                       )}
                     </div>
+                    <input
+                      id={`origin-picture-edit-${key}`}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={!canSelectOriginPictures}
+                      onClick={(e) => {
+                        e.currentTarget.value = "";
+                      }}
+                      onChange={(e) => handleOriginPictureSelect(key, e.currentTarget.files?.[0] || null)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!canSelectOriginPictures) return;
+                        document.getElementById(`origin-picture-edit-${key}`)?.click();
+                      }}
+                      disabled={!canSelectOriginPictures}
+                      className="inline-flex w-full items-center justify-center gap-2 border border-border bg-bg-card px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {preview ? "Replace" : "Upload"}
+                    </button>
                   </div>
                 );
               })}
             </div>
 
-            {selectedCategoryZone !== "other" && (generationRequirements.needsModel || selectedCategoryZone === "footwear") && (
+            {form.productType === "fashion" && hasPendingEnhanceOriginPictures && (
+              <div className="mt-4">
+                <div className="flex justify-end gap-2">
+                  {productMediaStatus === "processing" && (
+                    <button
+                      type="button"
+                      onClick={handleCancelEnhance}
+                      aria-label="Cancel enhancement"
+                      className="inline-flex h-9 w-9 items-center justify-center border border-border text-xs text-text-secondary hover:bg-bg-hover"
+                    >
+                      ×
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleEnhanceButtonClick}
+                    disabled={productMediaStatus === "processing" || !selectedCategorySlug}
+                    className="bg-accent px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50"
+                  >
+                    {productMediaStatus === "processing" && (
+                      <span className="mr-2 inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary align-[-2px]" />
+                    )}
+                    {enhanceButtonLabel}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {productMediaError && (
+              <div className="border border-[#BD3100] bg-[#faf3f2] px-4 py-3 text-xs text-[#BD3100]">
+                {productMediaError}
+              </div>
+            )}
+
+            {!showProductMediaSection && selectedCategoryZone !== "other" && (generationRequirements.needsModel || selectedCategoryZone === "footwear") && productMediaStatus === "completed" && (
               <div className="mt-6 space-y-5 border-t border-border pt-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
@@ -1999,11 +2510,11 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                               key={model._id}
                               type="button"
                               onClick={() => setSelectedModelId(model._id)}
-                              className={`overflow-hidden rounded border text-left transition-colors ${
+                              className={`mx-auto w-full max-w-[150px] overflow-hidden rounded border text-left transition-colors ${
                                 active ? "border-accent" : "border-border hover:border-accent"
                               }`}
                             >
-                              <div className="aspect-[3/4] bg-bg-secondary">
+                              <div className="aspect-[4/5] bg-bg-secondary">
                                 <img
                                   src={model.frontImage || model.images?.[0] || ""}
                                   alt={model.name}
@@ -2053,6 +2564,38 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                   >
                     {generating ? "Generating..." : "Generate"}
                   </button>
+                </div>
+              </div>
+            )}
+            {showProductMediaSection && productMediaItems.length > 0 && (
+              <div className="mt-6 space-y-5 border-t border-border pt-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
+                      Product Media
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRegenerateModel}
+                    className="border border-border px-3 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:bg-bg-hover"
+                  >
+                    Regenerate model
+                  </button>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  {productMediaItems.map((item, index) => (
+                    <div key={`${item.label}-${index}`} className="mx-auto w-full max-w-[220px] space-y-2">
+                      <p className="text-[10px] uppercase tracking-wider text-text-secondary">{item.label}</p>
+                      <button
+                        type="button"
+                        onClick={() => setZoomedImage({ id: item.label, url: item.url, file: null, existing: false, kind: "source" })}
+                        className="flex aspect-[4/5] w-full items-center justify-center overflow-hidden rounded bg-bg-secondary p-2"
+                      >
+                        <img src={item.url} alt={item.label} className="max-h-full max-w-full object-contain" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
