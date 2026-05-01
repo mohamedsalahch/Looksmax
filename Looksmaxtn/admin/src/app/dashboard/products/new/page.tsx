@@ -308,8 +308,10 @@ export default function NewProductPage() {
   const [importingGeneratedImage, setImportingGeneratedImage] = useState<string | null>(null);
   const [isGeneratedImagesOpen, setIsGeneratedImagesOpen] = useState(false);
   const [generatedImagesSearch, setGeneratedImagesSearch] = useState("");
+  const [userRole, setUserRole] = useState("");
   const generationAbortRef = useRef<AbortController | null>(null);
   const allowStockEditing = true;
+  const isStoreOwner = userRole === "store_owner";
 
   useEffect(() => {
     fetch("/api/categories", withAuthRequest())
@@ -325,9 +327,21 @@ export default function NewProductPage() {
       .then((r) => r.json())
       .then((d) => setModels(d.models || []));
 
-    fetch("/api/generated-images", withAuthRequest())
+    fetch("/api/auth/me", withAuthRequest())
       .then((r) => r.json())
-      .then((d) => setGeneratedImages(d.generatedImages || []));
+      .then((d) => {
+        const role = d.user?.role || "";
+        setUserRole(role);
+        if (role === "store_owner") {
+          setForm((current) => ({ ...current, tag: "NEW", newTagDurationDays: "3" }));
+          return;
+        }
+
+        fetch("/api/generated-images", withAuthRequest())
+          .then((r) => r.json())
+          .then((data) => setGeneratedImages(data.generatedImages || []));
+      })
+      .catch(() => {});
   }, []);
 
   const selectedCategorySlug =
@@ -777,8 +791,8 @@ export default function NewProductPage() {
       body.append("brand", form.brand);
       body.append("reference", form.reference);
       body.append("description", form.description);
-      body.append("tag", form.tag);
-      body.append("newTagDurationDays", form.newTagDurationDays || "3");
+      body.append("tag", isStoreOwner ? "NEW" : form.tag);
+      body.append("newTagDurationDays", isStoreOwner ? "3" : form.newTagDurationDays || "3");
       body.append("productType", form.productType);
       body.append("fashionSubtype", form.fashionSubtype);
       body.append("stock", form.stock);
@@ -1181,32 +1195,34 @@ export default function NewProductPage() {
         )}
 
         <SectionCard title="Product Media" description="Tag the product and manage the gallery in the same working area.">
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
-            <div>
-              <FieldLabel>Tag</FieldLabel>
-              <select
-                value={form.tag}
-                onChange={(e) => setForm({ ...form, tag: e.target.value })}
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-              >
-                <option value="">None</option>
-                <option value="NEW">NEW</option>
-                <option value="FAVORITE">FAVORITE</option>
-              </select>
-              {form.tag === "NEW" && (
-                <div className="mt-3">
-                  <FieldLabel>NEW tag duration (days)</FieldLabel>
-                  <input
-                    type="number"
-                    min={1}
-                    value={form.newTagDurationDays}
-                    onChange={(e) => setForm({ ...form, newTagDurationDays: e.target.value })}
-                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-                    placeholder="3"
-                  />
-                </div>
-              )}
-            </div>
+          <div className={`grid grid-cols-1 gap-4 ${isStoreOwner ? "" : "xl:grid-cols-[280px_minmax(0,1fr)]"}`}>
+            {!isStoreOwner && (
+              <div>
+                <FieldLabel>Tag</FieldLabel>
+                <select
+                  value={form.tag}
+                  onChange={(e) => setForm({ ...form, tag: e.target.value })}
+                  className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                >
+                  <option value="">None</option>
+                  <option value="NEW">NEW</option>
+                  <option value="FAVORITE">FAVORITE</option>
+                </select>
+                {form.tag === "NEW" && (
+                  <div className="mt-3">
+                    <FieldLabel>NEW tag duration (days)</FieldLabel>
+                    <input
+                      type="number"
+                      min={1}
+                      value={form.newTagDurationDays}
+                      onChange={(e) => setForm({ ...form, newTagDurationDays: e.target.value })}
+                      className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                      placeholder="3"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
             <div>
               <FieldLabel>Product Images</FieldLabel>
           <input
@@ -1310,7 +1326,7 @@ export default function NewProductPage() {
           </div>
         )}
 
-        {generatedImages.length > 0 && (
+        {!isStoreOwner && generatedImages.length > 0 && (
           <section className="overflow-hidden rounded border border-border bg-bg-card">
             <button
               type="button"

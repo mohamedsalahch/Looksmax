@@ -10,6 +10,21 @@ const TOKEN_TTL_SECONDS = 60 * 30;
 
 export interface JWTPayload { userId: string; role: string; }
 
+export function canAccessAdminDashboard(role?: string | null) {
+  return role === "admin" || role === "store_owner";
+}
+
+export function canAccessAdminResource(
+  role: string | undefined | null,
+  resource: "products" | "orders" | "stats" | "assets" | "admin"
+) {
+  if (role === "admin") return true;
+  return (
+    role === "store_owner" &&
+    (resource === "products" || resource === "orders" || resource === "stats" || resource === "assets")
+  );
+}
+
 function getBearerTokenFromHeader(authorizationHeader?: string | null) {
   if (!authorizationHeader) return null;
   const [scheme, token] = authorizationHeader.split(" ");

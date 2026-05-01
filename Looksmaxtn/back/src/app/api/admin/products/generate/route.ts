@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
 import ModelAsset from "@/admin/models/ModelAsset";
 import ProductGenerationJob from "@/admin/models/ProductGenerationJob";
-import { getSession } from "@/admin/lib/auth";
+import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
 import { readModelImageAsBase64 } from "@/admin/lib/modelUploads";
 
 async function fileToBase64(file: File) {
@@ -18,7 +18,7 @@ function normalizeType(type: string, fashionSubtype: string) {
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
-    if (!session || session.role !== "admin") {
+    if (!session || !canAccessAdminResource(session.role, "products")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 

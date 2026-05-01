@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
+import { type IAuditActor, auditActorSchema } from "@/store/lib/audit";
 
 export interface IProductImage {
   url: string;
@@ -13,6 +14,7 @@ export interface IOriginPictures {
 }
 
 export type ProductType = "fashion" | "perfume" | "clothing" | "shoes";
+export type ProductApprovalStatus = "pending" | "approved" | "rejected";
 
 export interface ISizeStockEntry {
   fullStock: number;
@@ -23,6 +25,7 @@ export interface IProduct extends Document {
   name: string;
   price: number;
   isActive: boolean;
+  approvalStatus: ProductApprovalStatus;
   categories: string[];
   description: string;
   sizes: string[];
@@ -42,6 +45,8 @@ export interface IProduct extends Document {
   originPictures?: IOriginPictures;
   cloneSourceName?: string;
   cloneSourceImage?: string;
+  createdBy?: IAuditActor | null;
+  updatedBy?: IAuditActor | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -69,6 +74,11 @@ const productSchema = new Schema<IProduct>(
     name: { type: String, required: true, trim: true },
     price: { type: Number, required: true },
     isActive: { type: Boolean, default: true },
+    approvalStatus: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: "approved",
+    },
     categories: [{ type: String, lowercase: true, trim: true }],
     description: { type: String, default: "" },
     sizes: [{ type: String }],
@@ -104,6 +114,8 @@ const productSchema = new Schema<IProduct>(
     originPictures: { type: originPicturesSchema, default: () => ({}) },
     cloneSourceName: { type: String, default: "" },
     cloneSourceImage: { type: String, default: "" },
+    createdBy: { type: auditActorSchema, default: null },
+    updatedBy: { type: auditActorSchema, default: null },
   },
   { timestamps: true }
 );

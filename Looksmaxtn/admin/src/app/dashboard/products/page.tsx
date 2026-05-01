@@ -7,10 +7,10 @@ import { withAuthRequest } from "@/lib/authClient";
 
 interface Product {
   _id: string; name: string; price: number; categories: string[];
-  stock: number; availableStock?: number; soldQuantity?: number; fullStock?: number; tag: string; brand: string; reference?: string; createdAt: string; productType?: "fashion" | "perfume" | "clothing" | "shoes"; availabilityStatus?: string; isActive?: boolean; visibilityStatus?: string;
+  stock: number; availableStock?: number; soldQuantity?: number; fullStock?: number; tag: string; brand: string; reference?: string; createdAt: string; productType?: "fashion" | "perfume" | "clothing" | "shoes"; availabilityStatus?: string; isActive?: boolean; visibilityStatus?: string; approvalStatus?: "pending" | "approved" | "rejected";
 }
 
-type SortKey = "name" | "_id" | "categories" | "productType" | "price" | "stock" | "status" | "visibility" | "tag";
+type SortKey = "name" | "_id" | "categories" | "productType" | "price" | "stock" | "status" | "approval" | "visibility" | "tag";
 type SortDirection = "asc" | "desc";
 
 function getProductStatus(product: Product) {
@@ -52,16 +52,30 @@ function formatStockLabel(product: Product) {
   return `Available: ${available} · Sold: ${sold} · Full: ${full}`;
 }
 
+function getApprovalStatus(product: Product) {
+  switch (product.approvalStatus || "approved") {
+    case "pending":
+      return { label: "Pending", className: "bg-warning/10 text-warning" };
+    case "rejected":
+      return { label: "Rejected", className: "bg-danger/10 text-danger" };
+    default:
+      return { label: "Approved", className: "bg-[#f1ede8] text-[#6b6055]" };
+  }
+}
+
 export default function ProductsPage() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [visibilityFilter, setVisibilityFilter] = useState("all");
+  const [approvalFilter, setApprovalFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [togglingVisibilityId, setTogglingVisibilityId] = useState("");
+  const [updatingApprovalId, setUpdatingApprovalId] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [userRole, setUserRole] = useState("");
   const deferredSearch = useDeferredValue(search);
 
   const fetchProducts = () => {
@@ -72,7 +86,10 @@ export default function ProductsPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { fetchProducts(); }, []);
+  useEffect(() => {
+    fetch("/api/auth/me", withAuthRequest()).then((r) => r.json()).then((d) => setUserRole(d.user?.role || "")).catch(() => {});
+    fetchProducts();
+  }, []);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this product?")) return;
@@ -109,6 +126,31 @@ export default function ProductsPage() {
     }
   };
 
+  const handleApprovalUpdate = async (product: Product, approvalStatus: "approved" | "rejected") => {
+    setUpdatingApprovalId(product._id);
+    try {
+      const response = await fetch(`/api/products/${product._id}`, withAuthRequest({
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ approvalStatus }),
+      }));
+      const data = await response.json();
+      if (!response.ok || !data.product) return;
+
+      setProducts((current) =>
+        current.map((entry) =>
+          entry._id === product._id
+            ? { ...entry, approvalStatus: data.product.approvalStatus || approvalStatus }
+            : entry
+        )
+      );
+    } catch {
+      // Keep current state on network failure.
+    } finally {
+      setUpdatingApprovalId("");
+    }
+  };
+
   const filteredProducts = useMemo(() => {
     const normalizedSearch = deferredSearch.trim().toLowerCase();
 
@@ -128,14 +170,17 @@ export default function ProductsPage() {
       const matchesType = typeFilter === "all" || normalizedProductType === typeFilter;
 
       const isInactive = product.isActive === false || product.visibilityStatus === "inactive";
+      const normalizedApprovalStatus = product.approvalStatus || "approved";
       const matchesVisibility =
         visibilityFilter === "all" ||
         (visibilityFilter === "active" && !isInactive) ||
         (visibilityFilter === "inactive" && isInactive);
+      const matchesApproval =
+        approvalFilter === "all" || normalizedApprovalStatus === approvalFilter;
 
-      return matchesSearch && matchesType && matchesVisibility;
+      return matchesSearch && matchesType && matchesVisibility && matchesApproval;
     });
-  }, [deferredSearch, products, typeFilter, visibilityFilter]);
+  }, [approvalFilter, deferredSearch, products, typeFilter, visibilityFilter]);
 
   const sortedProducts = useMemo(() => {
     const items = [...filteredProducts];
@@ -156,6 +201,8 @@ export default function ProductsPage() {
           return product.availableStock ?? product.stock;
         case "status":
           return getProductStatus(product).label;
+        case "approval":
+          return product.approvalStatus || "approved";
         case "visibility":
           return product.isActive === false || product.visibilityStatus === "inactive" ? "inactive" : "active";
         case "tag":
@@ -206,7 +253,7 @@ export default function ProductsPage() {
         </Link>
       </div>
 
-      <div className="mb-6 grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_180px]">
+      <div className="mb-6 grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_180px_180px]">
         <input
           type="text"
           value={search}
@@ -231,6 +278,16 @@ export default function ProductsPage() {
           <option value="all">All visibility</option>
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
+        </select>
+        <select
+          value={approvalFilter}
+          onChange={(e) => setApprovalFilter(e.target.value)}
+          className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
+        >
+          <option value="all">All approvals</option>
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
         </select>
       </div>
 
@@ -284,6 +341,11 @@ export default function ProductsPage() {
                   </button>
                 </th>
                 <th className="px-4 py-3">
+                  <button type="button" onClick={() => toggleSort("approval")} className="inline-flex items-center gap-1 cursor-pointer">
+                    Approval {renderSortIndicator("approval")}
+                  </button>
+                </th>
+                <th className="px-4 py-3">
                   <button type="button" onClick={() => toggleSort("visibility")} className="inline-flex items-center gap-1 cursor-pointer">
                     Visibility {renderSortIndicator("visibility")}
                   </button>
@@ -305,6 +367,7 @@ export default function ProductsPage() {
                 >
                   {(() => {
                     const status = getProductStatus(p);
+                    const approval = getApprovalStatus(p);
                     return (
                       <>
                   <td className="px-4 py-3">
@@ -330,6 +393,39 @@ export default function ProductsPage() {
                     <span className={`text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${status.className}`}>
                       {status.label}
                     </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-col items-start gap-2">
+                      <span className={`text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${approval.className}`}>
+                        {approval.label}
+                      </span>
+                      {userRole === "admin" && (p.approvalStatus || "approved") !== "approved" && (
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleApprovalUpdate(p, "approved");
+                            }}
+                            disabled={updatingApprovalId === p._id}
+                            className="text-[10px] uppercase tracking-wider text-[#6b6055] hover:text-text-primary disabled:opacity-50"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleApprovalUpdate(p, "rejected");
+                            }}
+                            disabled={updatingApprovalId === p._id}
+                            className="text-[10px] uppercase tracking-wider text-danger hover:text-danger/80 disabled:opacity-50"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <button

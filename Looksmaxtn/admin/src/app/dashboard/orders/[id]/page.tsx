@@ -43,8 +43,10 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [userRole, setUserRole] = useState("");
 
   useEffect(() => {
+    fetch("/api/auth/me", withAuthRequest()).then((r) => r.json()).then((d) => setUserRole(d.user?.role || "")).catch(() => {});
     fetch(`/api/orders/${id}`, withAuthRequest()).then((r) => r.json()).then((d) => setOrder(d.order)).catch(() => {}).finally(() => setLoading(false));
   }, [id]);
 
@@ -103,6 +105,9 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   if (!order) return <p className="text-sm text-text-secondary">Order not found.</p>;
   const isLocked = ["delivered", "canceled", "returned"].includes(order.orderStatus);
   const nextStatuses = ORDER_TRANSITIONS[order.orderStatus] || [];
+  const canPrintOrder =
+    userRole === "admin" ||
+    (userRole === "store_owner" && ["confirmed", "shipping", "delivered", "returned"].includes(order.orderStatus));
 
   return (
     <div className="space-y-6">
@@ -127,24 +132,28 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       </div>
 
       <div className="flex justify-end gap-3 print:hidden">
-        <button
-          type="button"
-          onClick={printOrder}
-          className="border border-border px-4 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
-        >
-          Print Order
-        </button>
-        <button
-          type="button"
-          onClick={deleteOrder}
-          disabled={deleting}
-          className="border border-rose-300 text-rose-300 px-4 py-2 text-[10px] uppercase tracking-wider hover:bg-rose-500/10 transition-colors disabled:opacity-50"
-        >
-          {deleting ? "Deleting..." : "Delete Order"}
-        </button>
+        {canPrintOrder && (
+          <button
+            type="button"
+            onClick={printOrder}
+            className="border border-border px-4 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
+          >
+            Print Order
+          </button>
+        )}
+        {userRole === "admin" && (
+          <button
+            type="button"
+            onClick={deleteOrder}
+            disabled={deleting}
+            className="border border-rose-300 text-rose-300 px-4 py-2 text-[10px] uppercase tracking-wider hover:bg-rose-500/10 transition-colors disabled:opacity-50"
+          >
+            {deleting ? "Deleting..." : "Delete Order"}
+          </button>
+        )}
       </div>
 
-      <div className="hidden print:block mx-auto w-[210mm] max-w-full border border-black p-6 space-y-5 bg-white text-black font-sans">
+      {canPrintOrder && <div className="hidden print:block mx-auto w-[210mm] max-w-full border border-black p-6 space-y-5 bg-white text-black font-sans">
         <div className="flex items-start justify-between border-b border-black pb-4">
           <div>
             <p className="text-[10px] uppercase tracking-[0.3em]">LOOKSMAX</p>
@@ -208,36 +217,38 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             </div>
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* Status Update */}
-      <div className="bg-bg-card border border-border rounded p-4 print:hidden">
-        <p className="text-xs text-text-secondary uppercase tracking-wider mb-3">Update Status</p>
-        {isLocked && (
-          <p className="text-xs text-danger mb-3">This order is locked and can no longer be updated.</p>
-        )}
-        {!isLocked && (
-          <p className="text-xs text-text-secondary mb-3">
-            Allowed next step{nextStatuses.length > 1 ? "s" : ""}: {nextStatuses.join(" or ")}
-          </p>
-        )}
-        {nextStatuses.length > 0 ? (
-          <div className="flex gap-2 flex-wrap">
-            {nextStatuses.map((status) => (
-              <button
-                key={status}
-                onClick={() => updateStatus(status)}
-                disabled={updating}
-                className="text-[10px] px-3 py-1.5 uppercase tracking-wider font-medium transition-colors cursor-pointer disabled:opacity-30 border border-border text-text-secondary hover:text-text-primary hover:bg-bg-hover"
-              >
-                {status}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs text-text-secondary">No further status changes are allowed for this order.</p>
-        )}
-      </div>
+      {userRole === "admin" && (
+        <div className="bg-bg-card border border-border rounded p-4 print:hidden">
+          <p className="text-xs text-text-secondary uppercase tracking-wider mb-3">Update Status</p>
+          {isLocked && (
+            <p className="text-xs text-danger mb-3">This order is locked and can no longer be updated.</p>
+          )}
+          {!isLocked && (
+            <p className="text-xs text-text-secondary mb-3">
+              Allowed next step{nextStatuses.length > 1 ? "s" : ""}: {nextStatuses.join(" or ")}
+            </p>
+          )}
+          {nextStatuses.length > 0 ? (
+            <div className="flex gap-2 flex-wrap">
+              {nextStatuses.map((status) => (
+                <button
+                  key={status}
+                  onClick={() => updateStatus(status)}
+                  disabled={updating}
+                  className="text-[10px] px-3 py-1.5 uppercase tracking-wider font-medium transition-colors cursor-pointer disabled:opacity-30 border border-border text-text-secondary hover:text-text-primary hover:bg-bg-hover"
+                >
+                  {status}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-text-secondary">No further status changes are allowed for this order.</p>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:hidden">
         {/* Customer */}

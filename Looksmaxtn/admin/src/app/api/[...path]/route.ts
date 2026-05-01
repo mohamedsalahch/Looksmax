@@ -1,6 +1,8 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
+const COOKIE_NAME = "looksmax-admin-token";
+
 function getBackendBaseUrl(req: NextRequest) {
   const localHostnames = new Set(["localhost", "127.0.0.1"]);
 
@@ -41,6 +43,11 @@ function buildHeaders(req: NextRequest) {
     "x-invoke-status",
   ]) {
     headers.delete(headerName);
+  }
+
+  if (!headers.has("authorization")) {
+    const token = req.cookies.get(COOKIE_NAME)?.value;
+    if (token) headers.set("authorization", `Bearer ${token}`);
   }
 
   return headers;

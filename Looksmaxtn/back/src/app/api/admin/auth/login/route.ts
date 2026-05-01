@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
 import User from "@/admin/models/User";
-import { comparePassword, createToken, getTokenCookieOptions } from "@/admin/lib/auth";
+import { canAccessAdminDashboard, comparePassword, createToken, getTokenCookieOptions } from "@/admin/lib/auth";
 import { verifyTurnstileToken } from "@/store/lib/turnstile";
 
 export async function POST(req: NextRequest) {
@@ -25,7 +25,9 @@ export async function POST(req: NextRequest) {
 
     const user = await User.findOne({ email });
     if (!user) return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
-    if (user.role !== "admin") return NextResponse.json({ error: "Access denied. Admin only." }, { status: 403 });
+    if (!canAccessAdminDashboard(user.role)) {
+      return NextResponse.json({ error: "Access denied." }, { status: 403 });
+    }
 
     const valid = await comparePassword(password, user.password);
     if (!valid) return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
@@ -34,7 +36,7 @@ export async function POST(req: NextRequest) {
     const cookieOpts = getTokenCookieOptions();
     const res = NextResponse.json({
       token,
-      user: { id: user._id, name: user.name, email: user.email, role: user.role },
+      user: { id: user._id, name: user.name, storeName: user.storeName || "", email: user.email, role: user.role },
     });
     res.cookies.set(cookieOpts.name, token, cookieOpts);
     return res;

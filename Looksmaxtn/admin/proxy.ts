@@ -6,13 +6,17 @@ const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "looksmax-secret-key-change-in-production"
 );
 
-async function verifyAdminToken(token: string) {
+async function getAdminTokenRole(token: string) {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET);
-    return payload?.role === "admin";
+    return typeof payload?.role === "string" ? payload.role : null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+function canAccessAdminDashboard(role: string | null) {
+  return role === "admin" || role === "store_owner";
 }
 
 function getBearerToken(authorizationHeader?: string | null) {
@@ -28,7 +32,8 @@ export async function proxy(request: NextRequest) {
   const token =
     getBearerToken(request.headers.get("authorization")) ||
     request.cookies.get(COOKIE_NAME)?.value;
-  const isAuthenticated = token ? await verifyAdminToken(token) : false;
+  const role = token ? await getAdminTokenRole(token) : null;
+  const isAuthenticated = canAccessAdminDashboard(role);
 
   if (pathname === "/") {
     if (isAuthenticated) {

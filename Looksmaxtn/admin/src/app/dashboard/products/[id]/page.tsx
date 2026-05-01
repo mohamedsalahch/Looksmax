@@ -38,6 +38,7 @@ interface ProductDetail {
   availabilityStatus?: string;
   isActive?: boolean;
   visibilityStatus?: string;
+  approvalStatus?: "pending" | "approved" | "rejected";
   cloneSourceName?: string;
   createdBy?: AuditActor | null;
   updatedBy?: AuditActor | null;
@@ -75,6 +76,17 @@ function getProductStatus(product: ProductDetail) {
   return product.stock > 0
     ? { label: "Available", className: "bg-[#f1ede8] text-[#6b6055]" }
     : { label: "Reserved", className: "bg-warning/10 text-warning" };
+}
+
+function getApprovalStatus(product: ProductDetail) {
+  switch (product.approvalStatus || "approved") {
+    case "pending":
+      return { label: "Pending Approval", className: "bg-warning/10 text-warning" };
+    case "rejected":
+      return { label: "Rejected", className: "bg-danger/10 text-danger" };
+    default:
+      return { label: "Approved", className: "bg-[#f1ede8] text-[#6b6055]" };
+  }
 }
 
 function formatStockLabel(product: ProductDetail) {
@@ -123,6 +135,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
   if (!product) return <p className="text-sm text-text-secondary">Product not found.</p>;
 
   const status = getProductStatus(product);
+  const approval = getApprovalStatus(product);
   const inventory = getInventorySummary(product);
   const sizeEntries = Object.entries(product.sizeStock || {});
 
@@ -226,6 +239,9 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
               </span>
               <span className={`text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${status.className}`}>
                 {status.label}
+              </span>
+              <span className={`text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${approval.className}`}>
+                {approval.label}
               </span>
                 <span
                   className={`text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${

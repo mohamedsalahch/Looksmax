@@ -4,7 +4,7 @@ import Order from "@/admin/models/Order";
 import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
 import User from "@/store/models/User";
-import { getSession } from "@/admin/lib/auth";
+import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 import { broadcastAdminEvent } from "@/admin/lib/adminEvents";
 import { sendOrderStatusEmail } from "@/store/lib/mailer";
@@ -73,15 +73,47 @@ function getAdminOrderEventPayload(order: Record<string, unknown>) {
   };
 }
 
+async function storeOwnerCanAccessOrder(session: { userId: string; role: string }, order: { items?: LeanOrderItem[] }) {
+  if (session.role === "admin") return true;
+  if (session.role !== "store_owner") return false;
+
+  const orderProductIds = (order.items || []).map((item) => item.product.toString());
+  if (orderProductIds.length === 0) return false;
+
+  const ownedProductCount = await Product.countDocuments({
+    _id: { $in: orderProductIds },
+    "createdBy.id": session.userId,
+  });
+  return ownedProductCount > 0;
+}
+
+async function filterStoreOwnerOrderItems(session: { userId: string; role: string }, order: LeanOrder) {
+  if (session.role === "admin") return order;
+
+  const orderProductIds = order.items.map((item) => item.product.toString());
+  const ownedProductIds = await Product.find({
+    _id: { $in: orderProductIds },
+    "createdBy.id": session.userId,
+  }).distinct("_id");
+  const ownedProductIdSet = new Set(ownedProductIds.map((productId) => productId.toString()));
+
+  return {
+    ...order,
+    items: order.items.filter((item) => ownedProductIdSet.has(item.product.toString())),
+  };
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getSession();
-    if (!session || session.role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    if (!session || !canAccessAdminResource(session.role, "orders")) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     await dbConnect();
     const { id } = await params;
     const order = await Order.findById(id).populate("user", "name email").lean();
     if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    return NextResponse.json({ order: serializeOrder(order) });
+    const leanOrder = order as unknown as LeanOrder;
+    if (!(await storeOwnerCanAccessOrder(session, leanOrder))) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json({ order: serializeOrder(await filterStoreOwnerOrderItems(session, leanOrder)) });
   } catch (error) { console.error(error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }
 

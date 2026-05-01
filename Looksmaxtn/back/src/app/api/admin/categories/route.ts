@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
 import Category from "@/admin/models/Category";
-import { getSession } from "@/admin/lib/auth";
+import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
 import { DEFAULT_CATEGORY_TREE } from "@/admin/lib/categoryDefaults";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 import { getSystemAuditActor } from "@/admin/lib/audit";
@@ -23,7 +23,7 @@ async function ensureDefaultCategories() {
 export async function GET() {
   try {
     const session = await getSession();
-    if (!session || session.role !== "admin")
+    if (!session || !canAccessAdminResource(session.role, "products"))
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
 
     await dbConnect();

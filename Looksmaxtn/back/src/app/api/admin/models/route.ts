@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
 import ModelAsset from "@/admin/models/ModelAsset";
-import { getSession } from "@/admin/lib/auth";
+import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
 import { saveModelImage } from "@/admin/lib/modelUploads";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
@@ -9,7 +9,7 @@ import { logRequestError, logRequestStart } from "@/lib/requestLogging";
 export async function GET() {
   try {
     const session = await getSession();
-    if (!session || session.role !== "admin") {
+    if (!session || !canAccessAdminResource(session.role, "assets")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 

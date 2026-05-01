@@ -18,14 +18,16 @@ export interface IBodyProfile {
 
 export interface IUser extends Document {
   name: string;
+  storeName?: string;
   email: string;
   password: string;
-  role: "user" | "admin";
+  role: "user" | "admin" | "store_owner";
   isBlocked?: boolean;
   emailVerified?: boolean;
   emailVerificationTokenHash?: string | null;
   emailVerificationExpiresAt?: Date | null;
   emailVerificationSentAt?: Date | null;
+  sessionVersion?: number;
   passwordResetTokenHash?: string | null;
   passwordResetExpiresAt?: Date | null;
   passwordResetSentAt?: Date | null;
@@ -60,9 +62,10 @@ const bodyProfileSchema = new Schema<IBodyProfile>(
 const userSchema = new Schema<IUser>(
   {
     name: { type: String, required: true, trim: true },
+    storeName: { type: String, default: "", trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: true },
-    role: { type: String, enum: ["user", "admin"], default: "user" },
+    role: { type: String, enum: ["user", "admin", "store_owner"], default: "user" },
     isBlocked: { type: Boolean, default: false },
     emailVerified: { type: Boolean, default: true },
     emailVerificationTokenHash: { type: String, default: null },

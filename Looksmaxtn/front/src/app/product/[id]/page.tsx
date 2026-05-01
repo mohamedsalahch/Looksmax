@@ -22,6 +22,10 @@ type ProductResponse = {
     categories?: string[];
     price: number;
     brand: string;
+    storeName?: string;
+    createdBy?: {
+      name?: string;
+    } | null;
     images?: { url: string; isMain: boolean }[];
     sizes?: string[];
     sizeAvailability?: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null;
@@ -131,6 +135,7 @@ export default async function ProductDetailPage({
     categories: dbProduct.categories || [],
     price: dbProduct.price.toFixed(2),
     brand: dbProduct.brand || "LOOKSMAX",
+    storeName: dbProduct.storeName || dbProduct.createdBy?.name || "",
     image: dbProduct.images?.find((image) => image.isMain)?.url || dbProduct.images?.[0]?.url || "",
     sizes,
     stock: Math.max(dbProduct.stock ?? 0, 0),

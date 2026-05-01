@@ -3,7 +3,6 @@ import dbConnect, { cleanupProductReservationIndexes } from "@/store/lib/mongodb
 import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
 import { getSession } from "@/store/lib/auth";
-import { getActiveOrderHoldMapByProductIds } from "@/lib/productInventory";
 import { getSizeStockEntries } from "@/lib/sizeAvailability";
 import { broadcastAvailabilityChange } from "@/lib/sseClients";
 import mongoose from "mongoose";
@@ -29,23 +28,15 @@ export async function POST(
     }
 
     const now = new Date();
-    const activeOrderHoldMap = await getActiveOrderHoldMapByProductIds([id], session?.userId || null);
-    const activeOrderHold = activeOrderHoldMap.get(id);
 
     await ProductReservation.deleteMany({ reservedUntil: { $lte: now } });
 
-    const [product, activeReservations] = await Promise.all([
-      Product.findById(id).lean(),
-      ProductReservation.find({
-        product: id,
-        reservedUntil: { $gt: now },
-        ...(normalizedSize ? { size: normalizedSize } : {}),
-      })
-        .select("reservationKey quantity size")
-        .lean(),
-    ]);
+    const product = await Product.findById(id).lean();
 
     if (!product) {
+      return NextResponse.json({ error: "Product not found" }, { status: 404 });
+    }
+    if (product.isActive === false || (product.approvalStatus && product.approvalStatus !== "approved")) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
 

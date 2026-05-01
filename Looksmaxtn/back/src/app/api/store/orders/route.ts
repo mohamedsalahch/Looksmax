@@ -111,6 +111,12 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
+      if (product.isActive === false || (product.approvalStatus && product.approvalStatus !== "approved")) {
+        return NextResponse.json(
+          { error: `${product.name} is no longer available.` },
+          { status: 409 }
+        );
+      }
 
       const productId = product._id.toString();
       const itemSize = item.size || "";
@@ -144,7 +150,12 @@ export async function POST(req: NextRequest) {
 
         const sizeStockKey = `sizeStock.${itemSize}.stock`;
         const updatedProduct = await Product.findOneAndUpdate(
-          { _id: product._id, [sizeStockKey]: { $gte: quantityToDeduct } },
+          {
+            _id: product._id,
+            isActive: { $ne: false },
+            $or: [{ approvalStatus: "approved" }, { approvalStatus: { $exists: false } }],
+            [sizeStockKey]: { $gte: quantityToDeduct },
+          },
           { $inc: { [sizeStockKey]: -quantityToDeduct, stock: -quantityToDeduct } },
           { returnDocument: "after" }
         ).lean();
@@ -164,7 +175,12 @@ export async function POST(req: NextRequest) {
         }
 
         const updatedProduct = await Product.findOneAndUpdate(
-          { _id: product._id, stock: { $gte: quantityToDeduct } },
+          {
+            _id: product._id,
+            isActive: { $ne: false },
+            $or: [{ approvalStatus: "approved" }, { approvalStatus: { $exists: false } }],
+            stock: { $gte: quantityToDeduct },
+          },
           { $inc: { stock: -quantityToDeduct } },
           { returnDocument: "after" }
         ).lean();

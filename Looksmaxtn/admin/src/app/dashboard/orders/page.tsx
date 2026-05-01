@@ -29,9 +29,11 @@ export default function OrdersPage() {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("date");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [userRole, setUserRole] = useState("");
   const deferredSearch = useDeferredValue(search);
 
   useEffect(() => {
+    fetch("/api/auth/me", withAuthRequest()).then((r) => r.json()).then((d) => setUserRole(d.user?.role || "")).catch(() => {});
     fetch("/api/orders", withAuthRequest()).then((r) => r.json()).then((d) => setOrders(d.orders || [])).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
@@ -254,7 +256,7 @@ export default function OrdersPage() {
                     Date {renderSortIndicator("date")}
                   </button>
                 </th>
-                <th className="px-4 py-3 text-right">Actions</th>
+                {userRole === "admin" && <th className="px-4 py-3 text-right">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -294,16 +296,18 @@ export default function OrdersPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-xs text-text-secondary">{new Date(o.createdAt).toLocaleDateString()}</td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={(event) => handleDeleteOrder(o._id, event)}
-                      disabled={deletingOrderId === o._id}
-                      className="text-[10px] uppercase tracking-wider text-rose-300 hover:text-rose-200 transition-colors disabled:opacity-50"
-                    >
-                      {deletingOrderId === o._id ? "Deleting..." : "Delete"}
-                    </button>
-                  </td>
+                  {userRole === "admin" && (
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={(event) => handleDeleteOrder(o._id, event)}
+                        disabled={deletingOrderId === o._id}
+                        className="text-[10px] uppercase tracking-wider text-rose-300 hover:text-rose-200 transition-colors disabled:opacity-50"
+                      >
+                        {deletingOrderId === o._id ? "Deleting..." : "Delete"}
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

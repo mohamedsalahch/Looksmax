@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
 import GeneratedImageAsset from "@/admin/models/GeneratedImageAsset";
 import GeneratedImagePrompt from "@/admin/models/GeneratedImagePrompt";
-import { getSession } from "@/admin/lib/auth";
+import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 import { saveGeneratedSourceImage } from "@/admin/lib/generatedImageUploads";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
@@ -15,7 +15,7 @@ async function fileToBase64(file: File) {
 export async function GET() {
   try {
     const session = await getSession();
-    if (!session || session.role !== "admin") {
+    if (!session || !canAccessAdminResource(session.role, "assets")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 

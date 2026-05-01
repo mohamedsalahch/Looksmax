@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
 import Product from "@/admin/models/Product";
-import { getSession } from "@/admin/lib/auth";
+import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
 import { deleteProductImage, saveProductImages } from "@/admin/lib/productUploads";
 import { getConditionStatusFromScore } from "@/admin/lib/productCondition";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
@@ -126,14 +126,19 @@ function buildSizeStockSnapshot(params: {
   return snapshot;
 }
 
+function canAccessProduct(session: { userId: string; role: string }, product: { createdBy?: { id?: string } | null }) {
+  return session.role === "admin" || product.createdBy?.id === session.userId;
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getSession();
-    if (!session || session.role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    if (!session || !canAccessAdminResource(session.role, "products")) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     await dbConnect();
     const { id } = await params;
     const product = await Product.findById(id).lean();
     if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (!canAccessProduct(session, product)) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const soldQuantityMap = await getSoldQuantityByProductIds([id]);
     const soldQuantity = soldQuantityMap.get(id) || 0;
     const soldBySizeMap = await getSoldQuantityByProductAndSize([id]);
@@ -160,6 +165,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           stock: inventory.availableStock,
           sizeStock: product.sizeStock,
         }),
+        approvalStatus: product.approvalStatus || "approved",
       },
     });
   } catch (error) { console.error(error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
@@ -169,12 +175,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     await logRequestStart("admin.products.id.put", req);
     const session = await getSession();
-    if (!session || session.role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    if (!session || !canAccessAdminResource(session.role, "products")) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     await dbConnect();
     const { id } = await params;
     const auditActor = await getAuditActorFromSession(session);
     const existingProduct = await Product.findById(id).lean();
     if (!existingProduct) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (!canAccessProduct(session, existingProduct)) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const soldQuantityMap = await getSoldQuantityByProductIds([id]);
     const soldQuantity = soldQuantityMap.get(id) || 0;
     const soldBySizeMap = await getSoldQuantityByProductAndSize([id]);
@@ -193,6 +200,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
       if (typeof body.reference === "string") {
         update.reference = body.reference;
+      }
+
+      if (session.role === "admin" && ["pending", "approved", "rejected"].includes(body.approvalStatus)) {
+        update.approvalStatus = body.approvalStatus;
+      } else if (session.role === "store_owner") {
+        update.approvalStatus = "pending";
       }
 
       if (body.sizeStock && typeof body.sizeStock === "object") {
@@ -277,6 +290,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
             stock: inventory.availableStock,
             sizeStock: product.sizeStock,
           }),
+          approvalStatus: product.approvalStatus || "approved",
         },
       });
     }
@@ -419,6 +433,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           ? newCloneSourceImagePath || String(formData.get("cloneSourceImage") || "")
           : "",
       images,
+      approvalStatus: session.role === "store_owner" ? "pending" : existingProduct.approvalStatus || "approved",
       updatedBy: auditActor,
     };
 
@@ -466,8 +481,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       sizeStockData = {};
       for (const [size, entry] of getSizeStockEntries(product.sizeStock)) {
         sizeStockData[size] = {
-          fullStock: entry.fullStock,
-          stock: entry.stock,
+          fullStock: entry.fullStock ?? 0,
+          stock: entry.stock ?? 0,
           soldQuantity: soldBySize.get(size) || 0,
         };
       }
@@ -487,6 +502,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           stock: inventory.availableStock,
           sizeStock: product.sizeStock,
         }),
+        approvalStatus: product.approvalStatus || "approved",
       },
     });
   } catch (error) { logRequestError("admin.products.id.put", req, error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
@@ -495,9 +511,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getSession();
-    if (!session || session.role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    if (!session || !canAccessAdminResource(session.role, "products")) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     await dbConnect();
     const { id } = await params;
+    const product = await Product.findById(id).lean();
+    if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (!canAccessProduct(session, product)) return NextResponse.json({ error: "Not found" }, { status: 404 });
     await Product.findByIdAndDelete(id);
     return NextResponse.json({ success: true });
   } catch (error) { console.error(error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }

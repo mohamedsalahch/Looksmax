@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
 import Product from "@/admin/models/Product";
-import { getSession } from "@/admin/lib/auth";
+import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
 import { saveProductImages } from "@/admin/lib/productUploads";
 import { getConditionStatusFromScore } from "@/admin/lib/productCondition";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
@@ -148,7 +148,9 @@ function getProductPayload(
 export async function GET(req: NextRequest) {
   try {
     const session = await getSession();
-    if (!session || session.role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    if (!session || !canAccessAdminResource(session.role, "products")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
 
     await dbConnect();
     const { searchParams } = new URL(req.url);
@@ -156,6 +158,7 @@ export async function GET(req: NextRequest) {
     const category = searchParams.get("category");
 
     const filter: Record<string, unknown> = {};
+    if (session.role === "store_owner") filter["createdBy.id"] = session.userId;
     if (category) filter.categories = category;
     if (search) filter.name = { $regex: search, $options: "i" };
 
@@ -196,6 +199,7 @@ export async function GET(req: NextRequest) {
             stock: Math.max(product.stock ?? 0, 0),
             sizeStock: product.sizeStock,
           }),
+          approvalStatus: product.approvalStatus || "approved",
           visibilityStatus: product.isActive === false ? "inactive" : "active",
         };
       }),
@@ -207,7 +211,9 @@ export async function POST(req: NextRequest) {
   try {
     await logRequestStart("admin.products.post", req);
     const session = await getSession();
-    if (!session || session.role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    if (!session || !canAccessAdminResource(session.role, "products")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
 
     await dbConnect();
     const auditActor = await getAuditActorFromSession(session);
@@ -258,6 +264,10 @@ export async function POST(req: NextRequest) {
       cloneSourceImagePath,
       originPictures
     );
+    if (session.role === "store_owner") {
+      body.tag = "NEW";
+      body.newTagDurationDays = 3;
+    }
     const rawFullStock = String(formData.get("fullStock") ?? formData.get("stock") ?? "").trim();
     if (rawFullStock.length === 0) {
       return NextResponse.json({ error: "Please enter a full stock value." }, { status: 400 });
@@ -278,6 +288,7 @@ export async function POST(req: NextRequest) {
       ...body,
       stock,
       fullStock: body.sizeStock ? stock : fullStock,
+      approvalStatus: session.role === "store_owner" ? "pending" : "approved",
       createdBy: auditActor,
       updatedBy: auditActor,
     });

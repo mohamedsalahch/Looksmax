@@ -9,15 +9,33 @@ interface Stats {
   totalUsers: number;
   totalRevenue: number;
   pendingOrders: number;
+  scope?: "admin" | "store";
+  storeName?: string;
 }
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch("/api/stats", withAuthRequest()).then((r) => r.json()).then(setStats).catch(() => {});
+    fetch("/api/stats", withAuthRequest())
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || "Failed to load dashboard");
+        setStats({
+          totalProducts: Number(data.totalProducts || 0),
+          totalOrders: Number(data.totalOrders || 0),
+          totalUsers: Number(data.totalUsers || 0),
+          totalRevenue: Number(data.totalRevenue || 0),
+          pendingOrders: Number(data.pendingOrders || 0),
+          scope: data.scope,
+          storeName: data.storeName,
+        });
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load dashboard"));
   }, []);
 
+  if (error) return <p className="text-sm text-danger">{error}</p>;
   if (!stats) return <p className="text-xs text-text-secondary animate-pulse">Loading dashboard...</p>;
 
   const cards = [
@@ -25,12 +43,21 @@ export default function DashboardPage() {
     { label: "Total Orders", value: stats.totalOrders, icon: "🛒", color: "text-info" },
     { label: "Pending Orders", value: stats.pendingOrders, icon: "⏳", color: "text-warning" },
     { label: "Products", value: stats.totalProducts, icon: "📦", color: "text-accent" },
-    { label: "Users", value: stats.totalUsers, icon: "👥", color: "text-info" },
+    ...(stats.scope === "store"
+      ? []
+      : [{ label: "Users", value: stats.totalUsers, icon: "👥", color: "text-info" }]),
   ];
 
   return (
     <div>
-      <h1 className="text-xl font-semibold tracking-wide mb-6">Dashboard</h1>
+      <div className="mb-6">
+        <h1 className="text-xl font-semibold tracking-wide">
+          {stats.scope === "store" && stats.storeName ? `${stats.storeName} Dashboard` : "Dashboard"}
+        </h1>
+        {stats.scope === "store" && (
+          <p className="mt-1 text-xs text-text-secondary">Filtered to your store products and orders.</p>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         {cards.map((card) => (

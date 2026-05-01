@@ -35,7 +35,9 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "24");
     const includeFacets = searchParams.get("includeFacets") === "1";
 
-    const filter: Record<string, unknown> = {};
+    const filter: Record<string, unknown> = {
+      $or: [{ approvalStatus: "approved" }, { approvalStatus: { $exists: false } }],
+    };
     if (category === "new-arrivals" || category === "new") {
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
@@ -117,6 +119,7 @@ export async function GET(req: NextRequest) {
 
     const filteredProducts = searchMatchedProducts.filter((product) => {
       if (product.isActive === false) return false;
+      if (product.approvalStatus && product.approvalStatus !== "approved") return false;
       const stock = Math.max(product.stock ?? 0, 0);
       const hasSelectableSize = product.sizeAvailability
         ? Object.values(product.sizeAvailability).some((sizeInfo) => sizeInfo.available)

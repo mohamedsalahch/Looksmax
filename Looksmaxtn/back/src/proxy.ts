@@ -6,13 +6,30 @@ const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "looksmax-secret-key-change-in-production"
 );
 
-async function verifyAdminToken(token: string) {
+async function getAdminTokenRole(token: string) {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET);
-    return payload?.role === "admin";
+    return typeof payload?.role === "string" ? payload.role : null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+function canAccessAdminPath(role: string | null, pathname: string) {
+  if (role === "admin") return true;
+  if (role !== "store_owner") return false;
+
+  return (
+    pathname === "/api/admin/auth/me" ||
+    pathname === "/api/admin/auth/refresh" ||
+    pathname === "/api/admin/auth/logout" ||
+    pathname === "/api/admin/stats" ||
+    pathname.startsWith("/api/admin/products") ||
+    pathname.startsWith("/api/admin/orders") ||
+    pathname.startsWith("/api/admin/categories") ||
+    pathname.startsWith("/api/admin/models") ||
+    pathname.startsWith("/api/admin/generated-images")
+  );
 }
 
 function getBearerToken(authorizationHeader?: string | null) {
@@ -66,8 +83,8 @@ export async function proxy(request: NextRequest) {
       return addCorsHeaders(NextResponse.json({ error: "Unauthorized" }, { status: 403 }));
     }
 
-    const isAdmin = await verifyAdminToken(token);
-    if (!isAdmin) {
+    const role = await getAdminTokenRole(token);
+    if (!canAccessAdminPath(role, pathname)) {
       return addCorsHeaders(NextResponse.json({ error: "Unauthorized" }, { status: 403 }));
     }
   }

@@ -13,10 +13,12 @@ export interface IOriginPictures {
 }
 
 export type ProductType = "fashion" | "perfume" | "clothing" | "shoes";
+export type ProductApprovalStatus = "pending" | "approved" | "rejected";
 
 export interface IProduct extends Document {
   name: string;
   price: number;
+  approvalStatus: ProductApprovalStatus;
   categories: string[];
   description: string;
   sizes: string[];
@@ -59,6 +61,11 @@ const productSchema = new Schema<IProduct>(
   {
     name: { type: String, required: true, trim: true },
     price: { type: Number, required: true },
+    approvalStatus: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: "approved",
+    },
     categories: [{ type: String, lowercase: true, trim: true }],
     description: { type: String, default: "" },
     sizes: [{ type: String }],

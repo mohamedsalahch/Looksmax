@@ -11,7 +11,7 @@ import {
   withAuthRequest,
 } from "@/lib/authClient";
 
-interface AdminUser { id: string; name: string; email: string; role: string; }
+interface AdminUser { id: string; name: string; storeName?: string; email: string; role: "admin" | "store_owner" | string; }
 
 interface DashboardOrder {
   _id: string;
@@ -74,7 +74,12 @@ const navItems = [
   { name: "Users", href: "/dashboard/users", icon: "👥" },
   { name: "Newsletter", href: "/dashboard/newsletter", icon: "📧" },
   { name: "Messages", href: "/dashboard/messages", icon: "💬" },
+  { name: "Stores", href: "/dashboard/stores", icon: "🏬" },
 ];
+
+const storeOwnerNavItems = navItems.filter((item) =>
+  ["/dashboard", "/dashboard/products", "/dashboard/orders"].includes(item.href)
+);
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -201,7 +206,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       active = false;
       clearRefreshTimer();
     };
-  }, [router]);
+  }, [pathname, router]);
 
   useEffect(() => {
     showNotificationsRef.current = showNotifications;
@@ -223,6 +228,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   }, [pathname]);
 
   useEffect(() => {
+    if (!user) return;
+    const currentUser = user;
     let active = true;
 
     const loadProcessingOrders = async () => {
@@ -294,9 +301,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     };
 
     loadProcessingOrders();
-    loadUnreadMessages();
-    const eventSource = new EventSource("/api/events");
-    eventSource.onmessage = (event) => {
+    if (currentUser.role === "admin") loadUnreadMessages();
+    const eventSource = currentUser.role === "admin" ? new EventSource("/api/events") : null;
+    if (eventSource) eventSource.onmessage = (event) => {
       const payload = JSON.parse(event.data) as AdminRealtimeEvent;
       if (payload.type === "connected") return;
 
@@ -380,7 +387,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         });
       }
     };
-    eventSource.onerror = () => {
+    if (eventSource) eventSource.onerror = () => {
       // EventSource reconnects automatically.
     };
     const handlePointerDown = (event: MouseEvent) => {
@@ -394,11 +401,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
     return () => {
       active = false;
-      eventSource.close();
+      eventSource?.close();
       document.removeEventListener("mousedown", handlePointerDown);
       clearRefreshTimer();
     };
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     setMobileSidebarOpen(false);
@@ -418,7 +425,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   };
 
   const unreadNotificationCount = orderNotifications.filter((notice) => !notice.read).length;
-  const unreadMessageCount = messageNotifications.filter((notice) => !notice.read).length;
+  const unreadMessageCount = user?.role === "admin" ? messageNotifications.filter((notice) => !notice.read).length : 0;
   const unreadTotalCount = unreadNotificationCount + unreadMessageCount;
 
   const handleNotificationClick = (notice: OrderNotice) => {
@@ -450,6 +457,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   if (!user) return null;
 
+  const visibleNavItems = user.role === "store_owner" ? storeOwnerNavItems : navItems;
+
   return (
     <div className="min-h-screen bg-bg-primary md:flex print:block print:bg-white print:text-black print:[&_*:not(.print\\:block)]:hidden">
       {mobileSidebarOpen && (
@@ -469,7 +478,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         <div className="flex items-center justify-between p-4">
           {sidebarOpen && (
             <div>
-              <h1 className="text-xs font-bold tracking-[0.2em] uppercase text-accent">LOOKSMAX</h1>
+              <h1 className="text-xs font-bold tracking-[0.2em] uppercase text-accent">
+                LOOKSMAX{user.role === "store_owner" && user.storeName ? ` '${user.storeName}'` : ""}
+              </h1>
               <p className="text-[9px] text-text-secondary uppercase tracking-wider">Admin</p>
             </div>
           )}
@@ -479,7 +490,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </div>
 
         <nav className="flex-1 py-4 space-y-1 px-2">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
             return (
               <Link

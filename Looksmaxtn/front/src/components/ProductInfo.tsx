@@ -24,6 +24,7 @@ type ProductInfoProduct = {
   categories?: string[];
   price: string;
   brand: string;
+  storeName?: string;
   image?: string;
   size?: string;
   sizes?: string[];
@@ -350,6 +351,13 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
         <p className="text-xs text-text-secondary uppercase tracking-wider">BRAND</p>
         <p className="mt-2 text-sm text-foreground">{product.brand}</p>
       </div>
+
+      {product.storeName && (
+        <div>
+          <p className="text-xs text-text-secondary uppercase tracking-wider">STORE</p>
+          <p className="mt-2 text-sm text-foreground">{product.storeName}</p>
+        </div>
+      )}
 
       {isPerfume && product.cloneSourceName && (
         <div className="grid grid-cols-[96px_1fr] gap-4 border border-border-color bg-surface/40 p-4">

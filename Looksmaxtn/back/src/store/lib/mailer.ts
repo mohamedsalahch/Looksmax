@@ -299,3 +299,87 @@ export async function sendOrderStatusEmail({
     html,
   });
 }
+
+export async function sendStoreApplicationStatusEmail({
+  to,
+  name,
+  status,
+  password,
+  adminUrl,
+}: {
+  to: string;
+  name: string;
+  status: "approved" | "rejected";
+  password?: string;
+  adminUrl?: string;
+}) {
+  const { from, transporter } = createTransporter();
+  const approved = status === "approved";
+  const subject = approved
+    ? "Your LOOKSMAX store request was approved"
+    : "Your LOOKSMAX store request was rejected";
+  const title = approved ? "Store request approved" : "Store request rejected";
+  const body = approved
+    ? "Your request to create your own store on LOOKSMAX has been approved."
+    : "Your request to create your own store on LOOKSMAX has been reviewed and rejected.";
+  const detail = approved
+    ? "Use the admin link and password below to connect to your store owner account."
+    : "If you believe this was a mistake or want to submit updated information, reply to this email.";
+
+  const text = [
+    `Hi ${name},`,
+    "",
+    body,
+    detail,
+    ...(approved && password && adminUrl
+      ? ["", `Admin URL: ${adminUrl}`, `Password: ${password}`]
+      : []),
+  ].join("\n");
+
+  const html = `
+    <div style="background:#f6f1e7;padding:24px">
+      <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e5dccd;border-radius:0;overflow:hidden;font-family:Arial,sans-serif;color:#1a1a1a">
+        <div style="padding:28px 28px 20px;border-bottom:1px solid #eee3d1">
+          <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#6b6258">LOOKSMAX</div>
+          <h1 style="margin:12px 0 0;font-size:24px;line-height:1.2;font-weight:700">${title}</h1>
+        </div>
+
+        <div style="padding:28px">
+          <p style="margin:0 0 16px;font-size:15px;line-height:1.7">Hi ${name},</p>
+          <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#3a332d">
+            ${body}
+          </p>
+
+          <div style="padding:16px 18px;background:#f8f5ef;border:1px solid #eee0cc;border-radius:0">
+            <p style="margin:0 0 6px;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#6b6258">Update</p>
+            <p style="margin:0;font-size:14px;line-height:1.6;color:#3a332d">${detail}</p>
+          </div>
+
+          ${
+            approved && password && adminUrl
+              ? `
+                <div style="margin-top:18px;padding:16px 18px;background:#f8f5ef;border:1px solid #eee0cc;border-radius:0">
+                  <p style="margin:0 0 8px;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#6b6258">Store Owner Access</p>
+                  <p style="margin:0 0 6px;font-size:14px;line-height:1.6;color:#3a332d">Admin URL: <a href="${adminUrl}" style="color:#111">${adminUrl}</a></p>
+                  <p style="margin:0;font-size:14px;line-height:1.6;color:#3a332d">Password: <strong style="color:#1a1a1a">${password}</strong></p>
+                </div>
+              `
+              : ""
+          }
+        </div>
+
+        <div style="padding:18px 28px 24px;border-top:1px solid #eee3d1;font-size:11px;line-height:1.6;color:#847b70">
+          Thank you for your interest in LOOKSMAX.
+        </div>
+      </div>
+    </div>
+  `;
+
+  await transporter.sendMail({
+    from,
+    to,
+    subject,
+    text,
+    html,
+  });
+}

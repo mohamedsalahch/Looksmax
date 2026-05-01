@@ -341,6 +341,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const [importingGeneratedImage, setImportingGeneratedImage] = useState<string | null>(null);
   const [isGeneratedImagesOpen, setIsGeneratedImagesOpen] = useState(false);
   const [generatedImagesSearch, setGeneratedImagesSearch] = useState("");
+  const [userRole, setUserRole] = useState("");
   const [soldQuantity, setSoldQuantity] = useState(0);
   const [soldQuantityBySize, setSoldQuantityBySize] = useState<Record<string, number>>({});
   const [restockAmounts, setRestockAmounts] = useState<Record<string, string>>({});
@@ -351,6 +352,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const [newSizeInput, setNewSizeInput] = useState("");
   const generationAbortRef = useRef<AbortController | null>(null);
   const allowStockEditing = true;
+  const isStoreOwner = userRole === "store_owner";
   const sizeList = useMemo(
     () =>
       form.productType !== "perfume"
@@ -379,9 +381,18 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       .then((r) => r.json())
       .then((d) => setModels(d.models || []));
 
-    fetch("/api/generated-images", withAuthRequest())
+    fetch("/api/auth/me", withAuthRequest())
       .then((r) => r.json())
-      .then((d) => setGeneratedImages(d.generatedImages || []));
+      .then((d) => {
+        const role = d.user?.role || "";
+        setUserRole(role);
+        if (role === "store_owner") return;
+
+        fetch("/api/generated-images", withAuthRequest())
+          .then((r) => r.json())
+          .then((data) => setGeneratedImages(data.generatedImages || []));
+      })
+      .catch(() => {});
 
     fetch(`/api/products/${id}`, withAuthRequest())
       .then((r) => r.json())
@@ -1530,35 +1541,37 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         )}
 
         <SectionCard title="Product Media" description="Keep tags and gallery management together while editing.">
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
-            <div>
-              <FieldLabel>Tag</FieldLabel>
-              <select
-                value={form.tag}
-                onChange={(e) => setForm({ ...form, tag: e.target.value })}
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-              >
-                <option value="">None</option>
-                <option value="NEW">NEW</option>
-                <option value="FAVORITE">FAVORITE</option>
-                {form.tag && !["", "NEW", "FAVORITE"].includes(form.tag) && (
-                  <option value={form.tag}>{form.tag}</option>
+          <div className={`grid grid-cols-1 gap-4 ${isStoreOwner ? "" : "xl:grid-cols-[280px_minmax(0,1fr)]"}`}>
+            {!isStoreOwner && (
+              <div>
+                <FieldLabel>Tag</FieldLabel>
+                <select
+                  value={form.tag}
+                  onChange={(e) => setForm({ ...form, tag: e.target.value })}
+                  className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                >
+                  <option value="">None</option>
+                  <option value="NEW">NEW</option>
+                  <option value="FAVORITE">FAVORITE</option>
+                  {form.tag && !["", "NEW", "FAVORITE"].includes(form.tag) && (
+                    <option value={form.tag}>{form.tag}</option>
+                  )}
+                </select>
+                {form.tag === "NEW" && (
+                  <div className="mt-3">
+                    <FieldLabel>NEW tag duration (days)</FieldLabel>
+                    <input
+                      type="number"
+                      min={1}
+                      value={form.newTagDurationDays}
+                      onChange={(e) => setForm({ ...form, newTagDurationDays: e.target.value })}
+                      className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                      placeholder="3"
+                    />
+                  </div>
                 )}
-              </select>
-              {form.tag === "NEW" && (
-                <div className="mt-3">
-                  <FieldLabel>NEW tag duration (days)</FieldLabel>
-                  <input
-                    type="number"
-                    min={1}
-                    value={form.newTagDurationDays}
-                    onChange={(e) => setForm({ ...form, newTagDurationDays: e.target.value })}
-                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-                    placeholder="3"
-                  />
-                </div>
-              )}
-            </div>
+              </div>
+            )}
             <div>
               <FieldLabel>Product Images</FieldLabel>
           <input
@@ -1657,7 +1670,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           </div>
         )}
 
-        {generatedImages.length > 0 && (
+        {!isStoreOwner && generatedImages.length > 0 && (
           <section className="overflow-hidden rounded border border-border bg-bg-card">
             <button
               type="button"

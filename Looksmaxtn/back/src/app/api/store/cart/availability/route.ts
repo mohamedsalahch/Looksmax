@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
 
     const [products, reservations] = await Promise.all([
       Product.find({ _id: { $in: ids } })
-        .select("_id stock sizeStock productType fashionSubtype images originPictures isActive")
+        .select("_id stock sizeStock productType fashionSubtype images originPictures isActive approvalStatus")
         .lean(),
       ProductReservation.find({
         product: { $in: ids },
@@ -90,9 +90,10 @@ export async function POST(req: NextRequest) {
           ? productReservations.find((reservation) => reservation.reservationKey === key) || null
           : null;
 
-        const available = hasSizeStock
+        const isApproved = !product?.approvalStatus || product.approvalStatus === "approved";
+        const available = product?.isActive !== false && isApproved && (hasSizeStock
           ? hasSelectableSize
-          : remainingStock > 0;
+          : remainingStock > 0);
 
         return {
           productId,

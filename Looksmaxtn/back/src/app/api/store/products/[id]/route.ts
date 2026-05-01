@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/store/lib/mongodb";
 import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
+import User from "@/store/models/User";
 import { getSession } from "@/store/lib/auth";
 import { getActiveOrderHoldMapByProductIds } from "@/lib/productInventory";
 import {
@@ -27,7 +28,12 @@ export async function GET(
         .select("reservationKey quantity size")
         .lean(),
     ]);
-    const activeOrderHoldMap = await getActiveOrderHoldMapByProductIds([id], session?.userId || null);
+    const [activeOrderHoldMap, owner] = await Promise.all([
+      getActiveOrderHoldMapByProductIds([id], session?.userId || null),
+      product?.createdBy?.id
+        ? User.findById(product.createdBy.id).select("storeName name").lean()
+        : Promise.resolve(null),
+    ]);
     const activeOrderHold = activeOrderHoldMap.get(id);
     if (!product) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
@@ -53,7 +59,7 @@ export async function GET(
       ? Boolean(activeOrderHold) && !anySizeAvailable
       : Boolean(activeOrderHold) && displayStock <= 0;
 
-    if (product.isActive === false) {
+    if (product.isActive === false || (product.approvalStatus && product.approvalStatus !== "approved")) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
     const reservedElsewhere = hasSizeStock
@@ -85,6 +91,7 @@ export async function GET(
         blockedByOrder,
         reservedElsewhere,
         ownedReservation,
+        storeName: owner?.storeName || product.createdBy?.name || "",
         reservationExpiresAt: null,
         sizeAvailability,
         viewerBlocked,
