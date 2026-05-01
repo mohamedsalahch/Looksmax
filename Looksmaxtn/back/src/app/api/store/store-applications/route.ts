@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/store/lib/mongodb";
-import StoreApplication, { StoreApplicationCategory } from "@/store/models/StoreApplication";
+import StoreApplication, { StoreApplicationCategory, StoreType } from "@/store/models/StoreApplication";
 
 const VALID_CATEGORIES = new Set<StoreApplicationCategory>([
   "clothes",
   "fragrances",
   "accessories",
 ]);
+
+const VALID_STORE_TYPES = new Set<StoreType>(["thrift", "retail"]);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -18,6 +20,7 @@ export async function POST(req: NextRequest) {
     const storeName = String(body?.storeName || "").trim();
     const email = String(body?.email || "").trim().toLowerCase();
     const category = String(body?.category || "").trim() as StoreApplicationCategory;
+    const storeType = String(body?.storeType || "").trim() as StoreType;
     const address = String(body?.address || "").trim();
     const phoneNumber = String(body?.phoneNumber || "").trim();
     const additionalInformation = String(body?.additionalInformation || "").trim();
@@ -34,11 +37,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Select a valid category" }, { status: 400 });
     }
 
+    if (!VALID_STORE_TYPES.has(storeType)) {
+      return NextResponse.json({ error: "Select whether this is a thrift or retail store" }, { status: 400 });
+    }
+
     await StoreApplication.create({
       name,
       storeName,
       email,
       category,
+      storeType,
       address,
       phoneNumber,
       additionalInformation,

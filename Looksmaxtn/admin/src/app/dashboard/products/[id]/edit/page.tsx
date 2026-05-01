@@ -342,6 +342,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const [isGeneratedImagesOpen, setIsGeneratedImagesOpen] = useState(false);
   const [generatedImagesSearch, setGeneratedImagesSearch] = useState("");
   const [userRole, setUserRole] = useState("");
+  const [userStoreName, setUserStoreName] = useState("");
+  const [userStoreType, setUserStoreType] = useState<"thrift" | "retail" | "">("");
   const [soldQuantity, setSoldQuantity] = useState(0);
   const [soldQuantityBySize, setSoldQuantityBySize] = useState<Record<string, number>>({});
   const [restockAmounts, setRestockAmounts] = useState<Record<string, string>>({});
@@ -353,6 +355,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const generationAbortRef = useRef<AbortController | null>(null);
   const allowStockEditing = true;
   const isStoreOwner = userRole === "store_owner";
+  const isRetailStoreOwner = isStoreOwner && userStoreType === "retail";
+  const isThriftStoreOwner = isStoreOwner && userStoreType === "thrift";
   const sizeList = useMemo(
     () =>
       form.productType !== "perfume"
@@ -386,6 +390,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       .then((d) => {
         const role = d.user?.role || "";
         setUserRole(role);
+        setUserStoreName(d.user?.storeName || "");
+        setUserStoreType(d.user?.storeType || "");
         if (role === "store_owner") return;
 
         fetch("/api/generated-images", withAuthRequest())
@@ -465,14 +471,17 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 
   const selectedCategorySlug =
     selectedGreatGrandchildSlug || selectedGrandchildSlug || selectedChildSlug || selectedParentSlug;
-  const categoryOptions = useMemo(
-    () =>
-      categories.map((category) => ({
-        slug: category.slug,
-        label: getCategoryPathLabel(categories, category),
-      })),
-    [categories]
-  );
+  const categoryOptions = useMemo(() => {
+    const visible = isStoreOwner
+      ? categories.filter(
+          (category) => !categories.some((other) => other.parentSlug === category.slug)
+        )
+      : categories;
+    return visible.map((category) => ({
+      slug: category.slug,
+      label: getCategoryPathLabel(categories, category),
+    }));
+  }, [categories, isStoreOwner]);
   const selectedModel = models.find((model) => model._id === selectedModelId);
   const originPictureKeys =
     form.fashionSubtype === "shoes"
@@ -1006,6 +1015,14 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       return;
     }
 
+    if (isThriftStoreOwner && !form.brand.trim()) {
+      setError("Please provide the brand of this item.");
+      setLoading(false);
+      return;
+    }
+
+    const brandToSend = isRetailStoreOwner ? userStoreName : form.brand;
+
     try {
       const productCategories = [
         selectedParentSlug,
@@ -1033,7 +1050,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       const body = new FormData();
       body.append("name", form.name);
       body.append("price", form.price);
-      body.append("brand", form.brand);
+      body.append("brand", brandToSend);
       body.append("reference", form.reference);
       body.append("description", form.description);
       body.append("tag", form.tag);
@@ -1149,32 +1166,37 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 placeholder="Product name"
               />
             </div>
-            <div>
-              <FieldLabel>Product Type</FieldLabel>
-              <select
-                value={form.productType}
-                onChange={(e) =>
-                  setForm((current) => ({
-                    ...current,
-                    productType: e.target.value as ProductType,
-                  }))
-                }
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-              >
-                <option value="fashion">Fashion (Clothes & Shoes)</option>
-                <option value="perfume">Perfume</option>
-              </select>
-            </div>
-            <div>
-              <FieldLabel>Brand</FieldLabel>
-              <input
-                type="text"
-                value={form.brand}
-                onChange={(e) => setForm({ ...form, brand: e.target.value })}
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-                placeholder="Brand"
-              />
-            </div>
+            {!isStoreOwner && (
+              <div>
+                <FieldLabel>Product Type</FieldLabel>
+                <select
+                  value={form.productType}
+                  onChange={(e) =>
+                    setForm((current) => ({
+                      ...current,
+                      productType: e.target.value as ProductType,
+                    }))
+                  }
+                  className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                >
+                  <option value="fashion">Fashion (Clothes & Shoes)</option>
+                  <option value="perfume">Perfume</option>
+                </select>
+              </div>
+            )}
+            {!isRetailStoreOwner && (
+              <div>
+                <FieldLabel>Brand{isThriftStoreOwner ? " *" : ""}</FieldLabel>
+                <input
+                  type="text"
+                  required={isThriftStoreOwner}
+                  value={form.brand}
+                  onChange={(e) => setForm({ ...form, brand: e.target.value })}
+                  className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                  placeholder={isThriftStoreOwner ? "Original brand of the item" : "Brand"}
+                />
+              </div>
+            )}
             <div>
               <FieldLabel>Reference</FieldLabel>
               <input

@@ -74,11 +74,16 @@ export async function PUT(
 
     const body = await req.json();
     const name = String(body.name || "").trim();
+    const gender = String(body.gender || "").trim();
     const frontImage = String(body.frontImage || "").trim();
     const backImage = String(body.backImage || "").trim();
 
     if (!name) {
       return NextResponse.json({ error: "Model name is required." }, { status: 400 });
+    }
+
+    if (!["male", "female", "unisex"].includes(gender)) {
+      return NextResponse.json({ error: "Please select the model gender." }, { status: 400 });
     }
 
     if (!frontImage || !model.images.includes(frontImage)) {
@@ -90,6 +95,7 @@ export async function PUT(
     }
 
     model.name = name;
+    model.gender = gender as "male" | "female" | "unisex";
     model.frontImage = frontImage;
     model.backImage = backImage;
     model.updatedBy = await getAuditActorFromSession(session);

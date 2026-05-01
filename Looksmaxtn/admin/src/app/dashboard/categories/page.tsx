@@ -39,6 +39,7 @@ export default function CategoriesPage() {
   const [error, setError] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("order");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const fetchCategories = () => {
     fetch("/api/categories", withAuthRequest())
@@ -153,7 +154,88 @@ export default function CategoriesPage() {
   };
   const getParentName = (parentSlug?: string | null) =>
     categories.find((cat) => cat.slug === parentSlug)?.name || "Top level";
+  const depthBySlug = useMemo(() => {
+    const bySlug = new Map(categories.map((c) => [c.slug, c]));
+    const cache = new Map<string, number>();
+    const compute = (cat: Category): number => {
+      const cached = cache.get(cat.slug);
+      if (cached !== undefined) return cached;
+      if (!cat.parentSlug) { cache.set(cat.slug, 0); return 0; }
+      const parent = bySlug.get(cat.parentSlug);
+      const depth = parent ? compute(parent) + 1 : 0;
+      cache.set(cat.slug, depth);
+      return depth;
+    };
+    for (const c of categories) compute(c);
+    return cache;
+  }, [categories]);
+
+  const treeOrdered = useMemo(() => {
+    const childrenOf = new Map<string | null, Category[]>();
+    for (const c of categories) {
+      const key = c.parentSlug || null;
+      if (!childrenOf.has(key)) childrenOf.set(key, []);
+      childrenOf.get(key)!.push(c);
+    }
+    for (const arr of childrenOf.values()) {
+      arr.sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+    }
+    const out: Category[] = [];
+    const walk = (parentSlug: string | null) => {
+      for (const c of childrenOf.get(parentSlug) || []) {
+        out.push(c);
+        walk(c.slug);
+      }
+    };
+    walk(null);
+    return out;
+  }, [categories]);
+
+  const useTreeView = sortKey === "order" && !normalizedSearch;
+
+  const hasChildrenSet = useMemo(() => {
+    const s = new Set<string>();
+    for (const c of categories) if (c.parentSlug) s.add(c.parentSlug);
+    return s;
+  }, [categories]);
+
+  const ancestorsOf = useMemo(() => {
+    const bySlug = new Map(categories.map((c) => [c.slug, c]));
+    const cache = new Map<string, string[]>();
+    const compute = (slug: string): string[] => {
+      const cached = cache.get(slug);
+      if (cached) return cached;
+      const cat = bySlug.get(slug);
+      if (!cat || !cat.parentSlug) { cache.set(slug, []); return []; }
+      const list = [cat.parentSlug, ...compute(cat.parentSlug)];
+      cache.set(slug, list);
+      return list;
+    };
+    for (const c of categories) compute(c.slug);
+    return cache;
+  }, [categories]);
+
+  const toggleCollapsed = (slug: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(slug)) next.delete(slug); else next.add(slug);
+      return next;
+    });
+  };
+
+  const expandAll = () => setCollapsed(new Set());
+  const collapseAll = () =>
+    setCollapsed(new Set(categories.filter((c) => hasChildrenSet.has(c.slug)).map((c) => c.slug)));
+
   const filteredCategories = useMemo(() => {
+    if (useTreeView) {
+      const visible = treeOrdered.filter((cat) => {
+        const ancestors = ancestorsOf.get(cat.slug) || [];
+        return !ancestors.some((a) => collapsed.has(a));
+      });
+      return sortDirection === "asc" ? visible : [...visible].reverse();
+    }
+
     const next = normalizedSearch
       ? categories.filter((cat) =>
           [cat.name, cat.slug, cat.parentSlug || "", String(cat.order)].some((value) =>
@@ -193,7 +275,7 @@ export default function CategoriesPage() {
 
       return sortDirection === "asc" ? comparison : -comparison;
     });
-  }, [categories, getParentName, normalizedSearch, sortDirection, sortKey]);
+  }, [ancestorsOf, categories, collapsed, getParentName, normalizedSearch, sortDirection, sortKey, treeOrdered, useTreeView]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -222,14 +304,32 @@ export default function CategoriesPage() {
         </button>
       </div>
 
-      <div className="mb-6">
+      <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center">
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search categories by name, slug, or order..."
-          className="w-full bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
+          className="flex-1 bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
         />
+        {useTreeView && (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={expandAll}
+              className="border border-border px-3 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:bg-bg-hover transition-colors cursor-pointer"
+            >
+              Expand all
+            </button>
+            <button
+              type="button"
+              onClick={collapseAll}
+              className="border border-border px-3 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:bg-bg-hover transition-colors cursor-pointer"
+            >
+              Collapse all
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Add/Edit Form */}
@@ -375,7 +475,35 @@ export default function CategoriesPage() {
               {filteredCategories.map((cat) => (
                 <tr key={cat._id} className="hover:bg-bg-hover transition-colors">
                   <td className="px-4 py-3 text-xs text-text-secondary font-mono">{cat.order}</td>
-                  <td className="px-4 py-3 text-xs font-medium">{cat.name}</td>
+                  <td className="px-4 py-3 text-xs font-medium">
+                    {useTreeView ? (
+                      (() => {
+                        const depth = depthBySlug.get(cat.slug) ?? 0;
+                        const hasKids = hasChildrenSet.has(cat.slug);
+                        const isCollapsed = collapsed.has(cat.slug);
+                        return (
+                          <span className="inline-flex items-center">
+                            <span style={{ width: `${depth * 16}px` }} aria-hidden="true" />
+                            {hasKids ? (
+                              <button
+                                type="button"
+                                onClick={() => toggleCollapsed(cat.slug)}
+                                aria-label={isCollapsed ? `Expand ${cat.name}` : `Collapse ${cat.name}`}
+                                className="mr-1.5 inline-flex h-4 w-4 items-center justify-center text-text-secondary hover:text-text-primary cursor-pointer"
+                              >
+                                <span className="text-[10px]">{isCollapsed ? "▶" : "▼"}</span>
+                              </button>
+                            ) : (
+                              <span className="mr-1.5 inline-block h-4 w-4" aria-hidden="true" />
+                            )}
+                            <span>{cat.name}</span>
+                          </span>
+                        );
+                      })()
+                    ) : (
+                      cat.name
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-xs text-text-secondary">{getParentName(cat.parentSlug)}</td>
                   <td className="px-4 py-3 text-xs text-text-secondary font-mono">{cat.slug}</td>
                   <td className="px-4 py-3">

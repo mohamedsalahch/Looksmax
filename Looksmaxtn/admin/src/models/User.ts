@@ -1,7 +1,7 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
 
 export interface IUser extends Document {
-  name: string; storeName?: string; email: string; password: string; role: "user" | "admin" | "store_owner";
+  name: string; storeName?: string; storeType?: "thrift" | "retail" | null; email: string; password: string; role: "user" | "admin" | "store_owner";
   isBlocked?: boolean;
   emailVerified?: boolean;
   emailVerificationTokenHash?: string | null;
@@ -18,6 +18,7 @@ export interface IUser extends Document {
 const userSchema = new Schema<IUser>({
   name: { type: String, required: true, trim: true },
   storeName: { type: String, default: "", trim: true },
+  storeType: { type: String, enum: ["thrift", "retail", null], default: null },
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   password: { type: String, required: true },
   role: { type: String, enum: ["user", "admin", "store_owner"], default: "user" },

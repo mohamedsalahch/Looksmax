@@ -25,6 +25,7 @@ type ProductInfoProduct = {
   price: string;
   brand: string;
   storeName?: string;
+  storeType?: "thrift" | "retail" | null;
   image?: string;
   size?: string;
   sizes?: string[];
@@ -347,10 +348,12 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
         </div>
       )}
 
-      <div>
-        <p className="text-xs text-text-secondary uppercase tracking-wider">BRAND</p>
-        <p className="mt-2 text-sm text-foreground">{product.brand}</p>
-      </div>
+      {product.storeType !== "retail" && (
+        <div>
+          <p className="text-xs text-text-secondary uppercase tracking-wider">BRAND</p>
+          <p className="mt-2 text-sm text-foreground">{product.brand}</p>
+        </div>
+      )}
 
       {product.storeName && (
         <div>

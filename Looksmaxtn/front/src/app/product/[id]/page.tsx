@@ -23,6 +23,7 @@ type ProductResponse = {
     price: number;
     brand: string;
     storeName?: string;
+    storeType?: "thrift" | "retail" | null;
     createdBy?: {
       name?: string;
     } | null;
@@ -136,6 +137,7 @@ export default async function ProductDetailPage({
     price: dbProduct.price.toFixed(2),
     brand: dbProduct.brand || "LOOKSMAX",
     storeName: dbProduct.storeName || dbProduct.createdBy?.name || "",
+    storeType: dbProduct.storeType || null,
     image: dbProduct.images?.find((image) => image.isMain)?.url || dbProduct.images?.[0]?.url || "",
     sizes,
     stock: Math.max(dbProduct.stock ?? 0, 0),

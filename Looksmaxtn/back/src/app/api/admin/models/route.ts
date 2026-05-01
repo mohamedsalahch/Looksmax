@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
     const auditActor = await getAuditActorFromSession(session);
     const formData = await req.formData();
     const name = String(formData.get("name") || "").trim();
+    const gender = String(formData.get("gender") || "").trim();
     const frontImageIndex = Number(formData.get("frontImageIndex") ?? -1);
     const backImageIndex = Number(formData.get("backImageIndex") ?? -1);
     const imageFiles = formData
@@ -42,6 +43,10 @@ export async function POST(req: NextRequest) {
 
     if (!name) {
       return NextResponse.json({ error: "Model name is required." }, { status: 400 });
+    }
+
+    if (!["male", "female", "unisex"].includes(gender)) {
+      return NextResponse.json({ error: "Please select the model gender." }, { status: 400 });
     }
 
     if (imageFiles.length === 0) {
@@ -59,6 +64,7 @@ export async function POST(req: NextRequest) {
     const imagePaths = await Promise.all(imageFiles.map((file) => saveModelImage(file)));
     const model = await ModelAsset.create({
       name,
+      gender: gender as "male" | "female" | "unisex",
       images: imagePaths,
       frontImage: imagePaths[frontImageIndex],
       backImage: imagePaths[backImageIndex],

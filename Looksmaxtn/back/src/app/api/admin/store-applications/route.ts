@@ -70,6 +70,7 @@ export async function PUT(req: NextRequest) {
       if (existingUser) {
         existingUser.name = store.name;
         existingUser.storeName = storeName;
+        existingUser.storeType = store.storeType;
         existingUser.password = passwordHash;
         existingUser.role = "store_owner";
         existingUser.emailVerified = true;
@@ -80,6 +81,7 @@ export async function PUT(req: NextRequest) {
         await User.create({
           name: store.name,
           storeName,
+          storeType: store.storeType,
           email: store.email,
           password: passwordHash,
           role: "store_owner",

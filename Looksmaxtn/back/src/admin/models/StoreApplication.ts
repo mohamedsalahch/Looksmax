@@ -2,12 +2,14 @@ import mongoose, { Schema, Document, Model } from "mongoose";
 
 export type StoreApplicationCategory = "clothes" | "fragrances" | "accessories";
 export type StoreApplicationStatus = "pending" | "approved" | "rejected";
+export type StoreType = "thrift" | "retail";
 
 export interface IStoreApplication extends Document {
   name: string;
   storeName: string;
   email: string;
   category: StoreApplicationCategory;
+  storeType: StoreType;
   address: string;
   phoneNumber: string;
   additionalInformation?: string;
@@ -26,6 +28,12 @@ const storeApplicationSchema = new Schema<IStoreApplication>(
       type: String,
       enum: ["clothes", "fragrances", "accessories"],
       required: true,
+    },
+    storeType: {
+      type: String,
+      enum: ["thrift", "retail"],
+      required: true,
+      default: "retail",
     },
     address: { type: String, required: true, trim: true },
     phoneNumber: { type: String, required: true, trim: true },

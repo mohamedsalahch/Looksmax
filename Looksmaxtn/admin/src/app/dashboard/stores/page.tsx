@@ -11,6 +11,7 @@ interface StoreApplication {
   storeName: string;
   email: string;
   category: "clothes" | "fragrances" | "accessories";
+  storeType: "thrift" | "retail";
   address: string;
   phoneNumber: string;
   additionalInformation?: string;
@@ -206,6 +207,11 @@ export default function StoresPage() {
                     <span className="rounded bg-bg-primary px-2 py-0.5 text-[10px] text-text-secondary">
                       {categoryLabels[store.category]}
                     </span>
+                    {store.storeType && (
+                      <span className="rounded bg-bg-primary px-2 py-0.5 text-[10px] text-text-secondary uppercase">
+                        {store.storeType}
+                      </span>
+                    )}
                   </div>
                   <p className="mt-1 text-[10px] text-text-secondary truncate">
                     {store.name} - {store.email} - {store.phoneNumber}

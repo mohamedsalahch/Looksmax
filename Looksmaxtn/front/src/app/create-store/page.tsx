@@ -8,11 +8,17 @@ const categories = [
   { value: "accessories", label: "Accessories" },
 ] as const;
 
+const storeTypes = [
+  { value: "retail", label: "Retail Store" },
+  { value: "thrift", label: "Thrift Store" },
+] as const;
+
 const initialForm = {
   name: "",
   storeName: "",
   email: "",
   category: "clothes",
+  storeType: "retail",
   address: "",
   phoneNumber: "",
   additionalInformation: "",
@@ -162,6 +168,39 @@ export default function CreateStorePage() {
                     </label>
                   ))}
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs text-text-secondary uppercase tracking-wider mb-2">
+                  Store Type
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {storeTypes.map((type) => (
+                    <label
+                      key={type.value}
+                      className={`border px-4 py-3 text-xs uppercase tracking-wider cursor-pointer transition-colors ${
+                        form.storeType === type.value
+                          ? "border-foreground bg-foreground text-background"
+                          : "border-border-color text-text-secondary hover:text-foreground"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="storeType"
+                        value={type.value}
+                        checked={form.storeType === type.value}
+                        onChange={(e) => setForm({ ...form, storeType: e.target.value })}
+                        className="sr-only"
+                      />
+                      {type.label}
+                    </label>
+                  ))}
+                </div>
+                <p className="mt-2 text-[11px] text-text-secondary">
+                  {form.storeType === "thrift"
+                    ? "Thrift stores list each item with its original brand."
+                    : "Retail stores sell their own brand — products will be listed under your store name."}
+                </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -1,8 +1,11 @@
 import mongoose, { Document, Model, Schema } from "mongoose";
 import { type IAuditActor, auditActorSchema } from "@/admin/lib/audit";
 
+export type ModelGender = "male" | "female" | "unisex";
+
 export interface IModelAsset extends Document {
   name: string;
+  gender: ModelGender;
   images: string[];
   frontImage: string;
   backImage: string;
@@ -15,6 +18,7 @@ export interface IModelAsset extends Document {
 const modelAssetSchema = new Schema<IModelAsset>(
   {
     name: { type: String, required: true, trim: true },
+    gender: { type: String, enum: ["male", "female", "unisex"], required: true, default: "unisex" },
     images: [{ type: String, required: true, trim: true }],
     frontImage: { type: String, required: true, trim: true },
     backImage: { type: String, required: true, trim: true },

@@ -5,9 +5,12 @@ import { useEffect, useState } from "react";
 import { withAuthRequest } from "@/lib/authClient";
 import { compressImageFile } from "@/lib/imageCompression";
 
+type ModelGender = "male" | "female" | "unisex";
+
 interface ModelAsset {
   _id: string;
   name: string;
+  gender: ModelGender;
   images: string[];
   frontImage: string;
   backImage: string;
@@ -16,6 +19,7 @@ interface ModelAsset {
 export default function ModelsPage() {
   const [models, setModels] = useState<ModelAsset[]>([]);
   const [name, setName] = useState("");
+  const [gender, setGender] = useState<ModelGender>("unisex");
   const [images, setImages] = useState<File[]>([]);
   const [frontImageIndex, setFrontImageIndex] = useState<number | null>(null);
   const [backImageIndex, setBackImageIndex] = useState<number | null>(null);
@@ -39,6 +43,7 @@ export default function ModelsPage() {
 
   const resetForm = () => {
     setName("");
+    setGender("unisex");
     setImages([]);
     setFrontImageIndex(null);
     setBackImageIndex(null);
@@ -64,6 +69,7 @@ export default function ModelsPage() {
     try {
       const body = new FormData();
       body.append("name", name);
+      body.append("gender", gender);
       body.append("frontImageIndex", String(frontImageIndex));
       body.append("backImageIndex", String(backImageIndex));
       const compressedImages = await Promise.all(images.map((image) => compressImageFile(image)));
@@ -142,6 +148,15 @@ export default function ModelsPage() {
             placeholder="Model name"
             className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
           />
+          <select
+            value={gender}
+            onChange={(e) => setGender(e.target.value as ModelGender)}
+            className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+          >
+            <option value="unisex">Unisex</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+          </select>
           <input
             id="model-images-upload"
             type="file"
@@ -235,7 +250,12 @@ export default function ModelsPage() {
                 <img src={model.frontImage || model.images?.[0] || ""} alt={model.name} className="w-full h-full object-cover" />
               </Link>
               <div className="p-3 space-y-2">
-                <p className="text-sm font-medium">{model.name}</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium truncate">{model.name}</p>
+                  <span className="text-[9px] uppercase tracking-wider border border-border px-1.5 py-0.5 text-text-secondary">
+                    {model.gender || "unisex"}
+                  </span>
+                </div>
                 <p className="text-[10px] text-text-secondary uppercase tracking-wider">
                   {model.images?.length || 0} image{(model.images?.length || 0) !== 1 ? "s" : ""}
                 </p>
@@ -243,6 +263,12 @@ export default function ModelsPage() {
                   Front / Back selected
                 </p>
                 <div className="flex items-center gap-3">
+                  <Link
+                    href={`/dashboard/models/${model._id}`}
+                    className="text-[10px] text-accent uppercase tracking-wider"
+                  >
+                    Edit
+                  </Link>
                   <button
                     type="button"
                     onClick={() => handleDelete(model._id)}

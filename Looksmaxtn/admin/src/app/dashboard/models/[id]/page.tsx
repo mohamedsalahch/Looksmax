@@ -4,9 +4,12 @@ import AuditMetaCard from "@/components/AuditMetaCard";
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
 
+type ModelGender = "male" | "female" | "unisex";
+
 interface ModelAsset {
   _id: string;
   name: string;
+  gender: ModelGender;
   images: string[];
   frontImage: string;
   backImage: string;
@@ -24,6 +27,7 @@ export default function ModelViewPage({ params }: { params: Promise<{ id: string
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [name, setName] = useState("");
+  const [gender, setGender] = useState<ModelGender>("unisex");
   const [frontImage, setFrontImage] = useState("");
   const [backImage, setBackImage] = useState("");
 
@@ -35,6 +39,7 @@ export default function ModelViewPage({ params }: { params: Promise<{ id: string
         setModel(nextModel);
         if (nextModel) {
           setName(nextModel.name);
+          setGender(nextModel.gender || "unisex");
           setFrontImage(nextModel.frontImage);
           setBackImage(nextModel.backImage);
         }
@@ -52,7 +57,7 @@ export default function ModelViewPage({ params }: { params: Promise<{ id: string
       const res = await fetch(`/api/models/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, frontImage, backImage }),
+        body: JSON.stringify({ name, gender, frontImage, backImage }),
       });
       const data = await res.json();
 
@@ -64,6 +69,7 @@ export default function ModelViewPage({ params }: { params: Promise<{ id: string
 
       setModel(data.model);
       setName(data.model.name);
+      setGender(data.model.gender || "unisex");
       setFrontImage(data.model.frontImage);
       setBackImage(data.model.backImage);
       setEditing(false);
@@ -88,7 +94,12 @@ export default function ModelViewPage({ params }: { params: Promise<{ id: string
         </Link>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-xl font-semibold tracking-wide">{model.name}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-semibold tracking-wide">{model.name}</h1>
+              <span className="text-[10px] uppercase tracking-wider border border-border px-2 py-0.5 text-text-secondary">
+                {model.gender || "unisex"}
+              </span>
+            </div>
             <p className="text-xs text-text-secondary mt-1">
               {model.images.length} image{model.images.length !== 1 ? "s" : ""}
             </p>
@@ -99,6 +110,7 @@ export default function ModelViewPage({ params }: { params: Promise<{ id: string
               setEditing((current) => !current);
               setError("");
               setName(model.name);
+              setGender(model.gender || "unisex");
               setFrontImage(model.frontImage);
               setBackImage(model.backImage);
             }}
@@ -131,6 +143,15 @@ export default function ModelViewPage({ params }: { params: Promise<{ id: string
             placeholder="Model name"
             className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
           />
+          <select
+            value={gender}
+            onChange={(e) => setGender(e.target.value as ModelGender)}
+            className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+          >
+            <option value="unisex">Unisex</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+          </select>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <select
               value={frontImage}
@@ -171,6 +192,7 @@ export default function ModelViewPage({ params }: { params: Promise<{ id: string
                 setEditing(false);
                 setError("");
                 setName(model.name);
+                setGender(model.gender || "unisex");
                 setFrontImage(model.frontImage);
                 setBackImage(model.backImage);
               }}

@@ -31,7 +31,7 @@ export async function GET(
     const [activeOrderHoldMap, owner] = await Promise.all([
       getActiveOrderHoldMapByProductIds([id], session?.userId || null),
       product?.createdBy?.id
-        ? User.findById(product.createdBy.id).select("storeName name").lean()
+        ? User.findById(product.createdBy.id).select("storeName storeType name role").lean()
         : Promise.resolve(null),
     ]);
     const activeOrderHold = activeOrderHoldMap.get(id);
@@ -92,6 +92,7 @@ export async function GET(
         reservedElsewhere,
         ownedReservation,
         storeName: owner?.storeName || product.createdBy?.name || "",
+        storeType: owner?.role === "store_owner" ? owner?.storeType || null : null,
         reservationExpiresAt: null,
         sizeAvailability,
         viewerBlocked,

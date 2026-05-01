@@ -11,7 +11,7 @@ import {
   withAuthRequest,
 } from "@/lib/authClient";
 
-interface AdminUser { id: string; name: string; storeName?: string; email: string; role: "admin" | "store_owner" | string; }
+interface AdminUser { id: string; name: string; storeName?: string; storeType?: "thrift" | "retail" | null; email: string; role: "admin" | "store_owner" | string; }
 
 interface DashboardOrder {
   _id: string;

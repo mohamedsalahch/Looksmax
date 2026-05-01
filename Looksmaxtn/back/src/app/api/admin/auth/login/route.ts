@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     const cookieOpts = getTokenCookieOptions();
     const res = NextResponse.json({
       token,
-      user: { id: user._id, name: user.name, storeName: user.storeName || "", email: user.email, role: user.role },
+      user: { id: user._id, name: user.name, storeName: user.storeName || "", storeType: user.storeType || null, email: user.email, role: user.role },
     });
     res.cookies.set(cookieOpts.name, token, cookieOpts);
     return res;
