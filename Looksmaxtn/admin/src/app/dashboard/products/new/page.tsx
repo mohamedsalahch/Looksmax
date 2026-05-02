@@ -9,6 +9,7 @@ import {
   SECONDARY_GARMENT_PALETTE,
   PaletteColor,
 } from "@/lib/generationPalette";
+import ColorPicker from "@/components/ColorPicker";
 import {
   getCategoryGender,
   getCategoryZone,
@@ -1315,6 +1316,19 @@ export default function NewProductPage() {
       return;
     }
 
+    if (form.productType === "fashion") {
+      if (!generationInputs.front.file && !generationInputs.front.previewUrl) {
+        setError("Please enhance the product images before saving.");
+        setLoading(false);
+        return;
+      }
+      if (generatedModelMedia.length === 0) {
+        setError("Please generate at least one model picture before saving.");
+        setLoading(false);
+        return;
+      }
+    }
+
     const brandToSend = isRetailStoreOwner ? userStoreName : form.brand;
 
     try {
@@ -1657,36 +1671,18 @@ export default function NewProductPage() {
                   />
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">Color</span>
-                    <span className="text-[10px] text-text-secondary">
-                      {draftVariantRow.colors ? draftVariantRow.colors : "Pick from palette"}
-                    </span>
-                    {SECONDARY_GARMENT_PALETTE.map((color) => {
-                      const active = draftVariantRow.colors.trim().toLowerCase() === color.name.toLowerCase();
-                      return (
-                        <button
-                          key={color.hex}
-                          type="button"
-                          title={color.name}
-                          onClick={() => setVariantDraft((current) => ({ ...current, colors: color.name }))}
-                          className={`h-7 w-7 rounded-full border-2 transition-all ${
-                            active ? "border-accent scale-110" : "border-border hover:border-text-secondary"
-                          }`}
-                          style={{ backgroundColor: color.hex }}
-                        />
-                      );
-                    })}
-                    <button
-                      type="button"
-                      onClick={async () => {
+                    <ColorPicker
+                      value={draftVariantRow.colors}
+                      onChange={(color) =>
+                        setVariantDraft((current) => ({ ...current, colors: color.name }))
+                      }
+                      onPickInspector={async () => {
                         const picked = await pickScreenColor();
                         if (!picked) return;
                         setVariantDraft((current) => ({ ...current, colors: picked.name }));
                       }}
-                      className="rounded-full border border-border px-3 py-1.5 text-[10px] uppercase tracking-[0.22em] text-text-secondary transition-colors hover:border-accent hover:text-accent"
-                      >
-                        Inspector
-                      </button>
-                    </div>
+                    />
+                  </div>
                   <div className="rounded border border-border bg-bg-secondary px-3 py-2">
                     <FieldLabel>Condition</FieldLabel>
                     <input
@@ -1754,33 +1750,16 @@ export default function NewProductPage() {
                         />
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">Color</span>
-                          <span className="text-[10px] text-text-secondary">
-                            {row.colors ? row.colors : "Pick from palette"}
-                          </span>
-                          {SECONDARY_GARMENT_PALETTE.map((color) => {
-                            const active = row.colors.trim().toLowerCase() === color.name.toLowerCase();
-                            return (
-                              <button
-                                key={color.hex}
-                                type="button"
-                                title={color.name}
-                                onClick={() =>
-                                  setVariantRows((current) =>
-                                    current.map((item) =>
-                                      item.id === row.id ? { ...item, colors: color.name } : item
-                                    )
-                                  )
-                                }
-                                className={`h-7 w-7 rounded-full border-2 transition-all ${
-                                  active ? "border-accent scale-110" : "border-border hover:border-text-secondary"
-                                }`}
-                                style={{ backgroundColor: color.hex }}
-                              />
-                            );
-                          })}
-                          <button
-                            type="button"
-                            onClick={async () => {
+                          <ColorPicker
+                            value={row.colors}
+                            onChange={(color) =>
+                              setVariantRows((current) =>
+                                current.map((item) =>
+                                  item.id === row.id ? { ...item, colors: color.name } : item
+                                )
+                              )
+                            }
+                            onPickInspector={async () => {
                               const picked = await pickScreenColor();
                               if (!picked) return;
                               setVariantRows((current) =>
@@ -1789,10 +1768,7 @@ export default function NewProductPage() {
                                 )
                               );
                             }}
-                            className="rounded-full border border-border px-3 py-1.5 text-[10px] uppercase tracking-[0.22em] text-text-secondary transition-colors hover:border-accent hover:text-accent"
-                          >
-                            Inspector
-                          </button>
+                          />
                         </div>
                         <div className="rounded border border-border bg-bg-secondary px-3 py-2">
                           <FieldLabel>Condition</FieldLabel>

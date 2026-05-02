@@ -129,7 +129,18 @@ export async function POST(req: NextRequest) {
       fileToBase64(backFile),
     ]);
 
-    const compare = await compareFrontBackImages(normalizedBaseUrl, frontBase64, backBase64);
+    let compare: Awaited<ReturnType<typeof compareFrontBackImages>>;
+    try {
+      compare = await compareFrontBackImages(normalizedBaseUrl, frontBase64, backBase64);
+    } catch (fetchErr: unknown) {
+      const cause = fetchErr instanceof Error ? (fetchErr.cause ?? fetchErr) : fetchErr;
+      console.error("[enhance] fetch to generator failed:", cause);
+      logRequestError("admin.products.enhance.post", req, fetchErr);
+      return NextResponse.json(
+        { error: `Generation service unreachable at ${normalizedBaseUrl}. Make sure the generator API is running.` },
+        { status: 503 }
+      );
+    }
     if (!compare.ok) {
       const reason = compare.data?.detail || compare.data?.error || "Unable to compare product images.";
       return NextResponse.json({ error: reason }, { status: compare.data?.status ? Number(compare.data.status) : 400 });

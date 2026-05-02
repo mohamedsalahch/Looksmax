@@ -10,6 +10,7 @@ import {
   SECONDARY_GARMENT_PALETTE,
   PaletteColor,
 } from "@/lib/generationPalette";
+import ColorPicker from "@/components/ColorPicker";
 import {
   getCategoryGender,
   getCategoryZone,
@@ -507,6 +508,14 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     conditionScore: "9",
   });
   const generationAbortRef = useRef<AbortController | null>(null);
+  const savedSnapshot = useRef<{
+    form: typeof initialForm;
+    images: ProductImage[];
+    generatedModelMedia: ProductImage[];
+    generationInputs: GenerationInputs;
+    initialCategorySlugs: string[];
+    showProductMediaSection: boolean;
+  } | null>(null);
   const allowStockEditing = true;
   const isStoreOwner = userRole === "store_owner";
   const isRetailStoreOwner = isStoreOwner && userStoreType === "retail";
@@ -679,7 +688,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         );
         const nextSizeStock = buildSizeStockRecord(nextSizes, nextSizeStockEntries);
         const nextSoldQuantityBySize = buildSoldQuantityRecord(nextSizes, nextSizeStockEntries);
-        setForm({
+        const loadedFormData = {
           name: p.name,
           price: p.price.toString(),
           description: p.description || "",
@@ -691,8 +700,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           sizes: nextSizes.join(","),
           colors: getPrimaryColor(p.colors),
           conditionScore: String(p.conditionScore ?? 9),
-          productType: p.productType === "perfume" ? "perfume" : "fashion",
-          fashionSubtype: "",
+          productType: (p.productType === "perfume" ? "perfume" : "fashion") as "perfume" | "fashion",
+          fashionSubtype: "" as FashionSubtype,
           sizeStock: nextSizeStock,
           originPictures: {
             front: p.originPictures?.front || "",
@@ -702,7 +711,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           },
           cloneSourceName: p.cloneSourceName || "",
           cloneSourceImage: p.cloneSourceImage || "",
-        });
+        };
+        setForm(loadedFormData);
         setSoldQuantity(Math.max(Number(p.soldQuantity ?? 0), 0));
         setSavedFashionSubtype(p.fashionSubtype || "clothes");
         setSoldQuantityBySize(nextSoldQuantityBySize);
@@ -720,24 +730,31 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         );
         setRestockAmounts(Object.fromEntries(nextSizes.map((size) => [size, "0"])));
         setInitialCategorySlugs(p.categories || []);
-        setGeneratedModelMedia(
-          (p.images || []).map((image: ProductImage) => ({
-            ...image,
-            id: generateId(),
-            file: null,
-            kind: "generated",
-          }))
-        );
-        setShowProductMediaSection((p.images || []).length > 0);
-        setImages(
-          (p.images || []).map((image: ProductImage) => ({
-            ...image,
-            id: generateId(),
-            existing: true,
-            file: null,
-            kind: "source",
-          }))
-        );
+        const loadedModelMedia = (p.images || []).map((image: ProductImage) => ({
+          ...image,
+          id: generateId(),
+          file: null,
+          kind: "generated" as const,
+        }));
+        const loadedImages = (p.images || []).map((image: ProductImage) => ({
+          ...image,
+          id: generateId(),
+          existing: true,
+          file: null,
+          kind: "source" as const,
+        }));
+const loadedCategorySlugs = p.categories || [];
+        setGeneratedModelMedia(loadedModelMedia);
+        setShowProductMediaSection(loadedModelMedia.length > 0);
+        setImages(loadedImages);
+        savedSnapshot.current = {
+          form: loadedFormData,
+          images: loadedImages,
+          generatedModelMedia: loadedModelMedia,
+          generationInputs: initialGenerationInputs,
+          initialCategorySlugs: loadedCategorySlugs,
+          showProductMediaSection: loadedModelMedia.length > 0,
+        };
       })
       .catch(() => {})
       .finally(() => setFetching(false));
@@ -1380,6 +1397,18 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     clearProductMediaEnhancement();
   };
 
+  const handleCancel = () => {
+    const snap = savedSnapshot.current;
+    if (!snap) { router.back(); return; }
+    setForm(snap.form);
+    setImages(snap.images);
+    setGeneratedModelMedia(snap.generatedModelMedia);
+    setGenerationInputs(snap.generationInputs);
+    setShowProductMediaSection(snap.showProductMediaSection);
+    setInitialCategorySlugs([...snap.initialCategorySlugs]);
+    setError("");
+  };
+
   const handleEnhanceButtonClick = () => {
     if (!selectedCategorySlug) {
       categorySelectRef.current?.focus();
@@ -1621,6 +1650,21 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       setError("Please provide the brand of this item.");
       setLoading(false);
       return;
+    }
+
+    if (form.productType === "fashion") {
+      const hasExistingMedia = generatedModelMedia.some((m) => !m.file);
+      const hasEnhanced = hasExistingMedia || Boolean(generationInputs.front.file);
+      if (!hasEnhanced) {
+        setError("Please enhance the product images before saving.");
+        setLoading(false);
+        return;
+      }
+      if (generatedModelMedia.length === 0) {
+        setError("Please generate at least one model picture before saving.");
+        setLoading(false);
+        return;
+      }
     }
 
     const brandToSend = isRetailStoreOwner ? userStoreName : form.brand;
@@ -2070,35 +2114,17 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                   />
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">Color</span>
-                    <span className="text-[10px] text-text-secondary">
-                      {variantDraft.colors ? variantDraft.colors : "Pick from palette"}
-                    </span>
-                    {SECONDARY_GARMENT_PALETTE.map((color) => {
-                      const active = variantDraft.colors.trim().toLowerCase() === color.name.toLowerCase();
-                      return (
-                        <button
-                          key={color.hex}
-                          type="button"
-                          title={color.name}
-                          onClick={() => setVariantDraft((current) => ({ ...current, colors: color.name }))}
-                          className={`h-7 w-7 rounded-full border-2 transition-all ${
-                            active ? "border-accent scale-110" : "border-border hover:border-text-secondary"
-                          }`}
-                          style={{ backgroundColor: color.hex }}
-                        />
-                      );
-                    })}
-                    <button
-                      type="button"
-                      onClick={async () => {
+                    <ColorPicker
+                      value={variantDraft.colors}
+                      onChange={(color) =>
+                        setVariantDraft((current) => ({ ...current, colors: color.name }))
+                      }
+                      onPickInspector={async () => {
                         const picked = await pickScreenColor();
                         if (!picked) return;
                         setVariantDraft((current) => ({ ...current, colors: picked.name }));
                       }}
-                      className="rounded-full border border-border px-3 py-1.5 text-[10px] uppercase tracking-[0.22em] text-text-secondary transition-colors hover:border-accent hover:text-accent"
-                    >
-                      Inspector
-                    </button>
+                    />
                   </div>
                   <div className="rounded border border-border bg-bg-card px-3 py-2">
                     <FieldLabel>Condition</FieldLabel>
@@ -2172,33 +2198,16 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                         />
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">Color</span>
-                          <span className="text-[10px] text-text-secondary">
-                            {row.colors ? row.colors : "Pick from palette"}
-                          </span>
-                          {SECONDARY_GARMENT_PALETTE.map((color) => {
-                            const active = row.colors.trim().toLowerCase() === color.name.toLowerCase();
-                            return (
-                              <button
-                                key={color.hex}
-                                type="button"
-                                title={color.name}
-                                onClick={() =>
-                                  setVariantRows((current) =>
-                                    current.map((item) =>
-                                      item.id === row.id ? { ...item, colors: color.name } : item
-                                    )
-                                  )
-                                }
-                                className={`h-7 w-7 rounded-full border-2 transition-all ${
-                                  active ? "border-accent scale-110" : "border-border hover:border-text-secondary"
-                                }`}
-                                style={{ backgroundColor: color.hex }}
-                              />
-                            );
-                          })}
-                          <button
-                            type="button"
-                            onClick={async () => {
+                          <ColorPicker
+                            value={row.colors}
+                            onChange={(color) =>
+                              setVariantRows((current) =>
+                                current.map((item) =>
+                                  item.id === row.id ? { ...item, colors: color.name } : item
+                                )
+                              )
+                            }
+                            onPickInspector={async () => {
                               const picked = await pickScreenColor();
                               if (!picked) return;
                               setVariantRows((current) =>
@@ -2207,10 +2216,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                                 )
                               );
                             }}
-                            className="rounded-full border border-border px-3 py-1.5 text-[10px] uppercase tracking-[0.22em] text-text-secondary transition-colors hover:border-accent hover:text-accent"
-                          >
-                            Inspector
-                          </button>
+                          />
                         </div>
                         <div className="rounded border border-border bg-bg-secondary px-3 py-2">
                           <FieldLabel>Condition</FieldLabel>
@@ -2606,7 +2612,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           <button type="submit" disabled={loading} className="bg-accent text-bg-primary px-8 py-3 text-xs font-semibold tracking-wide uppercase disabled:opacity-50">
             {loading ? "Saving..." : "Save Changes"}
           </button>
-          <button type="button" onClick={() => router.back()} className="border border-border px-6 py-3 text-xs text-text-secondary uppercase tracking-wider">
+          <button type="button" onClick={handleCancel} className="border border-border px-6 py-3 text-xs text-text-secondary uppercase tracking-wider">
             Cancel
           </button>
         </div>
