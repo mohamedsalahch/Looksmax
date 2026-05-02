@@ -10,6 +10,7 @@ import { getSession } from "@/store/lib/auth";
 import { getAuditActorFromSession } from "@/store/lib/auditRoute";
 import { broadcastAdminEvent } from "@/admin/lib/adminEvents";
 import { sendOrderStatusEmail } from "@/store/lib/mailer";
+import { isStoreOwnerApproved } from "@/store/lib/storeApproval";
 import {
   buildCouponValidationResult,
   getCouponValidationError,
@@ -109,6 +110,15 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           { error: `Product not found: ${item.name}` },
           { status: 400 }
+        );
+      }
+      const productOwner = product.createdBy?.id
+        ? await User.findById(product.createdBy.id).select("role storeApprovalStatus").lean()
+        : null;
+      if (!isStoreOwnerApproved(productOwner)) {
+        return NextResponse.json(
+          { error: `${product.name} is no longer available.` },
+          { status: 409 }
         );
       }
       if (product.isActive === false || (product.approvalStatus && product.approvalStatus !== "approved")) {

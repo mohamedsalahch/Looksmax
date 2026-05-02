@@ -5,6 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { withAuthRequest } from "@/lib/authClient";
 
+interface Category {
+  _id: string;
+  name: string;
+  slug: string;
+  parentSlug?: string | null;
+  order?: number;
+}
+
 interface Product {
   _id: string; name: string; price: number; categories: string[];
   stock: number; availableStock?: number; soldQuantity?: number; fullStock?: number; tag: string; brand: string; reference?: string; createdAt: string; productType?: "fashion" | "perfume" | "clothing" | "shoes"; availabilityStatus?: string; isActive?: boolean; visibilityStatus?: string; approvalStatus?: "pending" | "approved" | "rejected";
@@ -66,8 +74,9 @@ function getApprovalStatus(product: Product) {
 export default function ProductsPage() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
   const [visibilityFilter, setVisibilityFilter] = useState("all");
   const [approvalFilter, setApprovalFilter] = useState("all");
   const [loading, setLoading] = useState(true);
@@ -77,6 +86,8 @@ export default function ProductsPage() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [userRole, setUserRole] = useState("");
   const deferredSearch = useDeferredValue(search);
+  const canManageProducts = userRole === "store_owner";
+  const canModerateProducts = userRole === "admin";
 
   const fetchProducts = () => {
     fetch("/api/products", withAuthRequest())
@@ -86,9 +97,17 @@ export default function ProductsPage() {
       .finally(() => setLoading(false));
   };
 
+  const fetchCategories = () => {
+    fetch("/api/categories", withAuthRequest())
+      .then((r) => r.json())
+      .then((d) => setCategories(d.categories || []))
+      .catch(() => {});
+  };
+
   useEffect(() => {
     fetch("/api/auth/me", withAuthRequest()).then((r) => r.json()).then((d) => setUserRole(d.user?.role || "")).catch(() => {});
     fetchProducts();
+    fetchCategories();
   }, []);
 
   const handleDelete = async (id: string) => {
@@ -166,8 +185,9 @@ export default function ProductsPage() {
           ...(product.categories || []),
         ].some((value) => String(value || "").toLowerCase().includes(normalizedSearch));
 
-      const normalizedProductType = product.productType === "clothing" ? "fashion" : product.productType || "fashion";
-      const matchesType = typeFilter === "all" || normalizedProductType === typeFilter;
+      const matchesCategory =
+        categoryFilter === "all" ||
+        (product.categories || []).includes(categoryFilter);
 
       const isInactive = product.isActive === false || product.visibilityStatus === "inactive";
       const normalizedApprovalStatus = product.approvalStatus || "approved";
@@ -178,9 +198,33 @@ export default function ProductsPage() {
       const matchesApproval =
         approvalFilter === "all" || normalizedApprovalStatus === approvalFilter;
 
-      return matchesSearch && matchesType && matchesVisibility && matchesApproval;
+      return matchesSearch && matchesCategory && matchesVisibility && matchesApproval;
     });
-  }, [approvalFilter, deferredSearch, products, typeFilter, visibilityFilter]);
+  }, [approvalFilter, categoryFilter, deferredSearch, products, visibilityFilter]);
+
+  const categoryOptions = useMemo(() => {
+    const bySlug = new Map(categories.map((category) => [category.slug, category]));
+    const buildLabel = (category: Category) => {
+      const segments = [category.name];
+      let cursor = category.parentSlug ? bySlug.get(category.parentSlug) : null;
+      while (cursor) {
+        segments.unshift(cursor.name);
+        cursor = cursor.parentSlug ? bySlug.get(cursor.parentSlug) : null;
+      }
+      return segments.join(" / ");
+    };
+
+    return [...categories]
+      .sort((a, b) => {
+        const aPath = buildLabel(a);
+        const bPath = buildLabel(b);
+        return aPath.localeCompare(bPath, undefined, { numeric: true, sensitivity: "base" });
+      })
+      .map((category) => ({
+        value: category.slug,
+        label: buildLabel(category),
+      }));
+  }, [categories]);
 
   const sortedProducts = useMemo(() => {
     const items = [...filteredProducts];
@@ -248,9 +292,15 @@ export default function ProductsPage() {
     <div>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-xl font-semibold tracking-wide">Products</h1>
-        <Link href="/dashboard/products/new" className="inline-flex w-full justify-center bg-accent text-bg-primary px-4 py-2 text-xs font-semibold tracking-wide uppercase hover:bg-accent-hover transition-colors sm:w-auto">
-          + Add Product
-        </Link>
+        {canManageProducts ? (
+          <Link href="/dashboard/products/new" className="inline-flex w-full justify-center bg-accent text-bg-primary px-4 py-2 text-xs font-semibold tracking-wide uppercase hover:bg-accent-hover transition-colors sm:w-auto">
+            + Add Product
+          </Link>
+        ) : (
+          <span className="inline-flex w-full justify-center bg-bg-secondary text-text-secondary px-4 py-2 text-xs font-semibold tracking-wide uppercase sm:w-auto">
+            Product Access
+          </span>
+        )}
       </div>
 
       <div className="mb-6 grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_180px_180px]">
@@ -262,13 +312,16 @@ export default function ProductsPage() {
           className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
         />
         <select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
           className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
         >
-          <option value="all">All types</option>
-          <option value="fashion">Fashion</option>
-          <option value="perfume">Perfume</option>
+          <option value="all">All categories</option>
+          {categoryOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
         </select>
         <select
           value={visibilityFilter}
@@ -399,7 +452,7 @@ export default function ProductsPage() {
                       <span className={`text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${approval.className}`}>
                         {approval.label}
                       </span>
-                      {userRole === "admin" && (p.approvalStatus || "approved") !== "approved" && (
+                      {canModerateProducts && (p.approvalStatus || "approved") !== "approved" && (
                         <div className="flex gap-2">
                           <button
                             type="button"
@@ -428,55 +481,69 @@ export default function ProductsPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void handleToggleVisibility(p);
-                      }}
-                      disabled={togglingVisibilityId === p._id}
-                      className={`group relative inline-flex h-6 w-12 items-center transition-opacity ${
-                        togglingVisibilityId === p._id ? "opacity-60" : ""
-                      }`}
-                      aria-label={`Toggle visibility for ${p.name}`}
-                    >
-                      <span
-                        className={`absolute inset-0 transition-colors ${
-                          p.isActive === false || p.visibilityStatus === "inactive"
-                            ? "bg-[#d9d3c9]"
-                            : "bg-[#d7c08c]"
+                    {canManageProducts ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleToggleVisibility(p);
+                        }}
+                        disabled={togglingVisibilityId === p._id}
+                        className={`group relative inline-flex h-6 w-12 items-center transition-opacity ${
+                          togglingVisibilityId === p._id ? "opacity-60" : ""
                         }`}
-                      />
-                      <span
-                        className={`absolute top-[2px] h-5 w-5 bg-[#1a1a1a] transition-all duration-200 ease-out ${
-                          p.isActive === false || p.visibilityStatus === "inactive"
-                            ? "left-[2px]"
-                            : "left-[25px]"
-                        }`}
-                      />
-                    </button>
+                        aria-label={`Toggle visibility for ${p.name}`}
+                      >
+                        <span
+                          className={`absolute inset-0 transition-colors ${
+                            p.isActive === false || p.visibilityStatus === "inactive"
+                              ? "bg-[#d9d3c9]"
+                              : "bg-[#d7c08c]"
+                          }`}
+                        />
+                        <span
+                          className={`absolute top-[2px] h-5 w-5 bg-[#1a1a1a] transition-all duration-200 ease-out ${
+                            p.isActive === false || p.visibilityStatus === "inactive"
+                              ? "left-[2px]"
+                              : "left-[25px]"
+                          }`}
+                        />
+                      </button>
+                    ) : (
+                      <span className={`text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${p.isActive === false || p.visibilityStatus === "inactive" ? "bg-neutral-200 text-neutral-700" : "bg-[#f1ede8] text-[#6b6055]"}`}>
+                        {p.isActive === false || p.visibilityStatus === "inactive" ? "Inactive" : "Active"}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     {p.tag && <span className="text-[10px] bg-accent/10 text-accent px-2 py-0.5 font-medium uppercase">{p.tag}</span>}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <Link
-                        href={`/dashboard/products/${p._id}/edit`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-[10px] text-info hover:text-info/80 transition-colors uppercase font-medium"
-                      >
-                        Edit
-                      </Link>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void handleDelete(p._id);
-                        }}
-                        className="text-[10px] text-danger hover:text-danger/80 transition-colors uppercase font-medium cursor-pointer"
-                      >
-                        Delete
-                      </button>
+                      {canManageProducts ? (
+                        <>
+                          <Link
+                            href={`/dashboard/products/${p._id}/edit`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-[10px] text-info hover:text-info/80 transition-colors uppercase font-medium"
+                          >
+                            Edit
+                          </Link>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleDelete(p._id);
+                            }}
+                            className="text-[10px] text-danger hover:text-danger/80 transition-colors uppercase font-medium cursor-pointer"
+                          >
+                            Delete
+                          </button>
+                        </>
+                      ) : (
+                        <span className="text-[10px] uppercase tracking-wider text-text-secondary">
+                          View only
+                        </span>
+                      )}
                     </div>
                   </td>
                       </>

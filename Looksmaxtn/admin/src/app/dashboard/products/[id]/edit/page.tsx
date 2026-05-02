@@ -1818,6 +1818,25 @@ const loadedCategorySlugs = p.categories || [];
   };
 
   if (fetching) return <p className="text-xs text-text-secondary animate-pulse">Loading product...</p>;
+  if (userRole === "admin") {
+    return (
+      <div className="rounded-2xl border border-border bg-bg-card p-8 space-y-4 max-w-2xl">
+        <p className="text-xs uppercase tracking-[0.22em] text-text-secondary">Admin Access</p>
+        <h1 className="text-xl font-semibold tracking-wide">Products are read-only</h1>
+        <p className="text-sm text-text-secondary">
+          Admin accounts can review product details, approve or reject them, and manage visibility.
+          Only store owners can edit product data.
+        </p>
+        <button
+          type="button"
+          onClick={() => router.push("/dashboard/products")}
+          className="bg-black text-white px-4 py-2 text-xs font-medium tracking-wide uppercase"
+        >
+          Back to Products
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

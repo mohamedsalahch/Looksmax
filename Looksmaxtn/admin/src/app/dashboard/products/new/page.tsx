@@ -457,6 +457,7 @@ export default function NewProductPage() {
   const [userRole, setUserRole] = useState("");
   const [userStoreName, setUserStoreName] = useState("");
   const [userStoreType, setUserStoreType] = useState<"thrift" | "retail" | "">("");
+  const [authLoaded, setAuthLoaded] = useState(false);
   const generationAbortRef = useRef<AbortController | null>(null);
   const categorySelectRef = useRef<HTMLSelectElement | null>(null);
   const isStoreOwner = userRole === "store_owner";
@@ -503,7 +504,8 @@ export default function NewProductPage() {
           .then((r) => r.json())
           .then((data) => setGeneratedImages(data.generatedImages || []));
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setAuthLoaded(true));
   }, []);
 
   const selectedCategorySlug =
@@ -1444,6 +1446,32 @@ export default function NewProductPage() {
       setLoading(false);
     }
   };
+
+  if (!authLoaded) {
+    return <p className="text-xs text-text-secondary animate-pulse">Loading product setup...</p>;
+  }
+
+  if (userRole === "admin") {
+    return (
+      <div className="rounded-2xl border border-border bg-bg-card p-8 space-y-4 max-w-2xl">
+        <p className="text-xs uppercase tracking-[0.22em] text-text-secondary">Admin Access</p>
+        <h1 className="text-xl font-semibold tracking-wide">Products are read-only</h1>
+        <p className="text-sm text-text-secondary">
+          Admin accounts can review products, approve or reject them, and manage visibility.
+          Only store owners can add new products.
+        </p>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={() => router.push("/dashboard/products")}
+            className="bg-black text-white px-4 py-2 text-xs font-medium tracking-wide uppercase"
+          >
+            Back to Products
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

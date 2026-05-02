@@ -16,7 +16,15 @@ export async function GET() {
     }
 
     return NextResponse.json({
-      user: { id: user._id, name: user.name, storeName: user.storeName || "", storeType: user.storeType || null, email: user.email, role: user.role },
+      user: {
+        id: user._id,
+        name: user.name,
+        storeName: user.storeName || "",
+        storeType: user.storeType || null,
+        storeApprovalStatus: user.storeApprovalStatus || null,
+        email: user.email,
+        role: user.role,
+      },
     });
   } catch { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }

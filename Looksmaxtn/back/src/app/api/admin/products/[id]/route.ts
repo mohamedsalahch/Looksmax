@@ -191,8 +191,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const soldBySize = soldBySizeMap.get(id) || new Map<string, number>();
 
     const contentType = req.headers.get("content-type") || "";
+    if (session.role === "admin" && contentType.includes("multipart/form-data")) {
+      return NextResponse.json({ error: "Admins cannot edit products." }, { status: 403 });
+    }
     if (contentType.includes("application/json")) {
       const body = await req.json();
+      if (session.role === "admin") {
+        const allowedAdminKeys = new Set(["approvalStatus", "isActive"]);
+        const bodyKeys = Object.keys(body || {});
+        const hasRestrictedKeys = bodyKeys.some((key) => !allowedAdminKeys.has(key));
+        if (hasRestrictedKeys) {
+          return NextResponse.json({ error: "Admins cannot edit products." }, { status: 403 });
+        }
+      }
       const update: Record<string, unknown> = {};
       const sizeStockMode = body.sizeStockMode === "restock" ? "restock" : "full";
       const declaredSizes = getDeclaredSizes(existingProduct.sizes, body.sizes);
@@ -540,6 +551,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const session = await getSession();
     if (!session || !canAccessAdminResource(session.role, "products")) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    if (session.role === "admin") {
+      return NextResponse.json({ error: "Admins cannot delete products." }, { status: 403 });
+    }
     await dbConnect();
     const { id } = await params;
     const product = await Product.findById(id).lean();

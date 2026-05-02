@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/store/lib/mongodb";
 import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
+import User from "@/store/models/User";
 import { getSession } from "@/store/lib/auth";
 import { getActiveOrderHoldMapByProductIds } from "@/lib/productInventory";
 import { buildSizeAvailability, getSizeStockEntries } from "@/lib/sizeAvailability";
+import { isStoreOwnerApproved } from "@/store/lib/storeApproval";
 
 function normalizeProductType(value?: string) {
   return value === "perfume" ? "perfume" : "fashion";
@@ -27,7 +29,7 @@ export async function POST(req: NextRequest) {
 
     const [products, reservations] = await Promise.all([
       Product.find({ _id: { $in: ids } })
-        .select("_id stock sizeStock productType fashionSubtype images originPictures isActive approvalStatus")
+        .select("_id stock sizeStock productType fashionSubtype images originPictures isActive approvalStatus createdBy")
         .lean(),
       ProductReservation.find({
         product: { $in: ids },
@@ -36,6 +38,21 @@ export async function POST(req: NextRequest) {
         .select("product reservationKey reservedUntil quantity size")
         .lean(),
     ]);
+    const ownerIds = [...new Set(
+      products
+        .map((product) => product.createdBy?.id)
+        .filter((id): id is string => typeof id === "string" && id.length > 0)
+    )];
+    const owners = ownerIds.length > 0
+      ? await User.find({ _id: { $in: ownerIds } })
+          .select("_id role storeApprovalStatus")
+          .lean()
+      : [];
+    const approvedOwnerIds = new Set(
+      owners
+        .filter((owner) => isStoreOwnerApproved(owner))
+        .map((owner) => owner._id.toString())
+    );
     const activeOrderHoldMap = await getActiveOrderHoldMapByProductIds(ids, session?.userId || null);
 
     const productsMap = new Map(products.map((product) => [product._id.toString(), product]));
@@ -56,6 +73,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       items: ids.map((productId) => {
         const product = productsMap.get(productId);
+        const ownerId = product?.createdBy?.id || "";
+        if (ownerId && !approvedOwnerIds.has(ownerId)) {
+          return {
+            productId,
+            available: false,
+            blockedByOrder: false,
+            maxStock: 1,
+            productType: normalizeProductType(product?.productType),
+            fashionSubtype: product?.fashionSubtype || "clothes",
+            originPictures: product?.originPictures || { front: "", back: "", left: "", right: "" },
+            image: product?.images?.find((image: { url: string; isMain: boolean }) => image.isMain)?.url ||
+              product?.images?.[0]?.url ||
+              "",
+            cartCount: 0,
+            reservedElsewhere: false,
+            ownedReservation: false,
+            reservationExpiresAt: null,
+            sizeAvailability: null,
+          };
+        }
         const productReservations = reservationsMap.get(productId) || [];
         const activeOrderHold = activeOrderHoldMap.get(productId);
         const mainImage =

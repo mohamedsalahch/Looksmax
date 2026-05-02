@@ -19,9 +19,9 @@ export async function PUT(req: NextRequest) {
     if (!session || session.role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     await dbConnect();
 
-    const { id, isBlocked } = await req.json();
-    if (!id || typeof isBlocked !== "boolean") {
-      return NextResponse.json({ error: "ID and isBlocked are required." }, { status: 400 });
+    const { id, isBlocked, storeApprovalStatus } = await req.json();
+    if (!id || (typeof isBlocked !== "boolean" && typeof storeApprovalStatus !== "string")) {
+      return NextResponse.json({ error: "ID and an update value are required." }, { status: 400 });
     }
 
     const user = await User.findById(id);
@@ -30,7 +30,15 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Admin accounts cannot be blocked here." }, { status: 400 });
     }
 
-    user.isBlocked = isBlocked;
+    if (typeof isBlocked === "boolean") {
+      user.isBlocked = isBlocked;
+    }
+    if (typeof storeApprovalStatus === "string" && user.role === "store_owner") {
+      if (!["pending", "approved", "rejected"].includes(storeApprovalStatus)) {
+        return NextResponse.json({ error: "Invalid store approval status." }, { status: 400 });
+      }
+      user.storeApprovalStatus = storeApprovalStatus as "pending" | "approved" | "rejected";
+    }
     await user.save();
 
     return NextResponse.json({ user });

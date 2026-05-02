@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/store/lib/mongodb";
 import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
+import User from "@/store/models/User";
 import { getSession } from "@/store/lib/auth";
 import { filterAndRankProducts } from "@/store/lib/productSearch";
 import { getActiveOrderHoldMapByProductIds } from "@/lib/productInventory";
@@ -10,6 +11,7 @@ import {
   getDisplayStock,
   getSizeStockEntries,
 } from "@/lib/sizeAvailability";
+import { isStoreOwnerApproved } from "@/store/lib/storeApproval";
 
 function uniqueSortedValues(values: string[]) {
   return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -51,6 +53,21 @@ export async function GET(req: NextRequest) {
     const products = await Product.find(filter)
       .sort(category === "new" ? { createdAt: -1 } : { createdAt: -1 })
       .lean();
+    const ownerIds = [...new Set(
+      products
+        .map((product) => product.createdBy?.id)
+        .filter((id): id is string => typeof id === "string" && id.length > 0)
+    )];
+    const owners = ownerIds.length > 0
+      ? await User.find({ _id: { $in: ownerIds } })
+          .select("_id role storeApprovalStatus")
+          .lean()
+      : [];
+    const approvedOwnerIds = new Set(
+      owners
+        .filter((owner) => isStoreOwnerApproved(owner))
+        .map((owner) => owner._id.toString())
+    );
     const now = new Date();
     const activeReservations = await ProductReservation.find({ reservedUntil: { $gt: now } })
       .select("product reservationKey quantity size")
@@ -77,6 +94,10 @@ export async function GET(req: NextRequest) {
     }, new Map<string, { totalQuantity: number; ownedQuantity: number }>());
 
     const productsWithAvailability = products.map((product) => {
+      const ownerId = product.createdBy?.id || "";
+      if (ownerId && !approvedOwnerIds.has(ownerId)) {
+        return null;
+      }
       const stock = Math.max(product.stock ?? 0, 0);
       const reservationInfo = reservationMap.get(product._id.toString()) || {
         totalQuantity: 0,
@@ -93,10 +114,10 @@ export async function GET(req: NextRequest) {
         : Math.max(stock - reservedByOthers, 0);
 
       const hasSelectableSize = sizeAvailability
-        ? Object.values(sizeAvailability).some((sizeInfo) => sizeInfo.available)
+        ? Object.values(sizeAvailability as Record<string, { available: boolean }>).some((sizeInfo) => sizeInfo.available)
         : displayStock > 0;
       const reservedElsewhere = sizeAvailability
-        ? Object.values(sizeAvailability).some((sizeInfo) => sizeInfo.reservedElsewhere)
+        ? Object.values(sizeAvailability as Record<string, { reservedElsewhere: boolean }>).some((sizeInfo) => sizeInfo.reservedElsewhere)
         : reservedByOthers > 0 && (reservedByOthers >= stock || reservedByOthers + reservationInfo.ownedQuantity > stock);
       const blockedByOrder = sizeAvailability
         ? Boolean(activeOrderHold) && !hasSelectableSize
@@ -113,11 +134,15 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    const searchMatchedProducts = search
-      ? filterAndRankProducts(productsWithAvailability, search)
-      : productsWithAvailability;
+    const visibleProducts = productsWithAvailability.filter(
+      (product): product is NonNullable<(typeof productsWithAvailability)[number]> => product !== null
+    );
 
-    const filteredProducts = searchMatchedProducts.filter((product) => {
+    const searchMatchedProducts = search
+      ? filterAndRankProducts(visibleProducts as any[], search)
+      : visibleProducts;
+
+    const filteredProducts = (searchMatchedProducts as any[]).filter((product) => {
       if (product.isActive === false) return false;
       if (product.approvalStatus && product.approvalStatus !== "approved") return false;
       const stock = Math.max(product.stock ?? 0, 0);

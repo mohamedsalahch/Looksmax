@@ -40,6 +40,7 @@ interface Product {
 }
 
 interface Facets {
+  categories: string[];
   brands: string[];
   sizes: string[];
   colors: string[];
@@ -50,6 +51,12 @@ function getMainImage(images?: ProductImage[]): string | undefined {
   if (!images || images.length === 0) return undefined;
   const main = images.find((i) => i.isMain);
   return main?.url || images[0]?.url;
+}
+
+function formatCategoryLabel(value: string) {
+  return value
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 export default function ProductGrid({
@@ -68,12 +75,14 @@ export default function ProductGrid({
   const [facets, setFacets] = useState<Facets | null>(initialFacets);
 
   const [queryInput, setQueryInput] = useState("");
+  const [draftCategory, setDraftCategory] = useState("");
   const [draftBrand, setDraftBrand] = useState("");
   const [draftSizes, setDraftSizes] = useState<string[]>([]);
   const [draftColor, setDraftColor] = useState("");
   const [priceMin, setPriceMin] = useState("");
   const [priceMax, setPriceMax] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
+  const [appliedCategory, setAppliedCategory] = useState("");
   const [appliedBrand, setAppliedBrand] = useState("");
   const [appliedSizes, setAppliedSizes] = useState<string[]>([]);
   const [appliedColor, setAppliedColor] = useState("");
@@ -84,6 +93,7 @@ export default function ProductGrid({
 
   const hasActiveFilters = Boolean(
     appliedSearch ||
+      appliedCategory ||
       appliedBrand ||
       appliedSizes.length > 0 ||
       appliedColor ||
@@ -91,6 +101,7 @@ export default function ProductGrid({
       appliedPriceMax
   );
   const hasDraftChanges =
+    draftCategory !== appliedCategory ||
     draftBrand !== appliedBrand ||
     draftColor !== appliedColor ||
     priceMin !== appliedPriceMin ||
@@ -120,7 +131,11 @@ export default function ProductGrid({
     const loadProducts = () => {
       const params = new URLSearchParams();
       if (appliedSearch) params.set("search", appliedSearch);
-      if (category) params.set("category", category);
+      if (category) {
+        params.set("category", category);
+      } else if (appliedCategory) {
+        params.set("category", appliedCategory);
+      }
       if (appliedBrand) params.set("brand", appliedBrand);
       if (appliedSizes.length > 0) params.set("size", appliedSizes.join(","));
       if (appliedColor) params.set("color", appliedColor);
@@ -137,6 +152,7 @@ export default function ProductGrid({
           setProducts(data.products || []);
           if (data.facets) {
             setFacets({
+              categories: data.facets.categories || [],
               brands: data.facets.brands || [],
               sizes: data.facets.sizes || [],
               colors: data.facets.colors || [],
@@ -158,16 +174,18 @@ export default function ProductGrid({
     return () => {
       cancelled = true;
     };
-  }, [category, appliedSearch, appliedBrand, appliedSizes, appliedColor, appliedPriceMin, appliedPriceMax]);
+  }, [category, appliedSearch, appliedCategory, appliedBrand, appliedSizes, appliedColor, appliedPriceMin, appliedPriceMax]);
 
   const clearFilters = () => {
     setQueryInput("");
+    setDraftCategory("");
     setDraftBrand("");
     setDraftSizes([]);
     setDraftColor("");
     setPriceMin("");
     setPriceMax("");
     setAppliedSearch("");
+    setAppliedCategory("");
     setAppliedBrand("");
     setAppliedSizes([]);
     setAppliedColor("");
@@ -182,6 +200,7 @@ export default function ProductGrid({
   };
 
   const applyFilters = () => {
+    setAppliedCategory(draftCategory);
     setAppliedBrand(draftBrand);
     setAppliedSizes(draftSizes);
     setAppliedColor(draftColor);
@@ -274,9 +293,9 @@ export default function ProductGrid({
                 <circle cx="11" cy="11" r="8" />
                 <path d="m21 21-4.35-4.35" />
               </svg>
-              <input
-                type="text"
-                value={queryInput}
+            <input
+              type="text"
+              value={queryInput}
                 onChange={(event) => setQueryInput(event.target.value)}
                 placeholder="Search shoes, jackets, hats..."
                 className="h-12 w-full border-0 border-b border-border-color bg-transparent pl-9 pr-9 text-sm text-foreground outline-none transition-colors placeholder:text-text-secondary/50 focus:border-foreground"
@@ -295,6 +314,21 @@ export default function ProductGrid({
                 </button>
               )}
             </div>
+
+            {!category && facets && facets.categories.length > 0 && (
+              <select
+                value={draftCategory}
+                onChange={(event) => setDraftCategory(event.target.value)}
+                className="w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm text-foreground transition-colors focus:border-foreground focus:outline-none"
+              >
+                <option value="">All types</option>
+                {facets.categories.map((value) => (
+                  <option key={value} value={value}>
+                    {formatCategoryLabel(value)}
+                  </option>
+                ))}
+              </select>
+            )}
 
             <select
               value={draftBrand}

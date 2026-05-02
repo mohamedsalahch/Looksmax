@@ -109,8 +109,14 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
   const [loading, setLoading] = useState(true);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [isZoomOpen, setIsZoomOpen] = useState(false);
+  const [userRole, setUserRole] = useState("");
 
   useEffect(() => {
+    fetch("/api/auth/me", withAuthRequest())
+      .then((r) => r.json())
+      .then((d) => setUserRole(d.user?.role || ""))
+      .catch(() => {});
+
     fetch(`/api/products/${id}`, withAuthRequest())
       .then((r) => r.json())
       .then((data) => {
@@ -158,13 +164,19 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
               Reference <span className="font-mono">{product.reference}</span>
             </p>
           )}
-        </div>
-        <Link
-          href={`/dashboard/products/${product._id}/edit`}
-          className="bg-accent text-bg-primary px-4 py-2 text-xs font-semibold tracking-wide uppercase hover:bg-accent-hover transition-colors"
-        >
-          Edit Product
-        </Link>
+      </div>
+        {userRole === "store_owner" ? (
+          <Link
+            href={`/dashboard/products/${product._id}/edit`}
+            className="bg-accent text-bg-primary px-4 py-2 text-xs font-semibold tracking-wide uppercase hover:bg-accent-hover transition-colors"
+          >
+            Edit Product
+          </Link>
+        ) : (
+          <span className="bg-bg-secondary text-text-secondary px-4 py-2 text-xs font-semibold tracking-wide uppercase">
+            View Only
+          </span>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,420px)] gap-6">

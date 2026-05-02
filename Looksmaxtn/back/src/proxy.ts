@@ -23,6 +23,7 @@ function canAccessAdminPath(role: string | null, pathname: string) {
     pathname === "/api/admin/auth/me" ||
     pathname === "/api/admin/auth/refresh" ||
     pathname === "/api/admin/auth/logout" ||
+    pathname === "/api/admin/users/me/store" ||
     pathname === "/api/admin/stats" ||
     pathname.startsWith("/api/admin/products") ||
     pathname.startsWith("/api/admin/orders") ||
@@ -37,6 +38,15 @@ function getBearerToken(authorizationHeader?: string | null) {
   const [scheme, token] = authorizationHeader.split(" ");
   if (scheme?.toLowerCase() !== "bearer" || !token) return null;
   return token;
+}
+
+function isPublicAdminPath(pathname: string) {
+  return (
+    pathname === "/api/admin/auth/login" ||
+    pathname === "/api/admin/auth/forgot-password" ||
+    pathname === "/api/admin/auth/reset-password" ||
+    pathname === "/api/admin/turnstile-config"
+  );
 }
 
 export async function proxy(request: NextRequest) {
@@ -71,7 +81,7 @@ export async function proxy(request: NextRequest) {
 
   if (
     pathname.startsWith("/api/admin") &&
-    pathname !== "/api/admin/auth/login" &&
+    !isPublicAdminPath(pathname) &&
     pathname !== "/api/admin/generated-images/webhook" &&
     pathname !== "/api/admin/products/generate/webhook" &&
     pathname !== "/api/admin/products/enhance/webhook"

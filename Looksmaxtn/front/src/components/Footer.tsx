@@ -19,15 +19,10 @@ export default function Footer() {
               <Link href="/contact" className="block text-xs text-text-secondary hover:text-foreground transition-colors">
                 Contact Us
               </Link>
-              <Link href="/create-store" className="block text-xs text-text-secondary hover:text-foreground transition-colors">
-                Create Own Store
-              </Link>
               <Link href="/about" className="block text-xs text-text-secondary hover:text-foreground transition-colors">
-                FAQ
+                About Us
               </Link>
-              <Link href="/terms-and-conditions" className="block text-xs text-text-secondary hover:text-foreground transition-colors">
-                Terms & Conditions
-              </Link>
+
             </div>
           </div>
 
@@ -35,14 +30,11 @@ export default function Footer() {
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wider mb-4">Company</h3>
             <div className="space-y-2">
-              <Link href="/about" className="block text-xs text-text-secondary hover:text-foreground transition-colors">
-                About Us
-              </Link>
-              <Link href="/contact" className="block text-xs text-text-secondary hover:text-foreground transition-colors">
-                Get in Touch
-              </Link>
               <Link href="/create-store" className="block text-xs text-text-secondary hover:text-foreground transition-colors">
                 Become a Seller
+              </Link>
+              <Link href="/terms-and-conditions" className="block text-xs text-text-secondary hover:text-foreground transition-colors">
+                Terms & Conditions
               </Link>
             </div>
           </div>
@@ -76,14 +68,14 @@ export default function Footer() {
           © {currentYear} LOOKSMAX. All rights reserved.
         </p>
         <div className="flex items-center gap-4">
-          <Link href="/about" className="text-[10px] text-text-secondary hover:text-foreground transition-colors">
-            About
-          </Link>
           <Link href="/contact" className="text-[10px] text-text-secondary hover:text-foreground transition-colors">
             Contact
           </Link>
+          <Link href="/about" className="text-[10px] text-text-secondary hover:text-foreground transition-colors">
+            About
+          </Link>
           <Link href="/create-store" className="text-[10px] text-text-secondary hover:text-foreground transition-colors">
-            Create Store
+            Become a Seller
           </Link>
           <Link href="/terms-and-conditions" className="text-[10px] text-text-secondary hover:text-foreground transition-colors">
             Terms

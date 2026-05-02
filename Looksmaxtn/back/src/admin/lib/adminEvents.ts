@@ -22,11 +22,25 @@ export type AdminMessageEventPayload = {
   createdAt: string;
 };
 
+export type AdminStoreEventPayload = {
+  _id: string;
+  name: string;
+  storeName: string;
+  email: string;
+  category: string;
+  categories?: string[];
+  storeType: string;
+  status: string;
+  createdAt: string;
+};
+
 export type AdminEvent =
   | { type: "order:upsert"; order: AdminOrderEventPayload }
   | { type: "order:delete"; orderId: string }
   | { type: "message:upsert"; message: AdminMessageEventPayload }
-  | { type: "message:delete"; messageId: string };
+  | { type: "message:delete"; messageId: string }
+  | { type: "store:upsert"; store: AdminStoreEventPayload }
+  | { type: "store:delete"; storeId: string };
 
 const clients = new Map<string, AdminEventClient>();
 const encoder = new TextEncoder();

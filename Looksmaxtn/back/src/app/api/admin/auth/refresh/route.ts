@@ -11,7 +11,7 @@ export async function POST() {
     }
 
     await dbConnect();
-    const user = await User.findById(session.userId).select("name storeName storeType email role").lean();
+    const user = await User.findById(session.userId).select("name storeName storeType storeApprovalStatus email role").lean();
     if (!user || !canAccessAdminDashboard(user.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -20,7 +20,15 @@ export async function POST() {
     const cookieOpts = getTokenCookieOptions();
     const res = NextResponse.json({
       token,
-      user: { id: user._id, name: user.name, storeName: user.storeName || "", storeType: user.storeType || null, email: user.email, role: user.role },
+      user: {
+        id: user._id,
+        name: user.name,
+        storeName: user.storeName || "",
+        storeType: user.storeType || null,
+        storeApprovalStatus: user.storeApprovalStatus || null,
+        email: user.email,
+        role: user.role,
+      },
     });
     res.cookies.set(cookieOpts.name, token, cookieOpts);
     return res;

@@ -16,14 +16,17 @@ import {
 } from "@/lib/authClient";
 import { reconnectAvailabilityStream } from "@/lib/availabilityStream";
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  googleId?: string | null;
-  address?: {
-    street: string;
+  interface User {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    googleId?: string | null;
+    storeName?: string;
+    storeType?: "thrift" | "retail" | null;
+    storeApprovalStatus?: "pending" | "approved" | "rejected" | null;
+    address?: {
+      street: string;
     city: string;
     state: string;
     zip: string;

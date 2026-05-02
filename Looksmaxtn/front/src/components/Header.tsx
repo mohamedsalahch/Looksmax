@@ -103,7 +103,7 @@ export default function Header() {
           </Link>
 
           {/* User Icon / Menu */}
-          <div className="relative" ref={menuRef}>
+          <div className="relative" ref={menuRef} suppressHydrationWarning>
             <button
               type="button"
               onClick={() => {
@@ -113,8 +113,9 @@ export default function Header() {
                 }
                 router.push("/login");
               }}
-              className="inline-flex h-9 w-9 items-center justify-center text-foreground hover:text-text-secondary transition-colors cursor-pointer"
-              aria-label={mounted && user ? "Account menu" : "Sign in"}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border-color text-[10px] font-semibold tracking-[0.18em] text-foreground cursor-pointer transition-colors hover:bg-bg-secondary"
+              aria-label="Account"
+              suppressHydrationWarning
             >
               <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />

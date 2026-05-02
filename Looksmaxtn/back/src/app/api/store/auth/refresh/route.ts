@@ -40,14 +40,17 @@ export async function POST() {
     const cookieOpts = getTokenCookieOptions();
     const res = NextResponse.json({
       token,
-      user: {
-        id: String(user._id),
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        googleId: user.googleId || null,
-        address: user.address,
-        bodyProfile: user.bodyProfile
+        user: {
+          id: String(user._id),
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          googleId: user.googleId || null,
+          storeName: user.storeName || "",
+          storeType: user.storeType || null,
+          storeApprovalStatus: user.storeApprovalStatus || null,
+          address: user.address,
+          bodyProfile: user.bodyProfile
           ? {
               heightCm: user.bodyProfile.heightCm || "",
               weightKg: user.bodyProfile.weightKg || "",

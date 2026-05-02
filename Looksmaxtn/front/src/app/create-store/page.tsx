@@ -17,7 +17,7 @@ const initialForm = {
   name: "",
   storeName: "",
   email: "",
-  category: "clothes",
+  categories: ["clothes"] as (typeof categories)[number]["value"][],
   storeType: "retail",
   address: "",
   phoneNumber: "",
@@ -60,14 +60,14 @@ export default function CreateStorePage() {
   return (
     <div className="pt-[80px] min-h-screen">
       <div className="max-w-4xl mx-auto px-4 md:px-8 py-16">
-        <div className="text-center mb-12">
+          <div className="text-center mb-12">
           <p className="text-xs uppercase tracking-[0.3em] text-text-secondary mb-3">Partner With Us</p>
           <h1 className="text-3xl md:text-4xl font-semibold tracking-wide uppercase mb-4">
             Create Own Store
           </h1>
           <div className="w-16 h-px bg-foreground mx-auto mb-6" />
-          <p className="text-sm text-text-secondary max-w-lg mx-auto leading-relaxed">
-            Share your store details and category. Our team will review your request and send the decision by email.
+          <p className="text-sm text-text-secondary max-w-lg mx-auto leading-relaxed" suppressHydrationWarning>
+            Share your store details and categories. All fields are required except additional information.
           </p>
         </div>
 
@@ -142,32 +142,42 @@ export default function CreateStorePage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs text-text-secondary uppercase tracking-wider mb-2">
-                  Category
-                </label>
+                <div>
+                  <label className="block text-xs text-text-secondary uppercase tracking-wider mb-2">
+                    Categories
+                  </label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {categories.map((category) => (
                     <label
                       key={category.value}
                       className={`border px-4 py-3 text-xs uppercase tracking-wider cursor-pointer transition-colors ${
-                        form.category === category.value
+                        form.categories.includes(category.value)
                           ? "border-foreground bg-foreground text-background"
                           : "border-border-color text-text-secondary hover:text-foreground"
                       }`}
                     >
                       <input
-                        type="radio"
-                        name="category"
+                        type="checkbox"
+                        name="categories"
                         value={category.value}
-                        checked={form.category === category.value}
-                        onChange={(e) => setForm({ ...form, category: e.target.value })}
+                        checked={form.categories.includes(category.value)}
+                        onChange={(e) =>
+                          setForm((current) => ({
+                            ...current,
+                            categories: e.target.checked
+                              ? Array.from(new Set([...current.categories, category.value]))
+                              : current.categories.filter((value) => value !== category.value),
+                          }))
+                        }
                         className="sr-only"
                       />
                       {category.label}
                     </label>
                   ))}
                 </div>
+                <p className="mt-2 text-[11px] text-text-secondary" suppressHydrationWarning>
+                  Select one or more store categories. This field is required.
+                </p>
               </div>
 
               <div>

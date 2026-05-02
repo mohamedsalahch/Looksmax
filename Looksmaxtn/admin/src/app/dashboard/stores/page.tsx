@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { withAuthRequest } from "@/lib/authClient";
 
 type StoreStatus = "pending" | "approved" | "rejected";
@@ -11,7 +12,8 @@ interface StoreApplication {
   storeName: string;
   email: string;
   category: "clothes" | "fragrances" | "accessories";
-  storeType: "thrift" | "retail";
+  categories?: ("clothes" | "fragrances" | "accessories")[];
+  storeType?: "thrift" | "retail" | string;
   address: string;
   phoneNumber: string;
   additionalInformation?: string;
@@ -33,6 +35,8 @@ const statusClass: Record<StoreStatus, string> = {
 };
 
 export default function StoresPage() {
+  const searchParams = useSearchParams();
+  const focusStoreId = searchParams.get("storeId");
   const [stores, setStores] = useState<StoreApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -41,12 +45,35 @@ export default function StoresPage() {
   const [filter, setFilter] = useState<StoreStatus | "all">("all");
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  const formatCategories = (store: StoreApplication) => {
+    const values = Array.from(new Set([...(store.categories || []), store.category].filter(Boolean)));
+    return values.map((category) => categoryLabels[category as StoreApplication["category"]]).join(", ");
+  };
+
+  const formatValue = (value: string | null | undefined) => (value && value.trim() ? value : "Not provided");
+  const formatStoreType = (value?: string | null) => {
+    if (!value) return "Retail Store";
+    if (value === "thrift") return "Thrift Store";
+    if (value === "retail") return "Retail Store";
+    return value;
+  };
+
   useEffect(() => {
     fetch("/api/store-applications", withAuthRequest())
       .then((r) => r.json())
       .then((d) => setStores(d.stores || []))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!focusStoreId || loading) return;
+    if (!stores.some((store) => store._id === focusStoreId)) return;
+
+    setExpanded(focusStoreId);
+    window.setTimeout(() => {
+      document.getElementById(`store-${focusStoreId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 0);
+  }, [focusStoreId, loading, stores]);
 
   const updateStoreStatus = async (store: StoreApplication, status: "approved" | "rejected") => {
     const action = status === "approved" ? "approve" : "reject";
@@ -105,7 +132,11 @@ export default function StoresPage() {
       }
 
       setStores((current) => current.filter((item) => item._id !== store._id));
-      setNotice({ type: "success", text: "Store request deleted." });
+      const data = await res.json().catch(() => null);
+      setNotice({
+        type: "success",
+        text: data?.message || "Store request deleted. Its products are now hidden from the storefront.",
+      });
     } catch {
       setNotice({ type: "error", text: "Network error. Please try again." });
     } finally {
@@ -192,7 +223,7 @@ export default function StoresPage() {
       ) : (
         <div className="space-y-3">
           {filteredStores.map((store) => (
-            <div key={store._id} className="border border-border bg-bg-secondary/30 rounded">
+            <div key={store._id} id={`store-${store._id}`} className="border border-border bg-bg-secondary/30 rounded">
               <button
                 type="button"
                 className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left cursor-pointer"
@@ -205,7 +236,7 @@ export default function StoresPage() {
                       {store.status}
                     </span>
                     <span className="rounded bg-bg-primary px-2 py-0.5 text-[10px] text-text-secondary">
-                      {categoryLabels[store.category]}
+                      {formatCategories(store)}
                     </span>
                     {store.storeType && (
                       <span className="rounded bg-bg-primary px-2 py-0.5 text-[10px] text-text-secondary uppercase">
@@ -226,35 +257,59 @@ export default function StoresPage() {
                 <div className="px-4 pb-4 border-t border-border">
                   <div className="grid grid-cols-1 gap-3 pt-3 text-xs md:grid-cols-2">
                     <div>
-                      <p className="mb-1 text-[10px] uppercase tracking-wider text-text-secondary">Store Name</p>
-                      <p className="text-text-primary">{store.storeName || "Not provided"}</p>
-                    </div>
-                    <div>
                       <p className="mb-1 text-[10px] uppercase tracking-wider text-text-secondary">Owner</p>
-                      <p className="text-text-primary">{store.name}</p>
+                      <p className="text-text-primary">{formatValue(store.name)}</p>
                     </div>
                     <div>
+                      <p className="mb-1 text-[10px] uppercase tracking-wider text-text-secondary">Store Name</p>
+                      <p className="text-text-primary">{formatValue(store.storeName)}</p>
+                    </div>
+                    <div>
+                      <p className="mb-1 text-[10px] uppercase tracking-wider text-text-secondary">Email</p>
+                      <p className="text-text-primary">{formatValue(store.email)}</p>
+                    </div>
+                    <div>
+                      <p className="mb-1 text-[10px] uppercase tracking-wider text-text-secondary">Store Type</p>
+                      <p className="text-text-primary">{formatStoreType(store.storeType)}</p>
+                    </div>
+                    <div>
+                      <p className="mb-1 text-[10px] uppercase tracking-wider text-text-secondary">Selected Categories</p>
+                      <div className="flex flex-wrap gap-2">
+                        {Array.from(new Set([...(store.categories || []), store.category].filter(Boolean))).map((category) => (
+                          <span
+                            key={category}
+                            className="rounded bg-bg-primary px-2 py-0.5 text-[10px] text-text-primary uppercase"
+                          >
+                            {categoryLabels[category as StoreApplication["category"]]}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="mb-1 text-[10px] uppercase tracking-wider text-text-secondary">Phone Number</p>
+                      <p className="text-text-primary">{formatValue(store.phoneNumber)}</p>
+                    </div>
+                    <div className="md:col-span-2">
                       <p className="mb-1 text-[10px] uppercase tracking-wider text-text-secondary">Address</p>
-                      <p className="text-text-primary">{store.address}</p>
+                      <p className="text-text-primary">{formatValue(store.address)}</p>
+                    </div>
+                    <div className="md:col-span-2">
+                      <p className="mb-1 text-[10px] uppercase tracking-wider text-text-secondary">Additional Information</p>
+                        <p className="whitespace-pre-wrap text-text-primary">
+                          {store.additionalInformation?.trim() ? store.additionalInformation : "Not provided"}
+                        </p>
                     </div>
                     <div>
-                      <p className="mb-1 text-[10px] uppercase tracking-wider text-text-secondary">Reviewed</p>
-                      <p className="text-text-primary">
-                        {store.reviewedAt ? new Date(store.reviewedAt).toLocaleString() : "Not reviewed"}
-                      </p>
+                      <p className="mb-1 text-[10px] uppercase tracking-wider text-text-secondary">Submitted</p>
+                      <p className="text-text-primary">{new Date(store.createdAt).toLocaleString()}</p>
                     </div>
+                    {store.reviewedAt && (
+                      <div>
+                        <p className="mb-1 text-[10px] uppercase tracking-wider text-text-secondary">Reviewed</p>
+                        <p className="text-text-primary">{new Date(store.reviewedAt).toLocaleString()}</p>
+                      </div>
+                    )}
                   </div>
-
-                  {store.additionalInformation && (
-                    <div className="mt-4">
-                      <p className="mb-1 text-[10px] uppercase tracking-wider text-text-secondary">
-                        Additional Information
-                      </p>
-                      <p className="whitespace-pre-wrap text-xs leading-relaxed text-text-primary">
-                        {store.additionalInformation}
-                      </p>
-                    </div>
-                  )}
 
                   <div className="flex flex-wrap items-center gap-3 mt-4 pt-3 border-t border-border">
                     <button

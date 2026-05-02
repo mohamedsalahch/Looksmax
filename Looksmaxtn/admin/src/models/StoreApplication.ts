@@ -8,6 +8,8 @@ export interface IStoreApplication extends Document {
   storeName: string;
   email: string;
   category: StoreApplicationCategory;
+  categories: StoreApplicationCategory[];
+  storeType: "thrift" | "retail";
   address: string;
   phoneNumber: string;
   additionalInformation?: string;
@@ -26,6 +28,17 @@ const storeApplicationSchema = new Schema<IStoreApplication>(
       type: String,
       enum: ["clothes", "fragrances", "accessories"],
       required: true,
+    },
+    categories: {
+      type: [String],
+      enum: ["clothes", "fragrances", "accessories"],
+      default: [],
+    },
+    storeType: {
+      type: String,
+      enum: ["thrift", "retail"],
+      required: true,
+      default: "retail",
     },
     address: { type: String, required: true, trim: true },
     phoneNumber: { type: String, required: true, trim: true },

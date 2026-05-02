@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/providers/AuthContext";
 
-const navItems = [
+const baseNavItems = [
   { name: "Overview", href: "/account" },
   { name: "Orders", href: "/account/orders" },
   { name: "Settings", href: "/account/settings" },
@@ -16,7 +16,6 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading } = useAuth();
-
   useEffect(() => {
     if (!loading && !user) {
       router.replace(`/login?next=${encodeURIComponent(pathname)}`);
@@ -56,7 +55,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
           {/* Sidebar */}
           <nav className="md:w-48 shrink-0">
             <div className="flex md:flex-col gap-1 overflow-x-auto">
-              {navItems.map((item) => {
+              {baseNavItems.map((item) => {
                 const isActive = pathname === item.href || (item.href !== "/account" && pathname.startsWith(item.href));
                 return (
                   <Link

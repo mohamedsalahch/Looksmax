@@ -8,6 +8,9 @@ interface User {
   _id: string; name: string; email: string; role: string; createdAt: string;
   isBlocked?: boolean;
   emailVerified?: boolean;
+  storeName?: string;
+  storeType?: "thrift" | "retail" | null;
+  storeApprovalStatus?: "pending" | "approved" | "rejected" | null;
   address?: { street: string; city: string; state: string; zip: string; phone: string; };
 }
 
@@ -53,6 +56,23 @@ export default function UsersPage() {
     );
   };
 
+  const handleStoreApproval = async (user: User, storeApprovalStatus: "pending" | "approved" | "rejected") => {
+    const response = await fetch("/api/users", withAuthRequest({
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: user._id, storeApprovalStatus }),
+    }));
+
+    const data = await response.json();
+    if (!response.ok || !data.user) return;
+
+    setUsers((current) =>
+      current.map((entry) =>
+        entry._id === user._id ? { ...entry, storeApprovalStatus: data.user.storeApprovalStatus } : entry
+      )
+    );
+  };
+
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Delete user "${name}"? This cannot be undone.`)) return;
     await fetch(`/api/users?id=${id}`, withAuthRequest({ method: "DELETE" }));
@@ -69,6 +89,9 @@ export default function UsersPage() {
           u.name,
           u.email,
           u.role,
+          u.storeName || "",
+          u.storeType || "",
+          u.storeApprovalStatus || "",
           u.address?.street || "",
           u.address?.city || "",
           u.address?.state || "",
@@ -98,7 +121,13 @@ export default function UsersPage() {
         case "role":
           return user.role;
         case "status":
-          return user.isBlocked ? "blocked" : user.emailVerified === false ? "pending verification" : "active";
+          return user.isBlocked
+            ? "blocked"
+            : user.role === "store_owner" && user.storeApprovalStatus && user.storeApprovalStatus !== "approved"
+              ? `store ${user.storeApprovalStatus}`
+              : user.emailVerified === false
+                ? "pending verification"
+                : "active";
         case "city":
           return user.address?.city || "";
         default:
@@ -208,6 +237,7 @@ export default function UsersPage() {
                     Access {renderSortIndicator("status")}
                   </button>
                 </th>
+                <th className="px-4 py-3">Store</th>
                 <th className="px-4 py-3">
                   <button type="button" onClick={() => toggleSort("city")} className="inline-flex items-center gap-1 cursor-pointer">
                     Address {renderSortIndicator("city")}
@@ -248,17 +278,26 @@ export default function UsersPage() {
                       className={`text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider ${
                         u.isBlocked
                           ? "text-danger bg-danger/10"
-                          : u.emailVerified === false
+                          : u.role === "store_owner" && u.storeApprovalStatus && u.storeApprovalStatus !== "approved"
+                            ? "text-warning bg-warning/10"
+                            : u.emailVerified === false
                             ? "text-warning bg-warning/10"
                             : "text-[#6b6055] bg-[#f1ede8]"
                       }`}
                     >
                       {u.isBlocked
                         ? "Blocked"
-                        : u.emailVerified === false
-                          ? "Pending Verification"
-                          : "Active"}
+                        : u.role === "store_owner" && u.storeApprovalStatus && u.storeApprovalStatus !== "approved"
+                          ? `Store ${u.storeApprovalStatus}`
+                          : u.emailVerified === false
+                            ? "Pending Verification"
+                            : "Active"}
                     </span>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-text-secondary">
+                    {u.role === "store_owner"
+                      ? `${u.storeName || "—"}${u.storeType ? ` · ${u.storeType}` : ""}`
+                      : "—"}
                   </td>
                   <td className="px-4 py-3 text-xs text-text-secondary">
                     {u.address?.city ? `${u.address.city}, ${u.address.state}` : "—"}
@@ -282,6 +321,22 @@ export default function UsersPage() {
                           }`}
                         >
                           {u.isBlocked ? "Unblock" : "Block"}
+                        </button>
+                      )}
+                      {u.role === "store_owner" && u.storeApprovalStatus !== "approved" && (
+                        <button
+                          onClick={() => handleStoreApproval(u, "approved")}
+                          className="text-[10px] text-success hover:text-success/80 transition-colors uppercase font-medium cursor-pointer"
+                        >
+                          Approve store
+                        </button>
+                      )}
+                      {u.role === "store_owner" && u.storeApprovalStatus === "approved" && (
+                        <button
+                          onClick={() => handleStoreApproval(u, "pending")}
+                          className="text-[10px] text-warning hover:text-warning/80 transition-colors uppercase font-medium cursor-pointer"
+                        >
+                          Set pending
                         </button>
                       )}
                       {u.role !== "admin" && (

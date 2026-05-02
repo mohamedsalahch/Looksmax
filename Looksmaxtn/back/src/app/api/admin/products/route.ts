@@ -218,6 +218,9 @@ export async function POST(req: NextRequest) {
     if (!session || !canAccessAdminResource(session.role, "products")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
+    if (session.role === "admin") {
+      return NextResponse.json({ error: "Admins cannot add products." }, { status: 403 });
+    }
 
     await dbConnect();
     const auditActor = await getAuditActorFromSession(session);

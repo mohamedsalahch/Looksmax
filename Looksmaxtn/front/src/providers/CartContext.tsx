@@ -160,7 +160,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
           const nextItems = currentItems.flatMap((item) => {
             const productId = getCartItemProductId(item.id);
             const availability = availabilityMap.get(productId);
-            const sizeInfo = item.size && (availability as { sizeAvailability?: Record<string, { stock: number }> } | null)?.sizeAvailability?.[item.size];
+            const sizeInfo =
+              item.size && availability?.sizeAvailability
+                ? availability.sizeAvailability[item.size]
+                : undefined;
             const maxStock = Math.max(1, sizeInfo?.stock ?? availability?.maxStock ?? item.maxStock ?? 1);
             const ownedReservation = Boolean(availability?.ownedReservation);
 

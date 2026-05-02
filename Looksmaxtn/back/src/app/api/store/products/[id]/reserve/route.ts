@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect, { cleanupProductReservationIndexes } from "@/store/lib/mongodb";
 import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
+import User from "@/store/models/User";
 import { getSession } from "@/store/lib/auth";
 import { getSizeStockEntries } from "@/lib/sizeAvailability";
 import { broadcastAvailabilityChange } from "@/lib/sseClients";
 import mongoose from "mongoose";
+import { isStoreOwnerApproved } from "@/store/lib/storeApproval";
 
 const CART_PRESENCE_DURATION_MS = 30 * 60 * 1000;
 
@@ -32,8 +34,14 @@ export async function POST(
     await ProductReservation.deleteMany({ reservedUntil: { $lte: now } });
 
     const product = await Product.findById(id).lean();
+    const owner = product?.createdBy?.id
+      ? await User.findById(product.createdBy.id).select("role storeApprovalStatus").lean()
+      : null;
 
     if (!product) {
+      return NextResponse.json({ error: "Product not found" }, { status: 404 });
+    }
+    if (!isStoreOwnerApproved(owner)) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
     if (product.isActive === false || (product.approvalStatus && product.approvalStatus !== "approved")) {

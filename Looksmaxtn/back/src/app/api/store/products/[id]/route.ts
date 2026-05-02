@@ -11,6 +11,7 @@ import {
   getSizeStockEntries,
 } from "@/lib/sizeAvailability";
 import { computeViewerBlocked } from "@/lib/sseClients";
+import { isStoreOwnerApproved } from "@/store/lib/storeApproval";
 
 export async function GET(
   req: NextRequest,
@@ -31,11 +32,14 @@ export async function GET(
     const [activeOrderHoldMap, owner] = await Promise.all([
       getActiveOrderHoldMapByProductIds([id], session?.userId || null),
       product?.createdBy?.id
-        ? User.findById(product.createdBy.id).select("storeName storeType name role").lean()
+        ? User.findById(product.createdBy.id).select("storeName storeType name role storeApprovalStatus").lean()
         : Promise.resolve(null),
     ]);
     const activeOrderHold = activeOrderHoldMap.get(id);
     if (!product) {
+      return NextResponse.json({ error: "Product not found" }, { status: 404 });
+    }
+    if (!isStoreOwnerApproved(owner)) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
     const ownedReservationQuantity = activeReservations

@@ -11,7 +11,7 @@ import {
   withAuthRequest,
 } from "@/lib/authClient";
 
-interface AdminUser { id: string; name: string; storeName?: string; storeType?: "thrift" | "retail" | null; email: string; role: "admin" | "store_owner" | string; }
+interface AdminUser { id: string; name: string; storeName?: string; storeType?: "thrift" | "retail" | null; storeApprovalStatus?: "pending" | "approved" | "rejected" | null; email: string; role: "admin" | "store_owner" | string; }
 
 interface DashboardOrder {
   _id: string;
@@ -42,6 +42,16 @@ interface MessageNotice {
   read: boolean;
 }
 
+interface StoreNotice {
+  id: string;
+  storeId: string;
+  title: string;
+  detail: string;
+  status: string;
+  createdAt: string;
+  read: boolean;
+}
+
 type AdminRealtimeEvent =
   | { type: "connected" }
   | { type: "order:upsert"; order: DashboardOrder }
@@ -58,7 +68,22 @@ type AdminRealtimeEvent =
         createdAt: string;
       };
     }
-  | { type: "message:delete"; messageId: string };
+  | { type: "message:delete"; messageId: string }
+  | {
+      type: "store:upsert";
+      store: {
+        _id: string;
+        name: string;
+        storeName: string;
+        email: string;
+        category: string;
+        categories?: string[];
+        storeType: string;
+        status: string;
+        createdAt: string;
+      };
+    }
+  | { type: "store:delete"; storeId: string };
 
 const navItems = [
   { name: "Dashboard", href: "/dashboard", icon: "📊" },
@@ -77,9 +102,12 @@ const navItems = [
   { name: "Stores", href: "/dashboard/stores", icon: "🏬" },
 ];
 
-const storeOwnerNavItems = navItems.filter((item) =>
-  ["/dashboard", "/dashboard/products", "/dashboard/orders"].includes(item.href)
-);
+const storeOwnerNavItems = [
+  navItems[0],
+  navItems[6],
+  navItems[7],
+  { name: "Store Details", href: "/dashboard/store-details", icon: "🏬" },
+];
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -89,11 +117,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [orderNotifications, setOrderNotifications] = useState<OrderNotice[]>([]);
   const [messageNotifications, setMessageNotifications] = useState<MessageNotice[]>([]);
+  const [storeNotifications, setStoreNotifications] = useState<StoreNotice[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const notificationsRef = useRef<HTMLDivElement | null>(null);
   const showNotificationsRef = useRef(showNotifications);
   const readOrderIdsRef = useRef<Set<string>>(new Set());
+  const seenStoreIdsRef = useRef<Set<string>>(new Set());
   const refreshTimerRef = useRef<number | null>(null);
 
   const clearRefreshTimer = () => {
@@ -152,6 +182,27 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     window.localStorage.setItem("looksmax-admin-read-orders", JSON.stringify(Array.from(ids)));
   };
 
+  const loadSeenStoreIds = () => {
+    if (typeof window === "undefined") return new Set<string>();
+
+    try {
+      const raw = window.localStorage.getItem("looksmax-admin-seen-stores");
+      if (!raw) return new Set<string>();
+
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return new Set<string>();
+
+      return new Set(parsed.filter((value): value is string => typeof value === "string"));
+    } catch {
+      return new Set<string>();
+    }
+  };
+
+  const saveSeenStoreIds = (ids: Set<string>) => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("looksmax-admin-seen-stores", JSON.stringify(Array.from(ids)));
+  };
+
   const markMessageRead = async (notice: MessageNotice) => {
     setMessageNotifications((current) =>
       current.map((messageNotice) =>
@@ -171,6 +222,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     } catch {
       // Keep the optimistic UI update. The messages page can reconcile later if needed.
     }
+  };
+
+  const formatStoreCategories = (categories?: string[], category?: string) => {
+    const values = categories?.length ? categories : category ? [category] : [];
+    return values
+      .map((value) => value.replace(/[_-]+/g, " ").trim())
+      .filter(Boolean)
+      .join(", ");
   };
 
   useEffect(() => {
@@ -300,8 +359,60 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       }
     };
 
+    const loadPendingStores = async () => {
+      try {
+        const response = await fetch("/api/store-applications", withAuthRequest());
+        const data = (await response.json()) as {
+          stores?: Array<{
+            _id: string;
+            name: string;
+            storeName: string;
+            email: string;
+            category: string;
+            categories?: string[];
+            storeType: string;
+            status: string;
+            createdAt: string;
+          }>;
+        };
+        if (!active || !data) return;
+
+        const pendingStores = (data.stores || []).filter((store) => store.status === "pending");
+        const seenStoreIds = loadSeenStoreIds();
+        seenStoreIdsRef.current = seenStoreIds;
+
+        setStoreNotifications((current) => {
+          const currentById = new Map(current.map((notice) => [notice.storeId, notice]));
+
+          return pendingStores
+            .filter((store) => !seenStoreIds.has(store._id))
+            .map((store) => {
+              const existing = currentById.get(store._id);
+
+              return {
+                id: existing?.id || store._id,
+                storeId: store._id,
+                title: store.storeName || store.name || "New store request",
+                detail: `${store.name || "Owner"} • ${
+                  formatStoreCategories(store.categories, store.category) || store.storeType || "Store request"
+                }`,
+                status: store.status,
+                createdAt: store.createdAt,
+                read: existing?.read ?? false,
+              };
+            })
+            .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+        });
+      } catch {
+        // Leave the current notification state untouched on polling failures.
+      }
+    };
+
     loadProcessingOrders();
-    if (currentUser.role === "admin") loadUnreadMessages();
+    if (currentUser.role === "admin") {
+      loadUnreadMessages();
+      loadPendingStores();
+    }
     const eventSource = currentUser.role === "admin" ? new EventSource("/api/events") : null;
     if (eventSource) eventSource.onmessage = (event) => {
       const payload = JSON.parse(event.data) as AdminRealtimeEvent;
@@ -385,6 +496,60 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             ...current.filter((notice) => notice.messageId !== message._id),
           ].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
         });
+        return;
+      }
+
+      if (payload.type === "store:delete") {
+        setStoreNotifications((current) =>
+          current.filter((notice) => notice.storeId !== payload.storeId)
+        );
+        const seenStoreIds = loadSeenStoreIds();
+        seenStoreIds.delete(payload.storeId);
+        seenStoreIdsRef.current = seenStoreIds;
+        saveSeenStoreIds(seenStoreIds);
+        return;
+      }
+
+      if (payload.type === "store:upsert") {
+        const store = payload.store;
+        if (store.status !== "pending") {
+          setStoreNotifications((current) =>
+            current.filter((notice) => notice.storeId !== store._id)
+          );
+          const seenStoreIds = loadSeenStoreIds();
+          seenStoreIds.delete(store._id);
+          seenStoreIdsRef.current = seenStoreIds;
+          saveSeenStoreIds(seenStoreIds);
+          return;
+        }
+
+        const seenStoreIds = loadSeenStoreIds();
+        if (seenStoreIds.has(store._id)) {
+          setStoreNotifications((current) =>
+            current.filter((notice) => notice.storeId !== store._id)
+          );
+          return;
+        }
+
+        setStoreNotifications((current) => {
+          const currentById = new Map(current.map((notice) => [notice.storeId, notice]));
+          const existing = currentById.get(store._id);
+
+          return [
+            {
+              id: existing?.id || store._id,
+              storeId: store._id,
+              title: store.storeName || store.name || "New store request",
+              detail: `${store.name || "Owner"} • ${
+                formatStoreCategories(store.categories, store.category) || store.storeType || "Store request"
+              }`,
+              status: store.status,
+              createdAt: store.createdAt,
+              read: existing?.read ?? false,
+            },
+            ...current.filter((notice) => notice.storeId !== store._id),
+          ].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+        });
       }
     };
     if (eventSource) eventSource.onerror = () => {
@@ -426,7 +591,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   const unreadNotificationCount = orderNotifications.filter((notice) => !notice.read).length;
   const unreadMessageCount = user?.role === "admin" ? messageNotifications.filter((notice) => !notice.read).length : 0;
-  const unreadTotalCount = unreadNotificationCount + unreadMessageCount;
+  const unreadStoreCount = user?.role === "admin" ? storeNotifications.filter((notice) => !notice.read).length : 0;
+  const unreadTotalCount = unreadNotificationCount + unreadMessageCount + unreadStoreCount;
 
   const handleNotificationClick = (notice: OrderNotice) => {
     markNotificationRead(notice.id);
@@ -438,6 +604,21 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     void markMessageRead(notice);
     setShowNotifications(false);
     router.push("/dashboard/messages");
+  };
+
+  const handleStoreNotificationClick = (notice: StoreNotice) => {
+    const seenStoreIds = loadSeenStoreIds();
+    seenStoreIds.add(notice.storeId);
+    seenStoreIdsRef.current = seenStoreIds;
+    saveSeenStoreIds(seenStoreIds);
+
+    setStoreNotifications((current) =>
+      current.map((storeNotice) =>
+        storeNotice.storeId === notice.storeId ? { ...storeNotice, read: true } : storeNotice
+      )
+    );
+    setShowNotifications(false);
+    router.push(`/dashboard/stores?storeId=${encodeURIComponent(notice.storeId)}`);
   };
 
   const handleLogout = async () => {
@@ -543,10 +724,54 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                   </span>
                 )}
               </button>
-              {showNotifications && (orderNotifications.length > 0 || messageNotifications.length > 0) && (
+              {showNotifications &&
+                (orderNotifications.length > 0 || messageNotifications.length > 0 || storeNotifications.length > 0) && (
                 <div className="absolute right-0 top-full z-20 mt-2 w-72 border border-border bg-bg-secondary/95 p-3 shadow-lg shadow-black/10">
-                  {orderNotifications.length > 0 && (
+                  {storeNotifications.length > 0 && (
                     <>
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">
+                          Pending Store Requests
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const seenStoreIds = new Set(loadSeenStoreIds());
+                            for (const notice of storeNotifications) {
+                              seenStoreIds.add(notice.storeId);
+                            }
+                            seenStoreIdsRef.current = seenStoreIds;
+                            saveSeenStoreIds(seenStoreIds);
+                            setStoreNotifications((current) =>
+                              current.map((notice) => ({ ...notice, read: true }))
+                            );
+                          }}
+                          className="text-[10px] uppercase tracking-[0.18em] text-text-secondary hover:text-text-primary cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                      <div className="space-y-2">
+                        {storeNotifications.map((notice) => (
+                          <button
+                            key={notice.id}
+                            type="button"
+                            onClick={() => handleStoreNotificationClick(notice)}
+                            className="flex w-full items-start gap-2 border border-border bg-bg-primary/80 px-3 py-2 text-left transition-colors hover:bg-bg-hover"
+                          >
+                            {!notice.read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-accent" />}
+                            <span className="min-w-0">
+                              <span className="block text-xs font-medium text-text-primary">{notice.title}</span>
+                              <span className="block text-[10px] text-text-secondary">{notice.detail}</span>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  {orderNotifications.length > 0 && (
+                    <div className={storeNotifications.length > 0 ? "mt-4" : ""}>
                       <div className="mb-2 flex items-center justify-between">
                         <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">Processing Orders</p>
                         <button
@@ -573,11 +798,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                           </button>
                         ))}
                       </div>
-                    </>
+                    </div>
                   )}
 
                   {messageNotifications.length > 0 && (
-                    <div className={orderNotifications.length > 0 ? "mt-4" : ""}>
+                    <div className={storeNotifications.length > 0 || orderNotifications.length > 0 ? "mt-4" : ""}>
                       <div className="mb-2 flex items-center justify-between">
                         <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">Unread Messages</p>
                         <button

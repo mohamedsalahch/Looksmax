@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import Script from "next/script";
 import { useRouter } from "next/navigation";
@@ -135,7 +136,7 @@ export default function AdminLoginPage() {
             LOOKSMAX
           </h1>
           <p className="text-xs text-accent mt-1 tracking-wider uppercase font-medium">
-            Admin Dashboard
+            Store Dashboard
           </p>
         </div>
 
@@ -168,6 +169,15 @@ export default function AdminLoginPage() {
               className="w-full border border-border bg-bg-secondary px-4 py-3 text-sm text-text-primary focus:border-accent transition-colors"
               placeholder="••••••••"
             />
+          </div>
+
+          <div className="flex justify-end">
+            <Link
+              href="/forgot-password"
+              className="text-[10px] uppercase tracking-[0.22em] text-text-secondary underline underline-offset-2 hover:text-accent transition-colors"
+            >
+              Forgot password?
+            </Link>
           </div>
 
           {turnstileRequired && (

@@ -23,7 +23,7 @@ export async function GET() {
 
     await dbConnect();
     const user = await User.findById(session.userId)
-      .select("name email role address bodyProfile isBlocked googleId")
+      .select("name email role address bodyProfile isBlocked googleId storeName storeType storeApprovalStatus")
       .lean();
     if (!user || user.isBlocked) {
       return NextResponse.json({ user: null }, { status: 401 });
@@ -37,6 +37,9 @@ export async function GET() {
           email: user.email,
           role: user.role,
           googleId: user.googleId || null,
+          storeName: user.storeName || "",
+          storeType: user.storeType || null,
+          storeApprovalStatus: user.storeApprovalStatus || null,
           address: user.address,
           bodyProfile: user.bodyProfile
             ? {
