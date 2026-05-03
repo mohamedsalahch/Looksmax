@@ -15,7 +15,7 @@ interface Category {
 
 interface Product {
   _id: string; name: string; price: number; categories: string[];
-  stock: number; availableStock?: number; soldQuantity?: number; fullStock?: number; tag: string; brand: string; reference?: string; createdAt: string; productType?: "fashion" | "perfume" | "clothing" | "shoes"; availabilityStatus?: string; isActive?: boolean; visibilityStatus?: string; approvalStatus?: "pending" | "approved" | "rejected";
+  stock: number; availableStock?: number; soldQuantity?: number; fullStock?: number; tag: string; brand: string; reference?: string; createdAt: string; productType?: "fashion" | "perfume" | "clothing" | "shoes"; availabilityStatus?: string; isActive?: boolean; visibilityStatus?: string; approvalStatus?: "pending" | "approved" | "rejected"; images?: Array<{ url: string; isMain: boolean }>; originPictures?: { front?: string; back?: string; left?: string; right?: string };
 }
 
 type SortKey = "name" | "_id" | "categories" | "productType" | "price" | "stock" | "status" | "approval" | "visibility" | "tag";
@@ -53,13 +53,6 @@ function getProductStatus(product: Product) {
     : { label: "Reserved", className: "bg-warning/10 text-warning" };
 }
 
-function formatStockLabel(product: Product) {
-  const available = Math.max(product.availableStock ?? product.stock ?? 0, 0);
-  const sold = Math.max(product.soldQuantity ?? 0, 0);
-  const full = Math.max(product.fullStock ?? available + sold, 0);
-  return `Available: ${available} · Sold: ${sold} · Full: ${full}`;
-}
-
 function getApprovalStatus(product: Product) {
   switch (product.approvalStatus || "approved") {
     case "pending":
@@ -87,6 +80,7 @@ export default function ProductsPage() {
   const [userRole, setUserRole] = useState("");
   const deferredSearch = useDeferredValue(search);
   const canManageProducts = userRole === "store_owner";
+  const canToggleVisibility = userRole === "store_owner" || userRole === "admin";
   const canModerateProducts = userRole === "admin";
 
   const fetchProducts = () => {
@@ -271,6 +265,9 @@ export default function ProductsPage() {
     return items;
   }, [filteredProducts, sortDirection, sortKey]);
 
+  const getProductThumbnail = (product: Product) =>
+    product.originPictures?.front || product.images?.find((image) => image.isMain)?.url || product.images?.[0]?.url || "";
+
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
       setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
@@ -376,11 +373,7 @@ export default function ProductsPage() {
                     Price {renderSortIndicator("price")}
                   </button>
                 </th>
-                <th className="px-4 py-3">
-                  <button type="button" onClick={() => toggleSort("stock")} className="inline-flex items-center gap-1 cursor-pointer">
-                    Inventory {renderSortIndicator("stock")}
-                  </button>
-                </th>
+                <th className="px-4 py-3">Picture</th>
                 <th className="px-4 py-3">
                   <button type="button" onClick={() => toggleSort("status")} className="inline-flex items-center gap-1 cursor-pointer">
                     Status {renderSortIndicator("status")}
@@ -425,11 +418,18 @@ export default function ProductsPage() {
                   <td className="px-4 py-3 text-xs text-text-secondary">{p.reference || "—"}</td>
                   <td className="px-4 py-3 text-xs font-medium">{p.price.toFixed(2)} TND</td>
                   <td className="px-4 py-3">
-                    <div className="space-y-0.5">
-                      <span className="text-xs font-medium text-text-primary">
-                        {formatStockLabel(p)}
-                      </span>
-
+                    <div className="flex h-16 w-16 overflow-hidden rounded border border-border bg-bg-secondary">
+                      {getProductThumbnail(p) ? (
+                        <img
+                          src={getProductThumbnail(p)}
+                          alt={p.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-[10px] uppercase tracking-wider text-text-secondary">
+                          No image
+                        </div>
+                      )}
                     </div>
                   </td>
                   <td className="px-4 py-3">
@@ -471,7 +471,7 @@ export default function ProductsPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    {canManageProducts ? (
+                    {canToggleVisibility ? (
                       <button
                         type="button"
                         onClick={(e) => {
@@ -548,3 +548,4 @@ export default function ProductsPage() {
     </div>
   );
 }
+

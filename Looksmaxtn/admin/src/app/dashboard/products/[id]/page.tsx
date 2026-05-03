@@ -78,29 +78,16 @@ function getProductStatus(product: ProductDetail) {
     : { label: "Reserved", className: "bg-warning/10 text-warning" };
 }
 
-function getApprovalStatus(product: ProductDetail) {
-  switch (product.approvalStatus || "approved") {
-    case "pending":
-      return { label: "Pending Approval", className: "bg-warning/10 text-warning" };
-    case "rejected":
-      return { label: "Rejected", className: "bg-danger/10 text-danger" };
-    default:
-      return { label: "Approved", className: "bg-[#f1ede8] text-[#6b6055]" };
-  }
-}
-
-function formatStockLabel(product: ProductDetail) {
-  const available = Math.max(product.availableStock ?? product.stock ?? 0, 0);
-  const sold = Math.max(product.soldQuantity ?? 0, 0);
-  const full = Math.max(product.fullStock ?? available + sold, 0);
-  return `Available: ${available} · Sold: ${sold} · Full: ${full}`;
-}
-
 function getInventorySummary(product: ProductDetail) {
   const available = Math.max(product.availableStock ?? product.stock ?? 0, 0);
   const sold = Math.max(product.soldQuantity ?? 0, 0);
   const full = Math.max(product.fullStock ?? available + sold, 0);
   return { available, sold, full };
+}
+
+function formatVariantLabel(label: string) {
+  const [size] = label.split(" / ");
+  return size?.trim() || label.trim();
 }
 
 export default function ProductViewPage({ params }: { params: Promise<{ id: string }> }) {
@@ -110,6 +97,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [isZoomOpen, setIsZoomOpen] = useState(false);
   const [userRole, setUserRole] = useState("");
+  const [togglingVisibility, setTogglingVisibility] = useState(false);
 
   useEffect(() => {
     fetch("/api/auth/me", withAuthRequest())
@@ -130,18 +118,51 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
       .finally(() => setLoading(false));
   }, [id]);
 
+  const handleToggleVisibility = async () => {
+    if (!product || togglingVisibility) return;
+
+    const nextIsActive = !(product.isActive !== false);
+    setTogglingVisibility(true);
+
+    try {
+      const response = await fetch(
+        `/api/products/${product._id}`,
+        withAuthRequest({
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isActive: nextIsActive }),
+        })
+      );
+      const data = await response.json();
+      if (!response.ok || !data.product) return;
+
+      setProduct((current) =>
+        current
+          ? {
+              ...current,
+              isActive: data.product.isActive,
+              visibilityStatus: data.product.isActive === false ? "inactive" : "active",
+            }
+          : current
+      );
+    } catch {
+      // Leave the current state unchanged if the update fails.
+    } finally {
+      setTogglingVisibility(false);
+    }
+  };
+
   const images = product?.images || [];
   const mainImage = images[selectedImageIndex] || images.find((image) => image.isMain) || images[0];
   const categories = product?.categories || [];
-  const sizes = product?.sizes || [];
-  const colors = product?.colors || [];
   const details = product?.details || [];
+  const isInactive = product?.isActive === false || product?.visibilityStatus === "inactive";
+  const canToggleVisibility = userRole === "admin" || userRole === "store_owner";
 
   if (loading) return <p className="text-xs text-text-secondary animate-pulse">Loading product...</p>;
   if (!product) return <p className="text-sm text-text-secondary">Product not found.</p>;
 
   const status = getProductStatus(product);
-  const approval = getApprovalStatus(product);
   const inventory = getInventorySummary(product);
   const sizeEntries = Object.entries(product.sizeStock || {});
 
@@ -153,18 +174,18 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
             href="/dashboard/products"
             className="text-xs text-text-secondary hover:text-text-primary transition-colors mb-2 inline-block"
           >
-            ← Back
+            {"< Back"}
           </Link>
           <h1 className="text-lg font-semibold">{product.name}</h1>
           <p className="text-xs text-text-secondary mt-1">
-            {product.brand} · ID <span className="font-mono">{product._id}</span>
+            {product.brand} | ID <span className="font-mono">{product._id}</span>
           </p>
           {product.reference && (
             <p className="text-xs text-text-secondary mt-1">
               Reference <span className="font-mono">{product.reference}</span>
             </p>
           )}
-      </div>
+        </div>
         {userRole === "store_owner" ? (
           <Link
             href={`/dashboard/products/${product._id}/edit`}
@@ -172,6 +193,35 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
           >
             Edit Product
           </Link>
+        ) : userRole === "admin" ? (
+          <div className="flex items-center gap-3 rounded border border-border bg-bg-card px-4 py-3">
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-wider text-text-secondary">Visibility</p>
+              <p className="text-xs font-medium uppercase tracking-wider text-text-primary">
+                {isInactive ? "Inactive" : "Active"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleToggleVisibility()}
+              disabled={!canToggleVisibility || togglingVisibility}
+              className={`group relative inline-flex h-6 w-12 items-center transition-opacity ${
+                togglingVisibility ? "opacity-60" : ""
+              }`}
+              aria-label={`Toggle visibility for ${product.name}`}
+            >
+              <span
+                className={`absolute inset-0 transition-colors ${
+                  isInactive ? "bg-[#d9d3c9]" : "bg-[#d7c08c]"
+                }`}
+              />
+              <span
+                className={`absolute top-[2px] h-5 w-5 bg-[#1a1a1a] transition-all duration-200 ease-out ${
+                  isInactive ? "left-[2px]" : "left-[25px]"
+                }`}
+              />
+            </button>
+          </div>
         ) : (
           <span className="bg-bg-secondary text-text-secondary px-4 py-2 text-xs font-semibold tracking-wide uppercase">
             View Only
@@ -230,86 +280,40 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
           <div className="bg-bg-card border border-border rounded p-4 space-y-3">
             <p className="text-xs text-text-secondary uppercase tracking-wider">Product Summary</p>
             <p className="text-2xl font-semibold">{product.price.toFixed(2)} TND</p>
-            <div className="flex flex-wrap gap-2">
-              {product.tag && (
-                <span className="text-[10px] bg-accent/10 text-accent px-2 py-1 font-medium uppercase tracking-wider">
-                  {product.tag}
-                </span>
-              )}
-              {product.reference && (
-                <span className="text-[10px] bg-bg-secondary text-text-secondary px-2 py-1 font-medium uppercase tracking-wider">
-                  Ref {product.reference}
-                </span>
-              )}
-              {product.productType && (
-                <span className="text-[10px] bg-bg-secondary text-text-secondary px-2 py-1 font-medium uppercase tracking-wider">
-                  {product.productType}
-                </span>
-              )}
-              <span className="text-[10px] bg-bg-secondary text-text-secondary px-2 py-1 font-medium uppercase tracking-wider">
-                {formatStockLabel(product)}
-              </span>
-              <span className={`text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${status.className}`}>
-                {status.label}
-              </span>
-              <span className={`text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${approval.className}`}>
-                {approval.label}
-              </span>
-                <span
-                  className={`text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${
-                    product.isActive === false || product.visibilityStatus === "inactive"
-                      ? "bg-neutral-200 text-neutral-700"
-                      : "bg-[#f1ede8] text-[#6b6055]"
-                  }`}
-                >
-                {product.isActive === false || product.visibilityStatus === "inactive" ? "Inactive" : "Active"}
-                </span>
+            <span className={`inline-flex w-fit text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${status.className}`}>
+              {status.label}
+            </span>
+            <div className={`inline-flex w-fit text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${isInactive ? "bg-neutral-200 text-neutral-700" : "bg-[#f1ede8] text-[#6b6055]"}`}>
+              {isInactive ? "Inactive" : "Active"}
             </div>
-            {sizeEntries.length > 0 && (
-              <div className="border border-border rounded p-4 space-y-3">
-                <div>
-                  <p className="text-xs text-text-secondary uppercase tracking-wider">Size Inventory</p>
-                  <p className="mt-1 text-[11px] text-text-secondary">
-                    Full stock is the total set for each size. Sold stock is derived from orders.
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  {sizeEntries.map(([size, entry]) => (
-                    <div key={size} className="flex items-center justify-between gap-3 border border-border bg-bg-secondary px-3 py-2">
-                      <div>
-                        <p className="text-xs font-medium uppercase tracking-wider">{size}</p>
-                        <p className="text-[10px] text-text-secondary">
-                          Full {Math.max(entry.fullStock ?? 0, 0)} · Sold {Math.max(entry.soldQuantity ?? 0, 0)} · Available {Math.max(entry.stock ?? 0, 0)}
-                        </p>
-                      </div>
-                      <div className="text-right text-[10px] uppercase tracking-wider text-text-secondary">
-                        <p>Available: {Math.max(entry.stock ?? 0, 0)}</p>
-                        <p>Sold: {Math.max(entry.soldQuantity ?? 0, 0)}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {product.productType === "perfume" && product.cloneSourceName && (
-              <p className="text-xs text-text-secondary">
-                Clones <span className="text-text-primary">{product.cloneSourceName}</span>
-              </p>
-            )}
-            {product.description && <p className="text-sm text-text-secondary leading-relaxed">{product.description}</p>}
-            {details.length > 0 && (
-              <div className="pt-2 border-t border-border space-y-2">
-                <p className="text-xs text-text-secondary uppercase tracking-wider">Details</p>
-                <ul className="space-y-1.5">
-                  {details.map((detail, index) => (
-                    <li key={`${detail}-${index}`} className="text-sm text-text-secondary">
-                      {detail}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
           </div>
+
+          {product.productType === "perfume" && product.cloneSourceName && (
+            <div className="bg-bg-card border border-border rounded p-4">
+              <p className="text-xs text-text-secondary uppercase tracking-wider">Clone Source</p>
+              <p className="mt-1 text-sm text-text-primary">{product.cloneSourceName}</p>
+            </div>
+          )}
+
+          {product.description && (
+            <div className="bg-bg-card border border-border rounded p-4">
+              <p className="text-xs text-text-secondary uppercase tracking-wider mb-2">Description</p>
+              <p className="text-sm text-text-secondary leading-relaxed">{product.description}</p>
+            </div>
+          )}
+
+          {details.length > 0 && (
+            <div className="bg-bg-card border border-border rounded p-4">
+              <p className="text-xs text-text-secondary uppercase tracking-wider mb-2">Details</p>
+              <ul className="space-y-1.5">
+                {details.map((detail, index) => (
+                  <li key={`${detail}-${index}`} className="text-sm text-text-secondary">
+                    {detail}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div className="bg-bg-card border border-border rounded p-4 space-y-4">
             <div>
@@ -332,6 +336,30 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
                 <p className="mt-2 text-xl font-semibold">{inventory.sold}</p>
               </div>
             </div>
+
+            {sizeEntries.length > 0 && (
+              <div className="border border-border rounded bg-bg-secondary p-3 space-y-2">
+                <p className="text-[10px] uppercase tracking-wider text-text-secondary">By Size</p>
+                <div className="space-y-2">
+                  {sizeEntries.map(([size, entry]) => (
+                    <div
+                      key={size}
+                      className="flex items-center justify-between gap-3 border border-border bg-bg-card px-3 py-2"
+                    >
+                      <div>
+                        <p className="text-xs font-medium uppercase tracking-wider">{formatVariantLabel(size)}</p>
+                        <p className="text-[10px] text-text-secondary">
+                          Available {Math.max(entry.stock ?? 0, 0)} | Full {Math.max(entry.fullStock ?? 0, 0)} | Sold {Math.max(entry.soldQuantity ?? 0, 0)}
+                        </p>
+                      </div>
+                      <div className="text-right text-[10px] uppercase tracking-wider text-text-secondary">
+                        <p>Stock: {Math.max(entry.stock ?? 0, 0)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="bg-bg-card border border-border rounded p-4">
@@ -350,17 +378,6 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
             ) : (
               <p className="text-xs text-text-secondary">No categories assigned.</p>
             )}
-          </div>
-
-          <div className="bg-bg-card border border-border rounded p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <p className="text-xs text-text-secondary uppercase tracking-wider mb-2">Sizes</p>
-              <p className="text-sm text-text-primary">{sizes.length > 0 ? sizes.join(", ") : "—"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-text-secondary uppercase tracking-wider mb-2">Colors</p>
-              <p className="text-sm text-text-primary">{colors.length > 0 ? colors.join(", ") : "—"}</p>
-            </div>
           </div>
         </div>
       </div>
@@ -387,7 +404,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
               className="absolute right-3 top-3 z-10 h-9 w-9 border border-white/30 bg-black/35 text-sm text-white transition-colors hover:bg-black/55"
               aria-label="Close zoomed image"
             >
-              ×
+              X
             </button>
             <img
               src={mainImage.url}
@@ -400,3 +417,4 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
     </div>
   );
 }
+

@@ -938,7 +938,20 @@ export default function OutfitStudioPage() {
     });
     const selectedZoneHistory: OutfitViewItem[] = showAllSelectedItems
         ? allSelectedOutfitItems
+        : (
+            selectedZoneId
+                ? (zoneHistory[selectedZoneId as StudioZoneId] || []).map((item) => ({
+                    ...item,
+                    zoneId: selectedZoneId as StudioZoneId,
+                }))
+                : []
+          );
+    const fallbackSelectedZoneHistory: OutfitViewItem[] = showAllSelectedItems
+        ? allSelectedOutfitItems
         : allSelectedOutfitItems.filter((item) => item.zoneId === selectedZoneId);
+    const visibleSelectedZoneHistory = selectedZoneHistory.length > 0
+        ? selectedZoneHistory
+        : fallbackSelectedZoneHistory;
     const visibleBodyZones = isWomen ? BODY_ZONES : BODY_ZONES.filter((zone) => zone.id !== "dress");
     const hasSelectedOutfitItems = visibleBodyZones.some((zone) => Boolean(outfit[zone.id]));
     const selectedOutfitTotalPrice = visibleBodyZones.reduce((total, zone) => {
@@ -1678,13 +1691,13 @@ export default function OutfitStudioPage() {
                                 ))}
                             </div>
 
-                            {selectedZoneHistory.length > 0 && (
+                            {visibleSelectedZoneHistory.length > 0 && (
                                 <div className="border border-[#00000012] bg-[#f6f1e7] px-4 py-3">
                                     <p className="text-[11px] uppercase tracking-[0.18em] text-[#666]">
                                         {showAllSelectedItems ? "All cart items" : "Zone items"}
                                     </p>
                                     <div className="mt-3 space-y-2">
-                                        {selectedZoneHistory.map((item) => {
+                                        {visibleSelectedZoneHistory.map((item) => {
                                             const isSelectedHistoryItem =
                                                 outfit[item.zoneId]?.id === item.id ||
                                                 selectedZoneItem?.id === item.id;

@@ -485,6 +485,58 @@ async function pickScreenColor() {
   }
 }
 
+function CompanionColorPicker({
+  color,
+  onSelect,
+  title,
+}: {
+  color: PaletteColor | null;
+  onSelect: (color: PaletteColor) => void;
+  title: string;
+}) {
+  const colorInputRef = useRef<HTMLInputElement>(null);
+  const hasColor = Boolean(color?.hex.trim());
+
+  const handlePickColor = async () => {
+    const picked = await pickScreenColor();
+    if (picked) {
+      onSelect(picked);
+      return;
+    }
+    colorInputRef.current?.click();
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {SECONDARY_GARMENT_PALETTE.map((paletteColor) => (
+        <button
+          key={paletteColor.hex}
+          type="button"
+          title={paletteColor.name}
+          onClick={() => onSelect(paletteColor)}
+          className={`h-6 w-6 rounded-full border-2 transition-all ${color?.hex === paletteColor.hex ? "border-accent scale-110" : "border-border hover:border-text-secondary"}`}
+          style={{ backgroundColor: paletteColor.hex }}
+        />
+      ))}
+      <input
+        type="color"
+        value={color?.hex || "#000000"}
+        onChange={(e) => onSelect(customPaletteColor(e.target.value))}
+        title="Pick any custom color"
+        className="h-6 w-10 cursor-pointer rounded border border-border bg-bg-secondary p-0.5"
+      />
+      <button
+        type="button"
+        onClick={handlePickColor}
+        title={title}
+        className={`h-6 w-6 flex-none border-2 transition-all ${hasColor ? "rounded-full border-border hover:border-accent" : "rounded border-dashed border-border bg-transparent"}`}
+        style={hasColor ? { backgroundColor: color.hex } : undefined}
+      />
+      <input ref={colorInputRef} type="color" value={color?.hex || "#000000"} onChange={(e) => onSelect(customPaletteColor(e.target.value))} className="sr-only" />
+    </div>
+  );
+}
+
 function toggleColorToken(value: string, token: string) {
   const nextToken = token.trim();
   if (!nextToken) return value;
@@ -516,7 +568,7 @@ function ColorwayGenerationCard({
   const enhancedFrontPreview = colorway.enhancedFrontUrl || colorway.frontPreview;
   const enhancedBackPreview = colorway.enhancedBackUrl || colorway.backPreview;
   return (
-    <div className="flex-none w-[270px] rounded-2xl border border-border bg-bg-card p-4 space-y-4">
+    <div data-colorway-id={colorway.id} className="flex-none w-[270px] rounded-2xl border border-border bg-bg-card p-4 space-y-4">
       <div className="flex items-center gap-2">
         <span
           className={`h-4 w-4 flex-none border border-border/60 ${hasColor ? "rounded-full" : "rounded border-dashed bg-transparent"}`}
@@ -551,12 +603,11 @@ function ColorwayGenerationCard({
                 <option value="">Select type</option>
                 {companionTypeOptions.top.map((cat) => <option key={cat.slug} value={cat.slug}>{cat.name}</option>)}
               </select>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {SECONDARY_GARMENT_PALETTE.map((color) => (
-                  <button key={color.hex} type="button" title={color.name} onClick={() => onUpdate({ companionTopColor: color })} className={`h-6 w-6 rounded-full border-2 transition-all ${colorway.companionTopColor?.hex === color.hex ? "border-accent scale-110" : "border-border hover:border-text-secondary"}`} style={{ backgroundColor: color.hex }} />
-                ))}
-                <input type="color" value={colorway.companionTopColor?.hex || "#000000"} onChange={(e) => onUpdate({ companionTopColor: customPaletteColor(e.target.value) })} className="h-6 w-8 cursor-pointer rounded border border-border bg-bg-secondary p-0.5" />
-              </div>
+              <CompanionColorPicker
+                color={colorway.companionTopColor}
+                onSelect={(color) => onUpdate({ companionTopColor: color })}
+                title="Pick a custom top color"
+              />
             </div>
           )}
           {companionZones.includes("bottom") && (
@@ -566,12 +617,11 @@ function ColorwayGenerationCard({
                 <option value="">Select type</option>
                 {companionTypeOptions.bottom.map((cat) => <option key={cat.slug} value={cat.slug}>{cat.name}</option>)}
               </select>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {SECONDARY_GARMENT_PALETTE.map((color) => (
-                  <button key={color.hex} type="button" title={color.name} onClick={() => onUpdate({ companionBottomColor: color })} className={`h-6 w-6 rounded-full border-2 transition-all ${colorway.companionBottomColor?.hex === color.hex ? "border-accent scale-110" : "border-border hover:border-text-secondary"}`} style={{ backgroundColor: color.hex }} />
-                ))}
-                <input type="color" value={colorway.companionBottomColor?.hex || "#000000"} onChange={(e) => onUpdate({ companionBottomColor: customPaletteColor(e.target.value) })} className="h-6 w-8 cursor-pointer rounded border border-border bg-bg-secondary p-0.5" />
-              </div>
+              <CompanionColorPicker
+                color={colorway.companionBottomColor}
+                onSelect={(color) => onUpdate({ companionBottomColor: color })}
+                title="Pick a custom bottom color"
+              />
             </div>
           )}
           {companionZones.includes("footwear") && (
@@ -581,12 +631,11 @@ function ColorwayGenerationCard({
                 <option value="">Select type</option>
                 {companionTypeOptions.footwear.map((cat) => <option key={cat.slug} value={cat.slug}>{cat.name}</option>)}
               </select>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {SECONDARY_GARMENT_PALETTE.map((color) => (
-                  <button key={color.hex} type="button" title={color.name} onClick={() => onUpdate({ companionFootwearColor: color })} className={`h-6 w-6 rounded-full border-2 transition-all ${colorway.companionFootwearColor?.hex === color.hex ? "border-accent scale-110" : "border-border hover:border-text-secondary"}`} style={{ backgroundColor: color.hex }} />
-                ))}
-                <input type="color" value={colorway.companionFootwearColor?.hex || "#000000"} onChange={(e) => onUpdate({ companionFootwearColor: customPaletteColor(e.target.value) })} className="h-6 w-8 cursor-pointer rounded border border-border bg-bg-secondary p-0.5" />
-              </div>
+              <CompanionColorPicker
+                color={colorway.companionFootwearColor}
+                onSelect={(color) => onUpdate({ companionFootwearColor: color })}
+                title="Pick a custom footwear color"
+              />
             </div>
           )}
         </div>
@@ -658,7 +707,7 @@ function ColorwayCard({
   };
 
   return (
-    <div className="flex-none w-[270px] rounded-2xl border border-border bg-bg-card p-4 space-y-4">
+    <div data-colorway-id={colorway.id} className="flex-none w-[270px] rounded-2xl border border-border bg-bg-card p-4 space-y-4">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           {canRemove && <button type="button" onClick={onRemove} title="Remove colorway" className="text-sm leading-none text-text-secondary hover:text-danger transition-colors">×</button>}
@@ -786,6 +835,10 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const [userStoreName, setUserStoreName] = useState("");
   const [userStoreType, setUserStoreType] = useState<"thrift" | "retail" | "">("");
   const categorySelectRef = useRef<HTMLSelectElement | null>(null);
+  const productBasicsRef = useRef<HTMLDivElement | null>(null);
+  const colorwaysSectionRef = useRef<HTMLDivElement | null>(null);
+  const modelPicturesSectionRef = useRef<HTMLDivElement | null>(null);
+  const productMediaSectionRef = useRef<HTMLDivElement | null>(null);
   const [soldQuantity, setSoldQuantity] = useState(0);
   const [soldQuantityBySize, setSoldQuantityBySize] = useState<Record<string, number>>({});
   const [sizeStockConditionBySize, setSizeStockConditionBySize] = useState<Record<string, number | null>>({});
@@ -952,11 +1005,6 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     return () => window.clearInterval(intervalId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [colorways]);
-
-  useEffect(() => {
-    if (!error) return;
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [error]);
 
   useEffect(() => {
     if (form.productType !== "fashion" || form.fashionSubtype !== "clothes") {
@@ -1208,7 +1256,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           }
         }
 
-        const loadedModelMedia = (p.images || []).map((image: ProductImage) => ({
+        const loadedProductMedia = (p.images || []).map((image: ProductImage) => ({
           ...image,
           id: generateId(),
           file: null,
@@ -1222,8 +1270,9 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           kind: "source" as const,
         }));
 const loadedCategorySlugs = p.categories || [];
-        setGeneratedModelMedia(loadedModelMedia);
-        setShowProductMediaSection(loadedModelMedia.length > 0);
+        const hasPersistedProductMedia = loadedProductMedia.length > 0 || Boolean(p.modelId);
+        setGeneratedModelMedia(loadedProductMedia);
+        setShowProductMediaSection(hasPersistedProductMedia);
         if (p.modelId) setSelectedModelId(p.modelId);
         const globalCs = (p.companionSettings as Record<string, { topType?: string; topColor?: { name: string; hex: string } | null; bottomType?: string; bottomColor?: { name: string; hex: string } | null; footwearType?: string; footwearColor?: { name: string; hex: string } | null; }> | null)?.["__global__"];
         if (globalCs) {
@@ -1238,10 +1287,10 @@ const loadedCategorySlugs = p.categories || [];
         savedSnapshot.current = {
           form: loadedFormData,
           images: loadedImages,
-          generatedModelMedia: loadedModelMedia,
+          generatedModelMedia: loadedProductMedia,
           generationInputs: initialGenerationInputs,
           initialCategorySlugs: loadedCategorySlugs,
-          showProductMediaSection: loadedModelMedia.length > 0,
+          showProductMediaSection: hasPersistedProductMedia,
         };
       })
       .catch(() => {})
@@ -1347,6 +1396,17 @@ const loadedCategorySlugs = p.categories || [];
     ],
     [generatedModelMedia, generationInputs.front.previewUrl, generationInputs.back.previewUrl]
   );
+
+  const scrollToElement = (element: HTMLElement | null | undefined) => {
+    if (!element) return false;
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+    return true;
+  };
+
+  const scrollToColorwayCard = (colorwayId: string | undefined) => {
+    if (!colorwayId) return false;
+    return scrollToElement(document.querySelector(`[data-colorway-id="${colorwayId}"]`) as HTMLElement | null);
+  };
   const fullStock = Math.max(Number(form.stock || 0), 0);
   const availableStock = Math.max(fullStock - soldQuantity, 0);
   const normalizedSizeStock = useMemo(
@@ -2117,14 +2177,15 @@ const loadedCategorySlugs = p.categories || [];
     setLoading(true);
 
     if (isStoreOwner) {
-      if (!selectedParentSlug) { setError("Please select a product category."); setLoading(false); return; }
-      if (colorways.length === 0) { setError("Please add at least one colorway."); setLoading(false); return; }
+      if (!selectedParentSlug) { setError("Please select a product category."); scrollToElement(categorySelectRef.current); setLoading(false); return; }
+      if (colorways.length === 0) { setError("Please add at least one colorway."); scrollToElement(colorwaysSectionRef.current); setLoading(false); return; }
+      if (!selectedModelId) { setError("Please select a model first."); scrollToElement(modelPicturesSectionRef.current); setLoading(false); return; }
       for (const cw of colorways) {
-        if (!cw.frontFile && !cw.frontPreview) { setError("Please upload a front image for each colorway."); setLoading(false); return; }
-        if (!cw.backFile && !cw.backPreview) { setError("Please upload a back image for each colorway."); setLoading(false); return; }
-        if (cw.sizes.filter((s) => s.size.trim() && s.stock.trim()).length === 0) { setError("Please add at least one size and stock for each colorway."); setLoading(false); return; }
+        if (!cw.frontFile && !cw.frontPreview) { setError("Please upload a front image for each colorway."); scrollToColorwayCard(cw.id); setLoading(false); return; }
+        if (!cw.backFile && !cw.backPreview) { setError("Please upload a back image for each colorway."); scrollToColorwayCard(cw.id); setLoading(false); return; }
+        if (cw.sizes.filter((s) => s.size.trim() && s.stock.trim()).length === 0) { setError("Please add at least one size and stock for each colorway."); scrollToColorwayCard(cw.id); setLoading(false); return; }
       }
-      if (isThriftStoreOwner && !form.brand.trim()) { setError("Please provide the brand of this item."); setLoading(false); return; }
+      if (isThriftStoreOwner && !form.brand.trim()) { setError("Please provide the brand of this item."); scrollToElement(productBasicsRef.current); setLoading(false); return; }
       try {
         const productCategories = [selectedParentSlug, selectedChildSlug, selectedGrandchildSlug, selectedGreatGrandchildSlug].filter(Boolean);
         type VariantEntry = { key: string; stock: number; conditionScore: number };
@@ -2201,24 +2262,28 @@ const loadedCategorySlugs = p.categories || [];
 
     if (!selectedCategorySlug) {
       setError("Please select a product category.");
+      scrollToElement(categorySelectRef.current);
       setLoading(false);
       return;
     }
 
     if (form.productType === "perfume" && !form.cloneSourceName.trim()) {
       setError("Please provide the original fragrance name this perfume is cloning.");
+      scrollToElement(productBasicsRef.current);
       setLoading(false);
       return;
     }
 
     if (form.stock.trim() === "") {
       setError("Please enter a full stock value.");
+      scrollToElement(productBasicsRef.current);
       setLoading(false);
       return;
     }
 
     if (isThriftStoreOwner && !form.brand.trim()) {
       setError("Please provide the brand of this item.");
+      scrollToElement(productBasicsRef.current);
       setLoading(false);
       return;
     }
@@ -2228,11 +2293,13 @@ const loadedCategorySlugs = p.categories || [];
       const hasEnhanced = hasExistingMedia || Boolean(generationInputs.front.file);
       if (!hasEnhanced) {
         setError("Please enhance the product images before saving.");
+        scrollToElement(productMediaSectionRef.current);
         setLoading(false);
         return;
       }
       if (generatedModelMedia.length === 0) {
         setError("Please generate at least one model picture before saving.");
+        scrollToElement(modelPicturesSectionRef.current) || scrollToElement(productMediaSectionRef.current);
         setLoading(false);
         return;
       }
@@ -2420,7 +2487,8 @@ const loadedCategorySlugs = p.categories || [];
         <form onSubmit={handleSubmit} className="space-y-6">
           {error && <div className="border border-[#BD3100] bg-[#faf3f2] px-4 py-3 text-xs text-[#BD3100]">{error}</div>}
 
-          <SectionCard title="Product Basics">
+          <div ref={productBasicsRef}>
+            <SectionCard title="Product Basics">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <div className="sm:col-span-2 xl:col-span-3">
                 <FieldLabel>Product Name</FieldLabel>
@@ -2453,9 +2521,11 @@ const loadedCategorySlugs = p.categories || [];
                 </select>
               </div>
             </div>
-          </SectionCard>
+            </SectionCard>
+          </div>
 
-          <SectionCard title="Colorways" description="Each colorway is a color variant with its own images and sizes. Use the eyedropper on the swatch to pick the color directly from the uploaded photo.">
+          <div ref={colorwaysSectionRef}>
+            <SectionCard title="Colorways" description="Each colorway is a color variant with its own images and sizes. Use the eyedropper on the swatch to pick the color directly from the uploaded photo.">
             <div className="flex items-start gap-3 overflow-x-auto pb-2">
               {colorways.map((cw, cwIndex) => (
                 <ColorwayCard
@@ -2474,10 +2544,12 @@ const loadedCategorySlugs = p.categories || [];
               ))}
               <button type="button" onClick={addColorway} title="Add colorway" className="mt-0 flex h-10 w-10 flex-none items-center justify-center rounded border border-dashed border-border text-lg text-text-secondary hover:border-accent hover:text-accent transition-colors self-start">+</button>
             </div>
-          </SectionCard>
+            </SectionCard>
+          </div>
 
           {selectedParentSlug && filteredModels.length > 0 && (
-            <SectionCard title="Model Pictures" description="Choose one model for all colorways, then configure each colorway's companion outfit and generate.">
+            <div ref={modelPicturesSectionRef}>
+              <SectionCard title="Model Pictures" description="Choose one model for all colorways, then configure each colorway's companion outfit and generate.">
               <div className="space-y-2">
                 <FieldLabel>Model</FieldLabel>
                 <div className="flex flex-wrap gap-3">
@@ -2507,7 +2579,8 @@ const loadedCategorySlugs = p.categories || [];
                   ))}
                 </div>
               )}
-            </SectionCard>
+              </SectionCard>
+            </div>
           )}
 
           <div className="flex gap-3">
@@ -2530,7 +2603,8 @@ const loadedCategorySlugs = p.categories || [];
       <form onSubmit={handleSubmit} className="space-y-6">
         {error && <div className="border border-[#BD3100] bg-[#faf3f2] px-4 py-3 text-xs text-[#BD3100]">{error}</div>}
 
-        <SectionCard title="Product Basics" description="">
+        <div ref={productBasicsRef}>
+          <SectionCard title="Product Basics" description="">
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             <div className="xl:col-span-2">
               <FieldLabel>Product Name</FieldLabel>
@@ -2638,7 +2712,8 @@ const loadedCategorySlugs = p.categories || [];
               />
             </div>
           </div>
-        </SectionCard>
+          </SectionCard>
+        </div>
 
         {form.productType === "perfume" ? (
           <SectionCard title="Perfume Details" description="Keep the clone source details and visual reference together.">
@@ -3059,10 +3134,11 @@ const loadedCategorySlugs = p.categories || [];
         )}
 
         {form.productType === "fashion" && (
-          <SectionCard
-            title="Origin Pictures"
+          <div ref={productMediaSectionRef}>
+            <SectionCard
+              title="Origin Pictures"
 
-          >
+            >
             {!isStoreOwner && (
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
                 <div>
@@ -3276,7 +3352,7 @@ const loadedCategorySlugs = p.categories || [];
               </div>
             )}
             {showProductMediaSection && productMediaItems.length > 0 && (
-              <div className="mt-6 space-y-5 border-t border-border pt-5">
+              <div ref={modelPicturesSectionRef} className="mt-6 space-y-5 border-t border-border pt-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
@@ -3307,7 +3383,8 @@ const loadedCategorySlugs = p.categories || [];
                 </div>
               </div>
             )}
-          </SectionCard>
+            </SectionCard>
+          </div>
         )}
 
         <div className="flex gap-3">

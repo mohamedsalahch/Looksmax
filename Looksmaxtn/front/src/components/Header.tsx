@@ -90,18 +90,6 @@ export default function Header() {
             )}
           </button>
 
-          <Link
-            href="/studio"
-            className="inline-flex h-9 w-9 items-center justify-center text-foreground hover:text-text-secondary transition-colors md:hidden"
-            aria-label="Open Outfit Studio"
-          >
-            <svg className="h-5 w-5 translate-y-[1px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 7.5c1.45 0 2.6-1.05 2.6-2.35S13.45 2.8 12 2.8 9.4 3.85 9.4 5.15" />
-              <path d="M12 7.5v2" />
-              <path d="M12 9.5 3.9 15.6a2.1 2.1 0 0 0 1.25 3.8h13.7a2.1 2.1 0 0 0 1.25-3.8L12 9.5Z" />
-            </svg>
-          </Link>
-
           {/* User Icon / Menu */}
           <div className="relative" ref={menuRef} suppressHydrationWarning>
             <button

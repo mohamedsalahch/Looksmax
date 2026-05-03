@@ -464,6 +464,58 @@ async function pickScreenColor() {
   }
 }
 
+function CompanionColorPicker({
+  color,
+  onSelect,
+  title,
+}: {
+  color: PaletteColor | null;
+  onSelect: (color: PaletteColor) => void;
+  title: string;
+}) {
+  const colorInputRef = useRef<HTMLInputElement>(null);
+  const hasColor = Boolean(color?.hex.trim());
+
+  const handlePickColor = async () => {
+    const picked = await pickScreenColor();
+    if (picked) {
+      onSelect(picked);
+      return;
+    }
+    colorInputRef.current?.click();
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {SECONDARY_GARMENT_PALETTE.map((paletteColor) => (
+        <button
+          key={paletteColor.hex}
+          type="button"
+          title={paletteColor.name}
+          onClick={() => onSelect(paletteColor)}
+          className={`h-6 w-6 rounded-full border-2 transition-all ${color?.hex === paletteColor.hex ? "border-accent scale-110" : "border-border hover:border-text-secondary"}`}
+          style={{ backgroundColor: paletteColor.hex }}
+        />
+      ))}
+      <input
+        type="color"
+        value={color?.hex || "#000000"}
+        onChange={(e) => onSelect(customPaletteColor(e.target.value))}
+        title="Pick any custom color"
+        className="h-6 w-10 cursor-pointer rounded border border-border bg-bg-secondary p-0.5"
+      />
+      <button
+        type="button"
+        onClick={handlePickColor}
+        title={title}
+        className={`h-6 w-6 flex-none border-2 transition-all ${hasColor ? "rounded-full border-border hover:border-accent" : "rounded border-dashed border-border bg-transparent"}`}
+        style={hasColor ? { backgroundColor: color.hex } : undefined}
+      />
+      <input ref={colorInputRef} type="color" value={color?.hex || "#000000"} onChange={(e) => onSelect(customPaletteColor(e.target.value))} className="sr-only" />
+    </div>
+  );
+}
+
 function toggleColorToken(value: string, token: string) {
   const nextToken = token.trim();
   if (!nextToken) return normalizeVariantColors(value).join(", ");
@@ -497,7 +549,7 @@ function ColorwayGenerationCard({
   const hasColor = Boolean(colorway.hex.trim());
 
   return (
-    <div className="flex-none w-[270px] rounded-2xl border border-border bg-bg-card p-4 space-y-4">
+    <div data-colorway-id={colorway.id} className="flex-none w-[270px] rounded-2xl border border-border bg-bg-card p-4 space-y-4">
       {/* Header */}
       <div className="flex items-center gap-2">
         <span
@@ -526,24 +578,11 @@ function ColorwayGenerationCard({
                   <option key={cat.slug} value={cat.slug}>{cat.name}</option>
                 ))}
               </select>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {SECONDARY_GARMENT_PALETTE.map((color) => (
-              <button
-                key={color.hex}
-                type="button"
-                title={color.name}
-                onClick={() => onUpdate({ companionTopColor: color })}
-                    className={`h-6 w-6 rounded-full border-2 transition-all ${colorway.companionTopColor?.hex === color.hex ? "border-accent scale-110" : "border-border hover:border-text-secondary"}`}
-                    style={{ backgroundColor: color.hex }}
-                  />
-                ))}
-                <input
-                  type="color"
-                  value={colorway.companionTopColor?.hex || "#000000"}
-                  onChange={(e) => onUpdate({ companionTopColor: customPaletteColor(e.target.value) })}
-                  className="h-6 w-8 cursor-pointer rounded border border-border bg-bg-secondary p-0.5"
-                />
-              </div>
+              <CompanionColorPicker
+                color={colorway.companionTopColor}
+                onSelect={(color) => onUpdate({ companionTopColor: color })}
+                title="Pick a custom top color"
+              />
             </div>
           )}
 
@@ -560,24 +599,11 @@ function ColorwayGenerationCard({
                   <option key={cat.slug} value={cat.slug}>{cat.name}</option>
                 ))}
               </select>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {SECONDARY_GARMENT_PALETTE.map((color) => (
-                  <button
-                    key={color.hex}
-                    type="button"
-                    title={color.name}
-                    onClick={() => onUpdate({ companionBottomColor: color })}
-                    className={`h-6 w-6 rounded-full border-2 transition-all ${colorway.companionBottomColor?.hex === color.hex ? "border-accent scale-110" : "border-border hover:border-text-secondary"}`}
-                    style={{ backgroundColor: color.hex }}
-                  />
-                ))}
-                <input
-                  type="color"
-                  value={colorway.companionBottomColor?.hex || "#000000"}
-                  onChange={(e) => onUpdate({ companionBottomColor: customPaletteColor(e.target.value) })}
-                  className="h-6 w-8 cursor-pointer rounded border border-border bg-bg-secondary p-0.5"
-                />
-              </div>
+              <CompanionColorPicker
+                color={colorway.companionBottomColor}
+                onSelect={(color) => onUpdate({ companionBottomColor: color })}
+                title="Pick a custom bottom color"
+              />
             </div>
           )}
 
@@ -594,24 +620,11 @@ function ColorwayGenerationCard({
                   <option key={cat.slug} value={cat.slug}>{cat.name}</option>
                 ))}
               </select>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {SECONDARY_GARMENT_PALETTE.map((color) => (
-                  <button
-                    key={color.hex}
-                    type="button"
-                    title={color.name}
-                    onClick={() => onUpdate({ companionFootwearColor: color })}
-                    className={`h-6 w-6 rounded-full border-2 transition-all ${colorway.companionFootwearColor?.hex === color.hex ? "border-accent scale-110" : "border-border hover:border-text-secondary"}`}
-                    style={{ backgroundColor: color.hex }}
-                  />
-                ))}
-                <input
-                  type="color"
-                  value={colorway.companionFootwearColor?.hex || "#000000"}
-                  onChange={(e) => onUpdate({ companionFootwearColor: customPaletteColor(e.target.value) })}
-                  className="h-6 w-8 cursor-pointer rounded border border-border bg-bg-secondary p-0.5"
-                />
-              </div>
+              <CompanionColorPicker
+                color={colorway.companionFootwearColor}
+                onSelect={(color) => onUpdate({ companionFootwearColor: color })}
+                title="Pick a custom footwear color"
+              />
             </div>
           )}
         </div>
@@ -756,7 +769,7 @@ function ColorwayCard({
   };
 
   return (
-    <div className="flex-none w-[270px] rounded-2xl border border-border bg-bg-card p-4 space-y-4">
+    <div data-colorway-id={colorway.id} className="flex-none w-[270px] rounded-2xl border border-border bg-bg-card p-4 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
@@ -1012,15 +1025,14 @@ export default function NewProductPage() {
   const [authLoaded, setAuthLoaded] = useState(false);
   const [colorways, setColorways] = useState<Colorway[]>(() => [createEmptyColorway()]);
   const generationAbortRef = useRef<AbortController | null>(null);
+  const productBasicsRef = useRef<HTMLDivElement | null>(null);
+  const colorwaysSectionRef = useRef<HTMLDivElement | null>(null);
+  const modelPicturesSectionRef = useRef<HTMLDivElement | null>(null);
+  const productMediaSectionRef = useRef<HTMLDivElement | null>(null);
   const categorySelectRef = useRef<HTMLSelectElement | null>(null);
   const isStoreOwner = userRole === "store_owner";
   const isRetailStoreOwner = isStoreOwner && userStoreType === "retail";
   const isThriftStoreOwner = isStoreOwner && userStoreType === "thrift";
-
-  useEffect(() => {
-    if (!error) return;
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [error]);
 
   useEffect(() => {
     fetch("/api/categories", withAuthRequest())
@@ -1187,9 +1199,6 @@ export default function NewProductPage() {
 
     return colorways.every((cw) => cw.generateStatus === "completed");
   }, [colorways, isStoreOwner, selectedCategorySlug]);
-  const canSubmitStoreOwnerProduct = isStoreOwner
-    ? storeOwnerBasicsReady && storeOwnerColorwaysReady && storeOwnerModelReady && storeOwnerGenerationReady && !loading
-    : !loading;
   const hasRequiredEnhanceInputs = Boolean(selectedParentSlug) && form.productType === "fashion";
   const canSelectOriginPictures = Boolean(selectedCategorySlug);
   const enhanceButtonLabel =
@@ -1218,6 +1227,17 @@ export default function NewProductPage() {
     ],
     [generatedModelMedia, generationInputs.front.previewUrl, generationInputs.back.previewUrl]
   );
+
+  const scrollToElement = (element: HTMLElement | null | undefined) => {
+    if (!element) return false;
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+    return true;
+  };
+
+  const scrollToColorwayCard = (colorwayId: string | undefined) => {
+    if (!colorwayId) return false;
+    return scrollToElement(document.querySelector(`[data-colorway-id="${colorwayId}"]`) as HTMLElement | null);
+  };
 
   const updateColorway = (id: string, patch: Partial<Colorway>) => {
     setColorways((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
@@ -2158,55 +2178,71 @@ export default function NewProductPage() {
     if (isStoreOwner) {
       if (!selectedParentSlug) {
         setError("Please select a product category.");
-        setLoading(false);
-        return;
-      }
-      if (colorways.length === 0) {
-        setError("Please add at least one colorway.");
+        scrollToElement(categorySelectRef.current);
         setLoading(false);
         return;
       }
       if (!storeOwnerBasicsReady) {
         setError("Please complete the product basics.");
+        scrollToElement(productBasicsRef.current);
+        setLoading(false);
+        return;
+      }
+      if (colorways.length === 0) {
+        setError("Please add at least one colorway.");
+        scrollToElement(colorwaysSectionRef.current);
+        setLoading(false);
+        return;
+      }
+      if (!selectedModelId) {
+        setError("Please select a model first.");
+        scrollToElement(modelPicturesSectionRef.current);
         setLoading(false);
         return;
       }
       if (colorways.length > 1 && colorways.some((cw) => !cw.hex.trim())) {
         setError("Please assign a color to every colorway before adding more than one.");
+        scrollToColorwayCard(colorways.find((cw) => !cw.hex.trim())?.id);
         setLoading(false);
         return;
       }
       const pendingGeneration = colorways.find((cw) => cw.hex.trim() && cw.generateStatus === "idle");
       if (pendingGeneration) {
         setError("Please complete model generation for each colorway before creating the product.");
+        scrollToColorwayCard(pendingGeneration.id);
         setLoading(false);
         return;
       }
       const incompleteGeneration = colorways.find((cw) => cw.generateStatus !== "completed");
       if (incompleteGeneration) {
         setError("Please complete model generation for each colorway before creating the product.");
+        scrollToColorwayCard(incompleteGeneration.id);
         setLoading(false);
         return;
       }
       for (const cw of colorways) {
         if (!cw.frontFile && !cw.frontPreview) {
           setError("Please upload a front image for each colorway.");
+          scrollToColorwayCard(cw.id);
           setLoading(false);
           return;
         }
         if (!cw.backFile && !cw.backPreview) {
           setError("Please upload a back image for each colorway.");
+          scrollToColorwayCard(cw.id);
           setLoading(false);
           return;
         }
         if (cw.sizes.filter((s) => s.size.trim() && s.stock.trim()).length === 0) {
           setError("Please add at least one size and stock for each colorway.");
+          scrollToColorwayCard(cw.id);
           setLoading(false);
           return;
         }
       }
       if (isThriftStoreOwner && !form.brand.trim()) {
         setError("Please provide the brand of this item.");
+        scrollToElement(productBasicsRef.current);
         setLoading(false);
         return;
       }
@@ -2311,6 +2347,7 @@ export default function NewProductPage() {
 
     if (!selectedParentSlug) {
       setError("Please select a product category.");
+      scrollToElement(categorySelectRef.current);
       setLoading(false);
       return;
     }
@@ -2336,6 +2373,7 @@ export default function NewProductPage() {
 
     if (isThriftStoreOwner && !form.brand.trim()) {
       setError("Please provide the brand of this item.");
+      scrollToElement(productBasicsRef.current);
       setLoading(false);
       return;
     }
@@ -2343,11 +2381,13 @@ export default function NewProductPage() {
     if (form.productType === "fashion") {
       if (!generationInputs.front.file && !generationInputs.front.previewUrl) {
         setError("Please enhance the product images before saving.");
+        scrollToElement(productMediaSectionRef.current);
         setLoading(false);
         return;
       }
       if (generatedModelMedia.length === 0) {
         setError("Please generate at least one model picture before saving.");
+        scrollToElement(modelPicturesSectionRef.current) || scrollToElement(productMediaSectionRef.current);
         setLoading(false);
         return;
       }
@@ -2520,7 +2560,8 @@ export default function NewProductPage() {
             </div>
           )}
 
-          <SectionCard title="Product Basics">
+          <div ref={productBasicsRef}>
+            <SectionCard title="Product Basics">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <div className="sm:col-span-2 xl:col-span-3">
                 <FieldLabel>Product Name</FieldLabel>
@@ -2599,13 +2640,15 @@ export default function NewProductPage() {
                 </select>
               </div>
             </div>
-          </SectionCard>
+            </SectionCard>
+          </div>
 
           {selectedCategorySlug && (
-            <SectionCard
-              title="Colorways"
-              description="Each colorway is a color variant with its own images and sizes. Use the eyedropper on the swatch to pick the color directly from the uploaded photo."
-            >
+            <div ref={colorwaysSectionRef}>
+              <SectionCard
+                title="Colorways"
+                description="Each colorway is a color variant with its own images and sizes. Use the eyedropper on the swatch to pick the color directly from the uploaded photo."
+              >
               <div className="flex items-start gap-3 overflow-x-auto pb-2">
                 {colorways.map((cw, cwIndex) => (
                   <ColorwayCard
@@ -2632,14 +2675,16 @@ export default function NewProductPage() {
                   +
                 </button>
               </div>
-            </SectionCard>
+              </SectionCard>
+            </div>
           )}
 
           {selectedCategorySlug && storeOwnerModelReady && (
-            <SectionCard
-              title="Model Pictures"
-              description="Choose one model for all colorways, then configure each colorway's companion outfit and generate."
-            >
+            <div ref={modelPicturesSectionRef}>
+              <SectionCard
+                title="Model Pictures"
+                description="Choose one model for all colorways, then configure each colorway's companion outfit and generate."
+              >
               {/* Shared model selector */}
               <div className="space-y-2">
                 <FieldLabel>Model</FieldLabel>
@@ -2688,13 +2733,14 @@ export default function NewProductPage() {
                   ))}
                 </div>
               )}
-            </SectionCard>
+              </SectionCard>
+            </div>
           )}
 
           <div className="flex gap-3">
             <button
               type="submit"
-              disabled={!canSubmitStoreOwnerProduct}
+              disabled={loading}
               className="bg-accent text-bg-primary px-8 py-3 text-xs font-semibold tracking-wide uppercase disabled:opacity-50"
             >
               {loading ? "Creating..." : "Create Product"}
@@ -2725,7 +2771,8 @@ export default function NewProductPage() {
           </div>
       )}
 
-        <SectionCard title="Product Basics" description="">
+        <div ref={productBasicsRef}>
+          <SectionCard title="Product Basics" description="">
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             <div className="xl:col-span-2">
               <FieldLabel>Product Name</FieldLabel>
@@ -2833,7 +2880,8 @@ export default function NewProductPage() {
               />
             </div>
           </div>
-        </SectionCard>
+          </SectionCard>
+        </div>
 
         {form.productType === "perfume" ? (
           <SectionCard
@@ -3183,10 +3231,11 @@ export default function NewProductPage() {
         )}
 
         {form.productType === "fashion" && (
-          <SectionCard
-            title="Origin Pictures"
-            description=""
-          >
+          <div ref={productMediaSectionRef}>
+            <SectionCard
+              title="Origin Pictures"
+              description=""
+            >
             {!isStoreOwner && (
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
                 <div>
@@ -3432,7 +3481,8 @@ export default function NewProductPage() {
                 </div>
               </div>
             )}
-          </SectionCard>
+            </SectionCard>
+          </div>
         )}
 
         <div className="flex gap-3">

@@ -593,6 +593,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const unreadMessageCount = user?.role === "admin" ? messageNotifications.filter((notice) => !notice.read).length : 0;
   const unreadStoreCount = user?.role === "admin" ? storeNotifications.filter((notice) => !notice.read).length : 0;
   const unreadTotalCount = unreadNotificationCount + unreadMessageCount + unreadStoreCount;
+  const showBackButton = pathname !== "/dashboard";
 
   const handleNotificationClick = (notice: OrderNotice) => {
     markNotificationRead(notice.id);
@@ -660,9 +661,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           {sidebarOpen && (
             <div>
               <h1 className="text-xs font-bold tracking-[0.2em] uppercase text-accent">
-                LOOKSMAX{user.role === "store_owner" && user.storeName ? ` '${user.storeName}'` : ""}
+                LOOKSMAX
               </h1>
-              <p className="text-[9px] text-text-secondary uppercase tracking-wider">Admin</p>
+              <p className="text-[9px] text-text-secondary uppercase tracking-wider">
+                {user.role === "store_owner" && user.storeName ? user.storeName : "Admin"}
+              </p>
             </div>
           )}
           <button onClick={() => setSidebarOpen((p) => !p)} className="text-text-secondary hover:text-text-primary transition-colors cursor-pointer text-sm">
@@ -693,6 +696,15 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         <div className="sticky top-0 z-20 border-b border-border/60 bg-bg-primary/80 px-4 py-3 backdrop-blur md:px-6 print:hidden">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-end md:gap-4">
             <div className="flex items-center justify-between gap-3 md:mr-auto">
+              {showBackButton && (
+                <Link
+                  href="/dashboard"
+                  className="inline-flex items-center gap-2 border border-border bg-bg-secondary px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-text-secondary transition-colors hover:text-text-primary"
+                >
+                  <span>←</span>
+                  Back
+                </Link>
+              )}
               <button
                 type="button"
                 onClick={() => setMobileSidebarOpen((current) => !current)}
@@ -700,13 +712,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               >
                 <span>☰</span>
                 Menu
-              </button>
-              <button
-                type="button"
-                onClick={() => setSidebarOpen((current) => !current)}
-                className="hidden md:inline-flex items-center gap-2 border border-border bg-bg-secondary px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-text-secondary transition-colors hover:text-text-primary"
-              >
-                {sidebarOpen ? "Collapse" : "Expand"}
               </button>
             </div>
 
