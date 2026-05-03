@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
 import { getReservationKey, reserveProduct, subscribeToReservationChanges } from "@/lib/reservations";
@@ -9,6 +9,7 @@ import { subscribeToAvailabilityStream } from "@/lib/availabilityStream";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { getConditionColor, getConditionLabel, getConditionPercent } from "@/lib/productCondition";
 import { queueStudioAssignment } from "@/lib/studioAssignment";
+import { getColorwayEnhancedFrontImage } from "@/lib/colorwayImage";
 
 type ProductType = "fashion" | "perfume" | "clothing" | "shoes";
 
@@ -40,11 +41,26 @@ interface ProductCardProps {
   };
   cloneSourceName?: string;
   cloneSourceImage?: string;
+  storeType?: "thrift" | "retail" | null;
+  colorImages?: Record<string, number[]> | null;
+  images?: { url: string; isMain: boolean }[];
 }
 
 const CLONE_PREVIEW_WIDTH = 184;
 const CLONE_PREVIEW_HEIGHT = 240;
 const CLONE_PREVIEW_OFFSET = 24;
+
+function splitVariantLabel(value: string) {
+  const separatorIndex = value.lastIndexOf(" / ");
+  if (separatorIndex === -1) {
+    return { sizeLabel: value.trim(), colorHex: "" };
+  }
+
+  return {
+    sizeLabel: value.slice(0, separatorIndex).trim(),
+    colorHex: value.slice(separatorIndex + 3).trim(),
+  };
+}
 
 export default function ProductCard({
   id,
@@ -58,8 +74,8 @@ export default function ProductCard({
   reservedElsewhere: initialReservedElsewhere = false,
   ownedReservation: initialOwnedReservation = false,
   blockedByOrder: initialBlockedByOrder = false,
-  conditionScore = 7,
-  conditionStatus = "used",
+  conditionScore = null,
+  conditionStatus = null,
   productType = "fashion",
   fashionSubtype = "clothes",
   sizes,
@@ -68,6 +84,9 @@ export default function ProductCard({
   originPictures,
   cloneSourceName = "",
   cloneSourceImage = "",
+  storeType,
+  colorImages,
+  images = [],
 }: ProductCardProps) {
   const { addItem } = useCart();
   const router = useRouter();
@@ -75,7 +94,7 @@ export default function ProductCard({
   const [hasHydratedAvailability, setHasHydratedAvailability] = useState(false);
   const [sizeAvailabilityState, setSizeAvailabilityState] = useState(sizeAvailability || null);
   const [viewerBlocked, setViewerBlocked] = useState<boolean>(initialReservedElsewhere);
-  const availableSizes = (
+  const allSizes = (
     sizes?.length
       ? sizes
       : Object.keys(sizeAvailabilityState || {}).length > 0
@@ -87,15 +106,41 @@ export default function ProductCard({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
   const [clonePreview, setClonePreview] = useState({ visible: false, x: 0, y: 0 });
+  const colorwayHexes = useMemo(
+    () => (colorImages && Object.keys(colorImages).length > 0
+      ? Object.keys(colorImages)
+      : Array.from(new Set(allSizes.map((entry) => splitVariantLabel(entry).colorHex).filter(Boolean))) as string[]),
+    [allSizes, colorImages],
+  );
+  const [activeColorHex, setActiveColorHex] = useState<string | null>(colorwayHexes[0] || null);
+  const displayImage = image;
+  const selectedCartImage = getColorwayEnhancedFrontImage(activeColorHex, { image, images, colorImages }, image);
+  const normalizedConditionScore = conditionScore ?? 0;
+
+  const handleColorwayClick = (e: React.MouseEvent, hex: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setActiveColorHex(hex);
+    setSelectedSize("");
+  };
   const [blockedByOrder, setBlockedByOrder] = useState(initialBlockedByOrder);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const isPerfume = productType === "perfume";
-  const conditionPercent = getConditionPercent(conditionScore ?? 7);
-  const conditionLabel = getConditionLabel(conditionScore ?? 7, conditionStatus ?? undefined);
-  const conditionColor = getConditionColor(conditionScore ?? 7);
-  const showNewBadge = !isPerfume && (conditionScore ?? 0) >= 10;
-  const hasSizes = !isPerfume && availableSizes.length > 0;
-  const defaultSelectableSize = availableSizes.find((sizeOption) => (sizeAvailabilityState?.[sizeOption]?.stock ?? 0) > 0) || availableSizes[0] || "";
+  const hasCondition = storeType !== "retail" && conditionScore != null;
+  const conditionPercent = hasCondition ? getConditionPercent(normalizedConditionScore) : 0;
+  const conditionLabel = hasCondition ? getConditionLabel(normalizedConditionScore, conditionStatus ?? undefined) : "";
+  const conditionColor = hasCondition ? getConditionColor(normalizedConditionScore) : "transparent";
+  const showNewBadge = !isPerfume && hasCondition && normalizedConditionScore >= 10;
+  const displayedSizes = useMemo(
+    () => (!isPerfume
+      ? (activeColorHex
+          ? allSizes.filter((entry) => splitVariantLabel(entry).colorHex === activeColorHex)
+          : allSizes)
+      : []),
+    [activeColorHex, allSizes, isPerfume],
+  );
+  const hasSizes = !isPerfume && displayedSizes.length > 0;
+  const defaultSelectableSize = displayedSizes.find((sizeOption) => (sizeAvailabilityState?.[sizeOption]?.stock ?? 0) > 0) || displayedSizes[0] || "";
   const [selectedSize, setSelectedSize] = useState(defaultSelectableSize);
   const selectedSizeAvailability = !isPerfume && selectedSize ? sizeAvailabilityState?.[selectedSize] : null;
   const getSizeOptionState = (sizeOption: string) => sizeAvailabilityState?.[sizeOption] || null;
@@ -129,19 +174,26 @@ export default function ProductCard({
   }, []);
 
   useEffect(() => {
-    if (availableSizes.length === 0) {
+    if (colorwayHexes.length > 0 && (!activeColorHex || !colorwayHexes.includes(activeColorHex))) {
+      setActiveColorHex(colorwayHexes[0]);
+      return;
+    }
+  }, [activeColorHex, colorwayHexes]);
+
+  useEffect(() => {
+    if (displayedSizes.length === 0) {
       setSelectedSize("");
       return;
     }
 
     setSelectedSize((current) => {
-      if (current && availableSizes.includes(current) && (sizeAvailabilityState?.[current]?.stock ?? 0) > 0) {
+      if (current && displayedSizes.includes(current) && (sizeAvailabilityState?.[current]?.stock ?? 0) > 0) {
         return current;
       }
 
       return defaultSelectableSize;
     });
-  }, [availableSizes.join("|"), defaultSelectableSize, sizeAvailabilityState]);
+  }, [displayedSizes.join("|"), defaultSelectableSize, sizeAvailabilityState]);
 
   useEffect(() => {
     setSizeAvailabilityState(sizeAvailability || null);
@@ -222,8 +274,9 @@ export default function ProductCard({
         price,
         brand,
         size: isPerfume ? undefined : selectedSize,
+        color: activeColorHex || undefined,
         maxStock: Math.max(1, selectedSizeStock),
-        image,
+        image: selectedCartImage || image,
         categories,
         productType,
         fashionSubtype,
@@ -253,8 +306,9 @@ export default function ProductCard({
         price,
         brand,
         size: isPerfume ? undefined : selectedSize,
+        color: activeColorHex || undefined,
         maxStock: Math.max(1, selectedSizeStock),
-        image,
+        image: selectedCartImage || image,
         productType,
         fashionSubtype,
         originPictures,
@@ -265,7 +319,8 @@ export default function ProductCard({
         id,
         name,
         categories,
-        image,
+        image: selectedCartImage || image,
+        color: activeColorHex || undefined,
         price,
         brand,
         quantity: 1,
@@ -362,7 +417,7 @@ export default function ProductCard({
         </div>
       )}
       <div
-        className="relative aspect-[3/4] overflow-hidden product-image-wrapper bg-surface"
+        className="relative overflow-hidden product-image-wrapper bg-surface"
         onMouseEnter={(e) => {
           if (!isPerfume || !cloneSourceImage) return;
           showClonePreviewAtPointer(e.clientX, e.clientY);
@@ -373,17 +428,17 @@ export default function ProductCard({
         }}
         onMouseLeave={() => setClonePreview({ visible: false, x: 0, y: 0 })}
       >
-        {image ? (
+        {displayImage ? (
           <img
-            src={image}
+            src={displayImage}
             alt={name}
-            className="absolute inset-0 w-full h-full object-cover"
+            className="block w-full h-auto object-contain"
             loading="lazy"
             decoding="async"
           />
         ) : (
           <>
-            <div className="absolute inset-0 placeholder-img" />
+            <div className="placeholder-img aspect-[3/4] w-full" />
             <span className="absolute inset-0 flex items-center justify-center text-[10px] tracking-widest opacity-50">
               PRODUCT
             </span>
@@ -454,7 +509,11 @@ export default function ProductCard({
                     hasSizes ? "hover:bg-hover cursor-pointer" : "cursor-default"
                   }`}
                 >
-                  <span>{hasSizes ? `Size ${selectedSize}` : "One size"}</span>
+                  <span>
+                    {hasSizes
+                      ? `Size ${splitVariantLabel(selectedSize || defaultSelectableSize).sizeLabel}`
+                      : "One size"}
+                  </span>
                   {hasSizes && (
                     <svg
                       width="10"
@@ -480,20 +539,23 @@ export default function ProductCard({
                       e.stopPropagation();
                     }}
                   >
-                    {availableSizes.map((sizeOption) => (
+                    {displayedSizes.map((sizeOption) => {
+                      const { sizeLabel } = splitVariantLabel(sizeOption);
+                      return (
                       <div
                         key={sizeOption}
                         onClick={(e) => handleSizeSelect(e, sizeOption)}
                         className="px-3 py-2.5 text-[10px] text-foreground font-medium hover:bg-surface transition-colors cursor-pointer flex items-center justify-between gap-2"
                       >
-                        <span>{sizeOption}</span>
+                        <span>{sizeLabel}</span>
                         {(getSizeOptionState(sizeOption)?.stock ?? 0) === 0 ? (
                           <span className="text-[9px] uppercase tracking-wide text-text-secondary">Sold out</span>
                         ) : hasHydratedAvailability && getSizeOptionState(sizeOption)?.reservedElsewhere ? (
                           <span className="text-[9px] uppercase tracking-wide text-text-secondary">Reserved elsewhere</span>
                         ) : null}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -532,13 +594,29 @@ export default function ProductCard({
           </div>
         )}
       </div>
-      <div className="mt-2 space-y-0.5">
-        <p className="text-xs font-semibold text-foreground truncate">{name}</p>
+      {!isPerfume && colorwayHexes.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-2">
+          {colorwayHexes.map((hex) => (
+            <button
+              key={hex}
+              type="button"
+              title={hex}
+              onClick={(e) => handleColorwayClick(e, hex)}
+              className={`w-4 h-4 border transition-all duration-150 ${
+                activeColorHex === hex ? "border-foreground scale-110" : "border-border-color hover:border-foreground"
+              }`}
+              style={{ backgroundColor: hex }}
+            />
+          ))}
+        </div>
+      )}
+      <div className="mt-2 space-y-1">
+        <p className="text-sm uppercase tracking-wider font-semibold text-foreground truncate">{formatTndPrice(price)}</p>
+        <p className="text-[10px] uppercase tracking-wider font-normal text-foreground truncate">{name}</p>
         {isPerfume && cloneSourceName && (
           <p className="text-[10px] text-text-secondary truncate">Clones {cloneSourceName}</p>
         )}
-        <p className="text-xs text-text-secondary">{formatTndPrice(price)}</p>
-        {!isPerfume && (
+        {!isPerfume && hasCondition && (
           <div className="space-y-1">
             <div className="h-1 w-full bg-border-color overflow-hidden">
               <div className="h-full" style={{ width: `${conditionPercent}%`, backgroundColor: conditionColor }} />

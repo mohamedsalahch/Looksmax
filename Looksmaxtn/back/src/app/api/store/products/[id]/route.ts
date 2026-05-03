@@ -86,6 +86,10 @@ export async function GET(
       }
     }
 
+    const colorImagesData = product.colorImages instanceof Map
+      ? Object.fromEntries(product.colorImages)
+      : (product.colorImages && typeof product.colorImages === "object" ? product.colorImages : null);
+
     return NextResponse.json({
       product: {
         ...product,
@@ -100,6 +104,7 @@ export async function GET(
         reservationExpiresAt: null,
         sizeAvailability,
         viewerBlocked,
+        colorImages: colorImagesData,
       },
     });
   } catch (error: unknown) {

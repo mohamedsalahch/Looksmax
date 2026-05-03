@@ -49,6 +49,7 @@ type ProductResponse = {
     };
     cloneSourceName?: string;
     cloneSourceImage?: string;
+    colorImages?: Record<string, number[]> | null;
   };
 };
 
@@ -139,6 +140,7 @@ export default async function ProductDetailPage({
     storeName: dbProduct.storeName || dbProduct.createdBy?.name || "",
     storeType: dbProduct.storeType || null,
     image: dbProduct.images?.find((image) => image.isMain)?.url || dbProduct.images?.[0]?.url || "",
+    images: dbProduct.images || [],
     sizes,
     stock: Math.max(dbProduct.stock ?? 0, 0),
     sizeAvailability,
@@ -163,6 +165,7 @@ export default async function ProductDetailPage({
     },
     cloneSourceName: dbProduct.cloneSourceName || "",
     cloneSourceImage: dbProduct.cloneSourceImage || "",
+    colorImages: (dbProduct.colorImages as Record<string, number[]> | null) ?? null,
   };
   const productId = String(dbProduct._id || id);
   const productUrl = absoluteUrl(`/product/${productId}`);
@@ -207,10 +210,10 @@ export default async function ProductDetailPage({
       <div className="max-w-7xl mx-auto px-4 md:px-8 py-8">
         {/* Breadcrumb */}
         <nav className="mb-6">
-          <ol className="flex items-center gap-2 text-xs text-text-secondary">
+          <ol className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-text-secondary">
             <li>
               <Link href="/" className="hover:text-foreground transition-colors">
-                Home
+                HOME
               </Link>
             </li>
             <li>/</li>
@@ -219,7 +222,7 @@ export default async function ProductDetailPage({
                 href="/category/all"
                 className="hidden md:inline hover:text-foreground transition-colors"
               >
-                Collection
+                COLLECTION
               </Link>
             </li>
             <li>/</li>
@@ -230,11 +233,11 @@ export default async function ProductDetailPage({
         {/* Product Layout */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
           {/* Left — Images */}
-          <ProductImageGallery images={product.images as { url: string; isMain: boolean }[]} />
+          <ProductImageGallery images={product.images as { url: string; isMain: boolean }[]} colorImages={product.colorImages} />
 
           {/* Right — Info */}
           <div className="md:sticky md:top-[80px] md:self-start">
-            <ProductInfo product={{ ...product, id: productId }} />
+            <ProductInfo product={{ ...product, id: productId, colorImages: product.colorImages }} />
           </div>
         </div>
       </div>

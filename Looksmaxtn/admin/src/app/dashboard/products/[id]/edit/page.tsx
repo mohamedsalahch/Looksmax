@@ -81,6 +81,59 @@ type CategoryPath = {
 
 type ProductMediaStatus = "idle" | "processing" | "completed" | "failed";
 
+type SizeRow = {
+  id: string;
+  size: string;
+  stock: string;
+  conditionScore: string;
+};
+
+type ColorwayEnhanceStatus = "idle" | "processing" | "completed" | "failed";
+
+type Colorway = {
+  id: string;
+  hex: string;
+  frontFile: File | null;
+  frontPreview: string;
+  backFile: File | null;
+  backPreview: string;
+  enhanceStatus: ColorwayEnhanceStatus;
+  enhanceJobId: string;
+  enhanceError: string;
+  enhancedFrontUrl: string;
+  enhancedBackUrl: string;
+  enhancedFrontFile: File | null;
+  enhancedBackFile: File | null;
+  sizes: SizeRow[];
+  generateStatus: ColorwayEnhanceStatus;
+  generateJobId: string;
+  generateError: string;
+  generatedImages: Array<{ url: string; file: File | null }>;
+  companionTopType: string;
+  companionBottomType: string;
+  companionFootwearType: string;
+  companionTopColor: PaletteColor | null;
+  companionBottomColor: PaletteColor | null;
+  companionFootwearColor: PaletteColor | null;
+};
+
+function createEmptyColorway(): Colorway {
+  return {
+    id: generateId(),
+    hex: "",
+    frontFile: null, frontPreview: "",
+    backFile: null, backPreview: "",
+    enhanceStatus: "idle", enhanceJobId: "", enhanceError: "",
+    enhancedFrontUrl: "", enhancedBackUrl: "",
+    enhancedFrontFile: null, enhancedBackFile: null,
+    sizes: [{ id: generateId(), size: "", stock: "", conditionScore: "9" }],
+    generateStatus: "idle", generateJobId: "", generateError: "",
+    generatedImages: [],
+    companionTopType: "", companionBottomType: "", companionFootwearType: "",
+    companionTopColor: null, companionBottomColor: null, companionFootwearColor: null,
+  };
+}
+
 type FashionVariantRow = {
   id: string;
   size: string;
@@ -449,6 +502,247 @@ function toggleColorToken(value: string, token: string) {
   return colors.join(", ");
 }
 
+function ColorwayGenerationCard({
+  colorway, index, companionZones, companionTypeOptions, onUpdate, onGenerate,
+}: {
+  colorway: Colorway; index: number;
+  companionZones: CompanionZone[];
+  companionTypeOptions: { top: { slug: string; name: string }[]; bottom: { slug: string; name: string }[]; footwear: { slug: string; name: string }[] };
+  onUpdate: (patch: Partial<Colorway>) => void;
+  onGenerate: () => void;
+}) {
+  const [zoomedUrl, setZoomedUrl] = useState<string | null>(null);
+  const hasColor = Boolean(colorway.hex.trim());
+  const enhancedFrontPreview = colorway.enhancedFrontUrl || colorway.frontPreview;
+  const enhancedBackPreview = colorway.enhancedBackUrl || colorway.backPreview;
+  return (
+    <div className="flex-none w-[270px] rounded-2xl border border-border bg-bg-card p-4 space-y-4">
+      <div className="flex items-center gap-2">
+        <span
+          className={`h-4 w-4 flex-none border border-border/60 ${hasColor ? "rounded-full" : "rounded border-dashed bg-transparent"}`}
+          style={hasColor ? { backgroundColor: colorway.hex } : undefined}
+        />
+        <span className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">Colorway {index + 1}</span>
+        <span className="ml-auto text-[9px] font-mono text-text-secondary/60">{hasColor ? colorway.hex : "No color"}</span>
+      </div>
+      {(enhancedFrontPreview || enhancedBackPreview) && (
+        <div className="space-y-1.5">
+          <p className="text-[9px] uppercase tracking-wider text-text-secondary">Enhanced</p>
+          <div className="grid grid-cols-2 gap-1.5">
+            {enhancedFrontPreview && (
+              <button type="button" onClick={() => setZoomedUrl(enhancedFrontPreview)} className="aspect-[4/5] overflow-hidden rounded border border-border bg-bg-secondary cursor-zoom-in">
+                <img src={enhancedFrontPreview} alt="Enhanced front" className="h-full w-full object-cover" />
+              </button>
+            )}
+            {enhancedBackPreview && (
+              <button type="button" onClick={() => setZoomedUrl(enhancedBackPreview)} className="aspect-[4/5] overflow-hidden rounded border border-border bg-bg-secondary cursor-zoom-in">
+                <img src={enhancedBackPreview} alt="Enhanced back" className="h-full w-full object-cover" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+      {companionZones.length > 0 && (
+        <div className="space-y-3">
+          {companionZones.includes("top") && (
+            <div className="space-y-2">
+              <p className="text-[9px] uppercase tracking-wider text-text-secondary">Top</p>
+              <select value={colorway.companionTopType} onChange={(e) => onUpdate({ companionTopType: e.target.value })} className="w-full bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-accent transition-colors">
+                <option value="">Select type</option>
+                {companionTypeOptions.top.map((cat) => <option key={cat.slug} value={cat.slug}>{cat.name}</option>)}
+              </select>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {SECONDARY_GARMENT_PALETTE.map((color) => (
+                  <button key={color.hex} type="button" title={color.name} onClick={() => onUpdate({ companionTopColor: color })} className={`h-6 w-6 rounded-full border-2 transition-all ${colorway.companionTopColor?.hex === color.hex ? "border-accent scale-110" : "border-border hover:border-text-secondary"}`} style={{ backgroundColor: color.hex }} />
+                ))}
+                <input type="color" value={colorway.companionTopColor?.hex || "#000000"} onChange={(e) => onUpdate({ companionTopColor: customPaletteColor(e.target.value) })} className="h-6 w-8 cursor-pointer rounded border border-border bg-bg-secondary p-0.5" />
+              </div>
+            </div>
+          )}
+          {companionZones.includes("bottom") && (
+            <div className="space-y-2">
+              <p className="text-[9px] uppercase tracking-wider text-text-secondary">Bottom</p>
+              <select value={colorway.companionBottomType} onChange={(e) => onUpdate({ companionBottomType: e.target.value })} className="w-full bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-accent transition-colors">
+                <option value="">Select type</option>
+                {companionTypeOptions.bottom.map((cat) => <option key={cat.slug} value={cat.slug}>{cat.name}</option>)}
+              </select>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {SECONDARY_GARMENT_PALETTE.map((color) => (
+                  <button key={color.hex} type="button" title={color.name} onClick={() => onUpdate({ companionBottomColor: color })} className={`h-6 w-6 rounded-full border-2 transition-all ${colorway.companionBottomColor?.hex === color.hex ? "border-accent scale-110" : "border-border hover:border-text-secondary"}`} style={{ backgroundColor: color.hex }} />
+                ))}
+                <input type="color" value={colorway.companionBottomColor?.hex || "#000000"} onChange={(e) => onUpdate({ companionBottomColor: customPaletteColor(e.target.value) })} className="h-6 w-8 cursor-pointer rounded border border-border bg-bg-secondary p-0.5" />
+              </div>
+            </div>
+          )}
+          {companionZones.includes("footwear") && (
+            <div className="space-y-2">
+              <p className="text-[9px] uppercase tracking-wider text-text-secondary">Footwear</p>
+              <select value={colorway.companionFootwearType} onChange={(e) => onUpdate({ companionFootwearType: e.target.value })} className="w-full bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-accent transition-colors">
+                <option value="">Select type</option>
+                {companionTypeOptions.footwear.map((cat) => <option key={cat.slug} value={cat.slug}>{cat.name}</option>)}
+              </select>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {SECONDARY_GARMENT_PALETTE.map((color) => (
+                  <button key={color.hex} type="button" title={color.name} onClick={() => onUpdate({ companionFootwearColor: color })} className={`h-6 w-6 rounded-full border-2 transition-all ${colorway.companionFootwearColor?.hex === color.hex ? "border-accent scale-110" : "border-border hover:border-text-secondary"}`} style={{ backgroundColor: color.hex }} />
+                ))}
+                <input type="color" value={colorway.companionFootwearColor?.hex || "#000000"} onChange={(e) => onUpdate({ companionFootwearColor: customPaletteColor(e.target.value) })} className="h-6 w-8 cursor-pointer rounded border border-border bg-bg-secondary p-0.5" />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {colorway.generatedImages.length > 0 && (
+        <div className="grid grid-cols-2 gap-1.5">
+          {colorway.generatedImages.map((img, i) => (
+            <button key={i} type="button" onClick={() => setZoomedUrl(img.url)} className="aspect-[4/5] overflow-hidden rounded border border-border bg-bg-secondary cursor-zoom-in">
+              <img src={img.url} alt={`Generated ${i + 1}`} className="h-full w-full object-cover" />
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="space-y-1 border-t border-border pt-3">
+        {colorway.generateError && <p className="text-[8px] text-danger line-clamp-2">{colorway.generateError}</p>}
+        <div className="flex items-center justify-end gap-2">
+          {colorway.generateStatus === "completed" && (
+            <button type="button" onClick={() => onUpdate({ generateStatus: "idle", generatedImages: [] })} className="text-[8px] uppercase tracking-wider text-text-secondary hover:text-accent transition-colors">Regenerate</button>
+          )}
+          <button type="button" onClick={colorway.generateStatus !== "completed" ? onGenerate : undefined} disabled={colorway.generateStatus === "processing" || colorway.generateStatus === "completed"} className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity">
+            {colorway.generateStatus === "processing" && <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />}
+            {colorway.generateStatus === "completed" ? "Generated ✓" : colorway.generateStatus === "processing" ? "Generating..." : "Generate"}
+          </button>
+        </div>
+      </div>
+      {zoomedUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setZoomedUrl(null)}>
+          <div className="relative max-h-[92vh] w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
+            <button type="button" onClick={() => setZoomedUrl(null)} className="absolute right-0 top-0 z-10 h-9 w-9 border border-white/30 bg-black/60 text-xl leading-none text-white hover:bg-black transition-colors">×</button>
+            <div className="flex max-h-[92vh] items-center justify-center bg-bg-card p-4">
+              <img src={zoomedUrl} alt="Generated model" className="max-h-[86vh] max-w-full object-contain" />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ColorwayCard({
+  colorway, index, canRemove, isThrift, onRemove, onUpdate, onEnhance, onAddSize, onRemoveSize, onUpdateSize,
+}: {
+  colorway: Colorway; index: number; canRemove: boolean; isThrift: boolean;
+  onRemove: () => void; onUpdate: (patch: Partial<Colorway>) => void; onEnhance: () => void;
+  onAddSize: () => void; onRemoveSize: (sizeId: string) => void; onUpdateSize: (sizeId: string, patch: Partial<SizeRow>) => void;
+}) {
+  const frontInputId = `cw-front-${colorway.id}`;
+  const backInputId = `cw-back-${colorway.id}`;
+  const colorInputRef = useRef<HTMLInputElement>(null);
+  const [zoomedPreview, setZoomedPreview] = useState<string | null>(null);
+  const canEnhance = (Boolean(colorway.frontFile) || Boolean(colorway.frontPreview)) && (Boolean(colorway.backFile) || Boolean(colorway.backPreview));
+  const hasColor = Boolean(colorway.hex.trim());
+
+  const handlePickColor = async () => {
+    const EyeDropperCtor = (window as Window & { EyeDropper?: new () => { open: () => Promise<{ sRGBHex: string }> } }).EyeDropper;
+    if (EyeDropperCtor) {
+      try { const eyeDropper = new EyeDropperCtor(); const result = await eyeDropper.open(); onUpdate({ hex: result.sRGBHex.toUpperCase() }); return; } catch { }
+    }
+    colorInputRef.current?.click();
+  };
+
+  const handleFrontFile = (file: File | null) => {
+    if (!file) { onUpdate({ frontFile: null, frontPreview: "", enhanceStatus: "idle", enhanceJobId: "" }); return; }
+    onUpdate({ frontFile: file, frontPreview: URL.createObjectURL(file), enhanceStatus: "idle", enhanceJobId: "" });
+  };
+  const handleBackFile = (file: File | null) => {
+    if (!file) { onUpdate({ backFile: null, backPreview: "", enhanceStatus: "idle", enhanceJobId: "" }); return; }
+    onUpdate({ backFile: file, backPreview: URL.createObjectURL(file), enhanceStatus: "idle", enhanceJobId: "" });
+  };
+
+  return (
+    <div className="flex-none w-[270px] rounded-2xl border border-border bg-bg-card p-4 space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          {canRemove && <button type="button" onClick={onRemove} title="Remove colorway" className="text-sm leading-none text-text-secondary hover:text-danger transition-colors">×</button>}
+          <span className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">Colorway {index + 1}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={handlePickColor}
+            title="Pick color from uploaded image"
+            className={`h-5 w-5 flex-none border-2 transition-colors ${
+              hasColor ? "rounded-full border-border hover:border-accent" : "rounded border-dashed border-border bg-transparent"
+            }`}
+            style={hasColor ? { backgroundColor: colorway.hex } : undefined}
+          />
+          <span className="text-[9px] text-text-secondary font-mono">{hasColor ? colorway.hex : "No color"}</span>
+          <input ref={colorInputRef} type="color" value={colorway.hex} onChange={(e) => onUpdate({ hex: e.target.value.toUpperCase() })} className="sr-only" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {(["front", "back"] as const).map((slot) => {
+          const inputId = slot === "front" ? frontInputId : backInputId;
+          const preview = slot === "front" ? colorway.frontPreview : colorway.backPreview;
+          const handleFile = slot === "front" ? handleFrontFile : handleBackFile;
+          return (
+            <div key={slot} className="space-y-1">
+              <p className="text-[9px] uppercase tracking-wider text-text-secondary">{slot}</p>
+              <input id={inputId} type="file" accept="image/*" className="hidden" onChange={(e) => handleFile(e.target.files?.[0] || null)} onClick={(e) => { e.currentTarget.value = ""; }} />
+              <div onClick={() => { if (preview) { setZoomedPreview(preview); } else { document.getElementById(inputId)?.click(); } }} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); handleFile(e.dataTransfer.files?.[0] || null); }} className={`aspect-[4/5] overflow-hidden rounded border border-dashed border-border bg-bg-secondary transition-colors flex items-center justify-center ${preview ? "cursor-zoom-in hover:border-accent/60" : "cursor-pointer hover:border-accent"}`}>
+                {preview ? <img src={preview} alt={slot} className="h-full w-full object-cover" /> : <span className="text-[8px] uppercase tracking-wider text-text-secondary/60">Upload</span>}
+              </div>
+              {preview && <button type="button" onClick={() => handleFile(null)} className="text-[8px] uppercase tracking-wider text-danger/70 underline hover:text-danger hover:font-bold transition-colors">Clear</button>}
+            </div>
+          );
+        })}
+      </div>
+      {zoomedPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setZoomedPreview(null)}>
+          <div className="relative max-h-[92vh] w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
+            <button type="button" onClick={() => setZoomedPreview(null)} aria-label="Close preview" className="absolute right-0 top-0 z-10 h-9 w-9 border border-white/30 bg-black/60 text-xl leading-none text-white hover:bg-black transition-colors">×</button>
+            <div className="flex max-h-[92vh] items-center justify-center bg-bg-card p-4">
+              <img src={zoomedPreview} alt="Image preview" className="max-h-[86vh] max-w-full object-contain" />
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="space-y-2">
+        <p className="text-[9px] uppercase tracking-wider text-text-secondary">Sizes</p>
+        {colorway.sizes.map((sizeRow) => (
+          <div key={sizeRow.id} className="space-y-1">
+            <div className="flex items-center gap-1">
+              <input type="text" value={sizeRow.size} onChange={(e) => onUpdateSize(sizeRow.id, { size: e.target.value })} placeholder="Size" className="min-w-0 flex-1 bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-accent transition-colors" />
+              <input type="number" min="0" value={sizeRow.stock} onChange={(e) => onUpdateSize(sizeRow.id, { stock: e.target.value })} placeholder="Qty" className="w-14 flex-none bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-accent transition-colors" />
+              <button type="button" onClick={() => onRemoveSize(sizeRow.id)} disabled={colorway.sizes.length === 1} className="flex-none text-sm leading-none text-text-secondary hover:text-danger transition-colors disabled:opacity-30">×</button>
+            </div>
+            {isThrift && (
+              <div className="space-y-0.5 px-0.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[8px] uppercase tracking-wider text-text-secondary">Condition</span>
+                  <span className="text-[8px] text-text-secondary">{sizeRow.conditionScore}/10</span>
+                </div>
+                <input type="range" min="1" max="10" step="1" value={sizeRow.conditionScore} onChange={(e) => onUpdateSize(sizeRow.id, { conditionScore: e.target.value })} className="w-full accent-accent cursor-pointer" />
+              </div>
+            )}
+          </div>
+        ))}
+        <button type="button" onClick={onAddSize} className="text-[9px] uppercase tracking-wider text-text-secondary hover:text-accent transition-colors">+ Add size</button>
+      </div>
+      <div className="space-y-1.5 border-t border-border pt-3">
+        {colorway.enhanceError && <p className="text-[8px] text-danger line-clamp-2">{colorway.enhanceError}</p>}
+        <div className="flex items-center justify-end gap-2">
+          {colorway.enhanceStatus === "completed" && (
+            <button type="button" onClick={onEnhance} className="text-[8px] uppercase tracking-wider text-text-secondary hover:text-accent transition-colors">Re-enhance</button>
+          )}
+          <button type="button" onClick={colorway.enhanceStatus !== "completed" ? onEnhance : undefined} disabled={!canEnhance || colorway.enhanceStatus === "processing" || colorway.enhanceStatus === "completed"} className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity">
+            {colorway.enhanceStatus === "processing" && <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />}
+            {colorway.enhanceStatus === "completed" ? "Enhanced ✓" : colorway.enhanceStatus === "processing" ? "Enhancing..." : "Enhance"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
@@ -507,6 +801,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     stock: "",
     conditionScore: "9",
   });
+  const [colorways, setColorways] = useState<Colorway[]>([createEmptyColorway()]);
   const generationAbortRef = useRef<AbortController | null>(null);
   const savedSnapshot = useRef<{
     form: typeof initialForm;
@@ -550,6 +845,113 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     () => sizeList.reduce((sum, size) => sum + Math.max(0, Number(form.sizeStock[size] || 0)), 0),
     [form.sizeStock, sizeList]
   );
+
+  const updateColorway = (id: string, patch: Partial<Colorway>) =>
+    setColorways((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  const addColorway = () => setColorways((prev) => [...prev, createEmptyColorway()]);
+  const removeColorway = (id: string) => setColorways((prev) => prev.length === 1 ? prev : prev.filter((c) => c.id !== id));
+  const addSizeRow = (colorwayId: string) => setColorways((prev) => prev.map((c) => c.id === colorwayId ? { ...c, sizes: [...c.sizes, { id: generateId(), size: "", stock: "", conditionScore: "9" }] } : c));
+  const removeSizeRow = (colorwayId: string, sizeId: string) => setColorways((prev) => prev.map((c) => c.id === colorwayId ? { ...c, sizes: c.sizes.length === 1 ? c.sizes : c.sizes.filter((s) => s.id !== sizeId) } : c));
+  const updateSizeRow = (colorwayId: string, sizeId: string, patch: Partial<SizeRow>) => setColorways((prev) => prev.map((c) => c.id === colorwayId ? { ...c, sizes: c.sizes.map((s) => s.id === sizeId ? { ...s, ...patch } : s) } : c));
+
+  const handleEnhanceColorway = async (colorwayId: string) => {
+    const cw = colorways.find((c) => c.id === colorwayId);
+    if (!cw?.frontFile || !cw?.backFile) return;
+    updateColorway(colorwayId, { enhanceStatus: "processing", enhanceError: "", enhanceJobId: "" });
+    try {
+      const [front, back] = await Promise.all([compressImageFile(cw.frontFile), compressImageFile(cw.backFile)]);
+      const body = new FormData();
+      body.append("front", front); body.append("back", back);
+      const res = await fetch("/api/products/enhance", withAuthRequest({ method: "POST", body }));
+      const data = await res.json();
+      if (!res.ok) { updateColorway(colorwayId, { enhanceStatus: "failed", enhanceError: data.error || "Unable to start enhancement." }); return; }
+      updateColorway(colorwayId, { enhanceJobId: data.job_id || "", enhanceStatus: data.status || "processing" });
+    } catch { updateColorway(colorwayId, { enhanceStatus: "failed", enhanceError: "Network error" }); }
+  };
+
+  useEffect(() => {
+    const processing = colorways.filter((c) => c.enhanceStatus === "processing" && c.enhanceJobId);
+    if (processing.length === 0) return;
+    const intervalId = window.setInterval(() => {
+      processing.forEach((cw) => {
+        fetch(`/api/products/enhance?job_id=${cw.enhanceJobId}`, withAuthRequest())
+          .then((r) => r.json().then((data) => ({ ok: r.ok, data })))
+          .then(({ ok, data }) => {
+            if (!ok) { updateColorway(cw.id, { enhanceStatus: "failed", enhanceError: data.error || "Enhancement failed.", enhanceJobId: "" }); return; }
+            if (data.status === "completed") {
+              const frontUrl: string = data.images?.front || "";
+              const backUrl: string = data.images?.back || "";
+              Promise.all([frontUrl ? imageUrlToFile(frontUrl, "front-enhanced") : Promise.resolve(null), backUrl ? imageUrlToFile(backUrl, "back-enhanced") : Promise.resolve(null)])
+                .then(([frontFile, backFile]) => updateColorway(cw.id, { enhanceStatus: "completed", enhanceJobId: "", enhanceError: "", enhancedFrontUrl: frontUrl, enhancedBackUrl: backUrl, enhancedFrontFile: frontFile, enhancedBackFile: backFile, ...(frontUrl ? { frontPreview: frontUrl } : {}), ...(backUrl ? { backPreview: backUrl } : {}) }));
+            } else if (data.status === "failed") { updateColorway(cw.id, { enhanceStatus: "failed", enhanceError: data.error || "Enhancement failed.", enhanceJobId: "" }); }
+          }).catch(() => updateColorway(cw.id, { enhanceStatus: "failed", enhanceError: "Unable to poll enhancement status.", enhanceJobId: "" }));
+      });
+    }, 4000);
+    return () => window.clearInterval(intervalId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colorways]);
+
+  const canGenerateColorway = (cw: Colorway) => {
+    if (!selectedModelId) return false;
+    if (!Boolean(cw.enhancedFrontFile || cw.frontFile || cw.frontPreview) || !Boolean(cw.enhancedBackFile || cw.backFile || cw.backPreview)) return false;
+    if (companionZones.includes("top") && (!cw.companionTopType || !cw.companionTopColor)) return false;
+    if (companionZones.includes("bottom") && (!cw.companionBottomType || !cw.companionBottomColor)) return false;
+    if (companionZones.includes("footwear") && (!cw.companionFootwearType || !cw.companionFootwearColor)) return false;
+    return true;
+  };
+
+  const handleGenerateColorway = async (colorwayId: string) => {
+    const cw = colorways.find((c) => c.id === colorwayId);
+    if (!cw || !selectedModelId) return;
+    const frontSrc = cw.enhancedFrontFile || cw.frontFile;
+    const backSrc = cw.enhancedBackFile || cw.backFile;
+    if (!frontSrc || !backSrc) return;
+    updateColorway(colorwayId, { generateStatus: "processing", generateError: "", generateJobId: "" });
+    try {
+      const body = new FormData();
+      body.append("modelId", selectedModelId);
+      body.append("type", "fashion");
+      body.append("fashionSubtype", form.fashionSubtype || savedFashionSubtype || "clothes");
+      body.append("generationTarget", generationRequirements.generationTarget);
+      body.append("garmentZone", generationRequirements.generationTarget === "bottom" ? "bottom" : "top");
+      if (companionZones.includes("top") && cw.companionTopType) body.append("companionTopType", cw.companionTopType);
+      if (companionZones.includes("bottom") && cw.companionBottomType) body.append("companionBottomType", cw.companionBottomType);
+      if (companionZones.includes("footwear") && cw.companionFootwearType) body.append("footwearType", cw.companionFootwearType);
+      if (companionZones.includes("top") && cw.companionTopColor) { body.append("topColorName", cw.companionTopColor.name); body.append("topColorHex", cw.companionTopColor.hex); }
+      if (companionZones.includes("bottom") && cw.companionBottomColor) { body.append("bottomColorName", cw.companionBottomColor.name); body.append("bottomColorHex", cw.companionBottomColor.hex); }
+      if (companionZones.includes("footwear") && cw.companionFootwearColor) { body.append("shoesColorName", cw.companionFootwearColor.name); body.append("shoesColorHex", cw.companionFootwearColor.hex); }
+      const [frontFile, backFile] = await Promise.all([compressImageFile(frontSrc), compressImageFile(backSrc)]);
+      body.append("front", frontFile); body.append("back", backFile);
+      const res = await fetch("/api/products/generate", withAuthRequest({ method: "POST", body }));
+      const data = await res.json();
+      if (!res.ok) { updateColorway(colorwayId, { generateStatus: "failed", generateError: data.error || "Unable to start generation." }); return; }
+      updateColorway(colorwayId, { generateJobId: data.job_id || "", generateStatus: "processing" });
+    } catch { updateColorway(colorwayId, { generateStatus: "failed", generateError: "Network error" }); }
+  };
+
+  useEffect(() => {
+    const processing = colorways.filter((c) => c.generateStatus === "processing" && c.generateJobId);
+    if (processing.length === 0) return;
+    const intervalId = window.setInterval(() => {
+      processing.forEach((cw) => {
+        fetch(`/api/products/generate?job_id=${cw.generateJobId}`, withAuthRequest())
+          .then((r) => r.json().then((data) => ({ ok: r.ok, data })))
+          .then(({ ok, data }) => {
+            if (!ok) { updateColorway(cw.id, { generateStatus: "failed", generateError: data.error || "Generation failed.", generateJobId: "" }); return; }
+            if (data.status === "completed") {
+              const subtype = form.fashionSubtype || savedFashionSubtype || "clothes";
+              const viewList = subtype === "shoes" ? ["front", "back", "left", "right"] : ["front", "back"];
+              Promise.all(viewList.map(async (view, i) => {
+                const base64: string = data.images?.[view]; if (!base64) return null;
+                const file = await base64ToFile(base64, i); return { url: URL.createObjectURL(file), file };
+              })).then((results) => updateColorway(cw.id, { generateStatus: "completed", generateJobId: "", generateError: "", generatedImages: results.filter((r): r is { url: string; file: File } => r !== null) }));
+            } else if (data.status === "failed") { updateColorway(cw.id, { generateStatus: "failed", generateError: data.error || "Generation failed.", generateJobId: "" }); }
+          }).catch(() => updateColorway(cw.id, { generateStatus: "failed", generateError: "Unable to poll generation status.", generateJobId: "" }));
+      });
+    }, 5000);
+    return () => window.clearInterval(intervalId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colorways]);
 
   useEffect(() => {
     if (!error) return;
@@ -730,6 +1132,82 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         );
         setRestockAmounts(Object.fromEntries(nextSizes.map((size) => [size, "0"])));
         setInitialCategorySlugs(p.categories || []);
+
+        // Initialize colorways from sizeStock for store owners
+        if (p.sizeStock && typeof p.sizeStock === "object") {
+          const sizeStockEntries = Object.entries(p.sizeStock as Record<string, { fullStock: number; stock: number; conditionScore: number | null }>);
+          const colorwayMap = new Map<string, SizeRow[]>();
+          for (const [key, entry] of sizeStockEntries) {
+            const parts = key.split(" / ");
+            const hex = parts.length >= 2 ? parts[parts.length - 1] : "";
+            const sizeName = parts.length >= 2 ? parts.slice(0, -1).join(" / ") : key;
+            if (!hex.startsWith("#")) { continue; }
+            if (!colorwayMap.has(hex)) colorwayMap.set(hex, []);
+            colorwayMap.get(hex)!.push({
+              id: generateId(),
+              size: sizeName,
+              stock: String(entry.fullStock ?? entry.stock ?? 0),
+              conditionScore: String(entry.conditionScore ?? 9),
+            });
+          }
+          if (colorwayMap.size > 0) {
+            const productImages: { url: string }[] = p.images || [];
+            const colorImagesMap = p.colorImages as Record<string, number[]> | null;
+            const originFrontUrl = p.originPictures?.front || "";
+            const originBackUrl = p.originPictures?.back || "";
+            type SavedCompanionSettings = {
+              topType?: string; topColor?: { name: string; hex: string } | null;
+              bottomType?: string; bottomColor?: { name: string; hex: string } | null;
+              footwearType?: string; footwearColor?: { name: string; hex: string } | null;
+            };
+            const savedCompanion = p.companionSettings as Record<string, SavedCompanionSettings> | null;
+            const loadedColorways: Colorway[] = Array.from(colorwayMap.entries()).map(([hex, sizes]) => {
+              const indices = colorImagesMap?.[hex] || [];
+              const frontUrl = indices.length >= 2
+                ? productImages[indices[indices.length - 2]]?.url || ""
+                : indices.length === 1 ? productImages[indices[0]]?.url || "" : "";
+              const backUrl = indices.length >= 2 ? productImages[indices[indices.length - 1]]?.url || "" : "";
+              const resolvedFrontUrl = frontUrl || originFrontUrl;
+              const resolvedBackUrl = backUrl || originBackUrl;
+              const generatedImages = indices.length > 2
+                ? indices.slice(0, -2)
+                    .map((i) => ({ url: productImages[i]?.url || "", file: null }))
+                    .filter((g) => g.url)
+                : [];
+              const generateStatus: ColorwayEnhanceStatus = generatedImages.length > 0 ? "completed" : "idle";
+              const cs = savedCompanion?.[hex];
+              return {
+                ...createEmptyColorway(),
+                hex,
+                sizes,
+                frontPreview: resolvedFrontUrl,
+                backPreview: resolvedBackUrl,
+                enhancedFrontUrl: resolvedFrontUrl,
+                enhancedBackUrl: resolvedBackUrl,
+                generatedImages, generateStatus,
+                companionTopType: cs?.topType || "",
+                companionTopColor: cs?.topColor || null,
+                companionBottomType: cs?.bottomType || "",
+                companionBottomColor: cs?.bottomColor || null,
+                companionFootwearType: cs?.footwearType || "",
+                companionFootwearColor: cs?.footwearColor || null,
+              };
+            });
+            setColorways(loadedColorways);
+
+            // Restore admin-flow global companion settings
+            const global = savedCompanion?.["__global__"];
+            if (global) {
+              if (global.topType) setCompanionTopType(global.topType as CompanionTopType);
+              if (global.topColor) setSecondaryTopColor(global.topColor);
+              if (global.bottomType) setCompanionBottomType(global.bottomType as CompanionBottomType);
+              if (global.bottomColor) setSecondaryBottomColor(global.bottomColor);
+              if (global.footwearType) setFootwearType(global.footwearType as FootwearType);
+              if (global.footwearColor) setShoesColor(global.footwearColor);
+            }
+          }
+        }
+
         const loadedModelMedia = (p.images || []).map((image: ProductImage) => ({
           ...image,
           id: generateId(),
@@ -746,6 +1224,16 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 const loadedCategorySlugs = p.categories || [];
         setGeneratedModelMedia(loadedModelMedia);
         setShowProductMediaSection(loadedModelMedia.length > 0);
+        if (p.modelId) setSelectedModelId(p.modelId);
+        const globalCs = (p.companionSettings as Record<string, { topType?: string; topColor?: { name: string; hex: string } | null; bottomType?: string; bottomColor?: { name: string; hex: string } | null; footwearType?: string; footwearColor?: { name: string; hex: string } | null; }> | null)?.["__global__"];
+        if (globalCs) {
+          if (globalCs.topType) setCompanionTopType(globalCs.topType as CompanionTopType);
+          if (globalCs.topColor) setSecondaryTopColor(globalCs.topColor);
+          if (globalCs.bottomType) setCompanionBottomType(globalCs.bottomType as CompanionBottomType);
+          if (globalCs.bottomColor) setSecondaryBottomColor(globalCs.bottomColor);
+          if (globalCs.footwearType) setFootwearType(globalCs.footwearType as FootwearType);
+          if (globalCs.footwearColor) setShoesColor(globalCs.footwearColor);
+        }
         setImages(loadedImages);
         savedSnapshot.current = {
           form: loadedFormData,
@@ -1628,6 +2116,89 @@ const loadedCategorySlugs = p.categories || [];
     setError("");
     setLoading(true);
 
+    if (isStoreOwner) {
+      if (!selectedParentSlug) { setError("Please select a product category."); setLoading(false); return; }
+      if (colorways.length === 0) { setError("Please add at least one colorway."); setLoading(false); return; }
+      for (const cw of colorways) {
+        if (!cw.frontFile && !cw.frontPreview) { setError("Please upload a front image for each colorway."); setLoading(false); return; }
+        if (!cw.backFile && !cw.backPreview) { setError("Please upload a back image for each colorway."); setLoading(false); return; }
+        if (cw.sizes.filter((s) => s.size.trim() && s.stock.trim()).length === 0) { setError("Please add at least one size and stock for each colorway."); setLoading(false); return; }
+      }
+      if (isThriftStoreOwner && !form.brand.trim()) { setError("Please provide the brand of this item."); setLoading(false); return; }
+      try {
+        const productCategories = [selectedParentSlug, selectedChildSlug, selectedGrandchildSlug, selectedGreatGrandchildSlug].filter(Boolean);
+        type VariantEntry = { key: string; stock: number; conditionScore: number };
+        const allVariants: VariantEntry[] = [];
+        for (const cw of colorways) {
+          const colorKey = cw.hex.trim();
+          for (const s of cw.sizes.filter((s) => s.size.trim() && s.stock.trim())) {
+            allVariants.push({
+              key: colorKey ? `${s.size.trim()} / ${colorKey}` : s.size.trim(),
+              stock: Math.max(0, Number(s.stock || 0)),
+              conditionScore: Math.max(1, Math.min(10, Number(s.conditionScore || 9))),
+            });
+          }
+        }
+        const totalStock = allVariants.reduce((sum, v) => sum + v.stock, 0);
+        const uniqueColors = Array.from(new Set(colorways.map((c) => c.hex.trim()).filter(Boolean)));
+        const sizeStockPayload = Object.fromEntries(allVariants.map((v) => [v.key, { fullStock: v.stock, stock: v.stock, conditionScore: v.conditionScore }]));
+        const body = new FormData();
+        body.append("name", form.name);
+        body.append("price", form.price);
+        body.append("brand", isRetailStoreOwner ? userStoreName : form.brand);
+        body.append("reference", form.reference);
+        body.append("description", "");
+        body.append("productType", "fashion");
+        body.append("fashionSubtype", form.fashionSubtype || savedFashionSubtype || "clothes");
+        body.append("stock", String(totalStock));
+        body.append("fullStock", String(totalStock));
+        body.append("categories", JSON.stringify(productCategories));
+        body.append("sizes", JSON.stringify(allVariants.map((v) => v.key)));
+        body.append("colors", JSON.stringify(uniqueColors));
+        body.append("sizeStock", JSON.stringify(sizeStockPayload));
+        body.append("mainImageIndex", "0");
+        if (selectedModelId) body.append("modelId", selectedModelId);
+        const companionSettingsPayload: Record<string, object> = {};
+        for (const cw of colorways) {
+          const colorKey = cw.hex.trim();
+          if (!colorKey) continue;
+          companionSettingsPayload[colorKey] = {
+            topType: cw.companionTopType,
+            topColor: cw.companionTopColor,
+            bottomType: cw.companionBottomType,
+            bottomColor: cw.companionBottomColor,
+            footwearType: cw.companionFootwearType,
+            footwearColor: cw.companionFootwearColor,
+          };
+        }
+        body.append("companionSettings", JSON.stringify(companionSettingsPayload));
+        const imageFiles: File[] = [];
+        const colorImagesPayload: Record<string, number[]> = {};
+        for (const cw of colorways) {
+          const colorKey = cw.hex.trim();
+          const indices: number[] = [];
+          for (const gi of cw.generatedImages) { if (gi.file) { indices.push(imageFiles.length); imageFiles.push(gi.file); } }
+          const front = cw.enhancedFrontFile || cw.frontFile;
+          const back = cw.enhancedBackFile || cw.backFile;
+          if (front) { indices.push(imageFiles.length); imageFiles.push(front); }
+          if (back) { indices.push(imageFiles.length); imageFiles.push(back); }
+          if (colorKey && indices.length > 0) colorImagesPayload[colorKey] = indices;
+        }
+        const compressedImages = await Promise.all(imageFiles.map((f) => compressImageFile(f)));
+        compressedImages.forEach((f) => body.append("images", f));
+        body.append("colorImages", JSON.stringify(colorImagesPayload));
+        const firstCw = colorways[0];
+        const frontOrigin = firstCw.enhancedFrontFile || firstCw.frontFile;
+        const backOrigin = firstCw.enhancedBackFile || firstCw.backFile;
+        if (frontOrigin) body.append("originPictureFrontFile", await compressImageFile(frontOrigin));
+        if (backOrigin) body.append("originPictureBackFile", await compressImageFile(backOrigin));
+        const res = await fetch(`/api/products/${id}`, withAuthRequest({ method: "PUT", body }));
+        if (!res.ok) { const d = await res.json(); setError(d.error || "Unable to save product."); setLoading(false); return; }
+        router.push("/dashboard/products");
+      } catch { setError("Network error"); setLoading(false); }
+      return;
+    }
+
     if (!selectedCategorySlug) {
       setError("Please select a product category.");
       setLoading(false);
@@ -1794,6 +2365,14 @@ const loadedCategorySlugs = p.categories || [];
       body.append("existingImages", JSON.stringify(existingImages));
       body.append("imageOrder", JSON.stringify(imageOrder));
       body.append("mainImageKey", mainImageKey);
+      if (selectedModelId) body.append("modelId", selectedModelId);
+      body.append("companionSettings", JSON.stringify({
+        __global__: {
+          topType: companionTopType, topColor: secondaryTopColor,
+          bottomType: companionBottomType, bottomColor: secondaryBottomColor,
+          footwearType, footwearColor: shoesColor,
+        },
+      }));
       compressedProductMediaFiles.forEach((file) => {
         body.append("images", file);
       });
@@ -1827,13 +2406,117 @@ const loadedCategorySlugs = p.categories || [];
           Admin accounts can review product details, approve or reject them, and manage visibility.
           Only store owners can edit product data.
         </p>
-        <button
-          type="button"
-          onClick={() => router.push("/dashboard/products")}
-          className="bg-black text-white px-4 py-2 text-xs font-medium tracking-wide uppercase"
-        >
+        <button type="button" onClick={() => router.push("/dashboard/products")} className="bg-black text-white px-4 py-2 text-xs font-medium tracking-wide uppercase">
           Back to Products
         </button>
+      </div>
+    );
+  }
+
+  if (isStoreOwner) {
+    return (
+      <div className="space-y-6">
+        <div><h1 className="text-xl font-semibold tracking-wide">Edit Product</h1></div>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {error && <div className="border border-[#BD3100] bg-[#faf3f2] px-4 py-3 text-xs text-[#BD3100]">{error}</div>}
+
+          <SectionCard title="Product Basics">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="sm:col-span-2 xl:col-span-3">
+                <FieldLabel>Product Name</FieldLabel>
+                <input type="text" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors" placeholder="e.g. Oversized Linen Shirt" />
+              </div>
+              {isThriftStoreOwner && (
+                <div>
+                  <FieldLabel>Brand *</FieldLabel>
+                  <input type="text" required value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors" placeholder="e.g. Zara" />
+                </div>
+              )}
+              <div>
+                <FieldLabel>Reference</FieldLabel>
+                <input type="text" value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors" placeholder="SKU or internal reference" />
+              </div>
+              <div>
+                <FieldLabel>Price (TND)</FieldLabel>
+                <input type="number" step="0.01" required value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors" placeholder="0.00" />
+              </div>
+              <div className={isThriftStoreOwner ? "" : "sm:col-span-2 xl:col-span-3"}>
+                <FieldLabel>Category</FieldLabel>
+                <select ref={categorySelectRef} value={selectedCategorySlug} onChange={(e) => {
+                  const value = e.target.value;
+                  if (!value) { setSelectedParentSlug(""); setSelectedChildSlug(""); setSelectedGrandchildSlug(""); setSelectedGreatGrandchildSlug(""); return; }
+                  const path = getCategoryPath(categories, [value]);
+                  setSelectedParentSlug(path.parent); setSelectedChildSlug(path.child); setSelectedGrandchildSlug(path.grandchild); setSelectedGreatGrandchildSlug(path.greatGrandchild || "");
+                }} className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm">
+                  <option value="">Select category</option>
+                  {categoryOptions.map((cat) => <option key={cat.slug} value={cat.slug}>{cat.label}</option>)}
+                </select>
+              </div>
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Colorways" description="Each colorway is a color variant with its own images and sizes. Use the eyedropper on the swatch to pick the color directly from the uploaded photo.">
+            <div className="flex items-start gap-3 overflow-x-auto pb-2">
+              {colorways.map((cw, cwIndex) => (
+                <ColorwayCard
+                  key={cw.id}
+                  colorway={cw}
+                  index={cwIndex}
+                  canRemove={colorways.length > 1}
+                  isThrift={isThriftStoreOwner}
+                  onRemove={() => removeColorway(cw.id)}
+                  onUpdate={(patch) => updateColorway(cw.id, patch)}
+                  onEnhance={() => void handleEnhanceColorway(cw.id)}
+                  onAddSize={() => addSizeRow(cw.id)}
+                  onRemoveSize={(sizeId) => removeSizeRow(cw.id, sizeId)}
+                  onUpdateSize={(sizeId, patch) => updateSizeRow(cw.id, sizeId, patch)}
+                />
+              ))}
+              <button type="button" onClick={addColorway} title="Add colorway" className="mt-0 flex h-10 w-10 flex-none items-center justify-center rounded border border-dashed border-border text-lg text-text-secondary hover:border-accent hover:text-accent transition-colors self-start">+</button>
+            </div>
+          </SectionCard>
+
+          {selectedParentSlug && filteredModels.length > 0 && (
+            <SectionCard title="Model Pictures" description="Choose one model for all colorways, then configure each colorway's companion outfit and generate.">
+              <div className="space-y-2">
+                <FieldLabel>Model</FieldLabel>
+                <div className="flex flex-wrap gap-3">
+                  {filteredModels.map((model) => {
+                    const active = selectedModelId === model._id;
+                    return (
+                      <button key={model._id} type="button" onClick={() => setSelectedModelId(model._id)} className={`w-[96px] overflow-hidden rounded border text-left transition-colors ${active ? "border-accent" : "border-border hover:border-accent"}`}>
+                        <div className="aspect-[4/5] bg-bg-secondary"><img src={model.frontImage || model.images?.[0] || ""} alt={model.name} className="h-full w-full object-cover" /></div>
+                        <div className="p-1.5"><p className="truncate text-[9px] font-medium">{model.name}</p></div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              {selectedModelId && (
+                <div className="mt-4 flex items-start gap-3 overflow-x-auto pb-2">
+                  {colorways.map((cw, cwIndex) => (
+                    <ColorwayGenerationCard
+                      key={cw.id}
+                      colorway={cw}
+                      index={cwIndex}
+                      companionZones={companionZones}
+                      companionTypeOptions={companionTypeOptions}
+                      onUpdate={(patch) => updateColorway(cw.id, patch)}
+                      onGenerate={() => { if (!canGenerateColorway(cw)) return; void handleGenerateColorway(cw.id); }}
+                    />
+                  ))}
+                </div>
+              )}
+            </SectionCard>
+          )}
+
+          <div className="flex gap-3">
+            <button type="submit" disabled={loading} className="bg-accent text-bg-primary px-8 py-3 text-xs font-semibold tracking-wide uppercase disabled:opacity-50">
+              {loading ? "Saving..." : "Save Changes"}
+            </button>
+            <button type="button" onClick={() => router.back()} className="border border-border px-6 py-3 text-xs text-text-secondary uppercase tracking-wider">Cancel</button>
+          </div>
+        </form>
       </div>
     );
   }

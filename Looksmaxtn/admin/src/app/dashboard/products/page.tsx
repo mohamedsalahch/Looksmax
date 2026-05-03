@@ -237,8 +237,6 @@ export default function ProductsPage() {
           return product._id;
         case "categories":
           return (product.categories || []).join(", ");
-        case "productType":
-          return product.productType === "perfume" ? "perfume" : "fashion";
         case "price":
           return product.price;
         case "stock":
@@ -374,11 +372,6 @@ export default function ProductsPage() {
                   <span className="inline-flex items-center gap-1">Reference</span>
                 </th>
                 <th className="px-4 py-3">
-                  <button type="button" onClick={() => toggleSort("productType")} className="inline-flex items-center gap-1 cursor-pointer">
-                    Type {renderSortIndicator("productType")}
-                  </button>
-                </th>
-                <th className="px-4 py-3">
                   <button type="button" onClick={() => toggleSort("price")} className="inline-flex items-center gap-1 cursor-pointer">
                     Price {renderSortIndicator("price")}
                   </button>
@@ -430,9 +423,6 @@ export default function ProductsPage() {
                   <td className="px-4 py-3 text-[10px] text-text-secondary">{p._id}</td>
                   <td className="px-4 py-3 text-xs text-text-secondary capitalize">{(p.categories || []).join(", ")}</td>
                   <td className="px-4 py-3 text-xs text-text-secondary">{p.reference || "—"}</td>
-                  <td className="px-4 py-3 text-xs text-text-secondary capitalize">
-                    {p.productType === "perfume" ? "Perfume" : "Fashion"}
-                  </td>
                   <td className="px-4 py-3 text-xs font-medium">{p.price.toFixed(2)} TND</td>
                   <td className="px-4 py-3">
                     <div className="space-y-0.5">

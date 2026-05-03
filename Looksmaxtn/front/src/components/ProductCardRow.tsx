@@ -31,6 +31,8 @@ export interface ProductCardRowItem {
   };
   cloneSourceName?: string;
   cloneSourceImage?: string;
+  storeType?: "thrift" | "retail" | null;
+  colorImages?: Record<string, number[]> | null;
 }
 
 function getMainImage(images?: ProductImage[]): string | undefined {
@@ -78,6 +80,9 @@ export default function ProductCardRow({
               originPictures={product.originPictures}
               cloneSourceName={product.cloneSourceName}
               cloneSourceImage={product.cloneSourceImage}
+              storeType={product.storeType}
+              colorImages={product.colorImages}
+              images={product.images}
             />
           ))}
         </div>

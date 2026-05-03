@@ -49,12 +49,14 @@ interface StudioProduct {
         left?: string;
         right?: string;
     };
+    colorImages?: Record<string, number[]> | null;
 }
 
 interface OutfitSlotItem {
     id: string;
     name: string;
     image?: string;
+    color?: string;
     price?: string;
     fashionSubtype?: "clothes" | "shoes" | null;
     originPictures?: {
@@ -63,6 +65,7 @@ interface OutfitSlotItem {
         left?: string;
         right?: string;
     };
+    colorImages?: Record<string, number[]> | null;
 }
 
 interface OutfitViewItem extends OutfitSlotItem {
@@ -915,7 +918,6 @@ export default function OutfitStudioPage() {
     const allSelectedOutfitItems: OutfitViewItem[] = cartItems.flatMap((cartItem) => {
         if (cartItem.productType === "perfume") return [];
 
-        const productId = getCartItemProductId(cartItem.id);
         const inferredZoneId = inferStudioAssignmentZone({
             categories: cartItem.categories,
             name: cartItem.name,
@@ -924,9 +926,10 @@ export default function OutfitStudioPage() {
         const zoneId = !isWomen && inferredZoneId === "dress" ? "top" : inferredZoneId;
 
         return [{
-            id: productId,
+            id: cartItem.id,
             name: cartItem.name,
             image: cartItem.image,
+            color: cartItem.color,
             price: cartItem.price,
             fashionSubtype: cartItem.fashionSubtype,
             originPictures: cartItem.originPictures,
@@ -976,6 +979,7 @@ export default function OutfitStudioPage() {
             id: item.id,
             name: item.name,
             image: item.image,
+            color: item.color,
             price: item.price,
             fashionSubtype: item.fashionSubtype,
             originPictures: item.originPictures,
@@ -1047,6 +1051,7 @@ export default function OutfitStudioPage() {
                     id: override.id,
                     name: override.name,
                     image: override.image,
+                    color: override.color,
                     price: override.price,
                     fashionSubtype: override.fashionSubtype,
                     originPictures: override.originPictures,
@@ -1082,7 +1087,7 @@ export default function OutfitStudioPage() {
             .map((zone) => zone.id)
             .filter((zoneId) => {
                 const assignedItem = outfit[zoneId];
-                return Boolean(assignedItem?.id && !cartProductIds.has(assignedItem.id));
+                return Boolean(assignedItem?.id && !cartProductIds.has(getCartItemProductId(assignedItem.id)));
             });
 
         if (staleZoneIds.length === 0) return;
@@ -1154,7 +1159,7 @@ export default function OutfitStudioPage() {
         keepAllView = false
     ) => {
         if (!isWomen && zoneId === "dress") return;
-        const normalizedItemId = getCartItemProductId(item.id);
+        const normalizedItemId = item.id;
         setShowAllSelectedItems(keepAllView);
         setSelectedZoneId(zoneId);
         setOutfit((current) => {
@@ -1176,6 +1181,7 @@ export default function OutfitStudioPage() {
                         id: normalizedItemId,
                         name: item.name,
                         image: item.image,
+                        color: item.color,
                         price: item.price,
                         fashionSubtype: item.fashionSubtype,
                         originPictures: item.originPictures,
@@ -1198,6 +1204,7 @@ export default function OutfitStudioPage() {
                     id: normalizedItemId,
                     name: item.name,
                     image: item.image,
+                    color: item.color,
                     price: item.price,
                     fashionSubtype: item.fashionSubtype,
                     originPictures: item.originPictures,
@@ -1271,8 +1278,10 @@ export default function OutfitStudioPage() {
                             zone.id,
                             {
                                 status: isWomen || zone.id !== "dress" ? Boolean(outfit[zone.id]) : false,
-                                productId: outfit[zone.id]?.id || "",
+                                productId: getCartItemProductId(outfit[zone.id]?.id || ""),
                                 fashionSubtype: outfit[zone.id]?.fashionSubtype || "",
+                                color: outfit[zone.id]?.color || "",
+                                image: outfit[zone.id]?.image || "",
                                 size:
                                     zone.id === "headwear"
                                         ? ""
@@ -1982,6 +1991,8 @@ export default function OutfitStudioPage() {
                                     productType={product.productType}
                                     fashionSubtype={product.fashionSubtype}
                                     originPictures={product.originPictures}
+                                    colorImages={product.colorImages}
+                                    images={product.images}
                                 />
                             </div>
                         ))}

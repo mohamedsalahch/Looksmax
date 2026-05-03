@@ -66,9 +66,9 @@ export default function Header() {
         <div className="flex items-center gap-2 md:gap-3">
           <Link
             href="/studio"
-            className="hidden md:inline-flex h-9 items-center px-2 text-[10px] uppercase tracking-[0.24em] text-text-secondary hover:text-foreground transition-colors"
+            className="hidden md:inline-flex h-9 items-center px-2 text-[10px] uppercase tracking-wider text-text-secondary hover:text-foreground transition-colors"
           >
-            Outfit Studio
+            OUTFIT STUDIO
           </Link>
 
           <button
@@ -113,7 +113,7 @@ export default function Header() {
                 }
                 router.push("/login");
               }}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border-color text-[10px] font-semibold tracking-[0.18em] text-foreground cursor-pointer transition-colors hover:bg-bg-secondary"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[10px] font-semibold tracking-[0.18em] text-foreground cursor-pointer transition-colors hover:bg-bg-secondary"
               aria-label="Account"
               suppressHydrationWarning
             >
@@ -132,30 +132,30 @@ export default function Header() {
                 <Link
                   href="/studio"
                   onClick={() => setShowUserMenu(false)}
-                  className="block px-4 py-2.5 text-xs text-foreground hover:text-accent hover:pl-5 transition-all md:hidden"
+                  className="block px-4 py-2.5 text-[10px] uppercase tracking-wider text-foreground hover:text-accent hover:pl-5 transition-all md:hidden"
                 >
-                  Outfit Studio
+                  OUTFIT STUDIO
                 </Link>
                 <Link
                   href="/account"
                   onClick={() => setShowUserMenu(false)}
-                  className="block px-4 py-2.5 text-xs text-foreground hover:text-accent hover:pl-5 transition-all"
+                  className="block px-4 py-2.5 text-[10px] uppercase tracking-wider text-foreground hover:text-accent hover:pl-5 transition-all"
                 >
-                  My Account
+                  MY ACCOUNT
                 </Link>
                 <Link
                   href="/account/orders"
                   onClick={() => setShowUserMenu(false)}
-                  className="block px-4 py-2.5 text-xs text-foreground hover:text-accent hover:pl-5 transition-all"
+                  className="block px-4 py-2.5 text-[10px] uppercase tracking-wider text-foreground hover:text-accent hover:pl-5 transition-all"
                 >
-                  My Orders
+                  MY ORDERS
                 </Link>
                 <Link
                   href="/account/settings"
                   onClick={() => setShowUserMenu(false)}
-                  className="block px-4 py-2.5 text-xs text-foreground hover:text-accent hover:pl-5 transition-all"
+                  className="block px-4 py-2.5 text-[10px] uppercase tracking-wider text-foreground hover:text-accent hover:pl-5 transition-all"
                 >
-                  Settings
+                  SETTINGS
                 </Link>
                 <button
                   onClick={async () => {
@@ -164,9 +164,9 @@ export default function Header() {
                     router.replace("/login");
                     router.refresh();
                   }}
-                  className="block w-full border-t border-border-color/40 px-4 py-2.5 text-left text-xs text-[#430C05] transition-all hover:pl-5 hover:text-[#8B3A2F] cursor-pointer"
+                  className="block w-full border-t border-border-color/40 px-4 py-2.5 text-left text-[10px] uppercase tracking-wider text-[#430C05] transition-all hover:pl-5 hover:text-[#8B3A2F] cursor-pointer"
                 >
-                  Sign Out
+                  SIGN OUT
                 </button>
               </div>
             )}

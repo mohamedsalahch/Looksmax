@@ -7,6 +7,7 @@ export interface StudioAssignmentItem {
   name: string;
   categories?: string[];
   image?: string;
+  color?: string;
   price?: string;
   brand?: string;
   quantity?: number;

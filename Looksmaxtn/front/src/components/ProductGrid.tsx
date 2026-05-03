@@ -37,6 +37,8 @@ interface Product {
   };
   cloneSourceName?: string;
   cloneSourceImage?: string;
+  storeType?: "thrift" | "retail" | null;
+  colorImages?: Record<string, number[]> | null;
 }
 
 interface Facets {
@@ -466,6 +468,9 @@ export default function ProductGrid({
                   originPictures={product.originPictures}
                   cloneSourceName={product.cloneSourceName}
                   cloneSourceImage={product.cloneSourceImage}
+                  storeType={product.storeType}
+                  colorImages={product.colorImages}
+                  images={product.images}
                 />
               ))}
             </div>

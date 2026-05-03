@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
 import { getReservationKey, reserveProduct, subscribeToReservationChanges } from "@/lib/reservations";
@@ -9,6 +9,7 @@ import { formatTndPrice } from "@/lib/formatPrice";
 import { getConditionColor, getConditionLabel, getConditionPercent } from "@/lib/productCondition";
 import { buildCartItemId } from "@/lib/cartItem";
 import { queueStudioAssignment } from "@/lib/studioAssignment";
+import { getColorwayEnhancedFrontImage } from "@/lib/colorwayImage";
 
 type TikTokWindow = Window & {
   ttq?: {
@@ -27,6 +28,7 @@ type ProductInfoProduct = {
   storeName?: string;
   storeType?: "thrift" | "retail" | null;
   image?: string;
+  images?: { url: string; isMain: boolean }[];
   size?: string;
   sizes?: string[];
   stock: number;
@@ -51,7 +53,20 @@ type ProductInfoProduct = {
   };
   cloneSourceName?: string;
   cloneSourceImage?: string;
+  colorImages?: Record<string, number[]> | null;
 };
+
+function splitVariantLabel(value: string) {
+  const separatorIndex = value.lastIndexOf(" / ");
+  if (separatorIndex === -1) {
+    return { sizeLabel: value.trim(), colorHex: "" };
+  }
+
+  return {
+    sizeLabel: value.slice(0, separatorIndex).trim(),
+    colorHex: value.slice(separatorIndex + 3).trim(),
+  };
+}
 
 export default function ProductInfo({ product }: { product: ProductInfoProduct }) {
   const [addedToCart, setAddedToCart] = useState(false);
@@ -63,9 +78,54 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
   const [ownedReservation, setOwnedReservation] = useState(() => Boolean(product.ownedReservation));
   const [blockedByOrder, setBlockedByOrder] = useState(() => Boolean(product.blockedByOrder));
   const [selectedQuantity, setSelectedQuantity] = useState(1);
-  const availableSizes = (product.sizes?.length ? product.sizes : product.size ? [product.size] : []).filter(
-    (entry) => Boolean(entry.trim())
+  const allSizes = useMemo(
+    () => (product.sizes?.length ? product.sizes : product.size ? [product.size] : []).filter((entry) => Boolean(entry.trim())),
+    [product.sizes, product.size]
   );
+
+  // Detect colorway format: "SIZE / #HEX"
+  const isColorwayProduct = allSizes.some((s) => / \/ #[0-9a-fA-F]{3,8}$/.test(s));
+  const uniqueColorHexes = useMemo(() => {
+    if (!isColorwayProduct) return [];
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const s of allSizes) {
+      const hex = s.split(" / ")[1];
+      if (hex && !seen.has(hex)) { seen.add(hex); result.push(hex); }
+    }
+    return result;
+  }, [allSizes, isColorwayProduct]);
+
+  const firstAvailableHex = useMemo(() => {
+    if (!isColorwayProduct || uniqueColorHexes.length === 0) return null;
+    for (const hex of uniqueColorHexes) {
+      const sizesForHex = allSizes.filter((s) => s.endsWith(` / ${hex}`));
+      if (sizesForHex.some((s) => (sizeAvailability?.[s]?.stock ?? 0) > 0)) return hex;
+    }
+    return uniqueColorHexes[0];
+  }, [uniqueColorHexes, allSizes, sizeAvailability, isColorwayProduct]);
+
+  const [selectedColorHex, setSelectedColorHex] = useState<string | null>(null);
+  const activeHex = selectedColorHex ?? firstAvailableHex;
+  const selectedColorImage = getColorwayEnhancedFrontImage(activeHex, {
+    image: product.image,
+    images: product.images,
+    colorImages: product.colorImages,
+  }, "");
+  const cartDisplayImage = selectedColorImage || product.originPictures?.front || product.image;
+
+  useEffect(() => {
+    if (!firstAvailableHex) return;
+    window.dispatchEvent(
+      new CustomEvent("product:gallery:filterColorway", { detail: { hex: firstAvailableHex } })
+    );
+  }, [firstAvailableHex]);
+
+  const availableSizes = useMemo(() => {
+    if (!isColorwayProduct || !activeHex) return allSizes;
+    return allSizes.filter((s) => s.endsWith(` / ${activeHex}`));
+  }, [allSizes, isColorwayProduct, activeHex]);
+
   const initialSelectedSize = product.initialSelectedSize || availableSizes[0] || "";
   const defaultSelectedSize = initialSelectedSize || availableSizes[0] || "";
   const initialSelectedSizeStock = product.initialSelectedSizeStock ?? currentStock;
@@ -246,7 +306,8 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
         name: product.name,
         price: product.price,
         brand: product.brand,
-        image: product.image,
+        image: cartDisplayImage,
+        color: activeHex || undefined,
         categories: product.categories,
         size: isPerfume ? undefined : selectedSize,
         maxStock: Math.max(1, selectedSizeStock),
@@ -282,7 +343,8 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
         name: product.name,
         price: product.price,
         brand: product.brand,
-        image: product.image,
+        image: cartDisplayImage,
+        color: activeHex || undefined,
         categories: product.categories,
         size: isPerfume ? undefined : selectedSize,
         maxStock: Math.max(1, selectedSizeStock),
@@ -296,7 +358,8 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
       queueStudioAssignment({
         id: product.id || "unknown",
         name: product.name,
-        image: product.image,
+        image: cartDisplayImage,
+        color: activeHex || undefined,
         categories: product.categories,
         price: product.price,
         brand: product.brand,
@@ -313,17 +376,32 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
     }
   };
 
-  const conditionPercent = getConditionPercent(product.conditionScore ?? 7);
-  const conditionLabel = getConditionLabel(product.conditionScore ?? 7, product.conditionStatus ?? undefined);
-  const conditionColor = getConditionColor(product.conditionScore ?? 7);
-  const showNewBadge = !isPerfume && (product.conditionScore ?? 0) >= 10;
+  const handleSelectColorway = (hex: string) => {
+    setSelectedColorHex(hex);
+    window.dispatchEvent(new CustomEvent("product:gallery:filterColorway", { detail: { hex } }));
+    const indices = product.colorImages?.[hex];
+    if (indices && indices.length > 0) {
+      window.dispatchEvent(
+        new CustomEvent("product:gallery:selectIndex", {
+          detail: { index: indices.length >= 2 ? indices[indices.length - 2] : indices[0] },
+        })
+      );
+    }
+  };
+
+  const normalizedConditionScore = product.conditionScore ?? 0;
+  const hasCondition = product.storeType !== "retail" && product.conditionScore != null;
+  const conditionPercent = hasCondition ? getConditionPercent(normalizedConditionScore) : 0;
+  const conditionLabel = hasCondition ? getConditionLabel(normalizedConditionScore, product.conditionStatus ?? undefined) : "";
+  const conditionColor = hasCondition ? getConditionColor(normalizedConditionScore) : "transparent";
+  const showNewBadge = !isPerfume && hasCondition && normalizedConditionScore >= 10;
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl md:text-3xl font-semibold tracking-tight leading-tight">{product.name}</h1>
+      <h1 className="text-base md:text-lg uppercase tracking-wider font-semibold leading-tight">{product.name}</h1>
 
       <div className="flex items-center gap-3">
-        <p className="text-xl font-medium">{formatTndPrice(product.price)}</p>
+        <p className="text-base font-medium">{formatTndPrice(product.price)}</p>
         {showNewBadge && (
           <span className="text-[10px] bg-accent text-background px-2 py-1 uppercase tracking-wider font-semibold">
             New
@@ -333,7 +411,7 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
 
       <div className="border-t border-border-color" />
 
-      {!isPerfume && (
+      {!isPerfume && hasCondition && (
         <div>
           <div className="flex items-center justify-between gap-3 mb-2">
             <p className="text-xs text-text-secondary uppercase tracking-wider">Condition</p>
@@ -391,6 +469,32 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
         </div>
       )}
 
+      {!isPerfume && isColorwayProduct && uniqueColorHexes.length > 0 && (
+        <div>
+          <p className="text-xs text-text-secondary uppercase tracking-wider mb-3">Colorways</p>
+          <div className="flex flex-wrap gap-2">
+            {uniqueColorHexes.map((hex) => {
+              const hexSizes = allSizes.filter((s) => s.endsWith(` / ${hex}`));
+              const hasStock = hexSizes.some((s) => (sizeAvailability?.[s]?.stock ?? 0) > 0 || (!sizeAvailability && currentStock > 0));
+              return (
+                <button
+                  key={hex}
+                  type="button"
+                  title={hex}
+                  onClick={() => handleSelectColorway(hex)}
+                  className={`w-7 h-7 rounded-full border-2 transition-all duration-200 cursor-pointer ${
+                    activeHex === hex
+                      ? "border-foreground scale-110"
+                      : "border-transparent hover:border-border-color"
+                  } ${!hasStock ? "opacity-40" : ""}`}
+                  style={{ backgroundColor: hex }}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {!isPerfume && availableSizes.length > 0 && (
         <div>
           <div className="flex items-center justify-between gap-3 mb-2">
@@ -401,6 +505,7 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
               const sizeInfo = sizeAvailability?.[sizeOption];
               const sizeAvailable = sizeInfo ? sizeInfo.stock > 0 : currentStock > 0;
               const reservedElsewhereForSize = Boolean(sizeInfo?.reservedElsewhere);
+              const displayLabel = isColorwayProduct ? sizeOption.split(" / ")[0] : sizeOption;
               return (
                 <button
                   key={sizeOption}
@@ -415,7 +520,7 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
                         : "border-border-color text-foreground hover:bg-hover cursor-pointer"
                   }`}
                 >
-                  <span>{sizeOption}</span>
+                  <span>{displayLabel}</span>
                   {sizeInfo?.stock === 0 ? (
                     <span className="text-[9px] uppercase tracking-wide text-text-secondary">Sold out</span>
                   ) : hasHydratedAvailability && reservedElsewhereForSize ? (
@@ -435,8 +540,8 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
             ? `${currentStock} bottle${currentStock !== 1 ? "s" : ""} available`
             : displaySelectedSize
               ? displaySelectedSizeStock === 1
-                ? `Last one — ${displaySelectedSize}`
-                : `Selected size: ${displaySelectedSize}`
+                ? `Last one — ${isColorwayProduct ? displaySelectedSize.split(" / ")[0] : displaySelectedSize}`
+                : `Selected size: ${isColorwayProduct ? displaySelectedSize.split(" / ")[0] : displaySelectedSize}`
               : currentStock === 1
                 ? "Last one"
                 : "Size selected"}

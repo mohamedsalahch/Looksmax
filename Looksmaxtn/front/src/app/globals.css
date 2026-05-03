@@ -190,15 +190,10 @@ body.outfit-detail-zoom-open header {
 }
 
 .product-image-wrapper > img {
+  display: block;
+  width: 100%;
+  height: auto;
   object-fit: contain;
-}
-
-.product-image-wrapper:hover .product-image {
-  transform: scale(1.03);
-}
-
-.product-image {
-  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Hide scrollbar for category nav */

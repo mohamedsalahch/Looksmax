@@ -125,14 +125,14 @@ export default function CategoryNav({
     <nav className="hidden md:block sticky top-[77px] z-30 border-b border-border-color/70 bg-background/92 backdrop-blur-md shadow-[0_8px_24px_rgba(26,26,26,0.04)]">
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex items-center gap-3 overflow-x-auto px-2 pt-3 pb-2 scrollbar-hide md:px-4">
-          <Link href="/" className={`hidden whitespace-nowrap px-2 py-2 text-xs transition-colors underline-offset-[6px] decoration-1 md:inline-block ${activeSlug === "home" ? "text-foreground font-medium underline decoration-foreground" : "text-text-secondary hover:text-foreground/60 hover:underline hover:decoration-foreground/60"}`}>
-            Home
+          <Link href="/" className={`hidden whitespace-nowrap px-2 py-2 text-[11px] uppercase transition-colors underline-offset-[6px] decoration-1 md:inline-block ${activeSlug === "home" ? "text-foreground font-medium underline decoration-foreground" : "text-text-secondary hover:text-foreground/60 hover:underline hover:decoration-foreground/60"}`}>
+            HOME
           </Link>
-          <Link href="/category/new-arrivals" className={`hidden whitespace-nowrap px-2 py-2 text-xs transition-colors underline-offset-[6px] decoration-1 md:inline-block ${activeSlug === "new-arrivals" ? "text-foreground font-medium underline decoration-foreground" : "text-text-secondary hover:text-foreground/60 hover:underline hover:decoration-foreground/60"}`}>
-            New Arrivals
+          <Link href="/category/new-arrivals" className={`hidden whitespace-nowrap px-2 py-2 text-[11px] uppercase transition-colors underline-offset-[6px] decoration-1 md:inline-block ${activeSlug === "new-arrivals" ? "text-foreground font-medium underline decoration-foreground" : "text-text-secondary hover:text-foreground/60 hover:underline hover:decoration-foreground/60"}`}>
+            NEW ARRIVALS
           </Link>
-          <Link href="/category/all" className={`hidden whitespace-nowrap px-2 py-2 text-xs transition-colors underline-offset-[6px] decoration-1 md:inline-block ${activeSlug === "all-categories" ? "text-foreground font-medium underline decoration-foreground" : "text-text-secondary hover:text-foreground/60 hover:underline hover:decoration-foreground/60"}`}>
-            All Categories
+          <Link href="/category/all" className={`hidden whitespace-nowrap px-2 py-2 text-[11px] uppercase transition-colors underline-offset-[6px] decoration-1 md:inline-block ${activeSlug === "all-categories" ? "text-foreground font-medium underline decoration-foreground" : "text-text-secondary hover:text-foreground/60 hover:underline hover:decoration-foreground/60"}`}>
+            ALL CATEGORIES
           </Link>
           {categoriesLoaded && categories.map((item) => (
             <div
@@ -154,7 +154,7 @@ export default function CategoryNav({
                   setExpandedParent(item.slug);
                   setPreviewPath([item.slug]);
                 }}
-                className={`px-2 py-2 text-xs transition-colors underline-offset-[6px] decoration-1 ${
+                className={`px-2 py-2 text-[11px] uppercase transition-colors underline-offset-[6px] decoration-1 ${
                   activePath.includes(item.slug)
                     ? "text-foreground font-medium underline decoration-foreground"
                     : "text-text-secondary hover:text-foreground/60 hover:underline hover:decoration-foreground/60"
@@ -216,7 +216,7 @@ export default function CategoryNav({
                         <Link
                           href={`/category/${item.slug}`}
                           onClick={(e) => e.stopPropagation()}
-                          className={`min-w-0 text-[12px] transition-all underline-offset-[6px] decoration-1 ${
+                          className={`min-w-0 text-[11px] uppercase transition-all underline-offset-[6px] decoration-1 ${
                             isCurrent || isPreviewed
                               ? "font-medium text-foreground underline decoration-foreground"
                               : "text-text-secondary hover:pl-1 hover:text-foreground/60 hover:underline hover:decoration-foreground/60 group-hover:pl-1 group-hover:text-foreground/60 group-hover:underline group-hover:decoration-foreground/60"

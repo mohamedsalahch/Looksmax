@@ -102,7 +102,7 @@ export default function SidePanel() {
   };
 
   const rowBase =
-    "transition-all duration-150 cursor-pointer underline-offset-[6px] decoration-1";
+    "transition-all duration-150 cursor-pointer underline-offset-[6px] decoration-1 text-[10px] uppercase tracking-wider";
   const rowActive =
     "text-foreground font-medium underline decoration-foreground";
   const rowIdle =
@@ -116,10 +116,10 @@ export default function SidePanel() {
     const indent = depth === 0 ? 0 : depth === 1 ? 18 : 34;
     const rowTextClass =
       depth === 0
-        ? "text-[14px] font-medium text-foreground"
+        ? "font-medium text-foreground"
         : depth === 1
-          ? "text-[13px] text-foreground/88"
-          : "text-[13px] text-text-secondary";
+          ? "text-foreground/88"
+          : "text-text-secondary";
 
     if (!hasChildren) {
       return (
@@ -208,7 +208,7 @@ export default function SidePanel() {
       >
         {/* Top bar */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border-color">
-          <span className="text-sm font-semibold tracking-[0.15em] uppercase text-foreground">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-foreground">
             LOOKSMAX
           </span>
 
@@ -229,21 +229,21 @@ export default function SidePanel() {
           <div className="mb-8 space-y-1">
             <Link
               href="/"
-              className={`group block py-2 text-sm font-semibold ${rowBase} ${pathname === "/" ? rowActive : rowIdle}`}
+              className={`group block py-2 font-semibold ${rowBase} ${pathname === "/" ? rowActive : rowIdle}`}
               onClick={() => setIsOpen(false)}
             >
               Home
             </Link>
             <Link
               href="/category/new-arrivals"
-              className={`group block py-2 text-sm font-semibold ${rowBase} ${pathname === "/category/new-arrivals" ? rowActive : rowIdle}`}
+              className={`group block py-2 font-semibold ${rowBase} ${pathname === "/category/new-arrivals" ? rowActive : rowIdle}`}
               onClick={() => setIsOpen(false)}
             >
               New Arrivals
             </Link>
             <Link
               href="/category/all"
-              className={`group block py-2 text-sm font-semibold ${rowBase} ${pathname === "/category/all" ? rowActive : rowIdle}`}
+              className={`group block py-2 font-semibold ${rowBase} ${pathname === "/category/all" ? rowActive : rowIdle}`}
               onClick={() => setIsOpen(false)}
             >
               All Categories
@@ -251,7 +251,7 @@ export default function SidePanel() {
           </div>
 
           <div>
-            <h3 className="mb-5 text-xs font-semibold uppercase tracking-wider text-text-secondary">
+            <h3 className="mb-5 text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
               Categories
             </h3>
             <div className="space-y-0.5">{renderCategoryItems(categories)}</div>

@@ -12,6 +12,8 @@ type ZonePayload = {
   status?: boolean;
   productId?: string;
   fashionSubtype?: string;
+  color?: string;
+  image?: string;
   size?: string;
   originPictures?: {
     front?: string;
@@ -56,6 +58,36 @@ function normalizeProductId(value: string) {
 
 function hasAnyImage(value: { front: string; back: string; left: string; right: string }) {
   return Boolean(value.front || value.back || value.left || value.right);
+}
+
+function getColorIndices(
+  colorImages: unknown,
+  color: string
+) {
+  if (!color || !colorImages || typeof colorImages !== "object") return [];
+  const record = colorImages as Record<string, number[]>;
+  const candidates = [color, color.toUpperCase(), color.toLowerCase()];
+  for (const key of candidates) {
+    const value = record[key];
+    if (Array.isArray(value) && value.length > 0) return value;
+  }
+  return [];
+}
+
+function getColorIndicesByImage(
+  colorImages: unknown,
+  images: Array<{ url?: string }>,
+  image: string
+) {
+  if (!image || !colorImages || typeof colorImages !== "object") return [];
+  const record = colorImages as Record<string, number[]>;
+  for (const indices of Object.values(record)) {
+    if (!Array.isArray(indices) || indices.length === 0) continue;
+    if (indices.some((index) => images[index]?.url === image)) {
+      return indices;
+    }
+  }
+  return [];
 }
 
 async function publicPathToBase64(imagePath: string) {
@@ -135,7 +167,7 @@ export async function POST(req: NextRequest) {
     )].map((productId) => normalizeProductId(productId));
     const selectedProducts = selectedProductIds.length > 0
       ? await Product.find({ _id: { $in: selectedProductIds } })
-          .select("_id originPictures fashionSubtype images")
+          .select("_id originPictures fashionSubtype images colorImages")
           .lean()
       : [];
     const productMap = new Map(
@@ -150,7 +182,17 @@ export async function POST(req: NextRequest) {
         const usesFourViews = zone === "footwear" && isShoes;
         const savedImages = Array.isArray(product?.images) ? product.images : [];
         const viewCount = usesFourViews ? 4 : 2;
-        const enhancedViews = savedImages.slice(Math.max(savedImages.length - viewCount, 0));
+        const selectedColor = String(value?.color || "").trim();
+        const selectedImage = String(value?.image || "").trim();
+        const colorIndices = (() => {
+          const byColor = getColorIndices(product?.colorImages, selectedColor);
+          if (byColor.length > 0) return byColor;
+          return getColorIndicesByImage(product?.colorImages, savedImages, selectedImage);
+        })();
+        const selectedIndices = colorIndices.length > 0 ? colorIndices : savedImages.map((_, index) => index);
+        const enhancedViews = selectedIndices.length > 0
+          ? selectedIndices.slice(Math.max(selectedIndices.length - viewCount, 0)).map((index) => savedImages[index]).filter(Boolean)
+          : [];
         const enhancedFront = enhancedViews[0]?.url || "";
         const enhancedBack = enhancedViews[1]?.url || "";
         const enhancedLeft = usesFourViews ? enhancedViews[2]?.url || "" : "";

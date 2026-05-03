@@ -185,7 +185,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
             return {
               ...item,
-              image: availability?.image || item.image,
+              image: item.image || availability?.image,
               originPictures: availability?.originPictures || item.originPictures,
               reservationExpiresAt: ownedReservation ? availability?.reservationExpiresAt ?? item.reservationExpiresAt ?? null : item.reservationExpiresAt ?? null,
               maxStock,
@@ -350,7 +350,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
                     size: newItem.size ?? item.size,
                     color: newItem.color ?? item.color,
                     productType: newItem.productType ?? item.productType,
-                    originPictures: newItem.originPictures ?? item.originPictures,
+              originPictures: newItem.originPictures ?? item.originPictures,
                     maxStock: nextMaxStock,
                     quantity: Math.min(item.quantity + nextQuantity, nextMaxStock),
                     reservationExpiresAt: newItem.reservationExpiresAt ?? item.reservationExpiresAt ?? null,

@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
     )];
     const owners = ownerIds.length > 0
       ? await User.find({ _id: { $in: ownerIds } })
-          .select("_id role storeApprovalStatus")
+          .select("_id role storeApprovalStatus storeType storeName name")
           .lean()
       : [];
     const approvedOwnerIds = new Set(
@@ -68,6 +68,7 @@ export async function GET(req: NextRequest) {
         .filter((owner) => isStoreOwnerApproved(owner))
         .map((owner) => owner._id.toString())
     );
+    const ownerMap = new Map(owners.map((o) => [o._id.toString(), o]));
     const now = new Date();
     const activeReservations = await ProductReservation.find({ reservedUntil: { $gt: now } })
       .select("product reservationKey quantity size")
@@ -123,6 +124,11 @@ export async function GET(req: NextRequest) {
         ? Boolean(activeOrderHold) && !hasSelectableSize
         : Boolean(activeOrderHold) && displayStock <= 0;
 
+      const owner = ownerMap.get(ownerId);
+      const colorImagesData = product.colorImages instanceof Map
+        ? Object.fromEntries(product.colorImages)
+        : (product.colorImages && typeof product.colorImages === "object" ? product.colorImages : null);
+
       return {
         ...product,
         stock: displayStock,
@@ -131,6 +137,9 @@ export async function GET(req: NextRequest) {
         reservedElsewhere,
         ownedReservation: reservationInfo.ownedQuantity > 0,
         sizeAvailability,
+        storeType: owner?.role === "store_owner" ? (owner as { storeType?: string }).storeType || null : null,
+        storeName: (owner as { storeName?: string; name?: string } | undefined)?.storeName || product.createdBy?.name || "",
+        colorImages: colorImagesData,
       };
     });
 

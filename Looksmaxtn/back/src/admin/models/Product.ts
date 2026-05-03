@@ -34,6 +34,7 @@ export interface IProduct extends Document {
   stock: number;
   fullStock?: number;
   sizeStock?: Map<string, ISizeStockEntry> | null;
+  colorImages?: Map<string, number[]> | null;
   images: IProductImage[];
   tag?: string;
   newTagDurationDays?: number;
@@ -46,6 +47,15 @@ export interface IProduct extends Document {
   originPictures?: IOriginPictures;
   cloneSourceName?: string;
   cloneSourceImage?: string;
+  modelId?: string;
+  companionSettings?: Map<string, {
+    topType?: string;
+    topColor?: { name: string; hex: string } | null;
+    bottomType?: string;
+    bottomColor?: { name: string; hex: string } | null;
+    footwearType?: string;
+    footwearColor?: { name: string; hex: string } | null;
+  }> | null;
   createdBy?: IAuditActor | null;
   updatedBy?: IAuditActor | null;
   createdAt: Date;
@@ -95,6 +105,11 @@ const productSchema = new Schema<IProduct>(
       }, { _id: false }),
       default: null,
     },
+    colorImages: {
+      type: Map,
+      of: [Number],
+      default: null,
+    },
     images: [productImageSchema],
     tag: { type: String, default: "" },
     newTagDurationDays: { type: Number, default: 3, min: 1 },
@@ -119,6 +134,19 @@ const productSchema = new Schema<IProduct>(
     originPictures: { type: originPicturesSchema, default: () => ({}) },
     cloneSourceName: { type: String, default: "" },
     cloneSourceImage: { type: String, default: "" },
+    modelId: { type: String, default: "" },
+    companionSettings: {
+      type: Map,
+      of: new Schema({
+        topType: { type: String, default: "" },
+        topColor: { type: new Schema({ name: String, hex: String }, { _id: false }), default: null },
+        bottomType: { type: String, default: "" },
+        bottomColor: { type: new Schema({ name: String, hex: String }, { _id: false }), default: null },
+        footwearType: { type: String, default: "" },
+        footwearColor: { type: new Schema({ name: String, hex: String }, { _id: false }), default: null },
+      }, { _id: false }),
+      default: null,
+    },
     createdBy: { type: auditActorSchema, default: null },
     updatedBy: { type: auditActorSchema, default: null },
   },

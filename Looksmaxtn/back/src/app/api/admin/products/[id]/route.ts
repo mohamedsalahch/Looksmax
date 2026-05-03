@@ -82,6 +82,19 @@ function getInventorySnapshot(
   return { availableStock, fullStock, soldQuantity };
 }
 
+function parseCompanionSettings(raw: FormDataEntryValue | null) {
+  const str = String(raw || "").trim();
+  if (!str || str === "{}") return null;
+  try {
+    const parsed = JSON.parse(str) as Record<string, {
+      topType?: string; topColor?: { name: string; hex: string } | null;
+      bottomType?: string; bottomColor?: { name: string; hex: string } | null;
+      footwearType?: string; footwearColor?: { name: string; hex: string } | null;
+    }>;
+    return new Map(Object.entries(parsed));
+  } catch { return null; }
+}
+
 function getDeclaredSizes(productSizes: unknown, bodySizes?: unknown) {
   const sizes = new Set<string>();
   for (const source of [productSizes, bodySizes]) {
@@ -154,6 +167,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       soldBySize,
     });
 
+    const colorImagesData = product.colorImages instanceof Map
+      ? Object.fromEntries(product.colorImages)
+      : (product.colorImages && typeof product.colorImages === "object" ? product.colorImages : null);
+
+    const companionSettingsData = product.companionSettings instanceof Map
+      ? Object.fromEntries(product.companionSettings)
+      : (product.companionSettings && typeof product.companionSettings === "object" ? product.companionSettings : null);
+
     return NextResponse.json({
       product: {
         ...product,
@@ -162,6 +183,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         soldQuantity: inventory.soldQuantity,
         fullStock: inventory.fullStock,
         sizeStock: sizeStockData,
+        colorImages: colorImagesData,
+        companionSettings: companionSettingsData,
         visibilityStatus: product.isActive === false ? "inactive" : "active",
         availabilityStatus: getAvailabilityStatus({
           productType: product.productType,
@@ -440,6 +463,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       computedFullStock = nextFullStock;
     }
 
+    const rawColorImages = String(formData.get("colorImages") || "").trim();
+    let colorImagesMap: Map<string, number[]> | null = null;
+    if (productType !== "perfume" && rawColorImages && rawColorImages !== "{}") {
+      try {
+        const parsed = JSON.parse(rawColorImages) as Record<string, number[]>;
+        colorImagesMap = new Map(Object.entries(parsed));
+      } catch { colorImagesMap = null; }
+    }
+
     const body = {
       name: String(formData.get("name") || ""),
       price: Number(formData.get("price") || 0),
@@ -460,6 +492,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       fullStock: computedFullStock,
       stock: computedStock,
       sizeStock: sizeStockMap,
+      colorImages: colorImagesMap,
       originPictures: normalizeOriginPictures(productType, fashionSubtype, newOriginPictures),
       sizes,
       colors: productType === "perfume" ? [] : parseStringArray(formData.get("colors")),
@@ -468,6 +501,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         productType === "perfume"
           ? newCloneSourceImagePath || String(formData.get("cloneSourceImage") || "")
           : "",
+      modelId: String(formData.get("modelId") || ""),
+      companionSettings: parseCompanionSettings(formData.get("companionSettings")),
       images,
       approvalStatus: session.role === "store_owner" ? "pending" : existingProduct.approvalStatus || "approved",
       updatedBy: auditActor,

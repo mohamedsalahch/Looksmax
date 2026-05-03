@@ -82,6 +82,19 @@ function getInventorySnapshot(
   return { availableStock, fullStock, soldQuantity };
 }
 
+function parseCompanionSettings(raw: FormDataEntryValue | null) {
+  const str = String(raw || "").trim();
+  if (!str || str === "{}") return null;
+  try {
+    const parsed = JSON.parse(str) as Record<string, {
+      topType?: string; topColor?: { name: string; hex: string } | null;
+      bottomType?: string; bottomColor?: { name: string; hex: string } | null;
+      footwearType?: string; footwearColor?: { name: string; hex: string } | null;
+    }>;
+    return new Map(Object.entries(parsed));
+  } catch { return null; }
+}
+
 function getProductPayload(
   formData: FormData,
   imagePaths: string[],
@@ -119,6 +132,17 @@ function getProductPayload(
     }
   }
 
+  const rawColorImages = String(formData.get("colorImages") || "").trim();
+  let colorImagesMap: Map<string, number[]> | null = null;
+  if (productType !== "perfume" && rawColorImages && rawColorImages !== "{}") {
+    try {
+      const parsed = JSON.parse(rawColorImages) as Record<string, number[]>;
+      colorImagesMap = new Map(Object.entries(parsed));
+    } catch {
+      colorImagesMap = null;
+    }
+  }
+
   return {
     name: String(formData.get("name") || ""),
     price: Number(formData.get("price") || 0),
@@ -129,6 +153,7 @@ function getProductPayload(
     reference: String(formData.get("reference") || ""),
     stock: Number.isNaN(rawStock) ? 0 : Math.max(0, rawStock),
     sizeStock: sizeStockMap,
+    colorImages: colorImagesMap,
     tag: String(formData.get("tag") || ""),
     newTagDurationDays: Math.max(1, Math.floor(Number(formData.get("newTagDurationDays") || 3)) || 3),
     productType,
@@ -142,6 +167,8 @@ function getProductPayload(
     cloneSourceName: productType === "perfume" ? String(formData.get("cloneSourceName") || "") : "",
     cloneSourceImage:
       productType === "perfume" ? cloneSourceImagePath || String(formData.get("cloneSourceImage") || "") : "",
+    modelId: String(formData.get("modelId") || ""),
+    companionSettings: parseCompanionSettings(formData.get("companionSettings")),
     images: imagePaths.map((url, index) => ({
       url,
       isMain: index === Math.min(mainImageIndex, imagePaths.length - 1),

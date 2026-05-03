@@ -7,16 +7,67 @@ interface ProductImage {
   isMain: boolean;
 }
 
-export default function ProductImageGallery({ images = [] }: { images?: ProductImage[] }) {
-  const displayImages = useMemo(() => {
-    if (images.length === 0) return [{ url: "", isMain: true }];
-    const sorted = [...images];
-    sorted.sort((a, b) => Number(b.isMain) - Number(a.isMain));
-    return sorted;
+export default function ProductImageGallery({
+  images = [],
+  colorImages,
+}: {
+  images?: ProductImage[];
+  colorImages?: Record<string, number[]> | null;
+}) {
+  const { displayImages, originalToDisplay } = useMemo(() => {
+    if (images.length === 0) return { displayImages: [{ url: "", isMain: true }], originalToDisplay: new Map<number, number>() };
+    const indexed = images.map((img, i) => ({ img, originalIndex: i }));
+    indexed.sort((a, b) => Number(b.img.isMain) - Number(a.img.isMain));
+    const map = new Map<number, number>();
+    indexed.forEach(({ originalIndex }, displayIdx) => map.set(originalIndex, displayIdx));
+    return { displayImages: indexed.map(({ img }) => img), originalToDisplay: map };
   }, [images]);
+
+  const [activeColorHex, setActiveColorHex] = useState<string | null>(null);
+
+  const visibleImages = useMemo(() => {
+    if (!activeColorHex || !colorImages?.[activeColorHex]) return displayImages;
+    const allowedDisplayIndices = new Set(
+      colorImages[activeColorHex].map((origIdx) => originalToDisplay.get(origIdx)).filter((i): i is number => i !== undefined)
+    );
+    return displayImages.filter((_, i) => allowedDisplayIndices.has(i));
+  }, [displayImages, activeColorHex, colorImages, originalToDisplay]);
+
   const [activeIndex, setActiveIndex] = useState(0);
   const [isZoomActive, setIsZoomActive] = useState(false);
   const [isZoomPinned, setIsZoomPinned] = useState(false);
+
+  useEffect(() => {
+    const filterHandler = (e: Event) => {
+      const { hex } = (e as CustomEvent<{ hex: string | null }>).detail;
+      setActiveColorHex(hex);
+      setActiveIndex(0);
+      setIsZoomActive(false);
+      setIsZoomPinned(false);
+    };
+    window.addEventListener("product:gallery:filterColorway", filterHandler);
+    return () => window.removeEventListener("product:gallery:filterColorway", filterHandler);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ index: number }>).detail;
+      const displayIdx = originalToDisplay.get(detail.index);
+      if (displayIdx === undefined) return;
+      if (!activeColorHex || !colorImages?.[activeColorHex]) {
+        setActiveIndex(displayIdx);
+        return;
+      }
+      // Map display index to visible index
+      const allowedDisplayIndices = (colorImages[activeColorHex] ?? [])
+        .map((origIdx) => originalToDisplay.get(origIdx))
+        .filter((i): i is number => i !== undefined);
+      const visibleIdx = allowedDisplayIndices.indexOf(displayIdx);
+      if (visibleIdx !== -1) setActiveIndex(visibleIdx);
+    };
+    window.addEventListener("product:gallery:selectIndex", handler);
+    return () => window.removeEventListener("product:gallery:selectIndex", handler);
+  }, [originalToDisplay, activeColorHex, colorImages]);
   const [isDesktop, setIsDesktop] = useState(false);
   const [zoomPoint, setZoomPoint] = useState({ x: 50, y: 50 });
   const [zoomPosition, setZoomPosition] = useState({ left: 0, top: 0 });
@@ -78,7 +129,7 @@ export default function ProductImageGallery({ images = [] }: { images?: ProductI
   };
 
   const toggleZoom = (event: ReactMouseEvent<HTMLDivElement>) => {
-    if (!isDesktop || !displayImages[activeIndex]?.url) return;
+    if (!isDesktop || !visibleImages[activeIndex]?.url) return;
 
     if (isZoomActive) {
       setIsZoomActive(false);
@@ -96,7 +147,7 @@ export default function ProductImageGallery({ images = [] }: { images?: ProductI
   };
 
   const handleMouseEnter = (event: ReactMouseEvent<HTMLDivElement>) => {
-    if (!isDesktop || !displayImages[activeIndex]?.url) return;
+    if (!isDesktop || !visibleImages[activeIndex]?.url) return;
 
     if (!isZoomPinned && !isZoomActive) return;
 
@@ -115,7 +166,7 @@ export default function ProductImageGallery({ images = [] }: { images?: ProductI
   };
 
   const showNextImage = () => {
-    setActiveIndex((current) => Math.min(current + 1, displayImages.length - 1));
+    setActiveIndex((current) => Math.min(current + 1, visibleImages.length - 1));
   };
 
   const showPreviousImage = () => {
@@ -123,13 +174,13 @@ export default function ProductImageGallery({ images = [] }: { images?: ProductI
   };
 
   const handleTouchStart = (event: ReactTouchEvent<HTMLDivElement>) => {
-    if (isDesktop || displayImages.length <= 1) return;
+    if (isDesktop || visibleImages.length <= 1) return;
     const touch = event.touches[0];
     touchStartRef.current = { x: touch.clientX, y: touch.clientY };
   };
 
   const handleTouchEnd = (event: ReactTouchEvent<HTMLDivElement>) => {
-    if (isDesktop || displayImages.length <= 1 || !touchStartRef.current) return;
+    if (isDesktop || visibleImages.length <= 1 || !touchStartRef.current) return;
 
     const touch = event.changedTouches[0];
     const deltaX = touch.clientX - touchStartRef.current.x;
@@ -148,9 +199,9 @@ export default function ProductImageGallery({ images = [] }: { images?: ProductI
   return (
     <div ref={galleryRef} className="flex flex-col-reverse md:flex-row gap-3">
       {/* Thumbnails */}
-      {displayImages.length > 1 && (
+      {visibleImages.length > 1 && (
         <div className="flex md:flex-col gap-2 overflow-x-auto md:overflow-y-auto md:max-h-[600px] scrollbar-hide">
-          {displayImages.map((img, index) => (
+          {visibleImages.map((img, index) => (
             <button
               key={index}
               onClick={() => setActiveIndex(index)}
@@ -180,7 +231,7 @@ export default function ProductImageGallery({ images = [] }: { images?: ProductI
       <div
         ref={imageShellRef}
         className={`flex-1 relative aspect-[3/4] md:aspect-auto md:h-[600px] bg-transparent overflow-visible touch-pan-y ${
-          isDesktop && displayImages[activeIndex]?.url ? "cursor-zoom-in" : "cursor-default"
+          isDesktop && visibleImages[activeIndex]?.url ? "cursor-zoom-in" : "cursor-default"
         }`}
         onClick={toggleZoom}
         onMouseEnter={handleMouseEnter}
@@ -189,11 +240,11 @@ export default function ProductImageGallery({ images = [] }: { images?: ProductI
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        {displayImages[activeIndex]?.url ? (
+        {visibleImages[activeIndex]?.url ? (
           <>
             <div className="absolute inset-0">
               <img
-                src={displayImages[activeIndex].url}
+                src={visibleImages[activeIndex].url}
                 alt="Main product"
                 className="absolute inset-0 w-full h-full object-contain"
                 loading="eager"
@@ -214,7 +265,7 @@ export default function ProductImageGallery({ images = [] }: { images?: ProductI
                 <div
                   className="absolute inset-0 rounded-[14px]"
                   style={{
-                    backgroundImage: `url(${displayImages[activeIndex].url})`,
+                    backgroundImage: `url(${visibleImages[activeIndex].url})`,
                     backgroundRepeat: "no-repeat",
                     backgroundSize: "450%",
                     backgroundPosition: `${zoomPoint.x}% ${zoomPoint.y}%`,

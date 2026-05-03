@@ -8,6 +8,13 @@ import { formatRemainingTime } from "@/lib/reservations";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { getCartItemProductId } from "@/lib/cartItem";
 
+function formatCartSizeLabel(size?: string) {
+  if (!size) return "";
+  const separatorIndex = size.lastIndexOf(" / ");
+  if (separatorIndex === -1) return size;
+  return size.slice(0, separatorIndex).trim();
+}
+
 export default function CartPanel() {
   const { items, isOpen, openCart, closeCart, removeItem, updateQuantity, totalItems, totalPrice } =
     useCart();
@@ -167,7 +174,7 @@ export default function CartPanel() {
                         </p>
                       )}
 
-                      {(item.size || item.color || item.productType === "perfume") && (
+                      {(item.size || item.productType === "perfume") && (
                         <div className="flex items-center gap-2 mt-1">
                           {item.productType === "perfume" ? (
                             <span className="text-[10px] text-text-secondary uppercase tracking-wider">
@@ -175,9 +182,7 @@ export default function CartPanel() {
                             </span>
                           ) : (
                             <>
-                              {item.size && <span className="text-[10px] text-text-secondary">{item.size}</span>}
-                              {item.size && item.color && <span className="text-[10px] text-text-secondary">·</span>}
-                              {item.color && <span className="text-[10px] text-text-secondary">{item.color}</span>}
+                              {item.size && <span className="text-[10px] text-text-secondary">{formatCartSizeLabel(item.size)}</span>}
                             </>
                           )}
                         </div>
@@ -274,6 +279,7 @@ export default function CartPanel() {
                   name: firstTryOnItem.name,
                   categories: firstTryOnItem.categories,
                   image: firstTryOnItem.image,
+                  color: firstTryOnItem.color,
                   price: firstTryOnItem.price,
                   brand: firstTryOnItem.brand,
                   quantity: firstTryOnItem.quantity,

@@ -31,6 +31,7 @@ export interface RelatedProduct {
   };
   cloneSourceName?: string;
   cloneSourceImage?: string;
+  colorImages?: Record<string, number[]> | null;
 }
 
 function getMainImage(images?: ProductImage[]): string | undefined {
@@ -72,6 +73,8 @@ export default function RelatedProducts({ products }: { products: RelatedProduct
               originPictures={product.originPictures}
               cloneSourceName={product.cloneSourceName}
               cloneSourceImage={product.cloneSourceImage}
+              colorImages={product.colorImages}
+              images={product.images}
             />
           ))}
         </div>
