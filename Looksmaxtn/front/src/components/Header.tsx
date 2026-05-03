@@ -40,6 +40,10 @@ export default function Header() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showUserMenu]);
 
+  if (!mounted) {
+    return null;
+  }
+
   return (
     <header className="fixed top-0 left-0 right-0 z-40 bg-background/90 backdrop-blur-sm border-b border-border-color/50">
       <div className="flex items-center justify-between px-5 py-4">
