@@ -52,6 +52,16 @@ interface StoreNotice {
   read: boolean;
 }
 
+interface ProductNotice {
+  id: string;
+  productId: string;
+  title: string;
+  detail: string;
+  status: string;
+  createdAt: string;
+  read: boolean;
+}
+
 type AdminRealtimeEvent =
   | { type: "connected" }
   | { type: "order:upsert"; order: DashboardOrder }
@@ -83,7 +93,24 @@ type AdminRealtimeEvent =
         createdAt: string;
       };
     }
-  | { type: "store:delete"; storeId: string };
+  | { type: "store:delete"; storeId: string }
+  | {
+      type: "product:upsert";
+      product: {
+        _id: string;
+        name: string;
+        brand: string;
+        reference?: string;
+        approvalStatus: string;
+        createdAt: string;
+        updatedAt?: string;
+        visibilityStatus?: string;
+        isActive?: boolean;
+        changeType?: "created" | "updated";
+        createdBy?: { id?: string; name?: string; email?: string } | null;
+      };
+    }
+  | { type: "product:delete"; productId: string };
 
 const navItems = [
   { name: "Dashboard", href: "/dashboard", icon: "📊" },
@@ -107,7 +134,10 @@ const storeOwnerNavItems = [
   navItems[6],
   navItems[7],
   { name: "Store Details", href: "/dashboard/store-details", icon: "🏬" },
+  { name: "Credits", href: "/dashboard/credits", icon: "💳" },
 ];
+
+const seenStoreIdsStorageKey = "looksmax-admin-seen-stores";
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -118,6 +148,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const [orderNotifications, setOrderNotifications] = useState<OrderNotice[]>([]);
   const [messageNotifications, setMessageNotifications] = useState<MessageNotice[]>([]);
   const [storeNotifications, setStoreNotifications] = useState<StoreNotice[]>([]);
+  const [productNotifications, setProductNotifications] = useState<ProductNotice[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const notificationsRef = useRef<HTMLDivElement | null>(null);
@@ -186,7 +217,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     if (typeof window === "undefined") return new Set<string>();
 
     try {
-      const raw = window.localStorage.getItem("looksmax-admin-seen-stores");
+      const raw = window.localStorage.getItem(seenStoreIdsStorageKey);
       if (!raw) return new Set<string>();
 
       const parsed = JSON.parse(raw);
@@ -200,7 +231,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   const saveSeenStoreIds = (ids: Set<string>) => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem("looksmax-admin-seen-stores", JSON.stringify(Array.from(ids)));
+    window.localStorage.setItem(seenStoreIdsStorageKey, JSON.stringify(Array.from(ids)));
   };
 
   const markMessageRead = async (notice: MessageNotice) => {
@@ -232,6 +263,44 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       .join(", ");
   };
 
+  const formatProductNotification = (product: {
+    _id: string;
+    name: string;
+    brand: string;
+    reference?: string;
+    approvalStatus: string;
+    createdAt: string;
+    updatedAt?: string;
+    visibilityStatus?: string;
+    changeType?: "created" | "updated";
+    createdBy?: { id?: string; name?: string; email?: string } | null;
+  }) => {
+    const eventAt = product.updatedAt || product.createdAt;
+    if (product.approvalStatus === "pending") {
+      return {
+        title: product.changeType === "updated" ? "Product review updated" : "New product review",
+        detail:
+          product.changeType === "created"
+            ? `${product.createdBy?.name || "Store owner"} • ${product.reference || product.brand || "Pending review"}`
+            : `${product.name || "Product"} • Pending review`,
+        createdAt: eventAt,
+        read: false,
+        status: product.approvalStatus,
+      };
+    }
+
+    const visibilityLabel =
+      product.visibilityStatus === "inactive" ? "Inactive" : "Active";
+
+    return {
+      title: "Product updated",
+      detail: `${product.name || "Product"} • Visibility ${visibilityLabel}`,
+      createdAt: eventAt,
+      read: false,
+      status: product.approvalStatus || "approved",
+    };
+  };
+
   useEffect(() => {
     let active = true;
 
@@ -243,7 +312,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           router.push("/");
           return;
         }
-
         setUser(data.user);
         try {
           const refreshedToken = await refreshAdminAuthToken();
@@ -408,12 +476,63 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       }
     };
 
-    loadProcessingOrders();
+    const loadPendingProducts = async () => {
+      try {
+        const response = await fetch("/api/products", withAuthRequest());
+        const data = (await response.json()) as {
+          products?: Array<{
+            _id: string;
+            name: string;
+            brand: string;
+            reference?: string;
+            approvalStatus?: string;
+            createdAt: string;
+            updatedAt?: string;
+            visibilityStatus?: string;
+            changeType?: "created" | "updated";
+            createdBy?: { id?: string; name?: string; email?: string } | null;
+          }>;
+        };
+        if (!active || !data) return;
+
+        const pendingProducts = (data.products || []).filter((product) => product.approvalStatus === "pending");
+
+        setProductNotifications((current) => {
+          const currentById = new Map(current.map((notice) => [notice.productId, notice]));
+
+          return pendingProducts
+            .map((product) => {
+              const existing = currentById.get(product._id);
+              const next = formatProductNotification({
+                ...product,
+                approvalStatus: product.approvalStatus || "pending",
+                createdAt: product.createdAt,
+              });
+
+              return {
+                id: existing?.id || product._id,
+                productId: product._id,
+                title: next.title,
+                detail: next.detail,
+                status: next.status,
+                createdAt: next.createdAt,
+                read: existing?.read ?? next.read,
+              };
+            })
+            .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+        });
+      } catch {
+        // Leave the current notification state untouched on polling failures.
+      }
+    };
+
     if (currentUser.role === "admin") {
+      loadProcessingOrders();
       loadUnreadMessages();
       loadPendingStores();
+      loadPendingProducts();
     }
-    const eventSource = currentUser.role === "admin" ? new EventSource("/api/events") : null;
+    const eventSource = currentUser.role === "admin" ? new EventSource("/api/admin/events") : null;
     if (eventSource) eventSource.onmessage = (event) => {
       const payload = JSON.parse(event.data) as AdminRealtimeEvent;
       if (payload.type === "connected") return;
@@ -550,6 +669,41 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             ...current.filter((notice) => notice.storeId !== store._id),
           ].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
         });
+        return;
+      }
+
+      if (payload.type === "product:delete") {
+        setProductNotifications((current) =>
+          current.filter((notice) => notice.productId !== payload.productId)
+        );
+        return;
+      }
+
+      if (payload.type === "product:upsert") {
+        const product = payload.product;
+        const next = formatProductNotification({
+          ...product,
+          approvalStatus: product.approvalStatus || "pending",
+          createdAt: product.createdAt,
+        });
+
+        setProductNotifications((current) => {
+          const currentById = new Map(current.map((notice) => [notice.productId, notice]));
+          const existing = currentById.get(product._id);
+
+          return [
+            {
+              id: existing?.id || product._id,
+              productId: product._id,
+              title: next.title,
+              detail: next.detail,
+              status: next.status,
+              createdAt: next.createdAt,
+              read: false,
+            },
+            ...current.filter((notice) => notice.productId !== product._id),
+          ].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+        });
       }
     };
     if (eventSource) eventSource.onerror = () => {
@@ -590,9 +744,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   };
 
   const unreadNotificationCount = orderNotifications.filter((notice) => !notice.read).length;
-  const unreadMessageCount = user?.role === "admin" ? messageNotifications.filter((notice) => !notice.read).length : 0;
-  const unreadStoreCount = user?.role === "admin" ? storeNotifications.filter((notice) => !notice.read).length : 0;
-  const unreadTotalCount = unreadNotificationCount + unreadMessageCount + unreadStoreCount;
+  const isAdminUser = user?.role === "admin";
+  const unreadMessageCount = isAdminUser ? messageNotifications.filter((notice) => !notice.read).length : 0;
+  const unreadStoreCount = isAdminUser ? storeNotifications.filter((notice) => !notice.read).length : 0;
+  const unreadProductCount = isAdminUser ? productNotifications.filter((notice) => !notice.read).length : 0;
+  const unreadTotalCount = isAdminUser
+    ? unreadNotificationCount + unreadMessageCount + unreadStoreCount + unreadProductCount
+    : 0;
   const showBackButton = pathname !== "/dashboard";
 
   const handleNotificationClick = (notice: OrderNotice) => {
@@ -620,6 +778,16 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     );
     setShowNotifications(false);
     router.push(`/dashboard/stores?storeId=${encodeURIComponent(notice.storeId)}`);
+  };
+
+  const handleProductNotificationClick = (notice: ProductNotice) => {
+    setProductNotifications((current) =>
+      current.map((productNotice) =>
+        productNotice.productId === notice.productId ? { ...productNotice, read: true } : productNotice
+      )
+    );
+    setShowNotifications(false);
+    router.push(`/dashboard/products/${notice.productId}`);
   };
 
   const handleLogout = async () => {
@@ -715,130 +883,172 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               </button>
             </div>
 
-            <div className="relative" ref={notificationsRef}>
-              <button
-                type="button"
-                onClick={() => setShowNotifications((current) => !current)}
-                className="flex items-center gap-2 text-right text-[10px] uppercase tracking-[0.18em] text-text-secondary transition-colors hover:text-text-primary cursor-pointer"
-              >
-                <span className="text-sm">🔔</span>
-                <span>Notifications</span>
-                {unreadTotalCount > 0 && (
-                  <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[9px] font-semibold text-bg-primary">
-                    {unreadTotalCount}
-                  </span>
+            {isAdminUser && (
+              <div className="relative" ref={notificationsRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowNotifications((current) => !current)}
+                  className="flex items-center gap-2 text-right text-[10px] uppercase tracking-[0.18em] text-text-secondary transition-colors hover:text-text-primary cursor-pointer"
+                >
+                  <span className="text-sm">🔔</span>
+                  <span>Notifications</span>
+                  {unreadTotalCount > 0 && (
+                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[9px] font-semibold text-bg-primary">
+                      {unreadTotalCount}
+                    </span>
+                  )}
+                </button>
+                {showNotifications &&
+                  (orderNotifications.length > 0 ||
+                    messageNotifications.length > 0 ||
+                    storeNotifications.length > 0 ||
+                    productNotifications.length > 0) && (
+                  <div className="absolute right-0 top-full z-20 mt-2 w-72 border border-border bg-bg-secondary/95 p-3 shadow-lg shadow-black/10">
+                    {productNotifications.length > 0 && (
+                      <>
+                        <div className="mb-2 flex items-center justify-between">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">
+                            Product Updates
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setProductNotifications((current) =>
+                                current.map((notice) => ({ ...notice, read: true }))
+                              );
+                            }}
+                            className="text-[10px] uppercase tracking-[0.18em] text-text-secondary hover:text-text-primary cursor-pointer"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                        <div className="space-y-2">
+                          {productNotifications.map((notice) => (
+                            <button
+                              key={notice.id}
+                              type="button"
+                              onClick={() => handleProductNotificationClick(notice)}
+                              className="flex w-full items-start gap-2 border border-border bg-bg-primary/80 px-3 py-2 text-left transition-colors hover:bg-bg-hover"
+                            >
+                              {!notice.read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-accent" />}
+                              <span className="min-w-0">
+                                <span className="block text-xs font-medium text-text-primary">{notice.title}</span>
+                                <span className="block text-[10px] text-text-secondary">{notice.detail}</span>
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    {storeNotifications.length > 0 && (
+                      <>
+                        <div className={productNotifications.length > 0 ? "mt-4 mb-2 flex items-center justify-between" : "mb-2 flex items-center justify-between"}>
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">
+                            Pending Store Requests
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const seenStoreIds = new Set(loadSeenStoreIds());
+                              for (const notice of storeNotifications) {
+                                seenStoreIds.add(notice.storeId);
+                              }
+                              seenStoreIdsRef.current = seenStoreIds;
+                              saveSeenStoreIds(seenStoreIds);
+                              setStoreNotifications((current) =>
+                                current.map((notice) => ({ ...notice, read: true }))
+                              );
+                            }}
+                            className="text-[10px] uppercase tracking-[0.18em] text-text-secondary hover:text-text-primary cursor-pointer"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                        <div className="space-y-2">
+                          {storeNotifications.map((notice) => (
+                            <button
+                              key={notice.id}
+                              type="button"
+                              onClick={() => handleStoreNotificationClick(notice)}
+                              className="flex w-full items-start gap-2 border border-border bg-bg-primary/80 px-3 py-2 text-left transition-colors hover:bg-bg-hover"
+                            >
+                              {!notice.read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-accent" />}
+                              <span className="min-w-0">
+                                <span className="block text-xs font-medium text-text-primary">{notice.title}</span>
+                                <span className="block text-[10px] text-text-secondary">{notice.detail}</span>
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    {orderNotifications.length > 0 && (
+                      <div className={productNotifications.length > 0 || storeNotifications.length > 0 ? "mt-4" : ""}>
+                        <div className="mb-2 flex items-center justify-between">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">Processing Orders</p>
+                          <button
+                            type="button"
+                            onClick={() => setOrderNotifications([])}
+                            className="text-[10px] uppercase tracking-[0.18em] text-text-secondary hover:text-text-primary cursor-pointer"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                        <div className="space-y-2">
+                          {orderNotifications.map((notice) => (
+                            <button
+                              key={notice.id}
+                              type="button"
+                              onClick={() => handleNotificationClick(notice)}
+                              className="flex w-full items-start gap-2 border border-border bg-bg-primary/80 px-3 py-2 text-left transition-colors hover:bg-bg-hover"
+                            >
+                              {!notice.read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-accent" />}
+                              <span className="min-w-0">
+                                <span className="block text-xs font-medium text-text-primary">{notice.title}</span>
+                                <span className="block text-[10px] text-text-secondary">{notice.detail}</span>
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {messageNotifications.length > 0 && (
+                      <div className={productNotifications.length > 0 || storeNotifications.length > 0 || orderNotifications.length > 0 ? "mt-4" : ""}>
+                        <div className="mb-2 flex items-center justify-between">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">Unread Messages</p>
+                          <button
+                            type="button"
+                            onClick={() => setMessageNotifications([])}
+                            className="text-[10px] uppercase tracking-[0.18em] text-text-secondary hover:text-text-primary cursor-pointer"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                        <div className="space-y-2">
+                          {messageNotifications.map((notice) => (
+                            <button
+                              key={notice.id}
+                              type="button"
+                              onClick={() => handleMessageNotificationClick(notice)}
+                              className="flex w-full items-start gap-2 border border-border bg-bg-primary/80 px-3 py-2 text-left transition-colors hover:bg-bg-hover"
+                            >
+                              {!notice.read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-accent" />}
+                              <span className="min-w-0">
+                                <span className="block text-xs font-medium text-text-primary">{notice.title}</span>
+                                <span className="block text-[10px] text-text-secondary">{notice.detail}</span>
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
-              </button>
-              {showNotifications &&
-                (orderNotifications.length > 0 || messageNotifications.length > 0 || storeNotifications.length > 0) && (
-                <div className="absolute right-0 top-full z-20 mt-2 w-72 border border-border bg-bg-secondary/95 p-3 shadow-lg shadow-black/10">
-                  {storeNotifications.length > 0 && (
-                    <>
-                      <div className="mb-2 flex items-center justify-between">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">
-                          Pending Store Requests
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const seenStoreIds = new Set(loadSeenStoreIds());
-                            for (const notice of storeNotifications) {
-                              seenStoreIds.add(notice.storeId);
-                            }
-                            seenStoreIdsRef.current = seenStoreIds;
-                            saveSeenStoreIds(seenStoreIds);
-                            setStoreNotifications((current) =>
-                              current.map((notice) => ({ ...notice, read: true }))
-                            );
-                          }}
-                          className="text-[10px] uppercase tracking-[0.18em] text-text-secondary hover:text-text-primary cursor-pointer"
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      <div className="space-y-2">
-                        {storeNotifications.map((notice) => (
-                          <button
-                            key={notice.id}
-                            type="button"
-                            onClick={() => handleStoreNotificationClick(notice)}
-                            className="flex w-full items-start gap-2 border border-border bg-bg-primary/80 px-3 py-2 text-left transition-colors hover:bg-bg-hover"
-                          >
-                            {!notice.read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-accent" />}
-                            <span className="min-w-0">
-                              <span className="block text-xs font-medium text-text-primary">{notice.title}</span>
-                              <span className="block text-[10px] text-text-secondary">{notice.detail}</span>
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
-
-                  {orderNotifications.length > 0 && (
-                    <div className={storeNotifications.length > 0 ? "mt-4" : ""}>
-                      <div className="mb-2 flex items-center justify-between">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">Processing Orders</p>
-                        <button
-                          type="button"
-                          onClick={() => setOrderNotifications([])}
-                          className="text-[10px] uppercase tracking-[0.18em] text-text-secondary hover:text-text-primary cursor-pointer"
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      <div className="space-y-2">
-                        {orderNotifications.map((notice) => (
-                          <button
-                            key={notice.id}
-                            type="button"
-                            onClick={() => handleNotificationClick(notice)}
-                            className="flex w-full items-start gap-2 border border-border bg-bg-primary/80 px-3 py-2 text-left transition-colors hover:bg-bg-hover"
-                          >
-                            {!notice.read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-accent" />}
-                            <span className="min-w-0">
-                              <span className="block text-xs font-medium text-text-primary">{notice.title}</span>
-                              <span className="block text-[10px] text-text-secondary">{notice.detail}</span>
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {messageNotifications.length > 0 && (
-                    <div className={storeNotifications.length > 0 || orderNotifications.length > 0 ? "mt-4" : ""}>
-                      <div className="mb-2 flex items-center justify-between">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">Unread Messages</p>
-                        <button
-                          type="button"
-                          onClick={() => setMessageNotifications([])}
-                          className="text-[10px] uppercase tracking-[0.18em] text-text-secondary hover:text-text-primary cursor-pointer"
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      <div className="space-y-2">
-                        {messageNotifications.map((notice) => (
-                          <button
-                            key={notice.id}
-                            type="button"
-                            onClick={() => handleMessageNotificationClick(notice)}
-                            className="flex w-full items-start gap-2 border border-border bg-bg-primary/80 px-3 py-2 text-left transition-colors hover:bg-bg-hover"
-                          >
-                            {!notice.read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-accent" />}
-                            <span className="min-w-0">
-                              <span className="block text-xs font-medium text-text-primary">{notice.title}</span>
-                              <span className="block text-[10px] text-text-secondary">{notice.detail}</span>
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+              </div>
+            )}
 
             <p className="min-w-0 text-[10px] uppercase tracking-[0.16em] text-text-secondary truncate text-right">
               {user.email}

@@ -74,14 +74,12 @@ export default function ProductsPage() {
   const [approvalFilter, setApprovalFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [togglingVisibilityId, setTogglingVisibilityId] = useState("");
-  const [updatingApprovalId, setUpdatingApprovalId] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [userRole, setUserRole] = useState("");
   const deferredSearch = useDeferredValue(search);
   const canManageProducts = userRole === "store_owner";
   const canToggleVisibility = userRole === "store_owner" || userRole === "admin";
-  const canModerateProducts = userRole === "admin";
 
   const fetchProducts = () => {
     fetch("/api/products", withAuthRequest())
@@ -136,31 +134,6 @@ export default function ProductsPage() {
       // Leave current state unchanged on network failure.
     } finally {
       setTogglingVisibilityId("");
-    }
-  };
-
-  const handleApprovalUpdate = async (product: Product, approvalStatus: "approved" | "rejected") => {
-    setUpdatingApprovalId(product._id);
-    try {
-      const response = await fetch(`/api/products/${product._id}`, withAuthRequest({
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ approvalStatus }),
-      }));
-      const data = await response.json();
-      if (!response.ok || !data.product) return;
-
-      setProducts((current) =>
-        current.map((entry) =>
-          entry._id === product._id
-            ? { ...entry, approvalStatus: data.product.approvalStatus || approvalStatus }
-            : entry
-        )
-      );
-    } catch {
-      // Keep current state on network failure.
-    } finally {
-      setUpdatingApprovalId("");
     }
   };
 
@@ -442,32 +415,6 @@ export default function ProductsPage() {
                       <span className={`text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${approval.className}`}>
                         {approval.label}
                       </span>
-                      {canModerateProducts && (p.approvalStatus || "approved") !== "approved" && (
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void handleApprovalUpdate(p, "approved");
-                            }}
-                            disabled={updatingApprovalId === p._id}
-                            className="text-[10px] uppercase tracking-wider text-[#6b6055] hover:text-text-primary disabled:opacity-50"
-                          >
-                            Approve
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void handleApprovalUpdate(p, "rejected");
-                            }}
-                            disabled={updatingApprovalId === p._id}
-                            className="text-[10px] uppercase tracking-wider text-danger hover:text-danger/80 disabled:opacity-50"
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      )}
                     </div>
                   </td>
                   <td className="px-4 py-3">

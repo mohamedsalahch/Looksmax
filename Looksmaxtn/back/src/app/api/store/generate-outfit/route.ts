@@ -7,6 +7,7 @@ import Product from "@/store/models/Product";
 import User from "@/store/models/User";
 import OutfitGenerationJob from "@/store/models/OutfitGenerationJob";
 import { loadImageAsBase64 } from "@/lib/imageSource";
+import { calculateUserOutfitStudioTries } from "@/store/lib/outfitStudioUtils";
 
 type ZonePayload = {
   status?: boolean;
@@ -139,23 +140,32 @@ export async function POST(req: NextRequest) {
 
     // Fetch the enhanced profile image if available
     await dbConnect();
-    const requestingUser = await User.collection.findOne(
-      { _id: new mongoose.Types.ObjectId(session.userId) },
-      { projection: { bodyProfile: 1 } }
-    );
-    const generationLimit = 100;
-    const generationCount = Number(requestingUser?.bodyProfile?.outfitGenerationCount || 0);
-    if (generationCount >= generationLimit) {
-      return NextResponse.json(
-        { error: "Generation limit reached. Use your saved outfit results." },
-        { status: 403 }
-      );
+    const userId = new mongoose.Types.ObjectId(session.userId);
+    const requestingUser = await User.findById(userId).lean();
+
+    if (!requestingUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
-    const bestProfileImage = requestingUser?.bodyProfile?.profileImageEnhanced
-      || requestingUser?.bodyProfile?.profileImage
+
+    // Check outfit studio tries - admins have unlimited
+    if (requestingUser.role !== "admin") {
+      const initialTries = requestingUser.outfitStudioStats?.initialTries || 5;
+      const triesUsed = requestingUser.outfitStudioStats?.triesUsed || 0;
+      const { total: totalAvailableTries } = await calculateUserOutfitStudioTries(userId, initialTries);
+
+      if (triesUsed >= totalAvailableTries) {
+        return NextResponse.json(
+          { error: "No outfit studio tries remaining. Spend 100 TND to earn 5 more tries." },
+          { status: 403 }
+        );
+      }
+    }
+
+    const bestProfileImage = requestingUser.bodyProfile?.profileImageEnhanced
+      || requestingUser.bodyProfile?.profileImage
       || body.profileImage
       || "";
-    const fallbackProfileImage = requestingUser?.bodyProfile?.profileImage
+    const fallbackProfileImage = requestingUser.bodyProfile?.profileImage
       || body.profileImage
       || "";
 
@@ -265,20 +275,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const generationCounterUpdate = await User.collection.updateOne(
-      {
-        _id: new mongoose.Types.ObjectId(session.userId),
-        "bodyProfile.outfitGenerationCount": { $lt: generationLimit },
-      },
-      {
-        $inc: { "bodyProfile.outfitGenerationCount": 1 },
-      }
-    );
+    // Increment tries used for non-admin users
+    if (requestingUser.role !== "admin") {
+      const initialTries = requestingUser.outfitStudioStats?.initialTries || 5;
+      const triesUsed = requestingUser.outfitStudioStats?.triesUsed || 0;
+      const { total: totalAvailableTries } = await calculateUserOutfitStudioTries(userId, initialTries);
 
-    if (generationCounterUpdate.matchedCount === 0) {
-      return NextResponse.json(
-        { error: "Generation limit reached. Use your saved outfit results." },
-        { status: 403 }
+      if (triesUsed >= totalAvailableTries) {
+        return NextResponse.json(
+          { error: "No outfit studio tries remaining. Spend 100 TND to earn 5 more tries." },
+          { status: 403 }
+        );
+      }
+
+      await User.updateOne(
+        { _id: userId },
+        { $inc: { "outfitStudioStats.triesUsed": 1 } }
       );
     }
 

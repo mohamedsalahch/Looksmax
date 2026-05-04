@@ -16,11 +16,17 @@ export interface IBodyProfile {
   gender: string;
 }
 
+export interface IStoreOwnerStats {
+  triesAllowed: number;
+  triesUsed: number;
+}
+
 export interface IUser extends Document {
   name: string;
   storeName?: string;
   storeType?: "thrift" | "retail" | null;
   storeApprovalStatus?: "pending" | "approved" | "rejected" | null;
+  storeOwnerStats?: IStoreOwnerStats;
   email: string;
   password: string;
   role: "user" | "admin" | "store_owner";
@@ -61,6 +67,14 @@ const bodyProfileSchema = new Schema<IBodyProfile>(
   { _id: false }
 );
 
+const storeOwnerStatsSchema = new Schema<IStoreOwnerStats>(
+  {
+    triesAllowed: { type: Number, default: 50 },
+    triesUsed: { type: Number, default: 0 },
+  },
+  { _id: false }
+);
+
 const userSchema = new Schema<IUser>(
   {
     name: { type: String, required: true, trim: true },
@@ -81,6 +95,7 @@ const userSchema = new Schema<IUser>(
     sessionVersion: { type: Number, default: 0 },
     address: { type: addressSchema, default: () => ({}) },
     bodyProfile: { type: bodyProfileSchema, default: () => ({}) },
+    storeOwnerStats: { type: storeOwnerStatsSchema, default: () => ({ triesAllowed: 50, triesUsed: 0 }) },
   },
   { timestamps: true }
 );

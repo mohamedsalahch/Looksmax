@@ -24,6 +24,7 @@ function canAccessAdminPath(role: string | null, pathname: string) {
     pathname === "/api/admin/auth/refresh" ||
     pathname === "/api/admin/auth/logout" ||
     pathname === "/api/admin/users/me/store" ||
+    pathname === "/api/admin/users/me/store-credits" ||
     pathname === "/api/admin/stats" ||
     pathname.startsWith("/api/admin/products") ||
     pathname.startsWith("/api/admin/orders") ||
@@ -45,7 +46,8 @@ function isPublicAdminPath(pathname: string) {
     pathname === "/api/admin/auth/login" ||
     pathname === "/api/admin/auth/forgot-password" ||
     pathname === "/api/admin/auth/reset-password" ||
-    pathname === "/api/admin/turnstile-config"
+    pathname === "/api/admin/turnstile-config" ||
+    pathname === "/api/admin/notifications/webhook"
   );
 }
 

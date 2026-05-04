@@ -856,6 +856,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   });
   const [colorways, setColorways] = useState<Colorway[]>([createEmptyColorway()]);
   const generationAbortRef = useRef<AbortController | null>(null);
+  const previousProductTypeRef = useRef<ProductType | null>(null);
   const savedSnapshot = useRef<{
     form: typeof initialForm;
     images: ProductImage[];
@@ -1744,17 +1745,24 @@ const loadedCategorySlugs = p.categories || [];
   };
 
   useEffect(() => {
+    const previousProductType = previousProductTypeRef.current;
+    previousProductTypeRef.current = form.productType;
+
     if (form.productType !== "fashion") {
       setGenerationTarget("");
-      setSelectedModelId("");
-      setCompanionTopType("");
-      setCompanionBottomType("");
-      setFootwearType("");
-      setSecondaryTopColor(null);
-      setSecondaryBottomColor(null);
-      setShoesColor(null);
-      setGenerationInputs(initialGenerationInputs);
-      setOriginPictureFiles(emptyOriginPictureFiles);
+      if (previousProductType && previousProductType !== form.productType) {
+        setSelectedModelId("");
+        setCompanionTopType("");
+        setCompanionBottomType("");
+        setFootwearType("");
+        setSecondaryTopColor(null);
+        setSecondaryBottomColor(null);
+        setShoesColor(null);
+        setGenerationInputs(initialGenerationInputs);
+        setOriginPictureFiles(emptyOriginPictureFiles);
+        setGeneratedModelMedia([]);
+        setShowProductMediaSection(false);
+      }
       setForm((current) =>
         current.fashionSubtype === "" ? current : { ...current, fashionSubtype: "" }
       );
@@ -1766,6 +1774,11 @@ const loadedCategorySlugs = p.categories || [];
       if (current.fashionSubtype === generationRequirements.fashionSubtype) return current;
       return { ...current, fashionSubtype: generationRequirements.fashionSubtype as FashionSubtype };
     });
+
+    if (!previousProductType || previousProductType === form.productType) {
+      return;
+    }
+
     setSelectedModelId("");
     setCompanionTopType("");
     setCompanionBottomType("");
@@ -1775,15 +1788,8 @@ const loadedCategorySlugs = p.categories || [];
     setShoesColor(null);
     setGenerationInputs(initialGenerationInputs);
     setOriginPictureFiles(emptyOriginPictureFiles);
-    setForm((current) => ({
-      ...current,
-      originPictures: {
-        front: "",
-        back: "",
-        left: "",
-        right: "",
-      },
-    }));
+    setGeneratedModelMedia([]);
+    setShowProductMediaSection(false);
   }, [form.productType, generationRequirements.fashionSubtype, generationRequirements.generationTarget]);
 
   const canGenerate =
@@ -2234,27 +2240,69 @@ const loadedCategorySlugs = p.categories || [];
         }
         body.append("companionSettings", JSON.stringify(companionSettingsPayload));
         const imageFiles: File[] = [];
+        const imageOrder: string[] = [];
+        const existingImagesPayload: { url: string }[] = [];
+        const existingUrlToOrderIndex = new Map<string, number>();
         const colorImagesPayload: Record<string, number[]> = {};
+        const isUploadableUrl = (url: string) => Boolean(url) && !url.startsWith("blob:") && !url.startsWith("data:");
+        const pushExisting = (url: string): number => {
+          const cached = existingUrlToOrderIndex.get(url);
+          if (cached !== undefined) return cached;
+          const idx = imageOrder.length;
+          existingImagesPayload.push({ url });
+          existingUrlToOrderIndex.set(url, idx);
+          imageOrder.push(`existing:${url}`);
+          return idx;
+        };
+        const pushNew = (file: File): number => {
+          const idx = imageOrder.length;
+          const newIdx = imageFiles.length;
+          imageFiles.push(file);
+          imageOrder.push(`new:${newIdx}`);
+          return idx;
+        };
         for (const cw of colorways) {
           const colorKey = cw.hex.trim();
           const indices: number[] = [];
-          for (const gi of cw.generatedImages) { if (gi.file) { indices.push(imageFiles.length); imageFiles.push(gi.file); } }
-          const front = cw.enhancedFrontFile || cw.frontFile;
-          const back = cw.enhancedBackFile || cw.backFile;
-          if (front) { indices.push(imageFiles.length); imageFiles.push(front); }
-          if (back) { indices.push(imageFiles.length); imageFiles.push(back); }
+          for (const gi of cw.generatedImages) {
+            if (gi.file) indices.push(pushNew(gi.file));
+            else if (isUploadableUrl(gi.url)) indices.push(pushExisting(gi.url));
+          }
+          const frontFile = cw.enhancedFrontFile || cw.frontFile;
+          const frontUrl = cw.enhancedFrontUrl || cw.frontPreview;
+          if (frontFile) indices.push(pushNew(frontFile));
+          else if (isUploadableUrl(frontUrl)) indices.push(pushExisting(frontUrl));
+          const backFile = cw.enhancedBackFile || cw.backFile;
+          const backUrl = cw.enhancedBackUrl || cw.backPreview;
+          if (backFile) indices.push(pushNew(backFile));
+          else if (isUploadableUrl(backUrl)) indices.push(pushExisting(backUrl));
           if (colorKey && indices.length > 0) colorImagesPayload[colorKey] = indices;
         }
         const compressedImages = await Promise.all(imageFiles.map((f) => compressImageFile(f)));
         compressedImages.forEach((f) => body.append("images", f));
         body.append("colorImages", JSON.stringify(colorImagesPayload));
+        body.append("existingImages", JSON.stringify(existingImagesPayload));
+        body.append("imageOrder", JSON.stringify(imageOrder));
         const firstCw = colorways[0];
-        const frontOrigin = firstCw.enhancedFrontFile || firstCw.frontFile;
-        const backOrigin = firstCw.enhancedBackFile || firstCw.backFile;
-        if (frontOrigin) body.append("originPictureFrontFile", await compressImageFile(frontOrigin));
-        if (backOrigin) body.append("originPictureBackFile", await compressImageFile(backOrigin));
+        const frontOriginFile = firstCw.enhancedFrontFile || firstCw.frontFile;
+        const backOriginFile = firstCw.enhancedBackFile || firstCw.backFile;
+        if (frontOriginFile) body.append("originPictureFrontFile", await compressImageFile(frontOriginFile));
+        else if (isUploadableUrl(form.originPictures.front)) body.append("originPictureFront", form.originPictures.front);
+        else if (isUploadableUrl(firstCw.enhancedFrontUrl || firstCw.frontPreview)) body.append("originPictureFront", firstCw.enhancedFrontUrl || firstCw.frontPreview);
+        if (backOriginFile) body.append("originPictureBackFile", await compressImageFile(backOriginFile));
+        else if (isUploadableUrl(form.originPictures.back)) body.append("originPictureBack", form.originPictures.back);
+        else if (isUploadableUrl(firstCw.enhancedBackUrl || firstCw.backPreview)) body.append("originPictureBack", firstCw.enhancedBackUrl || firstCw.backPreview);
         const res = await fetch(`/api/products/${id}`, withAuthRequest({ method: "PUT", body }));
-        if (!res.ok) { const d = await res.json(); setError(d.error || "Unable to save product."); setLoading(false); return; }
+        if (!res.ok) {
+          const d = await res.json();
+          const message = d.error || "Unable to save product.";
+          setError(message);
+          if (res.status === 409 || /reference must be unique within the same store/i.test(message)) {
+            scrollToElement(productBasicsRef.current);
+          }
+          setLoading(false);
+          return;
+        }
         router.push("/dashboard/products");
       } catch { setError("Network error"); setLoading(false); }
       return;
@@ -2315,25 +2363,33 @@ const loadedCategorySlugs = p.categories || [];
         selectedGreatGrandchildSlug,
       ].filter(Boolean);
 
+      const snapshotMedia = savedSnapshot.current?.generatedModelMedia || [];
+      const snapshotSourceMedia = savedSnapshot.current?.images || [];
       const currentProductMedia =
         generatedModelMedia.length > 0
           ? generatedModelMedia
           : images.filter((image) => image.kind === "source");
-      if (currentProductMedia.length === 0) {
+      const effectiveProductMedia =
+        currentProductMedia.length > 0
+          ? currentProductMedia
+          : snapshotMedia.length > 0
+            ? snapshotMedia
+            : snapshotSourceMedia;
+      if (effectiveProductMedia.length === 0) {
         setError("Please keep or upload at least one product image.");
         setLoading(false);
         return;
       }
-      const existingImages = currentProductMedia
+      const existingImages = effectiveProductMedia
         .filter((image) => !image.file)
         .map((image) => ({ url: image.url }));
-      const newMediaFiles = currentProductMedia
+      const newMediaFiles = effectiveProductMedia
         .filter((image): image is ProductImage & { file: File } => Boolean(image.file))
         .map((image) => image.file);
       const imageOrder: string[] = [];
       let newImageIndex = 0;
       let mainImageKey = "";
-      for (const image of currentProductMedia) {
+      for (const image of effectiveProductMedia) {
         const key = image.file ? `new:${newImageIndex++}` : `existing:${image.url}`;
         imageOrder.push(key);
         if (!mainImageKey && (image as { isMain?: boolean }).isMain) {
@@ -2451,7 +2507,11 @@ const loadedCategorySlugs = p.categories || [];
 
       if (!res.ok) {
         const d = await res.json();
-        setError(d.error || "Unable to save product.");
+        const message = d.error || "Unable to save product.";
+        setError(message);
+        if (res.status === 409 || /reference must be unique within the same store/i.test(message)) {
+          scrollToElement(productBasicsRef.current);
+        }
         setLoading(false);
         return;
       }

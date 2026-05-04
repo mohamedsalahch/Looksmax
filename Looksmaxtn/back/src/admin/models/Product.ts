@@ -114,7 +114,7 @@ const productSchema = new Schema<IProduct>(
     tag: { type: String, default: "" },
     newTagDurationDays: { type: Number, default: 3, min: 1 },
     brand: { type: String, default: "" },
-    reference: { type: String, default: "" },
+    reference: { type: String, default: "", trim: true },
     productType: {
       type: String,
       enum: ["fashion", "perfume", "clothing", "shoes"],
@@ -155,6 +155,16 @@ const productSchema = new Schema<IProduct>(
 
 productSchema.index({ categories: 1 });
 productSchema.index({ name: "text", description: "text" });
+productSchema.index(
+  { "createdBy.id": 1, reference: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      "createdBy.id": { $type: "string" },
+      reference: { $type: "string", $ne: "" },
+    },
+  }
+);
 
 if (process.env.NODE_ENV !== "production" && mongoose.models.Product) {
   delete mongoose.models.Product;

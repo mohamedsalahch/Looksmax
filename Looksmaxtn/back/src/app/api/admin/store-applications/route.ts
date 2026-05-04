@@ -67,7 +67,27 @@ export async function GET() {
 
     await dbConnect();
     const stores = await StoreApplication.find().sort({ createdAt: -1 }).lean();
-    return NextResponse.json({ stores: stores.map(normalizeStoreApplication) });
+
+    const emails = stores.map((s) => s.email.toLowerCase());
+    const owners = await User.find(
+      { email: { $in: emails }, role: "store_owner" },
+      { email: 1, storeOwnerStats: 1 }
+    ).lean();
+    const ownerStatsByEmail = new Map(
+      owners.map((u) => [u.email, u.storeOwnerStats])
+    );
+
+    const normalizedStores = stores.map((store) => ({
+      ...normalizeStoreApplication(store),
+      credits: ownerStatsByEmail.has(store.email)
+        ? {
+            allowed: ownerStatsByEmail.get(store.email)?.triesAllowed ?? 50,
+            used: ownerStatsByEmail.get(store.email)?.triesUsed ?? 0,
+          }
+        : null,
+    }));
+
+    return NextResponse.json({ stores: normalizedStores });
   } catch (error) {
     console.error("Store applications list error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

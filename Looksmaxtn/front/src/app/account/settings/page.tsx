@@ -35,6 +35,12 @@ export default function SettingsPage() {
     gender: "",
     profileImageRequiresGeneration: false,
   });
+  const [outfitStudioStats, setOutfitStudioStats] = useState({
+    totalTries: 5,
+    triesUsed: 0,
+    triesRemaining: 5,
+    isAdmin: false,
+  });
   const [bodyError, setBodyError] = useState("");
   const [bodySuccess, setBodySuccess] = useState("");
   const [bodyLoading, setBodyLoading] = useState(false);
@@ -103,6 +109,19 @@ export default function SettingsPage() {
 
   useEffect(() => {
     void refreshUser();
+    void fetch("/api/users/me/outfit-studio", withAuthRequest({ method: "GET" }))
+      .then((res) => res.json())
+      .then((data) => {
+        setOutfitStudioStats({
+          totalTries: data.totalTries || 5,
+          triesUsed: data.triesUsed || 0,
+          triesRemaining: data.triesRemaining || 5,
+          isAdmin: data.isAdmin || false,
+        });
+      })
+      .catch(() => {
+        setOutfitStudioStats({ totalTries: 5, triesUsed: 0, triesRemaining: 5, isAdmin: false });
+      });
   }, [refreshUser]);
 
   useEffect(() => {
@@ -178,9 +197,7 @@ export default function SettingsPage() {
   const uploadLimit = 100;
   const uploadsUsed = Math.min(Number(bodyProfile.profileImageUploadCount || 0), uploadLimit);
   const remainingUploads = Math.max(uploadLimit - uploadsUsed, 0);
-  const generationLimit = 100;
-  const generationsUsed = Math.min(Number(bodyProfile.outfitGenerationCount || 0), generationLimit);
-  const remainingGenerations = Math.max(generationLimit - generationsUsed, 0);
+  const remainingGenerations = outfitStudioStats.isAdmin ? Infinity : outfitStudioStats.triesRemaining;
   // Show enhanced column only if there's an enhanced image OR one is being generated
   const showEnhanced = hasEnhanced || (hasOriginal && imageEnhancing);
   // Hide original once enhanced is ready
@@ -684,9 +701,11 @@ export default function SettingsPage() {
                       : "Upload limit reached"}
                   </p>
                   <p className="text-[10px] uppercase tracking-[0.18em] text-text-secondary text-center">
-                    {remainingGenerations > 0
-                      ? `${remainingGenerations} generation${remainingGenerations === 1 ? "" : "s"} left`
-                      : "Generation limit reached"}
+                    {outfitStudioStats.isAdmin
+                      ? "Unlimited generations"
+                      : remainingGenerations > 0
+                        ? `${remainingGenerations} generation${remainingGenerations === 1 ? "" : "s"} left`
+                        : "Generation limit reached"}
                   </p>
                 </>
               )}

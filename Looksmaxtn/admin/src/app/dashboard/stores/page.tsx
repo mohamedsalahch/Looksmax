@@ -20,6 +20,7 @@ interface StoreApplication {
   status: StoreStatus;
   reviewedAt?: string | null;
   createdAt: string;
+  credits?: { allowed: number; used: number } | null;
 }
 
 const categoryLabels: Record<StoreApplication["category"], string> = {
@@ -310,6 +311,26 @@ export default function StoresPage() {
                       </div>
                     )}
                   </div>
+
+                  {store.credits && (
+                    <div className="mt-4 pt-3 border-t border-border">
+                      <p className="mb-2 text-[10px] uppercase tracking-wider text-text-secondary">AI Credits</p>
+                      <div className="flex flex-wrap gap-6 text-xs">
+                        <p>
+                          <span className="text-text-secondary">Added: </span>
+                          <span className="font-medium">{store.credits.allowed}</span>
+                        </p>
+                        <p>
+                          <span className="text-text-secondary">Used: </span>
+                          <span className="font-medium">{store.credits.used}</span>
+                        </p>
+                        <p>
+                          <span className="text-text-secondary">Remaining: </span>
+                          <span className="font-medium">{Math.max(0, store.credits.allowed - store.credits.used)}</span>
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="flex flex-wrap items-center gap-3 mt-4 pt-3 border-t border-border">
                     <button

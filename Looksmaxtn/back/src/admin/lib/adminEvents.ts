@@ -34,13 +34,29 @@ export type AdminStoreEventPayload = {
   createdAt: string;
 };
 
+export type AdminProductEventPayload = {
+  _id: string;
+  name: string;
+  brand: string;
+  reference?: string;
+  approvalStatus: string;
+  createdAt: string;
+  updatedAt?: string;
+  visibilityStatus?: string;
+  isActive?: boolean;
+  changeType?: "created" | "updated";
+  createdBy?: { id?: string; name?: string; email?: string } | null;
+};
+
 export type AdminEvent =
   | { type: "order:upsert"; order: AdminOrderEventPayload }
   | { type: "order:delete"; orderId: string }
   | { type: "message:upsert"; message: AdminMessageEventPayload }
   | { type: "message:delete"; messageId: string }
   | { type: "store:upsert"; store: AdminStoreEventPayload }
-  | { type: "store:delete"; storeId: string };
+  | { type: "store:delete"; storeId: string }
+  | { type: "product:upsert"; product: AdminProductEventPayload }
+  | { type: "product:delete"; productId: string };
 
 const clients = new Map<string, AdminEventClient>();
 const encoder = new TextEncoder();

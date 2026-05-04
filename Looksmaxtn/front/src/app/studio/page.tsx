@@ -693,6 +693,12 @@ export default function OutfitStudioPage() {
     const [generationStateHydrated, setGenerationStateHydrated] = useState(false);
     const [studioStateHydrated, setStudioStateHydrated] = useState(false);
     const [showAllSelectedItems, setShowAllSelectedItems] = useState(true);
+    const [outfitStudioStats, setOutfitStudioStats] = useState({
+      totalTries: 5,
+      triesUsed: 0,
+      triesRemaining: 5,
+      isAdmin: false,
+    });
     const sharedResetTimerRef = useRef<number | null>(null);
     const outfitGenerationStartAbortRef = useRef<AbortController | null>(null);
     const outfitGenerationPollAbortRef = useRef<AbortController | null>(null);
@@ -737,6 +743,24 @@ export default function OutfitStudioPage() {
         }
 
         setStudioStateHydrated(true);
+    }, [user?.id]);
+
+    useEffect(() => {
+        if (!user?.id) return;
+
+        fetch("/api/users/me/outfit-studio", withAuthRequest({ method: "GET" }))
+            .then((res) => res.json())
+            .then((data) => {
+                setOutfitStudioStats({
+                    totalTries: data.totalTries || 5,
+                    triesUsed: data.triesUsed || 0,
+                    triesRemaining: data.triesRemaining || 5,
+                    isAdmin: data.isAdmin || false,
+                });
+            })
+            .catch(() => {
+                setOutfitStudioStats({ totalTries: 5, triesUsed: 0, triesRemaining: 5, isAdmin: false });
+            });
     }, [user?.id]);
 
     useEffect(() => {
@@ -961,10 +985,8 @@ export default function OutfitStudioPage() {
     const dressSelected = Boolean(outfit.dress);
     const dressVisible = isWomen && (selectedZoneId === "dress" || (dressSelected && !DRESS_CONFLICT_ZONES.includes(selectedZoneId as StudioZoneId)));
     const dressSelectable = isWomen && (dressSelected && dressVisible && selectedZoneId !== "dress");
-    const generationLimit = 100;
-    const generationRequestsUsed = Math.min(Number(user?.bodyProfile?.outfitGenerationCount || 0), generationLimit);
-    const remainingGenerationRequests = Math.max(generationLimit - generationRequestsUsed, 0);
-    const generationLimitReached = remainingGenerationRequests <= 0;
+    const remainingGenerationRequests = outfitStudioStats.isAdmin ? Infinity : outfitStudioStats.triesRemaining;
+    const generationLimitReached = !outfitStudioStats.isAdmin && remainingGenerationRequests <= 0;
     const canGenerateOutfit = profileReady && hasSelectedOutfitItems && !generationLimitReached;
     const shouldOpenProfileSettings = !profileReady;
 
@@ -1814,15 +1836,17 @@ export default function OutfitStudioPage() {
                                         : !profileReady
                                             ? "Update profile to generate"
                                         : generationLimitReached
-                                            ? "Generation limit reached"
+                                            ? "Spend 100 TND to earn more tries"
                                         : hasSelectedOutfitItems
                                             ? `Generate outfit - ${formatTndPrice(selectedOutfitTotalPrice)}`
                                             : "Select at least one item"}
                                 </button>
                                 <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-[#999]">
-                                    {remainingGenerationRequests > 0
-                                        ? `${remainingGenerationRequests} generation${remainingGenerationRequests === 1 ? "" : "s"} left`
-                                        : "No generations left"}
+                                    {outfitStudioStats.isAdmin
+                                        ? "Unlimited generations"
+                                        : remainingGenerationRequests > 0
+                                            ? `${remainingGenerationRequests} generation${remainingGenerationRequests === 1 ? "" : "s"} left`
+                                            : "No generations left"}
                                 </p>
                             </div>
                         </div>

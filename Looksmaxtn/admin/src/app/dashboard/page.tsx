@@ -13,8 +13,15 @@ interface Stats {
   storeName?: string;
 }
 
+interface Credits {
+  allowed: number;
+  used: number;
+  remaining: number;
+}
+
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
+  const [credits, setCredits] = useState<Credits | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -22,6 +29,7 @@ export default function DashboardPage() {
       .then(async (r) => {
         const data = await r.json();
         if (!r.ok) throw new Error(data.error || "Failed to load dashboard");
+
         setStats({
           totalProducts: Number(data.totalProducts || 0),
           totalOrders: Number(data.totalOrders || 0),
@@ -31,6 +39,20 @@ export default function DashboardPage() {
           scope: data.scope,
           storeName: data.storeName,
         });
+
+        if (data.scope === "store") {
+          fetch("/api/users/me/store-credits", withAuthRequest())
+            .then(async (r) => {
+              const creditData = await r.json();
+              if (!r.ok) throw new Error(creditData.error || "Failed to load credits");
+              setCredits({
+                allowed: Number(creditData.allowed || 0),
+                used: Number(creditData.used || 0),
+                remaining: Number(creditData.remaining || 0),
+              });
+            })
+            .catch(() => setCredits(null));
+        }
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load dashboard"));
   }, []);
@@ -43,6 +65,9 @@ export default function DashboardPage() {
     { label: "Total Orders", value: stats.totalOrders, icon: "🛒", color: "text-info" },
     { label: "Pending Orders", value: stats.pendingOrders, icon: "⏳", color: "text-warning" },
     { label: "Products", value: stats.totalProducts, icon: "📦", color: "text-accent" },
+    ...(stats.scope === "store"
+      ? [{ label: "Credits Remaining", value: credits ? credits.remaining : "Loading...", icon: "💳", color: "text-accent" }]
+      : []),
     ...(stats.scope === "store"
       ? []
       : [{ label: "Users", value: stats.totalUsers, icon: "👥", color: "text-info" }]),

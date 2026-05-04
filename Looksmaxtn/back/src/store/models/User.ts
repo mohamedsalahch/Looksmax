@@ -22,6 +22,17 @@ export interface IBodyProfile {
   imageEnhancing: boolean;
   profileImageRequiresGeneration: boolean;
   profileImageValidationError?: string;
+  outfitStudioTriesUsed?: number;
+}
+
+export interface IOutfitStudioStats {
+  initialTries: number;
+  triesUsed: number;
+}
+
+export interface IStoreOwnerStats {
+  triesAllowed: number;
+  triesUsed: number;
 }
 
 export interface IUser extends Document {
@@ -44,6 +55,8 @@ export interface IUser extends Document {
   passwordResetSentAt?: Date | null;
   address?: IAddress;
   bodyProfile?: IBodyProfile;
+  outfitStudioStats?: IOutfitStudioStats;
+  storeOwnerStats?: IStoreOwnerStats;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -74,6 +87,23 @@ const bodyProfileSchema = new Schema<IBodyProfile>(
     imageEnhancing: { type: Boolean, default: false },
     profileImageRequiresGeneration: { type: Boolean, default: false },
     profileImageValidationError: { type: String, default: "" },
+    outfitStudioTriesUsed: { type: Number, default: 0 },
+  },
+  { _id: false }
+);
+
+const outfitStudioStatsSchema = new Schema<IOutfitStudioStats>(
+  {
+    initialTries: { type: Number, default: 5 },
+    triesUsed: { type: Number, default: 0 },
+  },
+  { _id: false }
+);
+
+const storeOwnerStatsSchema = new Schema<IStoreOwnerStats>(
+  {
+    triesAllowed: { type: Number, default: 50 },
+    triesUsed: { type: Number, default: 0 },
   },
   { _id: false }
 );
@@ -99,6 +129,8 @@ const userSchema = new Schema<IUser>(
     passwordResetSentAt: { type: Date, default: null },
     address: { type: addressSchema, default: () => ({}) },
     bodyProfile: { type: bodyProfileSchema, default: () => ({}) },
+    outfitStudioStats: { type: outfitStudioStatsSchema, default: () => ({ initialTries: 5, triesUsed: 0 }) },
+    storeOwnerStats: { type: storeOwnerStatsSchema, default: () => ({ triesAllowed: 50, triesUsed: 0 }) },
   },
   { timestamps: true }
 );

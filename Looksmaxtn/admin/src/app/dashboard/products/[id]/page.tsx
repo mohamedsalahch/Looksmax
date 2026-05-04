@@ -98,6 +98,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
   const [isZoomOpen, setIsZoomOpen] = useState(false);
   const [userRole, setUserRole] = useState("");
   const [togglingVisibility, setTogglingVisibility] = useState(false);
+  const [updatingApproval, setUpdatingApproval] = useState(false);
 
   useEffect(() => {
     fetch("/api/auth/me", withAuthRequest())
@@ -152,12 +153,45 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
     }
   };
 
+  const handleApprovalUpdate = async (approvalStatus: "approved" | "rejected") => {
+    if (!product || updatingApproval) return;
+
+    setUpdatingApproval(true);
+
+    try {
+      const response = await fetch(
+        `/api/products/${product._id}`,
+        withAuthRequest({
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ approvalStatus }),
+        })
+      );
+      const data = await response.json();
+      if (!response.ok || !data.product) return;
+
+      setProduct((current) =>
+        current
+          ? {
+              ...current,
+              approvalStatus: data.product.approvalStatus || approvalStatus,
+            }
+          : current
+      );
+    } catch {
+      // Leave the current state unchanged if the update fails.
+    } finally {
+      setUpdatingApproval(false);
+    }
+  };
+
   const images = product?.images || [];
   const mainImage = images[selectedImageIndex] || images.find((image) => image.isMain) || images[0];
   const categories = product?.categories || [];
   const details = product?.details || [];
   const isInactive = product?.isActive === false || product?.visibilityStatus === "inactive";
   const canToggleVisibility = userRole === "admin" || userRole === "store_owner";
+  const canModerateProduct = userRole === "admin";
 
   if (loading) return <p className="text-xs text-text-secondary animate-pulse">Loading product...</p>;
   if (!product) return <p className="text-sm text-text-secondary">Product not found.</p>;
@@ -194,33 +228,62 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
             Edit Product
           </Link>
         ) : userRole === "admin" ? (
-          <div className="flex items-center gap-3 rounded border border-border bg-bg-card px-4 py-3">
-            <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-wider text-text-secondary">Visibility</p>
-              <p className="text-xs font-medium uppercase tracking-wider text-text-primary">
-                {isInactive ? "Inactive" : "Active"}
-              </p>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3 rounded border border-border bg-bg-card px-4 py-3">
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-wider text-text-secondary">Visibility</p>
+                <p className="text-xs font-medium uppercase tracking-wider text-text-primary">
+                  {isInactive ? "Inactive" : "Active"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleToggleVisibility()}
+                disabled={!canToggleVisibility || togglingVisibility}
+                className={`group relative inline-flex h-6 w-12 items-center transition-opacity ${
+                  togglingVisibility ? "opacity-60" : ""
+                }`}
+                aria-label={`Toggle visibility for ${product.name}`}
+              >
+                <span
+                  className={`absolute inset-0 transition-colors ${
+                    isInactive ? "bg-[#d9d3c9]" : "bg-[#d7c08c]"
+                  }`}
+                />
+                <span
+                  className={`absolute top-[2px] h-5 w-5 bg-[#1a1a1a] transition-all duration-200 ease-out ${
+                    isInactive ? "left-[2px]" : "left-[25px]"
+                  }`}
+                />
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => void handleToggleVisibility()}
-              disabled={!canToggleVisibility || togglingVisibility}
-              className={`group relative inline-flex h-6 w-12 items-center transition-opacity ${
-                togglingVisibility ? "opacity-60" : ""
-              }`}
-              aria-label={`Toggle visibility for ${product.name}`}
-            >
-              <span
-                className={`absolute inset-0 transition-colors ${
-                  isInactive ? "bg-[#d9d3c9]" : "bg-[#d7c08c]"
-                }`}
-              />
-              <span
-                className={`absolute top-[2px] h-5 w-5 bg-[#1a1a1a] transition-all duration-200 ease-out ${
-                  isInactive ? "left-[2px]" : "left-[25px]"
-                }`}
-              />
-            </button>
+
+            <div className="rounded border border-border bg-bg-card px-4 py-3 space-y-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-text-secondary">Approval</p>
+                <p className="text-xs font-medium uppercase tracking-wider text-text-primary">
+                  {product.approvalStatus || "approved"}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleApprovalUpdate("approved")}
+                  disabled={!canModerateProduct || updatingApproval || (product.approvalStatus || "approved") === "approved"}
+                  className="text-[10px] uppercase tracking-wider text-[#6b6055] hover:text-text-primary disabled:opacity-50"
+                >
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleApprovalUpdate("rejected")}
+                  disabled={!canModerateProduct || updatingApproval || (product.approvalStatus || "approved") === "rejected"}
+                  className="text-[10px] uppercase tracking-wider text-danger hover:text-danger/80 disabled:opacity-50"
+                >
+                  Reject
+                </button>
+              </div>
+            </div>
           </div>
         ) : (
           <span className="bg-bg-secondary text-text-secondary px-4 py-2 text-xs font-semibold tracking-wide uppercase">

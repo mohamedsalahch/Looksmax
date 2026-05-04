@@ -5,6 +5,7 @@ import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
 import { saveProductImages } from "@/admin/lib/productUploads";
 import { getConditionStatusFromScore } from "@/admin/lib/productCondition";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
+import { broadcastAdminEvent } from "@/admin/lib/adminEvents";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
 import { getSoldQuantityByProductAndSize, getSoldQuantityByProductIds } from "@/lib/productInventory";
 
@@ -41,6 +42,10 @@ function getAvailabilityStatus(params: {
 
 function parseStringArray(value: FormDataEntryValue | null) {
   return JSON.parse(String(value || "[]")) as string[];
+}
+
+function normalizeReference(value: unknown) {
+  return String(value || "").trim();
 }
 
 function normalizeProductType(value: string) {
@@ -150,7 +155,7 @@ function getProductPayload(
     categories: parseStringArray(formData.get("categories")),
     description: String(formData.get("description") || ""),
     brand: String(formData.get("brand") || "LOOKSMAX"),
-    reference: String(formData.get("reference") || ""),
+    reference: normalizeReference(formData.get("reference")),
     stock: Number.isNaN(rawStock) ? 0 : Math.max(0, rawStock),
     sizeStock: sizeStockMap,
     colorImages: colorImagesMap,
@@ -174,6 +179,108 @@ function getProductPayload(
       isMain: index === Math.min(mainImageIndex, imagePaths.length - 1),
     })),
   };
+}
+
+async function ensureUniqueProductReference(params: {
+  ownerId?: string | null;
+  reference: string;
+}) {
+  const { ownerId, reference } = params;
+  if (!ownerId || !reference) return null;
+
+  const existing = await Product.findOne({
+    "createdBy.id": ownerId,
+    reference,
+  })
+    .select("_id")
+    .lean();
+
+  if (existing) {
+    return NextResponse.json(
+      { error: "Reference must be unique within the same store." },
+      { status: 409 }
+    );
+  }
+
+  return null;
+}
+
+function buildAdminProductEventPayload(
+  product: {
+    _id: unknown;
+    name?: string | null;
+    brand?: string | null;
+    reference?: string | null;
+    approvalStatus?: string | null;
+    createdAt?: Date | string | null;
+    updatedAt?: Date | string | null;
+    isActive?: boolean | null;
+    createdBy?: { id?: string; name?: string; email?: string } | null;
+  },
+  changeType: "created" | "updated"
+) {
+  const createdAt =
+    product.createdAt instanceof Date ? product.createdAt.toISOString() : String(product.createdAt || "");
+  const updatedAt =
+    product.updatedAt instanceof Date ? product.updatedAt.toISOString() : String(product.updatedAt || createdAt);
+
+  return {
+    type: "product:upsert" as const,
+    product: {
+      _id: String(product._id),
+      name: String(product.name || ""),
+      brand: String(product.brand || ""),
+      reference: String(product.reference || ""),
+      approvalStatus: String(product.approvalStatus || "pending"),
+      createdAt,
+      updatedAt,
+      visibilityStatus: product.isActive === false ? "inactive" : "active",
+      isActive: product.isActive !== false,
+      changeType,
+      createdBy: product.createdBy
+        ? {
+            id: String(product.createdBy.id || ""),
+            name: String(product.createdBy.name || ""),
+            email: String(product.createdBy.email || ""),
+          }
+        : null,
+    },
+  };
+}
+
+async function notifyAdminProductCreated(req: NextRequest, product: {
+  _id: unknown;
+  name?: string | null;
+  brand?: string | null;
+  reference?: string | null;
+  approvalStatus?: string | null;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+  isActive?: boolean | null;
+  createdBy?: { id?: string; name?: string; email?: string } | null;
+}) {
+  const webhookSecret = process.env.OUTFIT_WEBHOOK_SECRET || "";
+  const payload = buildAdminProductEventPayload(product, "created");
+
+  try {
+    const webhookUrl = new URL("/api/admin/notifications/webhook", req.url);
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(webhookSecret ? { "x-webhook-secret": webhookSecret } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      console.warn("[admin-notifications-webhook] Failed to send product notification", await response.text());
+      broadcastAdminEvent(payload);
+    }
+  } catch (error) {
+    console.error("[admin-notifications-webhook] Product notification error:", error);
+    broadcastAdminEvent(payload);
+  }
 }
 
 export async function GET(req: NextRequest) {
@@ -298,6 +405,11 @@ export async function POST(req: NextRequest) {
       cloneSourceImagePath,
       originPictures
     );
+    const duplicateResponse = await ensureUniqueProductReference({
+      ownerId: auditActor?.id,
+      reference: body.reference || "",
+    });
+    if (duplicateResponse) return duplicateResponse;
     if (session.role === "store_owner") {
       body.tag = "NEW";
       body.newTagDurationDays = 3;
@@ -326,6 +438,9 @@ export async function POST(req: NextRequest) {
       createdBy: auditActor,
       updatedBy: auditActor,
     });
+    if (session.role === "store_owner") {
+      await notifyAdminProductCreated(req, product.toObject());
+    }
     return NextResponse.json({ product }, { status: 201 });
   } catch (error) { logRequestError("admin.products.post", req, error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }

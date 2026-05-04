@@ -5,6 +5,7 @@ import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
 import { deleteProductImage, saveProductImages } from "@/admin/lib/productUploads";
 import { getConditionStatusFromScore } from "@/admin/lib/productCondition";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
+import { broadcastAdminEvent } from "@/admin/lib/adminEvents";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
 import { getSoldQuantityByProductAndSize, getSoldQuantityByProductIds } from "@/lib/productInventory";
 
@@ -95,6 +96,10 @@ function parseCompanionSettings(raw: FormDataEntryValue | null) {
   } catch { return null; }
 }
 
+function normalizeReference(value: unknown) {
+  return String(value || "").trim();
+}
+
 function getDeclaredSizes(productSizes: unknown, bodySizes?: unknown) {
   const sizes = new Set<string>();
   for (const source of [productSizes, bodySizes]) {
@@ -106,6 +111,33 @@ function getDeclaredSizes(productSizes: unknown, bodySizes?: unknown) {
     }
   }
   return Array.from(sizes);
+}
+
+async function ensureUniqueProductReference(params: {
+  ownerId?: string | null;
+  reference: string;
+  excludeProductId?: string;
+}) {
+  const { ownerId, reference, excludeProductId } = params;
+  if (!ownerId || !reference) return null;
+
+  const filter: Record<string, unknown> = {
+    "createdBy.id": ownerId,
+    reference,
+  };
+  if (excludeProductId) {
+    filter._id = { $ne: excludeProductId };
+  }
+
+  const existing = await Product.findOne(filter).select("_id").lean();
+  if (existing) {
+    return NextResponse.json(
+      { error: "Reference must be unique within the same store." },
+      { status: 409 }
+    );
+  }
+
+  return null;
 }
 
 function buildSizeStockSnapshot(params: {
@@ -144,6 +176,49 @@ function buildSizeStockSnapshot(params: {
 
 function canAccessProduct(session: { userId: string; role: string }, product: { createdBy?: { id?: string } | null }) {
   return session.role === "admin" || product.createdBy?.id === session.userId;
+}
+
+function buildAdminProductEventPayload(
+  product: {
+    _id: unknown;
+    name?: string | null;
+    brand?: string | null;
+    reference?: string | null;
+    approvalStatus?: string | null;
+    createdAt?: Date | string | null;
+    updatedAt?: Date | string | null;
+    isActive?: boolean | null;
+    createdBy?: { id?: string; name?: string; email?: string } | null;
+  },
+  changeType: "created" | "updated"
+) {
+  const createdAt =
+    product.createdAt instanceof Date ? product.createdAt.toISOString() : String(product.createdAt || "");
+  const updatedAt =
+    product.updatedAt instanceof Date ? product.updatedAt.toISOString() : String(product.updatedAt || createdAt);
+
+  return {
+    type: "product:upsert" as const,
+    product: {
+      _id: String(product._id),
+      name: String(product.name || ""),
+      brand: String(product.brand || ""),
+      reference: String(product.reference || ""),
+      approvalStatus: String(product.approvalStatus || "pending"),
+      createdAt,
+      updatedAt,
+      visibilityStatus: product.isActive === false ? "inactive" : "active",
+      isActive: product.isActive !== false,
+      changeType,
+      createdBy: product.createdBy
+        ? {
+            id: String(product.createdBy.id || ""),
+            name: String(product.createdBy.name || ""),
+            email: String(product.createdBy.email || ""),
+          }
+        : null,
+    },
+  };
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -236,13 +311,23 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }
 
       if (typeof body.reference === "string") {
-        update.reference = body.reference;
+        update.reference = normalizeReference(body.reference);
+        const duplicateResponse = await ensureUniqueProductReference({
+          ownerId: existingProduct.createdBy?.id || session.userId,
+          reference: update.reference,
+          excludeProductId: id,
+        });
+        if (duplicateResponse) return duplicateResponse;
       }
 
       if (session.role === "admin" && ["pending", "approved", "rejected"].includes(body.approvalStatus)) {
         update.approvalStatus = body.approvalStatus;
       } else if (session.role === "store_owner") {
-        update.approvalStatus = "pending";
+        const updatedKeys = Object.keys(body || {});
+        const isVisibilityOnlyUpdate = updatedKeys.length > 0 && updatedKeys.every((key) => key === "isActive");
+        if (!isVisibilityOnlyUpdate) {
+          update.approvalStatus = "pending";
+        }
       }
 
       if (body.sizeStock && typeof body.sizeStock === "object") {
@@ -409,22 +494,36 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       })
       .filter(Boolean) as { url: string; isMain: boolean; key: string }[];
 
-    if (mergedImages.length === 0) {
+    const existingProductImages = (existingProduct.images || []).filter(
+      (image): image is { url: string; isMain?: boolean } => Boolean(image && image.url)
+    );
+    const nextImages =
+      mergedImages.length > 0
+        ? mergedImages
+        : existingProductImages.map((image, index) => ({
+            url: image.url,
+            isMain: Boolean(image.isMain),
+            key: `existing:${image.url}:${index}`,
+          }));
+
+    if (nextImages.length === 0) {
       return NextResponse.json({ error: "Please keep or upload at least one product image." }, { status: 400 });
     }
 
-    const selectedKey = mergedImages.some((image) => image.key === mainImageKey)
+    const selectedKey = nextImages.some((image) => image.key === mainImageKey)
       ? mainImageKey
-      : mergedImages[0].key;
+      : nextImages[0].key;
 
-    const images = mergedImages.map(({ key, url }) => ({
+    const images = nextImages.map(({ key, url, isMain }) => ({
       url,
-      isMain: key === selectedKey,
+      isMain: mergedImages.length > 0 ? key === selectedKey : Boolean(isMain),
     }));
 
-    const removedImages = (existingProduct.images || [])
-      .map((image) => image.url)
-      .filter((url) => !existingImages.some((image) => image.url === url));
+    const removedImages = mergedImages.length > 0
+      ? (existingProduct.images || [])
+          .map((image) => image.url)
+          .filter((url) => !existingImages.some((image) => image.url === url))
+      : [];
 
     const sizes = productType === "perfume" ? [] : parseStringArray(formData.get("sizes"));
     const rawSizeStock = String(formData.get("sizeStock") || "").trim();
@@ -481,7 +580,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       categories: parseStringArray(formData.get("categories")),
       description: String(formData.get("description") || ""),
       brand: String(formData.get("brand") || "LOOKSMAX"),
-      reference: String(formData.get("reference") || ""),
+      reference: normalizeReference(formData.get("reference")),
       tag: String(formData.get("tag") || ""),
       newTagDurationDays: Math.max(1, Math.floor(Number(formData.get("newTagDurationDays") || 3)) || 3),
       productType,
@@ -511,6 +610,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (computedStock > 0) {
       body.isActive = true;
     }
+
+    const duplicateResponse = await ensureUniqueProductReference({
+      ownerId: existingProduct.createdBy?.id || session.userId,
+      reference: body.reference || "",
+      excludeProductId: id,
+    });
+    if (duplicateResponse) return duplicateResponse;
 
     const product = await Product.findByIdAndUpdate(id, body, { new: true }).lean();
     if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -562,7 +668,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       product: {
         ...product,
         stock: inventory.availableStock,
@@ -579,7 +685,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         approvalStatus: product.approvalStatus || "approved",
       },
     });
-  } catch (error) { logRequestError("admin.products.id.put", req, error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
+    broadcastAdminEvent(buildAdminProductEventPayload(product, "updated"));
+    return response;
+    } catch (error) { logRequestError("admin.products.id.put", req, error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -595,6 +703,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (!canAccessProduct(session, product)) return NextResponse.json({ error: "Not found" }, { status: 404 });
     await Product.findByIdAndDelete(id);
+    broadcastAdminEvent({ type: "product:delete", productId: id });
     return NextResponse.json({ success: true });
   } catch (error) { console.error(error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }

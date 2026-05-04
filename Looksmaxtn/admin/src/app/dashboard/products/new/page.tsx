@@ -2330,13 +2330,17 @@ export default function NewProductPage() {
         if (frontOrigin) body.append("originPictureFrontFile", await compressImageFile(frontOrigin));
         if (backOrigin) body.append("originPictureBackFile", await compressImageFile(backOrigin));
 
-        const res = await fetch("/api/products", withAuthRequest({ method: "POST", body }));
-        if (!res.ok) {
-          const d = await res.json();
-          setError(d.error || "Unable to create product.");
-          setLoading(false);
-          return;
+      const res = await fetch("/api/products", withAuthRequest({ method: "POST", body }));
+      if (!res.ok) {
+        const d = await res.json();
+        const message = d.error || "Unable to create product.";
+        setError(message);
+        if (res.status === 409 || /reference must be unique within the same store/i.test(message)) {
+          scrollToElement(productBasicsRef.current);
         }
+        setLoading(false);
+        return;
+      }
         router.push("/dashboard/products");
       } catch {
         setError("Network error");
@@ -2508,7 +2512,11 @@ export default function NewProductPage() {
 
       if (!res.ok) {
         const d = await res.json();
-        setError(d.error || "Unable to create product.");
+        const message = d.error || "Unable to create product.";
+        setError(message);
+        if (res.status === 409 || /reference must be unique within the same store/i.test(message)) {
+          scrollToElement(productBasicsRef.current);
+        }
         setLoading(false);
         return;
       }

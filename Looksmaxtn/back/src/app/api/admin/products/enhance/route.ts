@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import mongoose from "mongoose";
 import dbConnect from "@/admin/lib/mongodb";
 import ProductMediaEnhancementJob from "@/admin/models/ProductMediaEnhancementJob";
+import User from "@/admin/models/User";
 import {
   saveProductMediaSourceImage,
 } from "@/admin/lib/productMediaUploads";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
+import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
 
 const PRODUCT_MEDIA_ENHANCEMENT_PROMPT = `You are a professional e-commerce product retouching assistant.
 
@@ -105,12 +108,35 @@ function getWebhookBaseUrl(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     await logRequestStart("admin.products.enhance.post", req);
+
+    const session = await getSession();
+    if (!session || !canAccessAdminResource(session.role, "products")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
     const baseUrl = process.env.ADMIN_IMAGE_GENERATION_URL_BASE;
     if (!baseUrl) {
       return NextResponse.json({ error: "ADMIN_IMAGE_GENERATION_URL_BASE is not configured." }, { status: 500 });
     }
 
     await dbConnect();
+
+    // Check and consume a try for store_owners
+    if (session.role === "store_owner") {
+      const requestingUser = await User.findById(new mongoose.Types.ObjectId(session.userId))
+        .select("storeOwnerStats")
+        .lean();
+      const triesAllowed = requestingUser?.storeOwnerStats?.triesAllowed ?? 50;
+      const triesUsed = requestingUser?.storeOwnerStats?.triesUsed ?? 0;
+      if (triesUsed >= triesAllowed) {
+        return NextResponse.json({ error: "Enhancement try limit reached. Contact admin for more tries." }, { status: 403 });
+      }
+      await User.updateOne(
+        { _id: new mongoose.Types.ObjectId(session.userId) },
+        { $inc: { "storeOwnerStats.triesUsed": 1 } }
+      );
+    }
+
     const formData = await req.formData();
     const frontFile = formData.get("front");
     const backFile = formData.get("back");
