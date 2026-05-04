@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {useAuth} from "@/providers/AuthContext";
 import { useCart } from "@/providers/CartContext";
 import ProductCard from "@/components/ProductCard";
@@ -13,6 +13,7 @@ import { withAuthRequest } from "@/lib/authClient";
 import { shareOutfit } from "@/lib/share";
 import { upsertSavedOutfitSession } from "@/lib/savedOutfitsSession";
 import { readStudioSessionState, writeStudioSessionState, type StudioSessionZoneItem } from "@/lib/studioSession";
+import { getEnhancedFrontDisplayImage } from "@/lib/colorwayImage";
 
 interface CategoryNode {
     _id: string;
@@ -655,9 +656,10 @@ function StudioModel({
 
 export default function OutfitStudioPage() {
     const router = useRouter();
-    const pathname = usePathname();
     const {user, loading, refreshUser} = useAuth();
     const { items: cartItems, hydrated: cartHydrated } = useCart();
+    const isAuthenticated = Boolean(user?.id);
+    const isGuestStudio = !isAuthenticated;
     const isWomen = user?.bodyProfile?.gender === "women";
     const studioTitle = isWomen ? "Outfit Builder" : "Outfit Studio";
     const [categories, setCategories] = useState<CategoryNode[]>([]);
@@ -1141,7 +1143,91 @@ export default function OutfitStudioPage() {
             });
             return next;
         });
+        setZoneHistory((current) => {
+            const next = { ...current };
+            staleZoneIds.forEach((zoneId) => {
+                next[zoneId] = (next[zoneId] || []).filter((entry) => cartProductIds.has(getCartItemProductId(entry.id)));
+            });
+            return next;
+        });
+        setSelectedZoneId("");
+        setShowAllSelectedItems(true);
     }, [cartHydrated, cartItems, outfit, studioStateHydrated]);
+
+    useEffect(() => {
+        if (!studioStateHydrated) return;
+
+        const handleCartItemRemoved = (event: Event) => {
+            const detail = (event as CustomEvent<{ cartItemId?: string }>).detail;
+            const removedCartItemId = detail?.cartItemId;
+            if (!removedCartItemId) return;
+
+            setZoneOverrides((current) => {
+                const next = { ...current };
+                BODY_ZONES.forEach((zone) => {
+                    if (next[zone.id]?.id === removedCartItemId) {
+                        next[zone.id] = null;
+                    }
+                });
+                return next;
+            });
+
+            setOutfit((current) => {
+                const next = { ...current };
+                BODY_ZONES.forEach((zone) => {
+                    if (next[zone.id]?.id === removedCartItemId) {
+                        next[zone.id] = null;
+                    }
+                });
+                return next;
+            });
+
+            setZoneHistory((current) => {
+                const next = { ...current };
+                BODY_ZONES.forEach((zone) => {
+                    next[zone.id] = (next[zone.id] || []).filter((entry) => entry.id !== removedCartItemId);
+                });
+                return next;
+            });
+
+            setSelectedZoneId("");
+            setShowAllSelectedItems(true);
+        };
+
+        const handleCartCleared = () => {
+            setZoneOverrides((current) => {
+                const next = { ...current };
+                BODY_ZONES.forEach((zone) => {
+                    next[zone.id] = null;
+                });
+                return next;
+            });
+            setOutfit((current) => {
+                const next = { ...current };
+                BODY_ZONES.forEach((zone) => {
+                    next[zone.id] = null;
+                });
+                return next;
+            });
+            setZoneHistory((current) => {
+                const next = { ...current };
+                BODY_ZONES.forEach((zone) => {
+                    next[zone.id] = [];
+                });
+                return next;
+            });
+            setSelectedZoneId("");
+            setShowAllSelectedItems(true);
+        };
+
+        window.addEventListener("looksmax:cart-item-removed", handleCartItemRemoved as EventListener);
+        window.addEventListener("looksmax:cart-cleared", handleCartCleared as EventListener);
+
+        return () => {
+            window.removeEventListener("looksmax:cart-item-removed", handleCartItemRemoved as EventListener);
+            window.removeEventListener("looksmax:cart-cleared", handleCartCleared as EventListener);
+        };
+    }, [outfit, selectedZoneId, studioStateHydrated]);
 
     useEffect(() => {
         if (!studioStateHydrated) return;
@@ -1258,6 +1344,11 @@ export default function OutfitStudioPage() {
     };
 
     const handleGenerateOutfit = async () => {
+        if (!isAuthenticated) {
+            router.push(`/login?next=${encodeURIComponent("/studio")}`);
+            return;
+        }
+
         if (!profileReady) {
             router.push("/account/settings");
             return;
@@ -1611,25 +1702,6 @@ export default function OutfitStudioPage() {
         );
     }
 
-    if (!user) {
-        return (
-            <div className="pt-[80px] min-h-screen flex items-center justify-center px-4">
-                <div className="text-center">
-                    <h1 className="text-lg font-semibold tracking-wide uppercase mb-3">Sign In Required</h1>
-                    <p className="text-sm text-text-secondary mb-6">
-                        Sign in to build looks around your body profile.
-                    </p>
-                    <Link
-                        href={`/login?next=${encodeURIComponent(pathname)}`}
-                        className="bg-foreground text-background px-8 py-3 text-sm font-medium tracking-wide uppercase"
-                    >
-                        Sign In
-                    </Link>
-                </div>
-            </div>
-        );
-    }
-
     const activeGeneratedOutfitImage = generatedOutfitImages[generatedOutfitIndex] || "";
     const generatingPreviewImage =
         user?.bodyProfile?.profileImageEnhanced || user?.bodyProfile?.profileImage || "";
@@ -1659,18 +1731,22 @@ export default function OutfitStudioPage() {
                         <h1 className="mt-2 text-2xl font-semibold tracking-wide uppercase leading-tight">{studioTitle}</h1>
                     </div>
                     <div className="mt-1 flex shrink-0 items-center gap-6 md:mt-0">
-                        <Link
-                            href="/studio/outfits"
-                            className="inline-flex h-10 items-center text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-foreground hover:decoration-foreground"
-                        >
-                            SEE ALL
-                        </Link>
-                        <Link
-                            href="/account/settings"
-                            className="inline-flex h-10 items-center text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-foreground hover:decoration-foreground"
-                        >
-                            Edit Profile
-                        </Link>
+                        {isAuthenticated && (
+                            <>
+                                <Link
+                                    href="/studio/outfits"
+                                    className="inline-flex h-10 items-center text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-foreground hover:decoration-foreground"
+                                >
+                                    SEE ALL
+                                </Link>
+                                <Link
+                                    href="/account/settings"
+                                    className="inline-flex h-10 items-center text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-foreground hover:decoration-foreground"
+                                >
+                                    Edit Profile
+                                </Link>
+                            </>
+                        )}
                     </div>
                 </div>
 
@@ -1723,6 +1799,7 @@ export default function OutfitStudioPage() {
                                             const isSelectedHistoryItem =
                                                 outfit[item.zoneId]?.id === item.id ||
                                                 selectedZoneItem?.id === item.id;
+                                            const displayImage = getEnhancedFrontDisplayImage(item, item.image || "");
 
                                             return (
                                             <button
@@ -1736,9 +1813,9 @@ export default function OutfitStudioPage() {
                                                 }`}
                                             >
                                                 <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden bg-[#e8dccb]">
-                                                    {item.image ? (
+                                                    {displayImage ? (
                                                         <img
-                                                            src={item.image}
+                                                            src={displayImage}
                                                             alt={item.name}
                                                             className="h-full w-full object-cover"
                                                         />
@@ -1782,7 +1859,9 @@ export default function OutfitStudioPage() {
                                         />
                                         {visibleBodyZones.map((zone) => {
                                             const assignedItem = outfit[zone.id];
-                                            if (!assignedItem?.image) return null;
+                                            if (!assignedItem) return null;
+                                            const displayImage = getEnhancedFrontDisplayImage(assignedItem, assignedItem.image || "");
+                                            if (!displayImage) return null;
 
                                             return (
                                                 <button
@@ -1810,11 +1889,7 @@ export default function OutfitStudioPage() {
                                                     }`}
                                                     aria-label={`Remove ${assignedItem.name} from ${zone.label}`}
                                                 >
-                                                    <img
-                                                        src={assignedItem.image}
-                                                        alt={assignedItem.name}
-                                                        className="h-full w-full object-cover"
-                                                    />
+                                                    <img src={displayImage} alt={assignedItem.name} className="h-full w-full object-cover" />
                                                 </button>
                                             );
                                         })}
@@ -1824,14 +1899,16 @@ export default function OutfitStudioPage() {
                                 <button
                                     type="button"
                                     onClick={handleGenerateOutfit}
-                                    disabled={generatingOutfit || (!canGenerateOutfit && !shouldOpenProfileSettings)}
+                                    disabled={isAuthenticated && (generatingOutfit || (!canGenerateOutfit && !shouldOpenProfileSettings))}
                                     className={`mt-6 w-full rounded-none px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-white transition-colors ${
-                                        generatingOutfit || (!canGenerateOutfit && !shouldOpenProfileSettings)
+                                        isAuthenticated && (generatingOutfit || (!canGenerateOutfit && !shouldOpenProfileSettings))
                                             ? "cursor-not-allowed bg-[#1a1a1a] opacity-50"
                                             : "bg-[#1a1a1a] hover:bg-[#c9a96e]"
                                     }`}
                                 >
-                                    {generatingOutfit
+                                    {isGuestStudio
+                                        ? "Generate outfit"
+                                        : generatingOutfit
                                         ? "Generating..."
                                         : !profileReady
                                             ? "Update profile to generate"
@@ -1894,7 +1971,7 @@ export default function OutfitStudioPage() {
                                             <>
                                                 <img
                                                     src={generatingPreviewImage}
-                                                    alt={user.name}
+                                                    alt={user?.name || "Studio preview"}
                                                     className="max-h-full w-full object-contain blur-md opacity-60"
                                                 />
                                                 <div
@@ -1997,12 +2074,21 @@ export default function OutfitStudioPage() {
                         <div>
                             <p className="text-[11px] uppercase tracking-[0.18em] text-[#666]">Suggestions</p>
                         </div>
-                        <Link
-                            href={`/category/${genderCollectionSlug}`}
-                            className="text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-foreground hover:decoration-foreground"
-                        >
-                            See all
-                        </Link>
+                        {isAuthenticated ? (
+                            <Link
+                                href={`/category/${genderCollectionSlug}`}
+                                className="text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-foreground hover:decoration-foreground"
+                            >
+                                See all
+                            </Link>
+                        ) : (
+                            <Link
+                                href={`/login?next=${encodeURIComponent("/studio")}`}
+                                className="text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-foreground hover:decoration-foreground"
+                            >
+                                Sign in to personalize
+                            </Link>
+                        )}
                     </div>
 
                     <div className="mt-6 grid grid-cols-2 gap-x-3 gap-y-8 md:grid-cols-4 xl:grid-cols-5">
@@ -2035,7 +2121,9 @@ export default function OutfitStudioPage() {
                         ))}
                         {suggestedProducts.length === 0 && (
                             <div className="col-span-full bg-[#ede1ce] px-4 py-6 text-sm text-[#6B6055]">
-                                Add a gender in your Studio Profile to unlock tailored suggestions.
+                                {isAuthenticated
+                                    ? "Add a gender in your Studio Profile to unlock tailored suggestions."
+                                    : "Sign in to unlock tailored suggestions for your profile."}
                             </div>
                         )}
                     </div>

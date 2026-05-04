@@ -113,7 +113,6 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     <div className="space-y-6">
       <div className="flex items-start justify-between print:hidden">
         <div>
-          <Link href="/dashboard/orders" className="text-xs text-text-secondary hover:text-text-primary transition-colors mb-2 inline-block">← Back</Link>
           <h1 className="text-lg font-semibold">Order #{order._id.slice(-8).toUpperCase()}</h1>
           <p className="text-xs text-text-secondary">{new Date(order.createdAt).toLocaleString()}</p>
         </div>

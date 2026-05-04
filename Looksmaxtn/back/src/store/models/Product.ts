@@ -22,6 +22,15 @@ export interface ISizeStockEntry {
   conditionScore?: number | null;
 }
 
+export interface IProductVariant {
+  key: string;
+  size: string;
+  color?: string;
+  fullStock: number;
+  stock: number;
+  conditionScore?: number | null;
+}
+
 export interface IProduct extends Document {
   name: string;
   price: number;
@@ -34,6 +43,7 @@ export interface IProduct extends Document {
   stock: number;
   fullStock?: number;
   sizeStock?: Map<string, ISizeStockEntry> | null;
+  variants?: IProductVariant[];
   colorImages?: Map<string, number[]> | null;
   images: IProductImage[];
   tag?: string;
@@ -96,6 +106,16 @@ const productSchema = new Schema<IProduct>(
       }, { _id: false }),
       default: null,
     },
+    variants: [
+      new Schema<IProductVariant>({
+        key: { type: String, required: true, trim: true },
+        size: { type: String, required: true, trim: true },
+        color: { type: String, default: "", trim: true },
+        fullStock: { type: Number, default: 0, min: 0 },
+        stock: { type: Number, default: 0, min: 0 },
+        conditionScore: { type: Number, min: 0, max: 10, default: null },
+      }, { _id: false }),
+    ],
     colorImages: {
       type: Map,
       of: [Number],

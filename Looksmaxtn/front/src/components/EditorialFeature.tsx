@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import MediaRenderer from "@/components/MediaRenderer";
 
 export default function EditorialFeature({
   image,
@@ -48,15 +49,26 @@ export default function EditorialFeature({
           className="relative block w-full cursor-pointer group overflow-hidden bg-surface"
         >
           {image ? (
-          <img
-  src={image}
-  alt={label}
-  className={`block w-full h-auto transition-all duration-500 ${
-    mobileActive
-      ? "scale-[1.03] blur-none"
-      : "scale-100 blur-sm"
-  } md:scale-100 md:blur-none md:group-hover:scale-[1.03] md:group-hover:blur-sm`}
-/>
+            <MediaRenderer
+              src={image}
+              alt={label}
+              className={`block w-full h-auto transition-all duration-500 ${
+                mobileActive
+                  ? "scale-[1.03] blur-none"
+                  : "scale-100 blur-sm"
+              } md:scale-100 md:blur-none md:group-hover:scale-[1.03] md:group-hover:blur-sm`}
+              imageClassName={`block w-full h-auto transition-all duration-500 ${
+                mobileActive
+                  ? "scale-[1.03] blur-none"
+                  : "scale-100 blur-sm"
+              } md:scale-100 md:blur-none md:group-hover:scale-[1.03] md:group-hover:blur-sm`}
+              videoClassName={`block w-full h-auto transition-all duration-500 ${
+                mobileActive
+                  ? "scale-[1.03] blur-none"
+                  : "scale-100 blur-sm"
+              } md:scale-100 md:blur-none md:group-hover:scale-[1.03] md:group-hover:blur-sm`}
+              audioClassName="w-full px-4 py-8"
+            />
           ) : (
             <div className="w-full aspect-[4/5] md:aspect-[16/10] placeholder-img">
               <span className="relative z-10 text-sm tracking-widest">EDITORIAL</span>

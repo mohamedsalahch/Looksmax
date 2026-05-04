@@ -22,8 +22,18 @@ export interface IProduct extends Document {
   categories: string[];
   description: string;
   sizes: string[];
+  colors: string[];
   stock: number;
   fullStock?: number;
+  sizeStock?: Map<string, { fullStock: number; stock: number; conditionScore?: number | null }> | null;
+  variants?: {
+    key: string;
+    size: string;
+    color?: string;
+    fullStock: number;
+    stock: number;
+    conditionScore?: number | null;
+  }[];
   images: IProductImage[];
   tag?: string;
   brand: string;
@@ -69,8 +79,28 @@ const productSchema = new Schema<IProduct>(
     categories: [{ type: String, lowercase: true, trim: true }],
     description: { type: String, default: "" },
     sizes: [{ type: String }],
+    colors: [{ type: String }],
     stock: { type: Number, default: 1, min: 0 },
     fullStock: { type: Number, default: 1, min: 0 },
+    sizeStock: {
+      type: Map,
+      of: new Schema({
+        fullStock: { type: Number, default: 0, min: 0 },
+        stock: { type: Number, default: 0, min: 0 },
+        conditionScore: { type: Number, min: 0, max: 10, default: null },
+      }, { _id: false }),
+      default: null,
+    },
+    variants: [
+      new Schema({
+        key: { type: String, required: true, trim: true },
+        size: { type: String, required: true, trim: true },
+        color: { type: String, default: "", trim: true },
+        fullStock: { type: Number, default: 0, min: 0 },
+        stock: { type: Number, default: 0, min: 0 },
+        conditionScore: { type: Number, min: 0, max: 10, default: null },
+      }, { _id: false }),
+    ],
     images: [productImageSchema],
     tag: { type: String, default: "" },
     brand: { type: String, default: "" },

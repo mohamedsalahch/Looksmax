@@ -23,6 +23,14 @@ function extensionFromType(type: string, fallbackName: string) {
   if (type === "image/png") return ".png";
   if (type === "image/webp") return ".webp";
   if (type === "image/gif") return ".gif";
+  if (type === "video/mp4") return ".mp4";
+  if (type === "video/webm") return ".webm";
+  if (type === "video/ogg") return ".ogg";
+  if (type === "video/quicktime") return ".mov";
+  if (type === "audio/mpeg") return ".mp3";
+  if (type === "audio/mp4") return ".m4a";
+  if (type === "audio/wav") return ".wav";
+  if (type === "audio/ogg") return ".oga";
   return path.extname(fallbackName) || ".jpg";
 }
 
@@ -31,6 +39,15 @@ function contentTypeFromExtension(ext: string) {
   if (e === ".png") return "image/png";
   if (e === ".webp") return "image/webp";
   if (e === ".gif") return "image/gif";
+  if (e === ".mp4") return "video/mp4";
+  if (e === ".webm") return "video/webm";
+  if (e === ".ogg") return "video/ogg";
+  if (e === ".mov") return "video/quicktime";
+  if (e === ".m4v") return "video/x-m4v";
+  if (e === ".mp3") return "audio/mpeg";
+  if (e === ".m4a") return "audio/mp4";
+  if (e === ".wav") return "audio/wav";
+  if (e === ".oga") return "audio/ogg";
   return "image/jpeg";
 }
 

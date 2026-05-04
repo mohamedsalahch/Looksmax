@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { withAuthRequest } from "@/lib/authClient";
 import { compressImageFile } from "@/lib/imageCompression";
 
-type ModelGender = "male" | "female" | "unisex";
+type ModelGender = "male" | "female" | "child";
 
 interface ModelAsset {
   _id: string;
@@ -16,10 +16,14 @@ interface ModelAsset {
   backImage: string;
 }
 
+function normalizeModelGender(gender?: string | null): ModelGender {
+  return gender === "male" || gender === "female" || gender === "child" ? gender : "child";
+}
+
 export default function ModelsPage() {
   const [models, setModels] = useState<ModelAsset[]>([]);
   const [name, setName] = useState("");
-  const [gender, setGender] = useState<ModelGender>("unisex");
+  const [gender, setGender] = useState<ModelGender>("male");
   const [images, setImages] = useState<File[]>([]);
   const [frontImageIndex, setFrontImageIndex] = useState<number | null>(null);
   const [backImageIndex, setBackImageIndex] = useState<number | null>(null);
@@ -43,7 +47,7 @@ export default function ModelsPage() {
 
   const resetForm = () => {
     setName("");
-    setGender("unisex");
+    setGender("male");
     setImages([]);
     setFrontImageIndex(null);
     setBackImageIndex(null);
@@ -153,9 +157,9 @@ export default function ModelsPage() {
             onChange={(e) => setGender(e.target.value as ModelGender)}
             className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
           >
-            <option value="unisex">Unisex</option>
             <option value="male">Male</option>
             <option value="female">Female</option>
+            <option value="child">Child</option>
           </select>
           <input
             id="model-images-upload"
@@ -253,7 +257,7 @@ export default function ModelsPage() {
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm font-medium truncate">{model.name}</p>
                   <span className="text-[9px] uppercase tracking-wider border border-border px-1.5 py-0.5 text-text-secondary">
-                    {model.gender || "unisex"}
+                    {normalizeModelGender(model.gender)}
                   </span>
                 </div>
                 <p className="text-[10px] text-text-secondary uppercase tracking-wider">

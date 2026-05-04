@@ -77,13 +77,18 @@ export function getLeavesForZone<T extends ClassifiableCategory>(
   if (zone === "other") return [];
   const isLeaf = (category: T) =>
     !categories.some((other) => other.parentSlug === category.slug);
+  const seenLabels = new Set<string>();
   return categories.filter((category) => {
     if (!isLeaf(category)) return false;
     const categoryZone = getCategoryZone(categories, category.slug);
     if (categoryZone !== zone) return false;
-    if (gender === "unisex") return true;
     const categoryGender = getCategoryGender(categories, category.slug);
-    return categoryGender === gender || categoryGender === "unisex";
+    const normalizedLabel = category.name.trim().toLowerCase();
+    if (!normalizedLabel) return false;
+    if (seenLabels.has(normalizedLabel)) return false;
+    if (gender !== "unisex" && !(categoryGender === gender || categoryGender === "unisex")) return false;
+    seenLabels.add(normalizedLabel);
+    return true;
   });
 }
 

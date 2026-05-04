@@ -21,6 +21,7 @@ type ProductType = "fashion" | "perfume" | "clothing" | "shoes";
 
 type ProductInfoProduct = {
   id?: string;
+  initialSelectedColorHex?: string | null;
   name: string;
   categories?: string[];
   price: string;
@@ -31,6 +32,14 @@ type ProductInfoProduct = {
   images?: { url: string; isMain: boolean }[];
   size?: string;
   sizes?: string[];
+  variants?: Array<{
+    key: string;
+    size: string;
+    color?: string;
+    stock?: number;
+    fullStock?: number;
+    conditionScore?: number | null;
+  }>;
   stock: number;
   sizeAvailability?: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null;
   initialSelectedSize?: string;
@@ -56,18 +65,6 @@ type ProductInfoProduct = {
   colorImages?: Record<string, number[]> | null;
 };
 
-function splitVariantLabel(value: string) {
-  const separatorIndex = value.lastIndexOf(" / ");
-  if (separatorIndex === -1) {
-    return { sizeLabel: value.trim(), colorHex: "" };
-  }
-
-  return {
-    sizeLabel: value.slice(0, separatorIndex).trim(),
-    colorHex: value.slice(separatorIndex + 3).trim(),
-  };
-}
-
 export default function ProductInfo({ product }: { product: ProductInfoProduct }) {
   const [addedToCart, setAddedToCart] = useState(false);
   const [currentStock, setCurrentStock] = useState(() => product.stock);
@@ -79,33 +76,46 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
   const [blockedByOrder, setBlockedByOrder] = useState(() => Boolean(product.blockedByOrder));
   const [selectedQuantity, setSelectedQuantity] = useState(1);
   const allSizes = useMemo(
-    () => (product.sizes?.length ? product.sizes : product.size ? [product.size] : []).filter((entry) => Boolean(entry.trim())),
-    [product.sizes, product.size]
+    () => (
+      product.variants?.length
+        ? product.variants.map((variant) => variant.key)
+        : product.sizes?.length
+          ? product.sizes
+          : product.size
+            ? [product.size]
+            : []
+    ).filter((entry) => Boolean(entry.trim())),
+    [product.variants, product.sizes, product.size]
+  );
+  const variantByKey = useMemo(
+    () => new Map((product.variants || []).map((variant) => [variant.key, variant])),
+    [product.variants]
   );
 
   // Detect colorway format: "SIZE / #HEX"
-  const isColorwayProduct = allSizes.some((s) => / \/ #[0-9a-fA-F]{3,8}$/.test(s));
+  const isColorwayProduct = Boolean(product.variants?.some((variant) => variant.color)) || allSizes.some((s) => / \/ #[0-9a-fA-F]{3,8}$/.test(s));
   const uniqueColorHexes = useMemo(() => {
     if (!isColorwayProduct) return [];
     const seen = new Set<string>();
     const result: string[] = [];
     for (const s of allSizes) {
-      const hex = s.split(" / ")[1];
+      const hex = variantByKey.get(s)?.color || s.split(" / ")[1];
       if (hex && !seen.has(hex)) { seen.add(hex); result.push(hex); }
     }
     return result;
-  }, [allSizes, isColorwayProduct]);
+  }, [allSizes, isColorwayProduct, variantByKey]);
 
   const firstAvailableHex = useMemo(() => {
     if (!isColorwayProduct || uniqueColorHexes.length === 0) return null;
     for (const hex of uniqueColorHexes) {
-      const sizesForHex = allSizes.filter((s) => s.endsWith(` / ${hex}`));
+      const sizesForHex = allSizes.filter((s) => (variantByKey.get(s)?.color || (s.endsWith(` / ${hex}`) ? hex : "")) === hex);
       if (sizesForHex.some((s) => (sizeAvailability?.[s]?.stock ?? 0) > 0)) return hex;
     }
     return uniqueColorHexes[0];
-  }, [uniqueColorHexes, allSizes, sizeAvailability, isColorwayProduct]);
+  }, [uniqueColorHexes, allSizes, sizeAvailability, isColorwayProduct, variantByKey]);
 
-  const [selectedColorHex, setSelectedColorHex] = useState<string | null>(null);
+  const initialSelectedColorHex = product.initialSelectedColorHex || null;
+  const [selectedColorHex, setSelectedColorHex] = useState<string | null>(() => initialSelectedColorHex || firstAvailableHex);
   const activeHex = selectedColorHex ?? firstAvailableHex;
   const selectedColorImage = getColorwayEnhancedFrontImage(activeHex, {
     image: product.image,
@@ -115,16 +125,20 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
   const cartDisplayImage = selectedColorImage || product.originPictures?.front || product.image;
 
   useEffect(() => {
-    if (!firstAvailableHex) return;
+    if (!activeHex) return;
     window.dispatchEvent(
-      new CustomEvent("product:gallery:filterColorway", { detail: { hex: firstAvailableHex } })
+      new CustomEvent("product:gallery:filterColorway", {
+        detail: {
+          hex: activeHex,
+        },
+      })
     );
-  }, [firstAvailableHex]);
+  }, [activeHex]);
 
   const availableSizes = useMemo(() => {
     if (!isColorwayProduct || !activeHex) return allSizes;
-    return allSizes.filter((s) => s.endsWith(` / ${activeHex}`));
-  }, [allSizes, isColorwayProduct, activeHex]);
+    return allSizes.filter((s) => (variantByKey.get(s)?.color || (s.endsWith(` / ${activeHex}`) ? activeHex : "")) === activeHex);
+  }, [allSizes, isColorwayProduct, activeHex, variantByKey]);
 
   const initialSelectedSize = product.initialSelectedSize || availableSizes[0] || "";
   const defaultSelectedSize = initialSelectedSize || availableSizes[0] || "";
@@ -378,15 +392,21 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
 
   const handleSelectColorway = (hex: string) => {
     setSelectedColorHex(hex);
-    window.dispatchEvent(new CustomEvent("product:gallery:filterColorway", { detail: { hex } }));
-    const indices = product.colorImages?.[hex];
-    if (indices && indices.length > 0) {
-      window.dispatchEvent(
-        new CustomEvent("product:gallery:selectIndex", {
-          detail: { index: indices.length >= 2 ? indices[indices.length - 2] : indices[0] },
-        })
-      );
+    const nextSize = allSizes.find((sizeOption) => (variantByKey.get(sizeOption)?.color || (sizeOption.endsWith(` / ${hex}`) ? hex : "")) === hex);
+    if (nextSize) {
+      setSelectedSize(nextSize);
     }
+    const params = new URLSearchParams();
+    params.set("color", hex);
+    if (!isPerfume && nextSize) {
+      params.set("size", nextSize);
+    } else if (selectedSize) {
+      params.set("size", selectedSize);
+    }
+    router.replace(`/product/${product.id || ""}?${params.toString()}`, { scroll: false });
+    window.dispatchEvent(new CustomEvent("product:gallery:filterColorway", {
+      detail: { hex },
+    }));
   };
 
   const normalizedConditionScore = product.conditionScore ?? 0;
@@ -474,7 +494,7 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
           <p className="text-xs text-text-secondary uppercase tracking-wider mb-3">Colorways</p>
           <div className="flex flex-wrap gap-2">
             {uniqueColorHexes.map((hex) => {
-              const hexSizes = allSizes.filter((s) => s.endsWith(` / ${hex}`));
+              const hexSizes = allSizes.filter((s) => (variantByKey.get(s)?.color || (s.endsWith(` / ${hex}`) ? hex : "")) === hex);
               const hasStock = hexSizes.some((s) => (sizeAvailability?.[s]?.stock ?? 0) > 0 || (!sizeAvailability && currentStock > 0));
               return (
                 <button
@@ -505,7 +525,7 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
               const sizeInfo = sizeAvailability?.[sizeOption];
               const sizeAvailable = sizeInfo ? sizeInfo.stock > 0 : currentStock > 0;
               const reservedElsewhereForSize = Boolean(sizeInfo?.reservedElsewhere);
-              const displayLabel = isColorwayProduct ? sizeOption.split(" / ")[0] : sizeOption;
+              const displayLabel = variantByKey.get(sizeOption)?.size || (isColorwayProduct ? sizeOption.split(" / ")[0] : sizeOption);
               return (
                 <button
                   key={sizeOption}
@@ -540,8 +560,8 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
             ? `${currentStock} bottle${currentStock !== 1 ? "s" : ""} available`
             : displaySelectedSize
               ? displaySelectedSizeStock === 1
-                ? `Last one — ${isColorwayProduct ? displaySelectedSize.split(" / ")[0] : displaySelectedSize}`
-                : `Selected size: ${isColorwayProduct ? displaySelectedSize.split(" / ")[0] : displaySelectedSize}`
+                ? `Last one — ${variantByKey.get(displaySelectedSize)?.size || (isColorwayProduct ? displaySelectedSize.split(" / ")[0] : displaySelectedSize)}`
+                : `Selected size: ${variantByKey.get(displaySelectedSize)?.size || (isColorwayProduct ? displaySelectedSize.split(" / ")[0] : displaySelectedSize)}`
               : currentStock === 1
                 ? "Last one"
                 : "Size selected"}

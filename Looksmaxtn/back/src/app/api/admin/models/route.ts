@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Model name is required." }, { status: 400 });
     }
 
-    if (!["male", "female", "unisex"].includes(gender)) {
+    if (!["male", "female", "child"].includes(gender)) {
       return NextResponse.json({ error: "Please select the model gender." }, { status: 400 });
     }
 
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     const imagePaths = await Promise.all(imageFiles.map((file) => saveModelImage(file)));
     const model = await ModelAsset.create({
       name,
-      gender: gender as "male" | "female" | "unisex",
+      gender: gender as "male" | "female" | "child",
       images: imagePaths,
       frontImage: imagePaths[frontImageIndex],
       backImage: imagePaths[backImageIndex],

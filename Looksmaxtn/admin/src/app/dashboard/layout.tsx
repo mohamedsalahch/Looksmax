@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState, ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, ReactNode } from "react";
 import {
   clearAuthToken,
   getStoredAuthToken,
@@ -156,6 +156,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const readOrderIdsRef = useRef<Set<string>>(new Set());
   const seenStoreIdsRef = useRef<Set<string>>(new Set());
   const refreshTimerRef = useRef<number | null>(null);
+  const notificationAudioRef = useRef<AudioContext | null>(null);
 
   const clearRefreshTimer = () => {
     if (refreshTimerRef.current !== null) {
@@ -163,6 +164,59 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       refreshTimerRef.current = null;
     }
   };
+
+  const ensureNotificationAudio = useCallback(() => {
+    if (typeof window === "undefined") return null;
+
+    const AudioContextCtor =
+      window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextCtor) return null;
+
+    if (!notificationAudioRef.current) {
+      notificationAudioRef.current = new AudioContextCtor();
+    }
+
+    return notificationAudioRef.current;
+  }, []);
+
+  const unlockNotificationAudio = useCallback(async () => {
+    const context = ensureNotificationAudio();
+    if (!context || context.state === "running") return;
+
+    try {
+      await context.resume();
+    } catch {
+      // Autoplay restrictions can block the first resume attempt.
+    }
+  }, [ensureNotificationAudio]);
+
+  const playNotificationSound = useCallback(() => {
+    const context = ensureNotificationAudio();
+    if (!context || context.state !== "running") return;
+
+    const now = context.currentTime;
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.08, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.34);
+    gain.connect(context.destination);
+
+    [
+      { frequency: 880, startOffset: 0, stopOffset: 0.14 },
+      { frequency: 1320, startOffset: 0.12, stopOffset: 0.28 },
+    ].forEach(({ frequency, startOffset, stopOffset }) => {
+      const oscillator = context.createOscillator();
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(frequency, now + startOffset);
+      oscillator.connect(gain);
+      oscillator.start(now + startOffset);
+      oscillator.stop(now + stopOffset);
+    });
+
+    window.setTimeout(() => {
+      gain.disconnect();
+    }, 400);
+  }, [ensureNotificationAudio]);
 
   const scheduleTokenRefresh = (token?: string | null) => {
     clearRefreshTimer();
@@ -338,6 +392,29 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   useEffect(() => {
     showNotificationsRef.current = showNotifications;
   }, [showNotifications]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const unlock = () => {
+      void unlockNotificationAudio();
+    };
+
+    document.addEventListener("pointerdown", unlock, { once: true });
+    document.addEventListener("keydown", unlock, { once: true });
+
+    return () => {
+      document.removeEventListener("pointerdown", unlock);
+      document.removeEventListener("keydown", unlock);
+    };
+  }, [unlockNotificationAudio, user]);
+
+  useEffect(() => {
+    return () => {
+      notificationAudioRef.current?.close().catch(() => {});
+      notificationAudioRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     const match = pathname.match(/^\/dashboard\/orders\/([^/]+)$/);
@@ -556,6 +633,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           return;
         }
 
+        playNotificationSound();
         setOrderNotifications((current) => {
           const currentById = new Map(current.map((notice) => [notice.orderId, notice]));
           const existing = currentById.get(order._id);
@@ -599,6 +677,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           return;
         }
 
+        playNotificationSound();
         setMessageNotifications((current) => {
           const currentById = new Map(current.map((notice) => [notice.messageId, notice]));
           const existing = currentById.get(message._id);
@@ -650,6 +729,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           return;
         }
 
+        playNotificationSound();
         setStoreNotifications((current) => {
           const currentById = new Map(current.map((notice) => [notice.storeId, notice]));
           const existing = currentById.get(store._id);
@@ -687,6 +767,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           createdAt: product.createdAt,
         });
 
+        playNotificationSound();
         setProductNotifications((current) => {
           const currentById = new Map(current.map((notice) => [notice.productId, notice]));
           const existing = currentById.get(product._id);
@@ -865,13 +946,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-end md:gap-4">
             <div className="flex items-center justify-between gap-3 md:mr-auto">
               {showBackButton && (
-                <Link
-                  href="/dashboard"
+                <button
+                  type="button"
+                  onClick={() => router.back()}
                   className="inline-flex items-center gap-2 border border-border bg-bg-secondary px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-text-secondary transition-colors hover:text-text-primary"
                 >
                   <span>←</span>
                   Back
-                </Link>
+                </button>
               )}
               <button
                 type="button"

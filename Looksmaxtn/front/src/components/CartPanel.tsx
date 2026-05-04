@@ -7,9 +7,14 @@ import { useRouter } from "next/navigation";
 import { formatRemainingTime } from "@/lib/reservations";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { getCartItemProductId } from "@/lib/cartItem";
+import { getEnhancedFrontDisplayImage } from "@/lib/colorwayImage";
 
 function formatCartSizeLabel(size?: string) {
   if (!size) return "";
+  const colorVariantMatch = size.match(/^(.*?)(?:\s*\/\s*#?[0-9a-fA-F]{3,8})$/);
+  if (colorVariantMatch?.[1]) {
+    return colorVariantMatch[1].trim();
+  }
   const separatorIndex = size.lastIndexOf(" / ");
   if (separatorIndex === -1) return size;
   return size.slice(0, separatorIndex).trim();
@@ -117,13 +122,14 @@ export default function CartPanel() {
                 const remainingTime = item.reservationExpiresAt
                   ? formatRemainingTime(item.reservationExpiresAt, nowMs)
                   : null;
+                const displayImage = getEnhancedFrontDisplayImage(item, item.image || "");
 
                 return (
                   <div key={item.id} className="flex gap-4 px-6 py-5">
                     <div className="w-20 h-24 shrink-0 overflow-hidden bg-surface">
-                      {item.image ? (
+                      {displayImage ? (
                         <img
-                          src={item.image}
+                          src={displayImage}
                           alt={item.name}
                           className="w-full h-full object-cover"
                           loading="lazy"
@@ -183,6 +189,13 @@ export default function CartPanel() {
                           ) : (
                             <>
                               {item.size && <span className="text-[10px] text-text-secondary">{formatCartSizeLabel(item.size)}</span>}
+                              {item.color ? (
+                                <span
+                                  className="inline-block h-4 w-4 shrink-0 rounded-[2px] border border-border-color/40"
+                                  style={{ backgroundColor: item.color }}
+                                  aria-hidden="true"
+                                />
+                              ) : null}
                             </>
                           )}
                         </div>

@@ -46,6 +46,12 @@ interface ProductDetail {
   updatedAt: string;
 }
 
+interface SizeStockEntry {
+  fullStock: number;
+  stock: number;
+  soldQuantity: number;
+}
+
 function getProductStatus(product: ProductDetail) {
   if (product.availabilityStatus === "sold") {
     return { label: "Sold", className: "bg-neutral-200 text-neutral-700" };
@@ -85,9 +91,28 @@ function getInventorySummary(product: ProductDetail) {
   return { available, sold, full };
 }
 
+function getApprovalStatusBadge(approvalStatus: ProductDetail["approvalStatus"] | string) {
+  switch (approvalStatus) {
+    case "pending":
+      return { label: "Pending", className: "bg-warning/10 text-warning" };
+    case "rejected":
+      return { label: "Rejected", className: "bg-danger/10 text-danger" };
+    case "approved":
+    default:
+      return { label: "Approved", className: "bg-[#f1ede8] text-[#6b6055]" };
+  }
+}
+
 function formatVariantLabel(label: string) {
   const [size] = label.split(" / ");
   return size?.trim() || label.trim();
+}
+
+function formatVariantColor(label: string) {
+  const parts = label.split(" / ");
+  if (parts.length < 2) return "";
+  const color = parts[parts.length - 1]?.trim() || "";
+  return color.startsWith("#") ? color.toUpperCase() : color;
 }
 
 export default function ProductViewPage({ params }: { params: Promise<{ id: string }> }) {
@@ -97,7 +122,6 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [isZoomOpen, setIsZoomOpen] = useState(false);
   const [userRole, setUserRole] = useState("");
-  const [togglingVisibility, setTogglingVisibility] = useState(false);
   const [updatingApproval, setUpdatingApproval] = useState(false);
 
   useEffect(() => {
@@ -118,40 +142,6 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [id]);
-
-  const handleToggleVisibility = async () => {
-    if (!product || togglingVisibility) return;
-
-    const nextIsActive = !(product.isActive !== false);
-    setTogglingVisibility(true);
-
-    try {
-      const response = await fetch(
-        `/api/products/${product._id}`,
-        withAuthRequest({
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ isActive: nextIsActive }),
-        })
-      );
-      const data = await response.json();
-      if (!response.ok || !data.product) return;
-
-      setProduct((current) =>
-        current
-          ? {
-              ...current,
-              isActive: data.product.isActive,
-              visibilityStatus: data.product.isActive === false ? "inactive" : "active",
-            }
-          : current
-      );
-    } catch {
-      // Leave the current state unchanged if the update fails.
-    } finally {
-      setTogglingVisibility(false);
-    }
-  };
 
   const handleApprovalUpdate = async (approvalStatus: "approved" | "rejected") => {
     if (!product || updatingApproval) return;
@@ -190,7 +180,6 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
   const categories = product?.categories || [];
   const details = product?.details || [];
   const isInactive = product?.isActive === false || product?.visibilityStatus === "inactive";
-  const canToggleVisibility = userRole === "admin" || userRole === "store_owner";
   const canModerateProduct = userRole === "admin";
 
   if (loading) return <p className="text-xs text-text-secondary animate-pulse">Loading product...</p>;
@@ -199,27 +188,13 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
   const status = getProductStatus(product);
   const inventory = getInventorySummary(product);
   const sizeEntries = Object.entries(product.sizeStock || {});
+  const hasColorVariants = sizeEntries.some(([label]) => Boolean(formatVariantColor(label)));
+  const approvalStatus = product.approvalStatus || "approved";
+  const approvalBadge = getApprovalStatusBadge(approvalStatus);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <Link
-            href="/dashboard/products"
-            className="text-xs text-text-secondary hover:text-text-primary transition-colors mb-2 inline-block"
-          >
-            {"< Back"}
-          </Link>
-          <h1 className="text-lg font-semibold">{product.name}</h1>
-          <p className="text-xs text-text-secondary mt-1">
-            {product.brand} | ID <span className="font-mono">{product._id}</span>
-          </p>
-          {product.reference && (
-            <p className="text-xs text-text-secondary mt-1">
-              Reference <span className="font-mono">{product.reference}</span>
-            </p>
-          )}
-        </div>
+      <div className="flex items-start justify-end gap-4">
         {userRole === "store_owner" ? (
           <Link
             href={`/dashboard/products/${product._id}/edit`}
@@ -228,62 +203,23 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
             Edit Product
           </Link>
         ) : userRole === "admin" ? (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-3 rounded border border-border bg-bg-card px-4 py-3">
-              <div className="min-w-0">
-                <p className="text-[10px] uppercase tracking-wider text-text-secondary">Visibility</p>
-                <p className="text-xs font-medium uppercase tracking-wider text-text-primary">
-                  {isInactive ? "Inactive" : "Active"}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => void handleToggleVisibility()}
-                disabled={!canToggleVisibility || togglingVisibility}
-                className={`group relative inline-flex h-6 w-12 items-center transition-opacity ${
-                  togglingVisibility ? "opacity-60" : ""
-                }`}
-                aria-label={`Toggle visibility for ${product.name}`}
-              >
-                <span
-                  className={`absolute inset-0 transition-colors ${
-                    isInactive ? "bg-[#d9d3c9]" : "bg-[#d7c08c]"
-                  }`}
-                />
-                <span
-                  className={`absolute top-[2px] h-5 w-5 bg-[#1a1a1a] transition-all duration-200 ease-out ${
-                    isInactive ? "left-[2px]" : "left-[25px]"
-                  }`}
-                />
-              </button>
-            </div>
-
-            <div className="rounded border border-border bg-bg-card px-4 py-3 space-y-3">
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-text-secondary">Approval</p>
-                <p className="text-xs font-medium uppercase tracking-wider text-text-primary">
-                  {product.approvalStatus || "approved"}
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => void handleApprovalUpdate("approved")}
-                  disabled={!canModerateProduct || updatingApproval || (product.approvalStatus || "approved") === "approved"}
-                  className="text-[10px] uppercase tracking-wider text-[#6b6055] hover:text-text-primary disabled:opacity-50"
-                >
-                  Approve
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleApprovalUpdate("rejected")}
-                  disabled={!canModerateProduct || updatingApproval || (product.approvalStatus || "approved") === "rejected"}
-                  className="text-[10px] uppercase tracking-wider text-danger hover:text-danger/80 disabled:opacity-50"
-                >
-                  Reject
-                </button>
-              </div>
-            </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => void handleApprovalUpdate("approved")}
+              disabled={!canModerateProduct || updatingApproval || approvalStatus === "approved"}
+              className="border border-border bg-bg-card px-4 py-2 text-[10px] uppercase tracking-wider text-[#6b6055] transition-colors hover:text-text-primary disabled:opacity-50"
+            >
+              Approve
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleApprovalUpdate("rejected")}
+              disabled={!canModerateProduct || updatingApproval || approvalStatus === "rejected"}
+              className="border border-border bg-bg-card px-4 py-2 text-[10px] uppercase tracking-wider text-danger transition-colors hover:text-danger/80 disabled:opacity-50"
+            >
+              Reject
+            </button>
           </div>
         ) : (
           <span className="bg-bg-secondary text-text-secondary px-4 py-2 text-xs font-semibold tracking-wide uppercase">
@@ -342,12 +278,35 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
         <div className="space-y-6">
           <div className="bg-bg-card border border-border rounded p-4 space-y-3">
             <p className="text-xs text-text-secondary uppercase tracking-wider">Product Summary</p>
+            <div className="space-y-2 border-b border-border pb-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-text-secondary">Name</p>
+                <p className="mt-1 text-base font-semibold text-text-primary">{product.name}</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-text-secondary">Brand</p>
+                <p className="mt-1 text-sm text-text-primary">{product.brand}</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-text-secondary">Reference</p>
+                <p className="mt-1 text-sm text-text-primary font-mono">{product.reference || "—"}</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-text-secondary">Product ID</p>
+                <p className="mt-1 text-sm text-text-primary font-mono break-all">{product._id}</p>
+              </div>
+            </div>
             <p className="text-2xl font-semibold">{product.price.toFixed(2)} TND</p>
-            <span className={`inline-flex w-fit text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${status.className}`}>
-              {status.label}
-            </span>
-            <div className={`inline-flex w-fit text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${isInactive ? "bg-neutral-200 text-neutral-700" : "bg-[#f1ede8] text-[#6b6055]"}`}>
-              {isInactive ? "Inactive" : "Active"}
+            <div className="flex flex-wrap gap-2">
+              <span className={`inline-flex w-fit text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${status.className}`}>
+                {status.label}
+              </span>
+              <div className={`inline-flex w-fit text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${isInactive ? "bg-neutral-200 text-neutral-700" : "bg-[#f1ede8] text-[#6b6055]"}`}>
+                {isInactive ? "Inactive" : "Active"}
+              </div>
+              <span className={`inline-flex w-fit text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${approvalBadge.className}`}>
+                {approvalBadge.label}
+              </span>
             </div>
           </div>
 
@@ -402,24 +361,40 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
 
             {sizeEntries.length > 0 && (
               <div className="border border-border rounded bg-bg-secondary p-3 space-y-2">
-                <p className="text-[10px] uppercase tracking-wider text-text-secondary">By Size</p>
+                <p className="text-[10px] uppercase tracking-wider text-text-secondary">
+                  {hasColorVariants ? "By Size and Color" : "By Size"}
+                </p>
                 <div className="space-y-2">
-                  {sizeEntries.map(([size, entry]) => (
-                    <div
-                      key={size}
-                      className="flex items-center justify-between gap-3 border border-border bg-bg-card px-3 py-2"
-                    >
-                      <div>
-                        <p className="text-xs font-medium uppercase tracking-wider">{formatVariantLabel(size)}</p>
-                        <p className="text-[10px] text-text-secondary">
-                          Available {Math.max(entry.stock ?? 0, 0)} | Full {Math.max(entry.fullStock ?? 0, 0)} | Sold {Math.max(entry.soldQuantity ?? 0, 0)}
-                        </p>
+                  {sizeEntries.map(([size, entry]) => {
+                    const typedEntry = entry as SizeStockEntry;
+                    const hasColor = Boolean(formatVariantColor(size));
+                    const rowLabel = formatVariantLabel(size);
+                    const rowColor = formatVariantColor(size);
+                    return (
+                      <div
+                        key={size}
+                        className="flex items-center justify-between gap-3 border border-border bg-bg-card px-3 py-2"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs font-medium uppercase tracking-wider">{rowLabel}</p>
+                            {hasColor && (
+                              <span className="inline-flex items-center gap-1 rounded border border-border bg-bg-secondary px-2 py-0.5 text-[9px] uppercase tracking-wider text-text-secondary">
+                                <span className="h-2.5 w-2.5 rounded-full border border-border" style={{ backgroundColor: rowColor }} />
+                                {rowColor}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-text-secondary">
+                            Available {Math.max(typedEntry.stock ?? 0, 0)} | Full {Math.max(typedEntry.fullStock ?? 0, 0)} | Sold {Math.max(typedEntry.soldQuantity ?? 0, 0)}
+                          </p>
+                        </div>
+                        <div className="text-right text-[10px] uppercase tracking-wider text-text-secondary">
+                          <p>Stock: {Math.max(typedEntry.stock ?? 0, 0)}</p>
+                        </div>
                       </div>
-                      <div className="text-right text-[10px] uppercase tracking-wider text-text-secondary">
-                        <p>Stock: {Math.max(entry.stock ?? 0, 0)}</p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -480,4 +455,3 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
     </div>
   );
 }
-

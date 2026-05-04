@@ -42,7 +42,7 @@ function drawImageToCanvas(image: HTMLImageElement) {
 }
 
 export async function compressImageFile(file: File): Promise<File> {
-  if (!file.type.startsWith("image/")) {
+  if (!file.type.startsWith("image/") || file.type === "image/gif") {
     return file;
   }
 

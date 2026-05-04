@@ -4,7 +4,7 @@ import AuditMetaCard from "@/components/AuditMetaCard";
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
 
-type ModelGender = "male" | "female" | "unisex";
+type ModelGender = "male" | "female" | "child";
 
 interface ModelAsset {
   _id: string;
@@ -19,6 +19,10 @@ interface ModelAsset {
   updatedBy?: { id: string; name: string; email: string } | null;
 }
 
+function normalizeModelGender(gender?: string | null): ModelGender {
+  return gender === "male" || gender === "female" || gender === "child" ? gender : "child";
+}
+
 export default function ModelViewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [model, setModel] = useState<ModelAsset | null>(null);
@@ -27,7 +31,7 @@ export default function ModelViewPage({ params }: { params: Promise<{ id: string
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [name, setName] = useState("");
-  const [gender, setGender] = useState<ModelGender>("unisex");
+  const [gender, setGender] = useState<ModelGender>("male");
   const [frontImage, setFrontImage] = useState("");
   const [backImage, setBackImage] = useState("");
 
@@ -39,7 +43,7 @@ export default function ModelViewPage({ params }: { params: Promise<{ id: string
         setModel(nextModel);
         if (nextModel) {
           setName(nextModel.name);
-          setGender(nextModel.gender || "unisex");
+          setGender(normalizeModelGender(nextModel.gender));
           setFrontImage(nextModel.frontImage);
           setBackImage(nextModel.backImage);
         }
@@ -69,7 +73,7 @@ export default function ModelViewPage({ params }: { params: Promise<{ id: string
 
       setModel(data.model);
       setName(data.model.name);
-      setGender(data.model.gender || "unisex");
+      setGender(normalizeModelGender(data.model.gender));
       setFrontImage(data.model.frontImage);
       setBackImage(data.model.backImage);
       setEditing(false);
@@ -97,7 +101,7 @@ export default function ModelViewPage({ params }: { params: Promise<{ id: string
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-semibold tracking-wide">{model.name}</h1>
               <span className="text-[10px] uppercase tracking-wider border border-border px-2 py-0.5 text-text-secondary">
-                {model.gender || "unisex"}
+                {normalizeModelGender(model.gender)}
               </span>
             </div>
             <p className="text-xs text-text-secondary mt-1">
@@ -110,7 +114,7 @@ export default function ModelViewPage({ params }: { params: Promise<{ id: string
               setEditing((current) => !current);
               setError("");
               setName(model.name);
-              setGender(model.gender || "unisex");
+              setGender(normalizeModelGender(model.gender));
               setFrontImage(model.frontImage);
               setBackImage(model.backImage);
             }}
@@ -148,9 +152,9 @@ export default function ModelViewPage({ params }: { params: Promise<{ id: string
             onChange={(e) => setGender(e.target.value as ModelGender)}
             className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
           >
-            <option value="unisex">Unisex</option>
             <option value="male">Male</option>
             <option value="female">Female</option>
+            <option value="child">Child</option>
           </select>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <select
@@ -192,7 +196,7 @@ export default function ModelViewPage({ params }: { params: Promise<{ id: string
                 setEditing(false);
                 setError("");
                 setName(model.name);
-                setGender(model.gender || "unisex");
+                setGender(normalizeModelGender(model.gender));
                 setFrontImage(model.frontImage);
                 setBackImage(model.backImage);
               }}

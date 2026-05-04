@@ -4,12 +4,13 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
+import MediaRenderer from "@/components/MediaRenderer";
 import { getReservationKey, reserveProduct, subscribeToReservationChanges } from "@/lib/reservations";
 import { subscribeToAvailabilityStream } from "@/lib/availabilityStream";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { getConditionColor, getConditionLabel, getConditionPercent } from "@/lib/productCondition";
 import { queueStudioAssignment } from "@/lib/studioAssignment";
-import { getColorwayEnhancedFrontImage } from "@/lib/colorwayImage";
+import { getColorwayEnhancedFrontImage, getColorwayMainImage } from "@/lib/colorwayImage";
 
 type ProductType = "fashion" | "perfume" | "clothing" | "shoes";
 
@@ -94,14 +95,17 @@ export default function ProductCard({
   const [hasHydratedAvailability, setHasHydratedAvailability] = useState(false);
   const [sizeAvailabilityState, setSizeAvailabilityState] = useState(sizeAvailability || null);
   const [viewerBlocked, setViewerBlocked] = useState<boolean>(initialReservedElsewhere);
+  const availabilitySizeKeys = Object.keys(sizeAvailabilityState || {});
   const allSizes = (
-    sizes?.length
-      ? sizes
-      : Object.keys(sizeAvailabilityState || {}).length > 0
-        ? Object.keys(sizeAvailabilityState || {})
-        : size
-          ? [size]
-          : []
+    availabilitySizeKeys.some((entry) => entry.includes(" / "))
+      ? availabilitySizeKeys
+      : sizes?.length
+        ? sizes
+        : availabilitySizeKeys.length > 0
+          ? availabilitySizeKeys
+          : size
+            ? [size]
+            : []
   ).filter((entry) => Boolean(entry.trim()));
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
@@ -113,15 +117,18 @@ export default function ProductCard({
     [allSizes, colorImages],
   );
   const [activeColorHex, setActiveColorHex] = useState<string | null>(colorwayHexes[0] || null);
-  const displayImage = image;
-  const selectedCartImage = getColorwayEnhancedFrontImage(activeColorHex, { image, images, colorImages }, image);
+  const selectedCartImage = getColorwayMainImage(activeColorHex, { image, images, colorImages }, image);
+  const selectedStoreImage = getColorwayEnhancedFrontImage(activeColorHex, { image, images, colorImages }, image);
+  const displayImage = selectedCartImage || image;
   const normalizedConditionScore = conditionScore ?? 0;
 
   const handleColorwayClick = (e: React.MouseEvent, hex: string) => {
     e.preventDefault();
     e.stopPropagation();
     setActiveColorHex(hex);
-    setSelectedSize("");
+    const nextSizes = allSizes.filter((entry) => splitVariantLabel(entry).colorHex === hex);
+    const nextSize = nextSizes.find((entry) => (sizeAvailabilityState?.[entry]?.stock ?? 0) > 0) || nextSizes[0] || "";
+    setSelectedSize(nextSize);
   };
   const [blockedByOrder, setBlockedByOrder] = useState(initialBlockedByOrder);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -165,7 +172,7 @@ export default function ProductCard({
   const cardHref = !isPerfume && isMounted && selectedSize
     ? {
         pathname: `/product/${id}`,
-        query: { size: selectedSize },
+        query: { size: selectedSize, color: activeColorHex || undefined },
       }
     : `/product/${id}`;
 
@@ -276,7 +283,7 @@ export default function ProductCard({
         size: isPerfume ? undefined : selectedSize,
         color: activeColorHex || undefined,
         maxStock: Math.max(1, selectedSizeStock),
-        image: selectedCartImage || image,
+        image: selectedStoreImage || selectedCartImage || image,
         categories,
         productType,
         fashionSubtype,
@@ -308,7 +315,7 @@ export default function ProductCard({
         size: isPerfume ? undefined : selectedSize,
         color: activeColorHex || undefined,
         maxStock: Math.max(1, selectedSizeStock),
-        image: selectedCartImage || image,
+        image: selectedStoreImage || selectedCartImage || image,
         productType,
         fashionSubtype,
         originPictures,
@@ -319,7 +326,7 @@ export default function ProductCard({
         id,
         name,
         categories,
-        image: selectedCartImage || image,
+        image: selectedStoreImage || selectedCartImage || image,
         color: activeColorHex || undefined,
         price,
         brand,
@@ -407,12 +414,13 @@ export default function ProductCard({
           className="fixed z-[70] pointer-events-none h-[15rem] w-[11.5rem] overflow-hidden rounded border border-white/40 bg-background/95 p-3 shadow-2xl backdrop-blur-sm transition-opacity duration-150"
           style={getClonePreviewPosition(clonePreview.x, clonePreview.y)}
         >
-          <img
+          <MediaRenderer
             src={cloneSourceImage}
             alt={cloneSourceName || "Original fragrance"}
             className="w-full h-full object-contain"
-            loading="lazy"
-            decoding="async"
+            imageClassName="w-full h-full object-contain"
+            videoClassName="w-full h-full object-contain"
+            audioClassName="w-full"
           />
         </div>
       )}
@@ -427,14 +435,15 @@ export default function ProductCard({
           showClonePreviewAtPointer(e.clientX, e.clientY);
         }}
         onMouseLeave={() => setClonePreview({ visible: false, x: 0, y: 0 })}
-      >
+        >
         {displayImage ? (
-          <img
+          <MediaRenderer
             src={displayImage}
             alt={name}
             className="block w-full h-auto object-contain"
-            loading="lazy"
-            decoding="async"
+            imageClassName="block w-full h-auto object-contain"
+            videoClassName="block w-full h-auto object-contain"
+            audioClassName="block w-full px-3 py-6"
           />
         ) : (
           <>

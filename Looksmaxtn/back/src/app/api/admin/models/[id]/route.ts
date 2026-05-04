@@ -82,7 +82,7 @@ export async function PUT(
       return NextResponse.json({ error: "Model name is required." }, { status: 400 });
     }
 
-    if (!["male", "female", "unisex"].includes(gender)) {
+    if (!["male", "female", "child"].includes(gender)) {
       return NextResponse.json({ error: "Please select the model gender." }, { status: 400 });
     }
 
@@ -95,7 +95,7 @@ export async function PUT(
     }
 
     model.name = name;
-    model.gender = gender as "male" | "female" | "unisex";
+    model.gender = gender as "male" | "female" | "child";
     model.frontImage = frontImage;
     model.backImage = backImage;
     model.updatedBy = await getAuditActorFromSession(session);

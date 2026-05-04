@@ -106,12 +106,6 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
   return (
     <div className="space-y-6">
       <div>
-        <Link
-          href="/dashboard/users"
-          className="text-xs text-text-secondary hover:text-text-primary transition-colors mb-2 inline-block"
-        >
-          ← Back
-        </Link>
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-lg font-semibold">{user.name}</h1>

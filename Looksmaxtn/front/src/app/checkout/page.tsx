@@ -9,6 +9,7 @@ import { getReservationKey } from "@/lib/reservations";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { withAuthRequest } from "@/lib/authClient";
 import { getCartItemProductId } from "@/lib/cartItem";
+import { getEnhancedFrontDisplayImage } from "@/lib/colorwayImage";
 
 interface AppliedCoupon {
   code: string;
@@ -38,6 +39,20 @@ function calculateShippingFee(subtotal: number, settings: ShippingSettings) {
   const freeShippingThreshold = Math.max(0, Number(settings.freeShippingThreshold || 0));
   if (shippingCost === 0 || freeShippingThreshold === 0 || subtotal >= freeShippingThreshold) return 0;
   return shippingCost;
+}
+
+function formatCheckoutSizeLabel(size?: string) {
+  if (!size) return "One size";
+
+  const colorVariantMatch = size.match(/^(.*?)(?:\s*\/\s*#?[0-9a-fA-F]{3,8})$/);
+  if (colorVariantMatch?.[1]) {
+    return colorVariantMatch[1].trim() || "One size";
+  }
+
+  const separatorIndex = size.lastIndexOf(" / ");
+  if (separatorIndex === -1) return size;
+
+  return size.slice(0, separatorIndex).trim() || "One size";
 }
 
 export default function CheckoutPage() {
@@ -495,41 +510,56 @@ export default function CheckoutPage() {
                 Order Summary
               </h2>
               <div className="divide-y divide-border-color/40">
-                {items.map((item) => (
-                  <div
-                    key={item.id}
-                    className={`flex gap-3 p-4 ${
-                      item.isUnavailable ? "bg-[#faf3f2]/80" : ""
-                    }`}
-                  >
+                {items.map((item) => {
+                  const displayImage = getEnhancedFrontDisplayImage(item, item.image || "");
+
+                  return (
                     <div
-                      className={`w-32 h-44 shrink-0 overflow-hidden ${
-                        item.isUnavailable ? "bg-[#f6ddd7]" : "bg-surface"
+                      key={item.id}
+                      className={`flex gap-3 p-4 ${
+                        item.isUnavailable ? "bg-[#faf3f2]/80" : ""
                       }`}
                     >
-                      {item.image ? (
-                        <img
-                          src={item.image}
-                          alt={item.name}
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                          decoding="async"
-                        />
-                      ) : (
-                        <div className="w-full h-full placeholder-img">
-                          <span className="text-[6px] tracking-wider opacity-50">IMG</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
+                      <div
+                        className={`w-32 h-44 shrink-0 overflow-hidden ${
+                          item.isUnavailable ? "bg-[#f6ddd7]" : "bg-surface"
+                        }`}
+                      >
+                        {displayImage ? (
+                          <img
+                            src={displayImage}
+                            alt={item.name}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                            decoding="async"
+                          />
+                        ) : (
+                          <div className="w-full h-full placeholder-img">
+                            <span className="text-[6px] tracking-wider opacity-50">IMG</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="text-xs font-medium truncate">{item.name}</p>
-                          <p className="text-[10px] text-text-secondary mt-0.5">
-                            {item.productType === "perfume"
-                              ? `Fragrance · Qty: ${item.quantity}`
-                              : `${item.size || ""}${item.size && item.color ? " · " : ""}${item.color || ""} · Qty: ${item.quantity}`}
-                          </p>
+                          <div className="mt-0.5 flex items-center gap-2 text-[10px] text-text-secondary">
+                            {item.productType === "perfume" ? (
+                              <span>Fragrance</span>
+                            ) : (
+                              <>
+                                <span>{formatCheckoutSizeLabel(item.size)}</span>
+                                {item.color ? (
+                                  <span
+                                    className="inline-block h-4 w-4 shrink-0 rounded-[2px] border border-border-color/40"
+                                    style={{ backgroundColor: item.color }}
+                                    aria-hidden="true"
+                                  />
+                                ) : null}
+                              </>
+                            )}
+                            <span>· Qty: {item.quantity}</span>
+                          </div>
                         </div>
                         <button
                           type="button"
@@ -575,8 +605,9 @@ export default function CheckoutPage() {
                         </button>
                       </div>
                     </div>
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
 
                 {hasUnavailableItems && (
                   <div className="border border-[#430C05] bg-[#faf3f2] p-4">

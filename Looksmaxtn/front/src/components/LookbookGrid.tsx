@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import MediaRenderer from "@/components/MediaRenderer";
 
 interface LookbookCategory {
   _id: string;
@@ -89,10 +90,10 @@ export default function LookbookGrid({
               className="relative aspect-[3/4] cursor-pointer group overflow-hidden bg-surface block w-full md:w-[calc(33.333%-3px)]"
             >
               {item.image ? (
-                <img
+                <MediaRenderer
                   src={item.image}
                   alt={item.name}
-                  className={`w-full h-full object-cover transition-all duration-500
+                  className={`w-full h-full transition-all duration-500
                     ${
                       mobileActiveIndexes.includes(index)
                         ? "blur-none scale-[1.03]"
@@ -100,6 +101,23 @@ export default function LookbookGrid({
                     }
                     md:blur-none md:scale-100 md:group-hover:blur-sm md:group-hover:scale-[1.03]
                   `}
+                  imageClassName={`w-full h-full object-cover transition-all duration-500
+                    ${
+                      mobileActiveIndexes.includes(index)
+                        ? "blur-none scale-[1.03]"
+                        : "blur-sm scale-100"
+                    }
+                    md:blur-none md:scale-100 md:group-hover:blur-sm md:group-hover:scale-[1.03]
+                  `}
+                  videoClassName={`w-full h-full object-cover transition-all duration-500
+                    ${
+                      mobileActiveIndexes.includes(index)
+                        ? "blur-none scale-[1.03]"
+                        : "blur-sm scale-100"
+                    }
+                    md:blur-none md:scale-100 md:group-hover:blur-sm md:group-hover:scale-[1.03]
+                  `}
+                  audioClassName="w-full px-4 py-8"
                 />
               ) : (
                 <div className="w-full h-full placeholder-img">

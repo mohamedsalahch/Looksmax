@@ -44,6 +44,7 @@ interface Product {
 interface Facets {
   categories: string[];
   brands: string[];
+  stores: string[];
   sizes: string[];
   colors: string[];
   priceRange: { min: number; max: number };
@@ -59,6 +60,28 @@ function formatCategoryLabel(value: string) {
   return value
     .replace(/-/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatSizeLabel(value: string) {
+  const colorwayMatch = value.match(/^(.*?)(?:\s*\/\s*#?[0-9a-fA-F]{3,8})$/);
+  if (colorwayMatch?.[1]) {
+    return colorwayMatch[1].trim();
+  }
+
+  const separatorIndex = value.lastIndexOf(" / ");
+  if (separatorIndex === -1) return value;
+
+  return value.slice(0, separatorIndex).trim();
+}
+
+function getUniqueSizeOptions(values: string[]) {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const label = formatSizeLabel(value);
+    if (seen.has(label)) return false;
+    seen.add(label);
+    return true;
+  });
 }
 
 export default function ProductGrid({
@@ -79,6 +102,7 @@ export default function ProductGrid({
   const [queryInput, setQueryInput] = useState("");
   const [draftCategory, setDraftCategory] = useState("");
   const [draftBrand, setDraftBrand] = useState("");
+  const [draftStore, setDraftStore] = useState("");
   const [draftSizes, setDraftSizes] = useState<string[]>([]);
   const [draftColor, setDraftColor] = useState("");
   const [priceMin, setPriceMin] = useState("");
@@ -86,6 +110,7 @@ export default function ProductGrid({
   const [appliedSearch, setAppliedSearch] = useState("");
   const [appliedCategory, setAppliedCategory] = useState("");
   const [appliedBrand, setAppliedBrand] = useState("");
+  const [appliedStore, setAppliedStore] = useState("");
   const [appliedSizes, setAppliedSizes] = useState<string[]>([]);
   const [appliedColor, setAppliedColor] = useState("");
   const [appliedPriceMin, setAppliedPriceMin] = useState("");
@@ -97,6 +122,7 @@ export default function ProductGrid({
     appliedSearch ||
       appliedCategory ||
       appliedBrand ||
+      appliedStore ||
       appliedSizes.length > 0 ||
       appliedColor ||
       appliedPriceMin ||
@@ -105,6 +131,7 @@ export default function ProductGrid({
   const hasDraftChanges =
     draftCategory !== appliedCategory ||
     draftBrand !== appliedBrand ||
+    draftStore !== appliedStore ||
     draftColor !== appliedColor ||
     priceMin !== appliedPriceMin ||
     priceMax !== appliedPriceMax ||
@@ -113,6 +140,7 @@ export default function ProductGrid({
   const rangeMax = facets ? Math.ceil(facets.priceRange.max) : 1000;
   const sliderMin = priceMin !== "" ? Number(priceMin) : rangeMin;
   const sliderMax = priceMax !== "" ? Number(priceMax) : rangeMax;
+  const displaySizes = facets ? getUniqueSizeOptions(facets.sizes) : [];
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -139,6 +167,7 @@ export default function ProductGrid({
         params.set("category", appliedCategory);
       }
       if (appliedBrand) params.set("brand", appliedBrand);
+      if (appliedStore) params.set("store", appliedStore);
       if (appliedSizes.length > 0) params.set("size", appliedSizes.join(","));
       if (appliedColor) params.set("color", appliedColor);
       if (appliedPriceMin) params.set("priceMin", appliedPriceMin);
@@ -156,6 +185,7 @@ export default function ProductGrid({
             setFacets({
               categories: data.facets.categories || [],
               brands: data.facets.brands || [],
+              stores: data.facets.stores || [],
               sizes: data.facets.sizes || [],
               colors: data.facets.colors || [],
               priceRange: data.facets.priceRange || { min: 0, max: 0 },
@@ -176,12 +206,13 @@ export default function ProductGrid({
     return () => {
       cancelled = true;
     };
-  }, [category, appliedSearch, appliedCategory, appliedBrand, appliedSizes, appliedColor, appliedPriceMin, appliedPriceMax]);
+  }, [category, appliedSearch, appliedCategory, appliedBrand, appliedStore, appliedSizes, appliedColor, appliedPriceMin, appliedPriceMax]);
 
   const clearFilters = () => {
     setQueryInput("");
     setDraftCategory("");
     setDraftBrand("");
+    setDraftStore("");
     setDraftSizes([]);
     setDraftColor("");
     setPriceMin("");
@@ -189,6 +220,7 @@ export default function ProductGrid({
     setAppliedSearch("");
     setAppliedCategory("");
     setAppliedBrand("");
+    setAppliedStore("");
     setAppliedSizes([]);
     setAppliedColor("");
     setAppliedPriceMin("");
@@ -204,6 +236,7 @@ export default function ProductGrid({
   const applyFilters = () => {
     setAppliedCategory(draftCategory);
     setAppliedBrand(draftBrand);
+    setAppliedStore(draftStore);
     setAppliedSizes(draftSizes);
     setAppliedColor(draftColor);
     setAppliedPriceMin(priceMin);
@@ -239,7 +272,7 @@ export default function ProductGrid({
       <div className="mb-4 flex items-center justify-between gap-4">
         <button
           onClick={() => setFiltersOpen(!filtersOpen)}
-          className="text-[10px] uppercase tracking-wider text-text-secondary hover:text-foreground cursor-pointer flex items-center gap-1"
+          className="font-sans flex items-center gap-1 cursor-pointer text-[11px] font-medium uppercase tracking-[0.14em] text-text-secondary hover:text-foreground"
         >
           Filters
           <svg
@@ -259,7 +292,7 @@ export default function ProductGrid({
         {hasActiveFilters && (
           <button
             onClick={clearFilters}
-            className="text-[10px] uppercase tracking-wider text-text-secondary hover:text-foreground underline underline-offset-2 cursor-pointer"
+            className="font-sans cursor-pointer text-[11px] font-medium uppercase tracking-[0.14em] text-text-secondary underline underline-offset-2 hover:text-foreground"
           >
             Clear filters
           </button>
@@ -295,12 +328,12 @@ export default function ProductGrid({
                 <circle cx="11" cy="11" r="8" />
                 <path d="m21 21-4.35-4.35" />
               </svg>
-            <input
-              type="text"
-              value={queryInput}
+              <input
+                type="text"
+                value={queryInput}
                 onChange={(event) => setQueryInput(event.target.value)}
                 placeholder="Search shoes, jackets, hats..."
-                className="h-12 w-full border-0 border-b border-border-color bg-transparent pl-9 pr-9 text-sm text-foreground outline-none transition-colors placeholder:text-text-secondary/50 focus:border-foreground"
+                className="font-sans h-12 w-full border-0 border-b border-border-color bg-transparent pl-9 pr-9 text-sm text-foreground outline-none transition-colors placeholder:text-text-secondary/50 focus:border-foreground"
               />
               {queryInput && (
                 <button
@@ -321,7 +354,7 @@ export default function ProductGrid({
               <select
                 value={draftCategory}
                 onChange={(event) => setDraftCategory(event.target.value)}
-                className="w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm text-foreground transition-colors focus:border-foreground focus:outline-none"
+                className="font-sans w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm text-foreground transition-colors focus:border-foreground focus:outline-none"
               >
                 <option value="">All types</option>
                 {facets.categories.map((value) => (
@@ -335,7 +368,7 @@ export default function ProductGrid({
             <select
               value={draftBrand}
               onChange={(event) => setDraftBrand(event.target.value)}
-              className="w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm text-foreground transition-colors focus:border-foreground focus:outline-none"
+              className="font-sans w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm text-foreground transition-colors focus:border-foreground focus:outline-none"
             >
               <option value="">All brands</option>
               {facets?.brands.map((value) => (
@@ -345,44 +378,78 @@ export default function ProductGrid({
               ))}
             </select>
 
-            {facets && facets.sizes.length > 0 && (
+            {facets && facets.stores.length > 0 && (
+              <select
+                value={draftStore}
+                onChange={(event) => setDraftStore(event.target.value)}
+                className="font-sans w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm text-foreground transition-colors focus:border-foreground focus:outline-none"
+              >
+                <option value="">All stores</option>
+                {facets.stores.map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {displaySizes.length > 0 && (
               <div className="space-y-2">
-                <p className="text-[10px] uppercase tracking-wider text-text-secondary">Size</p>
+                <p className="font-sans text-[11px] font-medium uppercase tracking-[0.14em] text-text-secondary">Size</p>
                 <div className="flex min-h-8 flex-wrap items-center gap-1.5 overflow-hidden">
-                  {facets.sizes.map((size) => (
+                  {displaySizes.map((size) => (
                     <button
                       key={size}
                       type="button"
                       onClick={() => toggleSize(size)}
-                      className={`px-2.5 py-1 text-[10px] uppercase tracking-wider transition-colors cursor-pointer ${
+                      className={`font-sans px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.14em] transition-colors cursor-pointer ${
                         draftSizes.includes(size)
                           ? "bg-foreground text-background"
                           : "text-text-secondary hover:text-foreground"
                       }`}
                     >
-                      {size}
+                      {formatSizeLabel(size)}
                     </button>
                   ))}
                 </div>
               </div>
             )}
 
-            <select
-              value={draftColor}
-              onChange={(event) => setDraftColor(event.target.value)}
-              className="w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm text-foreground transition-colors focus:border-foreground focus:outline-none"
-            >
-              <option value="">All colors</option>
-              {facets?.colors.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
+            {facets && facets.colors.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="font-sans text-[11px] font-medium uppercase tracking-[0.14em] text-text-secondary">Colors</p>
+                  <button
+                    type="button"
+                    onClick={() => setDraftColor("")}
+                    className="font-sans text-[10px] uppercase tracking-[0.14em] text-text-secondary underline underline-offset-2 hover:text-foreground"
+                  >
+                    Clear
+                  </button>
+                </div>
+                <div className="grid grid-cols-6 gap-2 pl-2">
+                  {facets.colors.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setDraftColor(value)}
+                      title={value}
+                      aria-label={value}
+                      className={`relative h-8 w-8 border transition-all duration-200 cursor-pointer ${
+                        draftColor === value
+                          ? "border-foreground scale-110"
+                          : "border-border-color hover:border-foreground/40"
+                      }`}
+                      style={{ backgroundColor: value }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <p className="text-[10px] uppercase tracking-wider text-text-secondary">Price</p>
+                <p className="font-sans text-[11px] font-medium uppercase tracking-[0.14em] text-text-secondary">Price</p>
               </div>
               <div className="price-range-slider w-full">
                 <div className="price-range-track">
@@ -427,7 +494,7 @@ export default function ProductGrid({
               type="button"
               onClick={applyFilters}
               disabled={!hasDraftChanges}
-              className="w-full border border-foreground bg-foreground px-4 py-3 text-[10px] uppercase tracking-[0.22em] text-background transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+              className="font-sans w-full border border-foreground bg-foreground px-4 py-3 text-[11px] font-medium uppercase tracking-[0.14em] text-background transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
             >
               Apply filters
             </button>

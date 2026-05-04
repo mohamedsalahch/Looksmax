@@ -102,12 +102,6 @@ export default function ProductsPage() {
     fetchCategories();
   }, []);
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Delete this product?")) return;
-    await fetch(`/api/products/${id}`, withAuthRequest({ method: "DELETE" }));
-    setProducts((p) => p.filter((x) => x._id !== id));
-  };
-
   const handleToggleVisibility = async (product: Product) => {
     setTogglingVisibilityId(product._id);
     try {
@@ -319,18 +313,13 @@ export default function ProductsPage() {
           <p className="text-sm text-text-secondary">No products found</p>
         </div>
       ) : (
-        <div className="overflow-x-auto border border-border rounded">
+        <div className="overflow-x-auto border border-border rounded-none">
           <table className="min-w-[760px] w-full text-left">
             <thead className="bg-bg-secondary">
               <tr className="text-[10px] text-text-secondary uppercase tracking-wider">
                 <th className="px-4 py-3">
                   <button type="button" onClick={() => toggleSort("name")} className="inline-flex items-center gap-1 cursor-pointer">
                     Product {renderSortIndicator("name")}
-                  </button>
-                </th>
-                <th className="px-4 py-3">
-                  <button type="button" onClick={() => toggleSort("_id")} className="inline-flex items-center gap-1 cursor-pointer">
-                    ID {renderSortIndicator("_id")}
                   </button>
                 </th>
                 <th className="px-4 py-3">
@@ -386,7 +375,6 @@ export default function ProductsPage() {
                     <p className="text-xs font-medium">{p.name}</p>
                     <p className="text-[10px] text-text-secondary">{p.brand}</p>
                   </td>
-                  <td className="px-4 py-3 text-[10px] text-text-secondary">{p._id}</td>
                   <td className="px-4 py-3 text-xs text-text-secondary capitalize">{(p.categories || []).join(", ")}</td>
                   <td className="px-4 py-3 text-xs text-text-secondary">{p.reference || "—"}</td>
                   <td className="px-4 py-3 text-xs font-medium">{p.price.toFixed(2)} TND</td>
@@ -462,19 +450,10 @@ export default function ProductsPage() {
                           <Link
                             href={`/dashboard/products/${p._id}/edit`}
                             onClick={(e) => e.stopPropagation()}
-                            className="text-[10px] text-info hover:text-info/80 transition-colors uppercase font-medium"
+                            className="inline-flex items-center justify-center border border-accent bg-accent px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-bg-primary transition-colors hover:bg-accent-hover rounded-none"
                           >
                             Edit
                           </Link>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void handleDelete(p._id);
-                            }}
-                            className="text-[10px] text-danger hover:text-danger/80 transition-colors uppercase font-medium cursor-pointer"
-                          >
-                            Delete
-                          </button>
                         </>
                       ) : (
                         <span className="text-[10px] uppercase tracking-wider text-text-secondary">
@@ -495,4 +474,3 @@ export default function ProductsPage() {
     </div>
   );
 }
-

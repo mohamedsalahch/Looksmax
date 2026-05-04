@@ -7,12 +7,53 @@ interface ProductImage {
   isMain: boolean;
 }
 
+const VIDEO_EXTENSIONS = [".mp4", ".webm", ".ogg", ".mov", ".m4v"];
+
+function isVideoUrl(url: string) {
+  const normalized = url.split("?")[0].toLowerCase();
+  return VIDEO_EXTENSIONS.some((extension) => normalized.endsWith(extension));
+}
+
+function MediaPreview({
+  url,
+  alt,
+  className,
+  videoClassName,
+  showControls = false,
+}: {
+  url: string;
+  alt: string;
+  className: string;
+  videoClassName?: string;
+  showControls?: boolean;
+}) {
+  if (isVideoUrl(url)) {
+    return (
+      <video
+        src={url}
+        aria-label={alt}
+        className={videoClassName || className}
+        autoPlay
+        loop
+        muted
+        playsInline
+        controls={showControls}
+        preload="metadata"
+      />
+    );
+  }
+
+  return <img src={url} alt={alt} className={className} loading="eager" fetchPriority="high" decoding="async" />;
+}
+
 export default function ProductImageGallery({
   images = [],
   colorImages,
+  initialColorHex = null,
 }: {
   images?: ProductImage[];
   colorImages?: Record<string, number[]> | null;
+  initialColorHex?: string | null;
 }) {
   const { displayImages, originalToDisplay } = useMemo(() => {
     if (images.length === 0) return { displayImages: [{ url: "", isMain: true }], originalToDisplay: new Map<number, number>() };
@@ -23,27 +64,33 @@ export default function ProductImageGallery({
     return { displayImages: indexed.map(({ img }) => img), originalToDisplay: map };
   }, [images]);
 
-  const [activeColorHex, setActiveColorHex] = useState<string | null>(null);
+  const [activeColorHex, setActiveColorHex] = useState<string | null>(initialColorHex);
+  const selectedColorOriginalIndices = useMemo(() => {
+    if (!activeColorHex || !colorImages?.[activeColorHex]) return [];
+    return [...colorImages[activeColorHex]].sort((a, b) => a - b);
+  }, [activeColorHex, colorImages]);
 
   const visibleImages = useMemo(() => {
-    if (!activeColorHex || !colorImages?.[activeColorHex]) return displayImages;
-    const allowedDisplayIndices = new Set(
-      colorImages[activeColorHex].map((origIdx) => originalToDisplay.get(origIdx)).filter((i): i is number => i !== undefined)
-    );
-    return displayImages.filter((_, i) => allowedDisplayIndices.has(i));
-  }, [displayImages, activeColorHex, colorImages, originalToDisplay]);
+    if (selectedColorOriginalIndices.length > 0) {
+      const orderedImages = selectedColorOriginalIndices
+        .map((origIdx) => images[origIdx])
+        .filter((img): img is ProductImage => Boolean(img?.url));
+      if (orderedImages.length > 0) {
+        return orderedImages;
+      }
+    }
+    return displayImages;
+  }, [displayImages, images, selectedColorOriginalIndices]);
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [isZoomActive, setIsZoomActive] = useState(false);
-  const [isZoomPinned, setIsZoomPinned] = useState(false);
 
   useEffect(() => {
     const filterHandler = (e: Event) => {
-      const { hex } = (e as CustomEvent<{ hex: string | null }>).detail;
+      const { hex } = (e as CustomEvent<{ hex: string | null; imageUrl?: string }>).detail;
       setActiveColorHex(hex);
       setActiveIndex(0);
       setIsZoomActive(false);
-      setIsZoomPinned(false);
     };
     window.addEventListener("product:gallery:filterColorway", filterHandler);
     return () => window.removeEventListener("product:gallery:filterColorway", filterHandler);
@@ -52,22 +99,25 @@ export default function ProductImageGallery({
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<{ index: number }>).detail;
+      if (selectedColorOriginalIndices.length > 0) {
+        const visibleIdx = selectedColorOriginalIndices.indexOf(detail.index);
+        if (visibleIdx !== -1) setActiveIndex(visibleIdx);
+        return;
+      }
+
       const displayIdx = originalToDisplay.get(detail.index);
       if (displayIdx === undefined) return;
       if (!activeColorHex || !colorImages?.[activeColorHex]) {
         setActiveIndex(displayIdx);
         return;
       }
-      // Map display index to visible index
-      const allowedDisplayIndices = (colorImages[activeColorHex] ?? [])
-        .map((origIdx) => originalToDisplay.get(origIdx))
-        .filter((i): i is number => i !== undefined);
-      const visibleIdx = allowedDisplayIndices.indexOf(displayIdx);
+      const allowedOriginalIndices = [...(colorImages[activeColorHex] ?? [])].sort((a, b) => a - b);
+      const visibleIdx = allowedOriginalIndices.indexOf(detail.index);
       if (visibleIdx !== -1) setActiveIndex(visibleIdx);
     };
     window.addEventListener("product:gallery:selectIndex", handler);
     return () => window.removeEventListener("product:gallery:selectIndex", handler);
-  }, [originalToDisplay, activeColorHex, colorImages]);
+  }, [originalToDisplay, activeColorHex, colorImages, selectedColorOriginalIndices]);
   const [isDesktop, setIsDesktop] = useState(false);
   const [zoomPoint, setZoomPoint] = useState({ x: 50, y: 50 });
   const [zoomPosition, setZoomPosition] = useState({ left: 0, top: 0 });
@@ -91,7 +141,6 @@ export default function ProductImageGallery({
       if (!galleryRef.current) return;
       if (galleryRef.current.contains(event.target as Node)) return;
       setIsZoomActive(false);
-      setIsZoomPinned(false);
     };
 
     document.addEventListener("click", handleOutsideClick);
@@ -100,12 +149,13 @@ export default function ProductImageGallery({
 
   const calculateZoomState = (event: ReactMouseEvent<HTMLDivElement>) => {
     if (!imageShellRef.current) return null;
+    if (isVideoUrl(visibleImages[activeIndex]?.url || "")) return null;
 
     const rect = imageShellRef.current.getBoundingClientRect();
+    const overlayWidth = Math.max(0, Math.min(240, rect.width - 16));
+    const overlayHeight = Math.max(0, Math.min(320, rect.height - 16));
     const nextX = Math.min(Math.max(((event.clientX - rect.left) / rect.width) * 100, 0), 100);
     const nextY = Math.min(Math.max(((event.clientY - rect.top) / rect.height) * 100, 0), 100);
-    const overlayWidth = Math.min(160, rect.width - 16);
-    const overlayHeight = Math.min(220, rect.height - 16);
     const preferredLeft = event.clientX - rect.left + 14;
     const preferredTop = event.clientY - rect.top + 14;
 
@@ -128,28 +178,10 @@ export default function ProductImageGallery({
     setZoomPosition(next.position);
   };
 
-  const toggleZoom = (event: ReactMouseEvent<HTMLDivElement>) => {
-    if (!isDesktop || !visibleImages[activeIndex]?.url) return;
-
-    if (isZoomActive) {
-      setIsZoomActive(false);
-      setIsZoomPinned(false);
-      return;
-    }
-
-    const next = calculateZoomState(event);
-    if (next) {
-      setZoomPoint(next.point);
-      setZoomPosition(next.position);
-    }
-    setIsZoomPinned(true);
-    setIsZoomActive(true);
-  };
-
   const handleMouseEnter = (event: ReactMouseEvent<HTMLDivElement>) => {
-    if (!isDesktop || !visibleImages[activeIndex]?.url) return;
-
-    if (!isZoomPinned && !isZoomActive) return;
+    const activeUrl = visibleImages[activeIndex]?.url || "";
+    if (!isDesktop || !activeUrl) return;
+    if (isVideoUrl(activeUrl)) return;
 
     const next = calculateZoomState(event);
     if (next) {
@@ -212,12 +244,11 @@ export default function ProductImageGallery({
               }`}
             >
               {img.url ? (
-                <img
-                  src={img.url}
+                <MediaPreview
+                  url={img.url}
                   alt={`Thumbnail ${index + 1}`}
                   className="w-full h-full object-contain"
-                  loading="lazy"
-                  decoding="async"
+                  videoClassName="w-full h-full object-contain"
                 />
               ) : (
                 <div className="absolute inset-0 placeholder-img" />
@@ -228,38 +259,34 @@ export default function ProductImageGallery({
       )}
 
       {/* Main Image */}
-      <div
-        ref={imageShellRef}
-        className={`flex-1 relative aspect-[3/4] md:aspect-auto md:h-[600px] bg-transparent overflow-visible touch-pan-y ${
-          isDesktop && visibleImages[activeIndex]?.url ? "cursor-zoom-in" : "cursor-default"
-        }`}
-        onClick={toggleZoom}
-        onMouseEnter={handleMouseEnter}
-        onMouseMove={updateZoomState}
-        onMouseLeave={handleMouseLeave}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-      >
+      <div className="flex-1 w-full">
         {visibleImages[activeIndex]?.url ? (
-          <>
-            <div className="absolute inset-0">
-              <img
-                src={visibleImages[activeIndex].url}
-                alt="Main product"
-                className="absolute inset-0 w-full h-full object-contain"
-                loading="eager"
-                fetchPriority="high"
-                decoding="async"
-              />
-            </div>
-            {isDesktop && isZoomActive && (
+          <div
+            ref={imageShellRef}
+            className={`relative mx-auto w-fit max-w-full bg-transparent overflow-visible touch-pan-y ${
+              isDesktop && visibleImages[activeIndex]?.url ? "cursor-zoom-in" : "cursor-default"
+            }`}
+            onMouseEnter={handleMouseEnter}
+            onMouseMove={updateZoomState}
+            onMouseLeave={handleMouseLeave}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          >
+            <MediaPreview
+              url={visibleImages[activeIndex].url}
+              alt="Main product"
+              className="block max-w-full max-h-[600px] w-auto h-auto object-contain"
+              videoClassName="block max-w-full max-h-[600px] w-auto h-auto object-contain"
+              showControls
+            />
+            {isDesktop && isZoomActive && !isVideoUrl(visibleImages[activeIndex].url) && (
               <div
                 className="absolute z-20 hidden md:block overflow-hidden border border-border-color bg-background shadow-[0_18px_48px_rgba(26,26,26,0.18)] pointer-events-none"
                 style={{
                   left: `${zoomPosition.left}px`,
                   top: `${zoomPosition.top}px`,
-                  width: "160px",
-                  height: "220px",
+                  width: "240px",
+                  height: "320px",
                 }}
               >
                 <div
@@ -274,15 +301,22 @@ export default function ProductImageGallery({
                 />
               </div>
             )}
-          </>
+          </div>
         ) : (
-          <div className="absolute inset-0 placeholder-img flex items-center justify-center">
+          <div
+            ref={imageShellRef}
+            className="relative mx-auto w-full aspect-[3/4] md:min-h-[600px] placeholder-img flex items-center justify-center"
+            onMouseEnter={handleMouseEnter}
+            onMouseMove={updateZoomState}
+            onMouseLeave={handleMouseLeave}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          >
             <span className="relative z-10 text-sm tracking-widest opacity-50">
               PRODUCT VIEW
             </span>
           </div>
         )}
-        <div className="absolute inset-0 bg-foreground/0 hover:bg-foreground/[0.02] transition-colors duration-300 z-10 pointer-events-none" />
       </div>
     </div>
   );

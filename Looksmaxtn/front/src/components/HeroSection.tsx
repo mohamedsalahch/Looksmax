@@ -1,3 +1,5 @@
+import MediaRenderer from "@/components/MediaRenderer";
+
 export default function HeroSection({
   image,
   eyebrow,
@@ -25,12 +27,13 @@ export default function HeroSection({
   const content = (
     <div className="relative aspect-[16/10] md:aspect-[2/1] lg:aspect-[21/9] min-h-[28rem] md:min-h-[38rem] w-full overflow-hidden rounded-sm border border-border-color bg-surface transition-transform duration-300 group-hover:-translate-y-0.5">
       {image ? (
-        <img
+        <MediaRenderer
           src={image}
           alt={title}
-          className="w-full h-full object-cover scale-[1.01] hero-image"
-          fetchPriority="high"
-          decoding="async"
+          className="w-full h-full scale-[1.01] hero-image"
+          imageClassName="w-full h-full object-cover scale-[1.01] hero-image"
+          videoClassName="w-full h-full object-cover scale-[1.01] hero-image"
+          audioClassName="w-full px-6"
         />
       ) : (
         <div className="w-full h-full placeholder-img">

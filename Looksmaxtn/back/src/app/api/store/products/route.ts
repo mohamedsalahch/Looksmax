@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
     const category = searchParams.get("category");
     const search = searchParams.get("search");
     const brand = searchParams.get("brand");
+    const store = searchParams.get("store");
     const size = searchParams.get("size");
     const sizes = size
       ? size.split(",").map((value) => value.trim()).filter(Boolean)
@@ -156,8 +157,9 @@ export async function GET(req: NextRequest) {
       if (product.approvalStatus && product.approvalStatus !== "approved") return false;
       const stock = Math.max(product.stock ?? 0, 0);
       const hasSelectableSize = product.sizeAvailability
-        ? Object.values(product.sizeAvailability).some((sizeInfo) => sizeInfo.available)
+        ? Object.values(product.sizeAvailability as Record<string, { available: boolean }>).some((sizeInfo) => sizeInfo.available)
         : stock > 0;
+      if (store && product.storeName !== store) return false;
       if (brand && product.brand !== brand) return false;
       if (sizes.length > 0 && !sizes.some((sizeValue) => (product.sizes || []).includes(sizeValue))) return false;
       if (color && !(product.colors || []).includes(color)) return false;
@@ -173,6 +175,7 @@ export async function GET(req: NextRequest) {
       ? {
           categories: uniqueSortedValues(facetsSource.flatMap((product) => product.categories || [])),
           brands: uniqueSortedValues(facetsSource.map((product) => product.brand || "")),
+          stores: uniqueSortedValues(facetsSource.map((product) => product.storeName || "")),
           sizes: uniqueSortedValues(facetsSource.flatMap((product) => product.sizes || [])),
           colors: uniqueSortedValues(facetsSource.flatMap((product) => product.colors || [])),
           priceRange: {

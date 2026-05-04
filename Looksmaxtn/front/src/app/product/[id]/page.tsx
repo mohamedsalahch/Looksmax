@@ -29,6 +29,14 @@ type ProductResponse = {
     } | null;
     images?: { url: string; isMain: boolean }[];
     sizes?: string[];
+    variants?: Array<{
+      key: string;
+      size: string;
+      color?: string;
+      stock?: number;
+      fullStock?: number;
+      conditionScore?: number | null;
+    }>;
     sizeAvailability?: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null;
     stock: number;
     description: string;
@@ -108,11 +116,12 @@ export default async function ProductDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ size?: string }>;
+  searchParams?: Promise<{ size?: string; color?: string }>;
 }) {
   const { id } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const requestedSize = resolvedSearchParams?.size || "";
+  const requestedColor = resolvedSearchParams?.color || "";
 
   const [dbProduct, relatedProducts] = await Promise.all([
     loadProduct(id),
@@ -122,14 +131,39 @@ export default async function ProductDetailPage({
     notFound();
   }
 
-  const sizes = (dbProduct.sizes?.length ? dbProduct.sizes : Object.keys(dbProduct.sizeAvailability || {})).filter((size) =>
+  const selectableSizeKeys = (
+    dbProduct.variants?.length
+      ? dbProduct.variants.map((variant) => variant.key)
+      : dbProduct.sizes?.length
+        ? dbProduct.sizes
+        : Object.keys(dbProduct.sizeAvailability || {})
+  ).filter((size) =>
     Boolean(size && size.trim())
+  );
+  const colorwayHexes = Array.from(
+    new Set(
+      [
+        ...(dbProduct.variants || []).map((variant) => variant.color || ""),
+        ...(dbProduct.sizes || []),
+        ...Object.keys(dbProduct.sizeAvailability || {}),
+        ...Object.keys(dbProduct.colorImages || {}),
+      ]
+        .map((size) => {
+          if (size.startsWith("#")) return size;
+          const match = size.match(/\/\s*(#?[0-9a-fA-F]{3,8})$/);
+          return match?.[1] || "";
+        })
+        .filter(Boolean)
+    )
   );
   const sizeAvailability = dbProduct.sizeAvailability || null;
   const stock = Math.max(dbProduct.stock ?? 0, 0);
-  const initialSelectedSize = requestedSize && sizes.includes(requestedSize)
+  const initialSelectedSize = requestedSize && selectableSizeKeys.includes(requestedSize)
     ? requestedSize
-    : getDefaultSelectableSize(sizes, sizeAvailability);
+    : getDefaultSelectableSize(selectableSizeKeys, sizeAvailability);
+  const initialSelectedColorHex = requestedColor && colorwayHexes.includes(requestedColor)
+    ? requestedColor
+    : colorwayHexes[0] || null;
   const initialSelectedSizeStock = getSelectedSizeStock(sizeAvailability, initialSelectedSize, stock);
 
   const product = {
@@ -141,13 +175,13 @@ export default async function ProductDetailPage({
     storeType: dbProduct.storeType || null,
     image: dbProduct.images?.find((image) => image.isMain)?.url || dbProduct.images?.[0]?.url || "",
     images: dbProduct.images || [],
-    sizes,
+    sizes: selectableSizeKeys,
+    variants: dbProduct.variants || [],
     stock: Math.max(dbProduct.stock ?? 0, 0),
     sizeAvailability,
     initialSelectedSize,
     initialSelectedSizeStock,
     description: dbProduct.description || "",
-    images: dbProduct.images || [],
     reservationExpiresAt: null,
     cartCount: dbProduct.cartCount ?? 0,
     reservedElsewhere: Boolean(dbProduct.reservedElsewhere),
@@ -166,6 +200,7 @@ export default async function ProductDetailPage({
     cloneSourceName: dbProduct.cloneSourceName || "",
     cloneSourceImage: dbProduct.cloneSourceImage || "",
     colorImages: (dbProduct.colorImages as Record<string, number[]> | null) ?? null,
+    initialSelectedColorHex,
   };
   const productId = String(dbProduct._id || id);
   const productUrl = absoluteUrl(`/product/${productId}`);
@@ -233,11 +268,17 @@ export default async function ProductDetailPage({
         {/* Product Layout */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
           {/* Left — Images */}
-          <ProductImageGallery images={product.images as { url: string; isMain: boolean }[]} colorImages={product.colorImages} />
+          <ProductImageGallery
+            images={product.images as { url: string; isMain: boolean }[]}
+            colorImages={product.colorImages}
+            initialColorHex={initialSelectedColorHex}
+          />
 
           {/* Right — Info */}
           <div className="md:sticky md:top-[80px] md:self-start">
-            <ProductInfo product={{ ...product, id: productId, colorImages: product.colorImages }} />
+            <ProductInfo
+              product={{ ...product, id: productId, colorImages: product.colorImages, initialSelectedColorHex }}
+            />
           </div>
         </div>
       </div>

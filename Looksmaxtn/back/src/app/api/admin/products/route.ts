@@ -100,6 +100,42 @@ function parseCompanionSettings(raw: FormDataEntryValue | null) {
   } catch { return null; }
 }
 
+function parseProductVariants(raw: FormDataEntryValue | null) {
+  const str = String(raw || "").trim();
+  if (!str || str === "[]") return [];
+  try {
+    const parsed = JSON.parse(str) as Array<{
+      key?: string;
+      size?: string;
+      color?: string;
+      fullStock?: number;
+      stock?: number;
+      conditionScore?: number | null;
+    }>;
+    return parsed
+      .map((variant) => {
+        const key = String(variant.key || "").trim();
+        const size = String(variant.size || "").trim();
+        const color = String(variant.color || "").trim();
+        if (!key || !size) return null;
+        return {
+          key,
+          size,
+          color,
+          fullStock: Math.max(0, Number(variant.fullStock ?? variant.stock ?? 0) || 0),
+          stock: Math.max(0, Number(variant.stock ?? variant.fullStock ?? 0) || 0),
+          conditionScore:
+            variant.conditionScore == null
+              ? null
+              : Math.max(0, Math.min(10, Number(variant.conditionScore) || 0)),
+        };
+      })
+      .filter((variant): variant is NonNullable<typeof variant> => variant !== null);
+  } catch {
+    return [];
+  }
+}
+
 function getProductPayload(
   formData: FormData,
   imagePaths: string[],
@@ -116,6 +152,7 @@ function getProductPayload(
     productType === "perfume" ? Number(formData.get("conditionScore") || 9) : null;
   const sizes = productType === "perfume" ? [] : parseStringArray(formData.get("sizes"));
   const colors = productType === "perfume" ? [] : parseStringArray(formData.get("colors"));
+  const variants = productType === "perfume" ? [] : parseProductVariants(formData.get("variants"));
 
   const rawSizeStock = String(formData.get("sizeStock") || "").trim();
   let sizeStockMap: Map<string, { fullStock: number; stock: number; conditionScore: number | null }> | null = null;
@@ -169,6 +206,7 @@ function getProductPayload(
     originPictures: normalizeOriginPictures(productType, fashionSubtype, originPictures),
     sizes,
     colors,
+    variants,
     cloneSourceName: productType === "perfume" ? String(formData.get("cloneSourceName") || "") : "",
     cloneSourceImage:
       productType === "perfume" ? cloneSourceImagePath || String(formData.get("cloneSourceImage") || "") : "",

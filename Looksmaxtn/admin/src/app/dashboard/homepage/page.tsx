@@ -132,6 +132,60 @@ function SectionHeader({
   );
 }
 
+const VIDEO_EXTENSIONS = [".mp4", ".webm", ".ogg", ".mov", ".m4v"];
+const AUDIO_EXTENSIONS = [".mp3", ".m4a", ".wav", ".oga", ".aac", ".flac"];
+
+function getMediaKind(source: string, file?: File | null) {
+  if (file?.type.startsWith("video/")) return "video";
+  if (file?.type.startsWith("audio/")) return "audio";
+  if (file?.type.startsWith("image/")) return "image";
+
+  const normalizedSource = source.split("?")[0].toLowerCase();
+  if (VIDEO_EXTENSIONS.some((extension) => normalizedSource.endsWith(extension))) {
+    return "video";
+  }
+  if (AUDIO_EXTENSIONS.some((extension) => normalizedSource.endsWith(extension))) {
+    return "audio";
+  }
+
+  return "image";
+}
+
+function MediaPreview({
+  src,
+  alt,
+  file,
+  className,
+}: {
+  src: string;
+  alt: string;
+  file?: File | null;
+  className: string;
+}) {
+  const kind = getMediaKind(src, file);
+
+  if (kind === "video") {
+    return (
+      <video
+        src={src}
+        className={className}
+        autoPlay
+        loop
+        muted
+        playsInline
+        controls
+        preload="metadata"
+      />
+    );
+  }
+
+  if (kind === "audio") {
+    return <audio src={src} className={className} controls preload="metadata" />;
+  }
+
+  return <img src={src} alt={alt} className={className} />;
+}
+
 export default function HomePageEditor() {
   const [content, setContent] = useState<HomePageContent>(emptyContent);
   const [loading, setLoading] = useState(true);
@@ -175,6 +229,10 @@ export default function HomePageEditor() {
         ? lookbookFiles.map((file) => URL.createObjectURL(file))
         : content.lookbook.images,
     [content.lookbook.images, lookbookFiles]
+  );
+  const lookbookPreviewKinds = useMemo(
+    () => lookbookPreview.map((src, index) => getMediaKind(src, lookbookFiles[index] || null)),
+    [lookbookFiles, lookbookPreview]
   );
   const lookbookCount = lookbookPreview.length;
   const messageTone = message.toLowerCase().includes("success")
@@ -417,10 +475,10 @@ export default function HomePageEditor() {
               />
               </div>
               <div className="space-y-2">
-                <FieldLabel>Hero image</FieldLabel>
+                <FieldLabel>Hero media</FieldLabel>
               <input
                 type="file"
-                accept="image/*"
+                accept="image/*,video/*,audio/*"
                 onChange={(e) => setHeroFile(e.target.files?.[0] || null)}
                 className="w-full border border-dashed border-border bg-bg-secondary px-4 py-3 text-sm file:mr-3 file:border-0 file:bg-accent/10 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-accent"
               />
@@ -435,7 +493,12 @@ export default function HomePageEditor() {
               </div>
               <div className="aspect-[4/5] overflow-hidden">
               {heroPreview ? (
-                <img src={heroPreview} alt="Hero preview" className="w-full h-full object-cover" />
+                <MediaPreview
+                  src={heroPreview}
+                  file={heroFile}
+                  alt="Hero preview"
+                  className="w-full h-full object-cover"
+                />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-xs text-text-secondary uppercase tracking-wider">
                   Hero preview
@@ -543,10 +606,10 @@ export default function HomePageEditor() {
           />
           </div>
           <div className="space-y-2">
-            <FieldLabel>Lookbook images</FieldLabel>
+            <FieldLabel>Lookbook media</FieldLabel>
           <input
             type="file"
-            accept="image/*"
+            accept="image/*,video/*,audio/*"
             multiple
             onChange={(e) => handleLookbookFilesSelect(e.target.files)}
             className="w-full border border-dashed border-border bg-bg-secondary px-4 py-3 text-sm file:mr-3 file:border-0 file:bg-accent/10 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-accent"
@@ -557,7 +620,17 @@ export default function HomePageEditor() {
               lookbookPreview.map((image, index) => (
                 <div key={`${image}-${index}`} className="overflow-hidden border border-border bg-bg-secondary/35">
                   <div className="relative aspect-[3/4] overflow-hidden">
-                    <img src={image} alt={`Lookbook ${index + 1}`} className="w-full h-full object-cover" />
+                    <MediaPreview
+                      src={image}
+                      file={lookbookFiles[index] || null}
+                      alt={`Lookbook ${index + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                    {lookbookPreviewKinds[index] === "video" && (
+                      <div className="absolute left-3 top-3 border border-border bg-bg-card/90 px-2 py-1 text-[10px] uppercase tracking-wider backdrop-blur">
+                        Video
+                      </div>
+                    )}
                     {index < content.lookbook.images.length && (
                       <button
                         type="button"
@@ -587,7 +660,7 @@ export default function HomePageEditor() {
               ))
             ) : (
               <div className="md:col-span-2 xl:col-span-3 border border-dashed border-border p-8 text-center text-sm text-text-secondary">
-                No lookbook images yet.
+                No lookbook media yet.
               </div>
             )}
           </div>
@@ -632,10 +705,10 @@ export default function HomePageEditor() {
               />
               </div>
               <div className="space-y-2">
-                <FieldLabel>Editorial image</FieldLabel>
+                <FieldLabel>Editorial media</FieldLabel>
               <input
                 type="file"
-                accept="image/*"
+                accept="image/*,video/*,audio/*"
                 onChange={(e) => setEditorialFile(e.target.files?.[0] || null)}
                 className="w-full border border-dashed border-border bg-bg-secondary px-4 py-3 text-sm file:mr-3 file:border-0 file:bg-accent/10 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-accent"
               />
@@ -650,7 +723,12 @@ export default function HomePageEditor() {
               </div>
               <div className="aspect-[16/10] overflow-hidden">
               {editorialPreview ? (
-                <img src={editorialPreview} alt="Editorial preview" className="w-full h-full object-cover" />
+                <MediaPreview
+                  src={editorialPreview}
+                  file={editorialFile}
+                  alt="Editorial preview"
+                  className="w-full h-full object-cover"
+                />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-xs text-text-secondary uppercase tracking-wider">
                   Editorial preview

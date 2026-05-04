@@ -41,7 +41,7 @@ interface GenerationSlot {
 interface ModelAsset {
   _id: string;
   name: string;
-  gender: "male" | "female" | "unisex";
+  gender: "male" | "female" | "child";
   images: string[];
   frontImage: string;
   backImage: string;
@@ -131,7 +131,7 @@ function normalizeVariantColors(value: string) {
     .filter(Boolean);
 }
 
-function buildVariantLabel(row: FashionVariantRow) {
+function buildVariantKey(row: FashionVariantRow) {
   const size = row.size.trim();
   const color = row.colors.trim();
   return color ? `${size} / ${color}` : size;
@@ -228,10 +228,10 @@ const initialForm = {
 
 const createEmptySlot = (): GenerationSlot => ({ file: null, previewUrl: "" });
 
-function createEmptyColorway(): Colorway {
+function createEmptyColorway(hex = ""): Colorway {
   return {
     id: generateId(),
-    hex: "",
+    hex,
     frontFile: null,
     frontPreview: "",
     backFile: null,
@@ -277,6 +277,11 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
       {children}
     </label>
   );
+}
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return <p className="mt-1 text-[11px] text-danger">{message}</p>;
 }
 
 function SectionCard({
@@ -509,7 +514,7 @@ function CompanionColorPicker({
         onClick={handlePickColor}
         title={title}
         className={`h-6 w-6 flex-none border-2 transition-all ${hasColor ? "rounded-full border-border hover:border-accent" : "rounded border-dashed border-border bg-transparent"}`}
-        style={hasColor ? { backgroundColor: color.hex } : undefined}
+        style={hasColor ? { backgroundColor: color?.hex } : undefined}
       />
       <input ref={colorInputRef} type="color" value={color?.hex || "#000000"} onChange={(e) => onSelect(customPaletteColor(e.target.value))} className="sr-only" />
     </div>
@@ -537,6 +542,8 @@ function ColorwayGenerationCard({
   companionTypeOptions,
   onUpdate,
   onGenerate,
+  canGenerate,
+  onReset,
 }: {
   colorway: Colorway;
   index: number;
@@ -544,6 +551,8 @@ function ColorwayGenerationCard({
   companionTypeOptions: { top: { slug: string; name: string }[]; bottom: { slug: string; name: string }[]; footwear: { slug: string; name: string }[] };
   onUpdate: (patch: Partial<Colorway>) => void;
   onGenerate: () => void;
+  canGenerate: boolean;
+  onReset: () => void;
 }) {
   const [zoomedUrl, setZoomedUrl] = useState<string | null>(null);
   const hasColor = Boolean(colorway.hex.trim());
@@ -649,22 +658,24 @@ function ColorwayGenerationCard({
       {/* Generate button */}
       <div className="space-y-1 border-t border-border pt-3">
         {colorway.generateError && (
-          <p className="text-[8px] text-danger line-clamp-2">{colorway.generateError}</p>
+          <div className="border border-[#BD3100] bg-[#faf3f2] px-3 py-2 text-[10px] text-[#BD3100]">
+            {colorway.generateError}
+          </div>
         )}
         <div className="flex items-center justify-end gap-2">
           {colorway.generateStatus === "completed" && (
             <button
               type="button"
-              onClick={() => onUpdate({ generateStatus: "idle", generatedImages: [] })}
+              onClick={onReset}
               className="text-[8px] uppercase tracking-wider text-text-secondary hover:text-accent transition-colors"
             >
-              Regenerate
+              Reset
             </button>
           )}
           <button
             type="button"
-            onClick={colorway.generateStatus !== "completed" ? onGenerate : undefined}
-            disabled={colorway.generateStatus === "processing" || colorway.generateStatus === "completed"}
+            onClick={canGenerate && colorway.generateStatus !== "completed" ? onGenerate : undefined}
+            disabled={!canGenerate || colorway.generateStatus === "processing" || colorway.generateStatus === "completed"}
             className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity"
           >
             {colorway.generateStatus === "processing" && (
@@ -708,23 +719,35 @@ function ColorwayCard({
   index,
   canRemove,
   isThrift,
+  showGenerationPanel,
+  companionZones,
+  companionTypeOptions,
+  canGenerate,
   onRemove,
   onUpdate,
   onEnhance,
+  onGenerate,
   onAddSize,
   onRemoveSize,
   onUpdateSize,
+  onReset,
 }: {
   colorway: Colorway;
   index: number;
   canRemove: boolean;
   isThrift: boolean;
+  showGenerationPanel?: boolean;
+  companionZones?: CompanionZone[];
+  companionTypeOptions?: { top: { slug: string; name: string }[]; bottom: { slug: string; name: string }[]; footwear: { slug: string; name: string }[] };
+  canGenerate?: boolean;
   onRemove: () => void;
   onUpdate: (patch: Partial<Colorway>) => void;
   onEnhance: () => void;
+  onGenerate?: () => void;
   onAddSize: () => void;
   onRemoveSize: (sizeId: string) => void;
   onUpdateSize: (sizeId: string, patch: Partial<SizeRow>) => void;
+  onReset: () => void;
 }) {
   const frontInputId = `cw-front-${colorway.id}`;
   const backInputId = `cw-back-${colorway.id}`;
@@ -790,6 +813,27 @@ function ColorwayCard({
         <div className="flex items-center gap-1.5">
           <button
             type="button"
+            onClick={() => (canRemove ? onRemove() : onUpdate({ hex: "" }))}
+            aria-pressed={!hasColor}
+            title={canRemove ? "Remove colorway" : "No color"}
+            className={`relative h-5 w-5 flex-none rounded-full border-2 transition-all ${
+              !hasColor
+                ? "border-accent bg-accent/10"
+                : "border-border bg-transparent hover:border-accent/70"
+            }`}
+          >
+            <svg
+              viewBox="0 0 16 16"
+              aria-hidden="true"
+              className={`absolute inset-0 h-full w-full p-[2px] transition-colors ${
+                !hasColor ? "text-danger" : "text-danger/80"
+              }`}
+            >
+              <line x1="3" y1="13" x2="13" y2="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </button>
+          <button
+            type="button"
             onClick={handlePickColor}
             title="Pick color from uploaded image (eyedropper)"
             className={`h-5 w-5 flex-none border-2 transition-colors ${
@@ -797,7 +841,7 @@ function ColorwayCard({
             }`}
             style={hasColor ? { backgroundColor: colorway.hex } : undefined}
           />
-          <span className="text-[9px] text-text-secondary font-mono">{hasColor ? colorway.hex : "No color"}</span>
+          {hasColor && <span className="text-[9px] text-text-secondary font-mono">{colorway.hex}</span>}
           <input
             ref={colorInputRef}
             type="color"
@@ -944,16 +988,18 @@ function ColorwayCard({
       {/* Enhance */}
       <div className="space-y-1.5 border-t border-border pt-3">
         {colorway.enhanceError && (
-          <p className="text-[8px] text-danger line-clamp-2">{colorway.enhanceError}</p>
+          <div className="border border-[#BD3100] bg-[#faf3f2] px-3 py-2 text-[10px] text-[#BD3100]">
+            {colorway.enhanceError}
+          </div>
         )}
         <div className="flex items-center justify-end gap-2">
           {colorway.enhanceStatus === "completed" && (
             <button
               type="button"
-              onClick={onEnhance}
+              onClick={onReset}
               className="text-[8px] uppercase tracking-wider text-text-secondary hover:text-accent transition-colors"
             >
-              Re-enhance
+              Reset
             </button>
           )}
           <button
@@ -973,6 +1019,113 @@ function ColorwayCard({
           </button>
         </div>
       </div>
+
+      {showGenerationPanel && colorway.enhanceStatus === "completed" && (
+        <div className="space-y-3 border-t border-border pt-3">
+          <div className="space-y-1.5">
+            <p className="text-[9px] uppercase tracking-wider text-text-secondary">Zones</p>
+            {companionZones && companionZones.length > 0 ? (
+              <div className="space-y-3">
+                {companionZones.includes("top") && (
+                  <div className="space-y-2">
+                    <p className="text-[9px] uppercase tracking-wider text-text-secondary">Top</p>
+                    <select
+                      value={colorway.companionTopType}
+                      onChange={(e) => onUpdate({ companionTopType: e.target.value })}
+                      className="w-full bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-accent transition-colors"
+                    >
+                      <option value="">Select type</option>
+                      {companionTypeOptions?.top.map((cat) => (
+                        <option key={cat.slug} value={cat.slug}>{cat.name}</option>
+                      ))}
+                    </select>
+                    <CompanionColorPicker
+                      color={colorway.companionTopColor}
+                      onSelect={(color) => onUpdate({ companionTopColor: color })}
+                      title="Pick a custom top color"
+                    />
+                  </div>
+                )}
+                {companionZones.includes("bottom") && (
+                  <div className="space-y-2">
+                    <p className="text-[9px] uppercase tracking-wider text-text-secondary">Bottom</p>
+                    <select
+                      value={colorway.companionBottomType}
+                      onChange={(e) => onUpdate({ companionBottomType: e.target.value })}
+                      className="w-full bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-accent transition-colors"
+                    >
+                      <option value="">Select type</option>
+                      {companionTypeOptions?.bottom.map((cat) => (
+                        <option key={cat.slug} value={cat.slug}>{cat.name}</option>
+                      ))}
+                    </select>
+                    <CompanionColorPicker
+                      color={colorway.companionBottomColor}
+                      onSelect={(color) => onUpdate({ companionBottomColor: color })}
+                      title="Pick a custom bottom color"
+                    />
+                  </div>
+                )}
+                {companionZones.includes("footwear") && (
+                  <div className="space-y-2">
+                    <p className="text-[9px] uppercase tracking-wider text-text-secondary">Footwear</p>
+                    <select
+                      value={colorway.companionFootwearType}
+                      onChange={(e) => onUpdate({ companionFootwearType: e.target.value })}
+                      className="w-full bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-accent transition-colors"
+                    >
+                      <option value="">Select type</option>
+                      {companionTypeOptions?.footwear.map((cat) => (
+                        <option key={cat.slug} value={cat.slug}>{cat.name}</option>
+                      ))}
+                    </select>
+                    <CompanionColorPicker
+                      color={colorway.companionFootwearColor}
+                      onSelect={(color) => onUpdate({ companionFootwearColor: color })}
+                      title="Pick a custom footwear color"
+                    />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-[10px] text-text-secondary">No companion zones available for this category.</p>
+            )}
+          </div>
+
+          {colorway.generatedImages.length > 0 && (
+            <div className="grid grid-cols-2 gap-1.5">
+              {colorway.generatedImages.map((img, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setZoomedPreview(img.url)}
+                  className="aspect-[4/5] overflow-hidden rounded border border-border bg-bg-secondary cursor-zoom-in"
+                >
+                  <img src={img.url} alt={`Generated ${i + 1}`} className="h-full w-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={canGenerate ? onGenerate : undefined}
+              disabled={!canGenerate || colorway.generateStatus === "processing" || colorway.generateStatus === "completed"}
+              className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity"
+            >
+              {colorway.generateStatus === "processing" && (
+                <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />
+              )}
+              {colorway.generateStatus === "completed"
+                ? "Generated ✓"
+                : colorway.generateStatus === "processing"
+                ? "Generating..."
+                : "Generate"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -986,6 +1139,7 @@ export default function NewProductPage() {
   const [productMediaError, setProductMediaError] = useState("");
   const [showProductMediaSection, setShowProductMediaSection] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [categories, setCategories] = useState<Category[]>([]);
   const [models, setModels] = useState<ModelAsset[]>([]);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImageAsset[]>([]);
@@ -1019,6 +1173,7 @@ export default function NewProductPage() {
   const [importingGeneratedImage, setImportingGeneratedImage] = useState<string | null>(null);
   const [isGeneratedImagesOpen, setIsGeneratedImagesOpen] = useState(false);
   const [generatedImagesSearch, setGeneratedImagesSearch] = useState("");
+  const [categorySearch, setCategorySearch] = useState("");
   const [userRole, setUserRole] = useState("");
   const [userStoreName, setUserStoreName] = useState("");
   const [userStoreType, setUserStoreType] = useState<"thrift" | "retail" | "">("");
@@ -1083,12 +1238,12 @@ export default function NewProductPage() {
     () => getCategoryGender(categories, selectedCategorySlug),
     [categories, selectedCategorySlug]
   );
-  const selectedModelGender: "male" | "female" | "unisex" =
+  const selectedModelGender: "male" | "female" | "child" =
     selectedCategoryGender === "men"
       ? "male"
       : selectedCategoryGender === "women"
         ? "female"
-        : "unisex";
+        : "child";
   const generationRequirements = useMemo(
     () => getZoneRequirements(selectedCategoryZone),
     [selectedCategoryZone]
@@ -1116,12 +1271,26 @@ export default function NewProductPage() {
       label: getCategoryPathLabel(categories, category),
     }));
   }, [categories, isStoreOwner]);
+  const filteredCategoryOptions = useMemo(() => {
+    const term = categorySearch.trim().toLowerCase();
+    if (!term) return categoryOptions;
+
+    const filtered = categoryOptions.filter(
+      (category) =>
+        category.label.toLowerCase().includes(term) || category.slug.toLowerCase().includes(term)
+    );
+    const selected = categoryOptions.find((category) => category.slug === selectedCategorySlug);
+    if (selected && !filtered.some((category) => category.slug === selected.slug)) {
+      filtered.unshift(selected);
+    }
+    return filtered;
+  }, [categoryOptions, categorySearch, selectedCategorySlug]);
   const filteredModels = useMemo(
     () =>
-      selectedModelGender === "unisex"
+      selectedModelGender === "child"
         ? models
         : models.filter(
-            (model) => model.gender === selectedModelGender || model.gender === "unisex"
+            (model) => model.gender === selectedModelGender || model.gender === "child"
           ),
     [models, selectedModelGender]
   );
@@ -1181,17 +1350,11 @@ export default function NewProductPage() {
     if (!isStoreOwner) return true;
     return colorways.every((cw) => cw.hex.trim());
   }, [colorways, isStoreOwner]);
-  const storeOwnerModelReady = useMemo(() => {
-    if (!isStoreOwner) return true;
-    if (!selectedCategorySlug) return false;
-    if (colorways.length === 0) return false;
-
-    return colorways.every((cw) =>
-      Boolean(cw.frontFile || cw.frontPreview) &&
-      Boolean(cw.backFile || cw.backPreview) &&
-      cw.enhanceStatus === "completed"
-    );
-  }, [colorways, isStoreOwner, selectedCategorySlug]);
+  const addColorwayLabel = useMemo(
+    () => (colorways.some((cw) => !cw.hex.trim()) ? "Add color to the previous colorway" : "Add colorway"),
+    [colorways]
+  );
+  const shouldShowModelPictures = Boolean(selectedCategorySlug);
   const storeOwnerGenerationReady = useMemo(() => {
     if (!isStoreOwner) return true;
     if (!selectedCategorySlug) return false;
@@ -1243,9 +1406,36 @@ export default function NewProductPage() {
     setColorways((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   };
 
-  const addColorway = () => setColorways((prev) => [...prev, createEmptyColorway()]);
+  const resetColorway = (id: string) => {
+    updateColorway(id, {
+      frontFile: null,
+      frontPreview: "",
+      backFile: null,
+      backPreview: "",
+      enhanceStatus: "idle",
+      enhanceJobId: "",
+      enhanceError: "",
+      enhancedFrontUrl: "",
+      enhancedBackUrl: "",
+      enhancedFrontFile: null,
+      enhancedBackFile: null,
+      generateStatus: "idle",
+      generateJobId: "",
+      generateError: "",
+      generatedImages: [],
+    });
+  };
+
+  const addColorway = () =>
+    setColorways((prev) => [...prev, createEmptyColorway(prev[prev.length - 1]?.hex.trim() || "")]);
   const handleAddColorway = () => {
     if (isStoreOwner && !storeOwnerCanAddColorway) return;
+    const blankColorway = colorways.find((cw) => !cw.hex.trim());
+    if (blankColorway) {
+      setError("Please assign a color to the current colorway before adding another.");
+      scrollToColorwayCard(blankColorway.id);
+      return;
+    }
     addColorway();
   };
 
@@ -1378,8 +1568,9 @@ export default function NewProductPage() {
 
   const canGenerateColorway = (cw: Colorway) => {
     if (!selectedModelId) return false;
-    const hasFront = Boolean(cw.enhancedFrontFile || cw.frontFile || cw.frontPreview);
-    const hasBack = Boolean(cw.enhancedBackFile || cw.backFile || cw.backPreview);
+    const hasFront = Boolean(cw.enhancedFrontFile || cw.enhancedFrontUrl || cw.frontPreview);
+    const hasBack = Boolean(cw.enhancedBackFile || cw.enhancedBackUrl || cw.backPreview);
+    if (cw.enhanceStatus !== "completed") return false;
     if (!hasFront || !hasBack) return false;
     if (form.fashionSubtype !== "clothes") return true;
     if (companionZones.includes("top") && (!cw.companionTopType || !cw.companionTopColor)) return false;
@@ -2173,17 +2364,17 @@ export default function NewProductPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setFieldErrors({});
     setLoading(true);
 
     if (isStoreOwner) {
-      if (!selectedParentSlug) {
-        setError("Please select a product category.");
-        scrollToElement(categorySelectRef.current);
-        setLoading(false);
-        return;
-      }
-      if (!storeOwnerBasicsReady) {
-        setError("Please complete the product basics.");
+      const nextFieldErrors: Record<string, string> = {};
+      if (!form.name.trim()) nextFieldErrors.name = "Product name is required.";
+      if (isThriftStoreOwner && !form.brand.trim()) nextFieldErrors.brand = "Brand is required.";
+      if (!form.price.trim()) nextFieldErrors.price = "Price is required.";
+      if (!selectedParentSlug) nextFieldErrors.category = "Category is required.";
+      if (Object.keys(nextFieldErrors).length > 0) {
+        setFieldErrors(nextFieldErrors);
         scrollToElement(productBasicsRef.current);
         setLoading(false);
         return;
@@ -2241,7 +2432,7 @@ export default function NewProductPage() {
         }
       }
       if (isThriftStoreOwner && !form.brand.trim()) {
-        setError("Please provide the brand of this item.");
+        setFieldErrors((current) => ({ ...current, brand: "Brand is required." }));
         scrollToElement(productBasicsRef.current);
         setLoading(false);
         return;
@@ -2255,12 +2446,16 @@ export default function NewProductPage() {
           selectedGreatGrandchildSlug,
         ].filter(Boolean);
 
-        type VariantEntry = { key: string; stock: number; conditionScore: number };
+        type VariantEntry = { key: string; size: string; color: string; stock: number; conditionScore: number };
         const allVariants: VariantEntry[] = [];
         for (const cw of colorways) {
           for (const s of cw.sizes.filter((s) => s.size.trim() && s.stock.trim())) {
+            const size = s.size.trim();
+            const color = cw.hex.trim();
             allVariants.push({
-              key: cw.hex.trim() ? `${s.size.trim()} / ${cw.hex.trim()}` : s.size.trim(),
+              key: color ? `${size} / ${color}` : size,
+              size,
+              color,
               stock: Math.max(0, Number(s.stock || 0)),
               conditionScore: Math.max(1, Math.min(10, Number(s.conditionScore || 9))),
             });
@@ -2269,9 +2464,18 @@ export default function NewProductPage() {
 
         const totalStock = allVariants.reduce((sum, v) => sum + v.stock, 0);
         const uniqueColors = Array.from(new Set(colorways.map((c) => c.hex.trim()).filter(Boolean)));
+        const uniqueSizes = Array.from(new Set(allVariants.map((v) => v.size).filter(Boolean)));
         const sizeStockPayload = Object.fromEntries(
           allVariants.map((v) => [v.key, { fullStock: v.stock, stock: v.stock, conditionScore: v.conditionScore }])
         );
+        const variantsPayload = allVariants.map((v) => ({
+          key: v.key,
+          size: v.size,
+          color: v.color,
+          fullStock: v.stock,
+          stock: v.stock,
+          conditionScore: v.conditionScore,
+        }));
 
         const body = new FormData();
         body.append("name", form.name);
@@ -2286,9 +2490,10 @@ export default function NewProductPage() {
         body.append("stock", String(totalStock));
         body.append("fullStock", String(totalStock));
         body.append("categories", JSON.stringify(productCategories));
-        body.append("sizes", JSON.stringify(allVariants.map((v) => v.key)));
+        body.append("sizes", JSON.stringify(uniqueSizes));
         body.append("colors", JSON.stringify(uniqueColors));
         body.append("sizeStock", JSON.stringify(sizeStockPayload));
+        body.append("variants", JSON.stringify(variantsPayload));
         body.append("mainImageIndex", "0");
         if (selectedModelId) body.append("modelId", selectedModelId);
         const companionSettingsPayload: Record<string, object> = {};
@@ -2350,7 +2555,7 @@ export default function NewProductPage() {
     }
 
     if (!selectedParentSlug) {
-      setError("Please select a product category.");
+      setFieldErrors((current) => ({ ...current, category: "Category is required." }));
       scrollToElement(categorySelectRef.current);
       setLoading(false);
       return;
@@ -2364,7 +2569,7 @@ export default function NewProductPage() {
     }
 
     if (form.productType === "perfume" && !form.cloneSourceName.trim()) {
-      setError("Please provide the original fragrance name this perfume is cloning.");
+      setFieldErrors((current) => ({ ...current, cloneSourceName: "Original fragrance name is required." }));
       setLoading(false);
       return;
     }
@@ -2376,7 +2581,7 @@ export default function NewProductPage() {
     }
 
     if (isThriftStoreOwner && !form.brand.trim()) {
-      setError("Please provide the brand of this item.");
+      setFieldErrors((current) => ({ ...current, brand: "Brand is required." }));
       scrollToElement(productBasicsRef.current);
       setLoading(false);
       return;
@@ -2451,11 +2656,11 @@ export default function NewProductPage() {
       body.append("fullStock", form.productType === "fashion" ? String(computedFashionStock) : form.stock);
       const variantKeys = form.productType === "perfume"
         ? []
-        : completeVariantRows.map((row) => buildVariantLabel(row));
+        : completeVariantRows.map((row) => buildVariantKey(row));
       if (variantKeys.length > 0) {
         const sizeStockPayload = Object.fromEntries(
           completeVariantRows.map((row) => [
-            buildVariantLabel(row),
+            buildVariantKey(row),
             {
               fullStock: Math.max(0, Number(row.stock || 0)),
               stock: Math.max(0, Number(row.stock || 0)),
@@ -2464,6 +2669,19 @@ export default function NewProductPage() {
           ])
         );
         body.append("sizeStock", JSON.stringify(sizeStockPayload));
+        body.append(
+          "variants",
+          JSON.stringify(
+            completeVariantRows.map((row) => ({
+              key: buildVariantKey(row),
+              size: row.size.trim(),
+              color: row.colors.trim(),
+              fullStock: Math.max(0, Number(row.stock || 0)),
+              stock: Math.max(0, Number(row.stock || 0)),
+              conditionScore: Math.max(0, Math.min(10, Number(row.conditionScore || 9) || 9)),
+            }))
+          )
+        );
       }
       if (form.productType === "perfume") {
         body.append("conditionScore", form.conditionScore);
@@ -2480,7 +2698,7 @@ export default function NewProductPage() {
       body.append("cloneSourceImage", form.cloneSourceImage);
       if (compressedCloneSourceImageFile) body.append("cloneSourceImageFile", compressedCloneSourceImageFile);
       body.append("categories", JSON.stringify(productCategories));
-      body.append("sizes", JSON.stringify(variantKeys));
+      body.append("sizes", JSON.stringify(Array.from(new Set(completeVariantRows.map((row) => row.size.trim()).filter(Boolean)))));
       body.append(
         "colors",
         JSON.stringify(
@@ -2569,7 +2787,10 @@ export default function NewProductPage() {
           )}
 
           <div ref={productBasicsRef}>
-            <SectionCard title="Product Basics">
+            <SectionCard
+              title="Product Basics"
+              description="Set the core product info first, then add colorways and other variants."
+            >
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <div className="sm:col-span-2 xl:col-span-3">
                 <FieldLabel>Product Name</FieldLabel>
@@ -2581,6 +2802,7 @@ export default function NewProductPage() {
                   className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
                   placeholder="e.g. Oversized Linen Shirt"
                 />
+                <FieldError message={fieldErrors.name} />
               </div>
               {isThriftStoreOwner && (
                 <div>
@@ -2593,6 +2815,7 @@ export default function NewProductPage() {
                     className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
                     placeholder="e.g. Zara"
                   />
+                  <FieldError message={fieldErrors.brand} />
                 </div>
               )}
               <div>
@@ -2616,9 +2839,17 @@ export default function NewProductPage() {
                   className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
                   placeholder="0.00"
                 />
+                <FieldError message={fieldErrors.price} />
               </div>
               <div className={isThriftStoreOwner ? "" : "sm:col-span-2 xl:col-span-3"}>
                 <FieldLabel>Category</FieldLabel>
+                <input
+                  type="text"
+                  value={categorySearch}
+                  onChange={(e) => setCategorySearch(e.target.value)}
+                  placeholder="Search categories..."
+                  className="mb-2 w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
+                />
                 <select
                   ref={categorySelectRef}
                   value={selectedCategorySlug}
@@ -2640,16 +2871,76 @@ export default function NewProductPage() {
                   className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
                 >
                   <option value="">Select category</option>
-                  {categoryOptions.map((cat) => (
+                  {filteredCategoryOptions.map((cat) => (
                     <option key={cat.slug} value={cat.slug}>
                       {cat.label}
                     </option>
                   ))}
                 </select>
+                <FieldError message={fieldErrors.category} />
               </div>
             </div>
             </SectionCard>
           </div>
+
+          {shouldShowModelPictures && (
+            <div ref={modelPicturesSectionRef}>
+              <SectionCard
+                title="Model Pictures"
+                description="Choose one model for all colorways, then configure each colorway's companion outfit and generate."
+              >
+                {/* Shared model selector */}
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-3">
+                    {filteredModels.map((model) => {
+                      const active = selectedModelId === model._id;
+                      return (
+                        <button
+                          key={model._id}
+                          type="button"
+                          onClick={() => setSelectedModelId(model._id)}
+                          className={`w-[96px] overflow-hidden rounded border text-left transition-colors ${active ? "border-accent" : "border-border hover:border-accent"}`}
+                        >
+                          <div className="aspect-[4/5] bg-bg-secondary">
+                            <img
+                              src={model.frontImage || model.images?.[0] || ""}
+                              alt={model.name}
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+                          <div className="p-1.5">
+                            <p className="truncate text-[9px] font-medium">{model.name}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Per-colorway generation cards — only shown once a model is picked */}
+                {selectedModelId && !isStoreOwner && (
+                  <div className="mt-4 flex items-start gap-3 overflow-x-auto pb-2">
+                    {colorways.map((cw, cwIndex) => (
+                      <ColorwayGenerationCard
+                        key={cw.id}
+                        colorway={cw}
+                        index={cwIndex}
+                        companionZones={companionZones}
+                        companionTypeOptions={companionTypeOptions}
+                        onUpdate={(patch) => updateColorway(cw.id, patch)}
+                        canGenerate={canGenerateColorway(cw)}
+                        onGenerate={() => {
+                          if (!canGenerateColorway(cw)) return;
+                          void handleGenerateColorway(cw.id);
+                        }}
+                        onReset={() => resetColorway(cw.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </SectionCard>
+            </div>
+          )}
 
           {selectedCategorySlug && (
             <div ref={colorwaysSectionRef}>
@@ -2666,81 +2957,31 @@ export default function NewProductPage() {
                     canRemove={colorways.length > 1}
                     isThrift={isThriftStoreOwner}
                     onRemove={() => removeColorway(cw.id)}
-                    onUpdate={(patch) => updateColorway(cw.id, patch)}
-                    onEnhance={() => void handleEnhanceColorway(cw.id)}
-                    onAddSize={() => addSizeRow(cw.id)}
-                    onRemoveSize={(sizeId) => removeSizeRow(cw.id, sizeId)}
-                    onUpdateSize={(sizeId, patch) => updateSizeRow(cw.id, sizeId, patch)}
-                  />
+                  onUpdate={(patch) => updateColorway(cw.id, patch)}
+                  onEnhance={() => void handleEnhanceColorway(cw.id)}
+                  showGenerationPanel={isStoreOwner}
+                  companionZones={companionZones}
+                  companionTypeOptions={companionTypeOptions}
+                  canGenerate={canGenerateColorway(cw)}
+                  onGenerate={() => { if (!canGenerateColorway(cw)) return; void handleGenerateColorway(cw.id); }}
+                  onAddSize={() => addSizeRow(cw.id)}
+                  onRemoveSize={(sizeId) => removeSizeRow(cw.id, sizeId)}
+                  onUpdateSize={(sizeId, patch) => updateSizeRow(cw.id, sizeId, patch)}
+                  onReset={() => resetColorway(cw.id)}
+                />
                 ))}
                 <button
                   type="button"
                   onClick={handleAddColorway}
-                  title="Add colorway"
                   disabled={!storeOwnerCanAddColorway}
-                  className="mt-0 flex h-10 w-10 flex-none items-center justify-center rounded border border-dashed border-border text-lg text-text-secondary hover:border-accent hover:text-accent transition-colors self-start disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border disabled:hover:text-text-secondary"
+                  className="group mt-0 flex h-10 flex-none items-center gap-2 rounded border border-dashed border-border px-3 text-lg text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border disabled:hover:text-text-secondary"
                 >
-                  +
+                  <span className="leading-none">+</span>
+                  <span className="text-[9px] font-semibold uppercase tracking-[0.22em] text-text-secondary transition-colors group-hover:text-accent">
+                    {addColorwayLabel}
+                  </span>
                 </button>
               </div>
-              </SectionCard>
-            </div>
-          )}
-
-          {selectedCategorySlug && storeOwnerModelReady && (
-            <div ref={modelPicturesSectionRef}>
-              <SectionCard
-                title="Model Pictures"
-                description="Choose one model for all colorways, then configure each colorway's companion outfit and generate."
-              >
-              {/* Shared model selector */}
-              <div className="space-y-2">
-                <FieldLabel>Model</FieldLabel>
-                <div className="flex flex-wrap gap-3">
-                  {filteredModels.map((model) => {
-                    const active = selectedModelId === model._id;
-                    return (
-                      <button
-                        key={model._id}
-                        type="button"
-                        onClick={() => setSelectedModelId(model._id)}
-                        className={`w-[96px] overflow-hidden rounded border text-left transition-colors ${active ? "border-accent" : "border-border hover:border-accent"}`}
-                      >
-                        <div className="aspect-[4/5] bg-bg-secondary">
-                          <img
-                            src={model.frontImage || model.images?.[0] || ""}
-                            alt={model.name}
-                            className="h-full w-full object-cover"
-                          />
-                        </div>
-                        <div className="p-1.5">
-                          <p className="truncate text-[9px] font-medium">{model.name}</p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Per-colorway generation cards — only shown once a model is picked */}
-              {selectedModelId && (
-                <div className="mt-4 flex items-start gap-3 overflow-x-auto pb-2">
-                  {colorways.map((cw, cwIndex) => (
-                    <ColorwayGenerationCard
-                      key={cw.id}
-                      colorway={cw}
-                      index={cwIndex}
-                      companionZones={companionZones}
-                      companionTypeOptions={companionTypeOptions}
-                      onUpdate={(patch) => updateColorway(cw.id, patch)}
-                      onGenerate={() => {
-                        if (!canGenerateColorway(cw)) return;
-                        void handleGenerateColorway(cw.id);
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
               </SectionCard>
             </div>
           )}
@@ -2780,7 +3021,10 @@ export default function NewProductPage() {
       )}
 
         <div ref={productBasicsRef}>
-          <SectionCard title="Product Basics" description="">
+          <SectionCard
+            title="Product Basics"
+            description="Set the core product info first, then add colorways and other variants."
+          >
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             <div className="xl:col-span-2">
               <FieldLabel>Product Name</FieldLabel>
@@ -2792,6 +3036,7 @@ export default function NewProductPage() {
               className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
               placeholder="e.g. Vintage Denim Jacket"
             />
+            <FieldError message={fieldErrors.name} />
             </div>
             {!isStoreOwner && (
               <div>
@@ -2822,6 +3067,7 @@ export default function NewProductPage() {
                   className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
                   placeholder={isThriftStoreOwner ? "Original brand, e.g. Zara" : "Brand name, e.g. Nike"}
                 />
+                <FieldError message={fieldErrors.brand} />
               </div>
             )}
             <div>
@@ -2845,6 +3091,7 @@ export default function NewProductPage() {
                 className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
                 placeholder="0.00"
               />
+              <FieldError message={fieldErrors.price} />
             </div>
             <div className="xl:col-span-3">
               <FieldLabel>Category</FieldLabel>
@@ -2876,6 +3123,7 @@ export default function NewProductPage() {
                 </option>
               ))}
             </select>
+            <FieldError message={fieldErrors.category} />
             </div>
             <div className="xl:col-span-3">
               <FieldLabel>Description</FieldLabel>
@@ -2885,7 +3133,7 @@ export default function NewProductPage() {
                 rows={4}
                 className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm resize-none"
                 placeholder="Describe fit, materials, condition, and any notable details"
-              />
+            />
             </div>
           </div>
           </SectionCard>
@@ -2907,6 +3155,7 @@ export default function NewProductPage() {
                     className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
                     placeholder="e.g. Bleu de Chanel"
                   />
+                  <FieldError message={fieldErrors.cloneSourceName} />
                 </div>
               </div>
               <div className="space-y-3">

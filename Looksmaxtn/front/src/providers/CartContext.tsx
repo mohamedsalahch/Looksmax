@@ -56,6 +56,28 @@ interface CartContextType {
 }
 
 const STORAGE_KEY = "looksmax-cart";
+const CART_ITEM_REMOVED_EVENT = "looksmax:cart-item-removed";
+const CART_CLEARED_EVENT = "looksmax:cart-cleared";
+
+function notifyStudioCartItemRemoved(item?: CartItem) {
+  if (typeof window === "undefined" || !item) return;
+
+  window.dispatchEvent(
+    new CustomEvent(CART_ITEM_REMOVED_EVENT, {
+      detail: {
+        cartItemId: item.id,
+        productId: getCartItemProductId(item.id),
+        size: item.size || null,
+      },
+    })
+  );
+}
+
+function notifyStudioCartCleared() {
+  if (typeof window === "undefined") return;
+
+  window.dispatchEvent(new CustomEvent(CART_CLEARED_EVENT));
+}
 
 function loadCart(): CartItem[] {
   if (typeof window === "undefined") return [];
@@ -394,6 +416,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     } else {
       void releaseProductReservation(productId, removedItem?.size);
     }
+    notifyStudioCartItemRemoved(removedItem);
   }, []);
 
   const updateQuantity = useCallback((id: string, quantity: number) => {
@@ -413,6 +436,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       } else {
         void releaseProductReservation(productId, currentItem?.size);
       }
+      notifyStudioCartItemRemoved(currentItem);
       return;
     }
     setItems((prev) => {
@@ -440,6 +464,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     });
     clearReservationKey();
     setItems([]);
+    notifyStudioCartCleared();
   }, []);
 
   useEffect(() => {

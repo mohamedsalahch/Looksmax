@@ -96,6 +96,42 @@ function parseCompanionSettings(raw: FormDataEntryValue | null) {
   } catch { return null; }
 }
 
+function parseProductVariants(raw: FormDataEntryValue | null) {
+  const str = String(raw || "").trim();
+  if (!str || str === "[]") return [];
+  try {
+    const parsed = JSON.parse(str) as Array<{
+      key?: string;
+      size?: string;
+      color?: string;
+      fullStock?: number;
+      stock?: number;
+      conditionScore?: number | null;
+    }>;
+    return parsed
+      .map((variant) => {
+        const key = String(variant.key || "").trim();
+        const size = String(variant.size || "").trim();
+        const color = String(variant.color || "").trim();
+        if (!key || !size) return null;
+        return {
+          key,
+          size,
+          color,
+          fullStock: Math.max(0, Number(variant.fullStock ?? variant.stock ?? 0) || 0),
+          stock: Math.max(0, Number(variant.stock ?? variant.fullStock ?? 0) || 0),
+          conditionScore:
+            variant.conditionScore == null
+              ? null
+              : Math.max(0, Math.min(10, Number(variant.conditionScore) || 0)),
+        };
+      })
+      .filter((variant): variant is NonNullable<typeof variant> => variant !== null);
+  } catch {
+    return [];
+  }
+}
+
 function normalizeReference(value: unknown) {
   return String(value || "").trim();
 }
@@ -314,7 +350,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         update.reference = normalizeReference(body.reference);
         const duplicateResponse = await ensureUniqueProductReference({
           ownerId: existingProduct.createdBy?.id || session.userId,
-          reference: update.reference,
+          reference: String(update.reference || ""),
           excludeProductId: id,
         });
         if (duplicateResponse) return duplicateResponse;
@@ -494,9 +530,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       })
       .filter(Boolean) as { url: string; isMain: boolean; key: string }[];
 
-    const existingProductImages = (existingProduct.images || []).filter(
-      (image): image is { url: string; isMain?: boolean } => Boolean(image && image.url)
-    );
+    const existingProductImages = (existingProduct.images || []).filter((image) => Boolean(image && image.url));
     const nextImages =
       mergedImages.length > 0
         ? mergedImages
@@ -526,6 +560,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       : [];
 
     const sizes = productType === "perfume" ? [] : parseStringArray(formData.get("sizes"));
+    const variants = productType === "perfume" ? [] : parseProductVariants(formData.get("variants"));
     const rawSizeStock = String(formData.get("sizeStock") || "").trim();
     let sizeStockMap: Map<string, { fullStock: number; stock: number; conditionScore: number | null }> | null = null;
     let computedStock: number;
@@ -595,6 +630,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       originPictures: normalizeOriginPictures(productType, fashionSubtype, newOriginPictures),
       sizes,
       colors: productType === "perfume" ? [] : parseStringArray(formData.get("colors")),
+      variants,
       cloneSourceName: productType === "perfume" ? String(formData.get("cloneSourceName") || "") : "",
       cloneSourceImage:
         productType === "perfume"
