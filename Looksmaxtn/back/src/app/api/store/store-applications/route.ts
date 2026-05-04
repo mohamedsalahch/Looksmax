@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/store/lib/mongodb";
-import StoreApplication, { StoreApplicationCategory, StoreType } from "@/store/models/StoreApplication";
+import StoreApplication, { StoreApplicationCategory } from "@/store/models/StoreApplication";
 import { broadcastAdminEvent } from "@/admin/lib/adminEvents";
 
 const VALID_CATEGORIES = new Set<StoreApplicationCategory>([
@@ -8,8 +8,6 @@ const VALID_CATEGORIES = new Set<StoreApplicationCategory>([
   "fragrances",
   "accessories",
 ]);
-
-const VALID_STORE_TYPES = new Set<StoreType>(["thrift", "retail"]);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -32,9 +30,7 @@ function normalizeStoreApplication(store: {
         )
     : [];
   const normalizedCategory = categories[0] || (store.category as StoreApplicationCategory | undefined) || "clothes";
-  const normalizedStoreType = VALID_STORE_TYPES.has(store.storeType as StoreType)
-    ? (store.storeType as StoreType)
-    : "retail";
+  const normalizedStoreType = store.storeType === "thrift" ? "thrift" : "retail";
 
   return {
     _id: String(store._id),
@@ -64,7 +60,6 @@ export async function POST(req: NextRequest) {
     const storeName = String(body?.storeName || "").trim();
     const email = String(body?.email || "").trim().toLowerCase();
     const categories = normalizeCategories(body?.categories || body?.category);
-    const storeType = String(body?.storeType || "").trim() as StoreType;
     const address = String(body?.address || "").trim();
     const phoneNumber = String(body?.phoneNumber || "").trim();
     const additionalInformation = String(body?.additionalInformation || "").trim();
@@ -81,17 +76,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Select a valid category" }, { status: 400 });
     }
 
-    if (!VALID_STORE_TYPES.has(storeType)) {
-      return NextResponse.json({ error: "Select whether this is a thrift or retail store" }, { status: 400 });
-    }
-
     const store = await StoreApplication.create({
       name,
       storeName,
       email,
       category: categories[0],
       categories,
-      storeType,
+      storeType: "retail",
       address,
       phoneNumber,
       additionalInformation,

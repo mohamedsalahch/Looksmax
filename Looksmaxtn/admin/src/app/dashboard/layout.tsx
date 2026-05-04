@@ -195,27 +195,31 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     if (!context || context.state !== "running") return;
 
     const now = context.currentTime;
-    const gain = context.createGain();
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.08, now + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.34);
-    gain.connect(context.destination);
 
+    // Three-note ascending chime: C6 → E6 → G6
     [
-      { frequency: 880, startOffset: 0, stopOffset: 0.14 },
-      { frequency: 1320, startOffset: 0.12, stopOffset: 0.28 },
-    ].forEach(({ frequency, startOffset, stopOffset }) => {
+      { frequency: 1046.5, startOffset: 0,    duration: 0.5 },
+      { frequency: 1318.5, startOffset: 0.15, duration: 0.45 },
+      { frequency: 1568,   startOffset: 0.30, duration: 0.55 },
+    ].forEach(({ frequency, startOffset, duration }) => {
       const oscillator = context.createOscillator();
       oscillator.type = "sine";
       oscillator.frequency.setValueAtTime(frequency, now + startOffset);
-      oscillator.connect(gain);
-      oscillator.start(now + startOffset);
-      oscillator.stop(now + stopOffset);
-    });
 
-    window.setTimeout(() => {
-      gain.disconnect();
-    }, 400);
+      const gain = context.createGain();
+      gain.gain.setValueAtTime(0.0001, now + startOffset);
+      gain.gain.exponentialRampToValueAtTime(0.32, now + startOffset + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + startOffset + duration);
+
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(now + startOffset);
+      oscillator.stop(now + startOffset + duration);
+
+      window.setTimeout(() => {
+        gain.disconnect();
+      }, (startOffset + duration + 0.1) * 1000);
+    });
   }, [ensureNotificationAudio]);
 
   const scheduleTokenRefresh = (token?: string | null) => {
@@ -609,7 +613,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       loadPendingStores();
       loadPendingProducts();
     }
-    const eventSource = currentUser.role === "admin" ? new EventSource("/api/admin/events") : null;
+    const eventSource = currentUser.role === "admin" ? new EventSource("/api/events") : null;
     if (eventSource) eventSource.onmessage = (event) => {
       const payload = JSON.parse(event.data) as AdminRealtimeEvent;
       if (payload.type === "connected") return;

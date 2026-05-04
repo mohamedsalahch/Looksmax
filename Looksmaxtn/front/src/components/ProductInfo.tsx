@@ -446,7 +446,7 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
         </div>
       )}
 
-      {product.storeType !== "retail" && (
+      {product.brand && product.brand !== product.storeName && (
         <div>
           <p className="text-xs text-text-secondary uppercase tracking-wider">BRAND</p>
           <p className="mt-2 text-sm text-foreground">{product.brand}</p>

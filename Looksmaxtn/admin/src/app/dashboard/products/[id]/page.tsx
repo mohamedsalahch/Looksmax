@@ -39,6 +39,9 @@ interface ProductDetail {
   isActive?: boolean;
   visibilityStatus?: string;
   approvalStatus?: "pending" | "approved" | "rejected";
+  storeName?: string;
+  storeType?: "thrift" | "retail" | null;
+  conditionScore?: number | null;
   cloneSourceName?: string;
   createdBy?: AuditActor | null;
   updatedBy?: AuditActor | null;
@@ -50,6 +53,7 @@ interface SizeStockEntry {
   fullStock: number;
   stock: number;
   soldQuantity: number;
+  conditionScore?: number | null;
 }
 
 function getProductStatus(product: ProductDetail) {

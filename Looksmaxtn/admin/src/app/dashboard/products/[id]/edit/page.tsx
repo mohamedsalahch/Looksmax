@@ -126,7 +126,7 @@ function createEmptyColorway(hex = ""): Colorway {
     enhanceStatus: "idle", enhanceJobId: "", enhanceError: "",
     enhancedFrontUrl: "", enhancedBackUrl: "",
     enhancedFrontFile: null, enhancedBackFile: null,
-    sizes: [{ id: generateId(), size: "", stock: "", conditionScore: "9" }],
+    sizes: [{ id: generateId(), size: "", stock: "", conditionScore: "10" }],
     generateStatus: "idle", generateJobId: "", generateError: "",
     generatedImages: [],
     companionTopType: "", companionBottomType: "", companionFootwearType: "",
@@ -223,7 +223,7 @@ const initialForm = {
   newTagDurationDays: "3",
   sizes: "",
   colors: "",
-  conditionScore: "9",
+  conditionScore: "10",
   productType: "fashion" as ProductType,
   fashionSubtype: "" as FashionSubtype,
   sizeStock: {} as Record<string, string>,
@@ -714,12 +714,14 @@ function ColorwayCard({
   };
 
   const handleFrontFile = (file: File | null) => {
-    if (!file) { onUpdate({ frontFile: null, frontPreview: "", enhanceStatus: "idle", enhanceJobId: "" }); return; }
-    onUpdate({ frontFile: file, frontPreview: URL.createObjectURL(file), enhanceStatus: "idle", enhanceJobId: "" });
+    const generating = colorway.generateStatus === "processing";
+    if (!file) { onUpdate({ frontFile: null, frontPreview: "", ...(generating ? {} : { enhanceStatus: "idle" as const, enhanceJobId: "" }) }); return; }
+    onUpdate({ frontFile: file, frontPreview: URL.createObjectURL(file), ...(generating ? {} : { enhanceStatus: "idle" as const, enhanceJobId: "" }) });
   };
   const handleBackFile = (file: File | null) => {
-    if (!file) { onUpdate({ backFile: null, backPreview: "", enhanceStatus: "idle", enhanceJobId: "" }); return; }
-    onUpdate({ backFile: file, backPreview: URL.createObjectURL(file), enhanceStatus: "idle", enhanceJobId: "" });
+    const generating = colorway.generateStatus === "processing";
+    if (!file) { onUpdate({ backFile: null, backPreview: "", ...(generating ? {} : { enhanceStatus: "idle" as const, enhanceJobId: "" }) }); return; }
+    onUpdate({ backFile: file, backPreview: URL.createObjectURL(file), ...(generating ? {} : { enhanceStatus: "idle" as const, enhanceJobId: "" }) });
   };
 
   return (
@@ -804,7 +806,7 @@ function ColorwayCard({
               <div className="space-y-0.5 px-0.5">
                 <div className="flex items-center justify-between">
                   <span className="text-[8px] uppercase tracking-wider text-text-secondary">Condition</span>
-                  <span className="text-[8px] text-text-secondary">{sizeRow.conditionScore}/10</span>
+                  <span className="text-[8px] text-text-secondary">{sizeRow.conditionScore}/10 · {getConditionStatusFromScore(Number(sizeRow.conditionScore)).toUpperCase()}</span>
                 </div>
                 <input type="range" min="1" max="10" step="1" value={sizeRow.conditionScore} onChange={(e) => onUpdateSize(sizeRow.id, { conditionScore: e.target.value })} className="w-full accent-accent cursor-pointer" />
               </div>
@@ -823,6 +825,15 @@ function ColorwayCard({
           {colorway.enhanceStatus === "completed" && (
             <button type="button" onClick={onReset} className="text-[8px] uppercase tracking-wider text-text-secondary hover:text-accent transition-colors">Reset</button>
           )}
+          {colorway.enhanceStatus === "idle" && canEnhance && (
+            <button
+              type="button"
+              onClick={() => onUpdate({ enhanceStatus: "completed" })}
+              className="text-[8px] uppercase tracking-wider text-text-secondary hover:text-text-primary transition-colors"
+            >
+              Use original
+            </button>
+          )}
           <button type="button" onClick={colorway.enhanceStatus !== "completed" ? onEnhance : undefined} disabled={!canEnhance || colorway.enhanceStatus === "processing" || colorway.enhanceStatus === "completed"} className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity">
             {colorway.enhanceStatus === "processing" && <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />}
             {colorway.enhanceStatus === "completed" ? "Enhanced ✓" : colorway.enhanceStatus === "processing" ? "Enhancing..." : "Enhance"}
@@ -830,7 +841,7 @@ function ColorwayCard({
         </div>
       </div>
 
-      {showGenerationPanel && colorway.enhanceStatus === "completed" && (
+      {showGenerationPanel && (colorway.enhanceStatus === "completed" || colorway.generateStatus !== "idle") && (
         <div className="space-y-3 border-t border-border pt-3">
           <div className="space-y-1.5">
             <p className="text-[9px] uppercase tracking-wider text-text-secondary">Zones</p>
@@ -965,10 +976,11 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const [isGeneratedImagesOpen, setIsGeneratedImagesOpen] = useState(false);
   const [generatedImagesSearch, setGeneratedImagesSearch] = useState("");
   const [categorySearch, setCategorySearch] = useState("");
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const [userRole, setUserRole] = useState("");
   const [userStoreName, setUserStoreName] = useState("");
   const [userStoreType, setUserStoreType] = useState<"thrift" | "retail" | "">("");
-  const categorySelectRef = useRef<HTMLSelectElement | null>(null);
+  const categorySelectRef = useRef<HTMLInputElement | null>(null);
   const productBasicsRef = useRef<HTMLDivElement | null>(null);
   const colorwaysSectionRef = useRef<HTMLDivElement | null>(null);
   const modelPicturesSectionRef = useRef<HTMLDivElement | null>(null);
@@ -986,7 +998,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     size: "",
     colors: "",
     stock: "",
-    conditionScore: "9",
+    conditionScore: "10",
   });
   const [colorways, setColorways] = useState<Colorway[]>([createEmptyColorway()]);
   const generationAbortRef = useRef<AbortController | null>(null);
@@ -1020,7 +1032,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const completeVariantRows = useMemo(
     () =>
       activeVariantRows.filter(
-        (row) => row.size.trim() && row.stock.trim() && row.colors.trim() && row.conditionScore.trim()
+        (row) => row.size.trim() && row.stock.trim()
       ),
     [activeVariantRows]
   );
@@ -1052,7 +1064,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     addColorway();
   };
   const removeColorway = (id: string) => setColorways((prev) => prev.length === 1 ? prev : prev.filter((c) => c.id !== id));
-  const addSizeRow = (colorwayId: string) => setColorways((prev) => prev.map((c) => c.id === colorwayId ? { ...c, sizes: [...c.sizes, { id: generateId(), size: "", stock: "", conditionScore: "9" }] } : c));
+  const addSizeRow = (colorwayId: string) => setColorways((prev) => prev.map((c) => c.id === colorwayId ? { ...c, sizes: [...c.sizes, { id: generateId(), size: "", stock: "", conditionScore: "10" }] } : c));
   const removeSizeRow = (colorwayId: string, sizeId: string) => setColorways((prev) => prev.map((c) => c.id === colorwayId ? { ...c, sizes: c.sizes.length === 1 ? c.sizes : c.sizes.filter((s) => s.id !== sizeId) } : c));
   const updateSizeRow = (colorwayId: string, sizeId: string, patch: Partial<SizeRow>) => setColorways((prev) => prev.map((c) => c.id === colorwayId ? { ...c, sizes: c.sizes.map((s) => s.id === sizeId ? { ...s, ...patch } : s) } : c));
   const resetColorway = (colorwayId: string) =>
@@ -1320,7 +1332,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           name: p.name,
           price: p.price.toString(),
           description: p.description || "",
-          brand: p.brand || "LOOKSMAX",
+          brand: p.brand || "",
           reference: p.reference || "",
           stock: String(p.fullStock ?? p.stock ?? 1),
           tag: p.tag || "",
@@ -1482,6 +1494,9 @@ const loadedCategorySlugs = p.categories || [];
     setSelectedChildSlug(path.child);
     setSelectedGrandchildSlug(path.grandchild);
     setSelectedGreatGrandchildSlug(path.greatGrandchild || "");
+    const leafSlug = path.greatGrandchild || path.grandchild || path.child || path.parent;
+    const leaf = categories.find((c) => c.slug === leafSlug);
+    if (leaf) setCategorySearch(getCategoryPathLabel(categories, leaf));
   }, [categories, initialCategorySlugs]);
 
   const selectedCategorySlug =
@@ -2377,7 +2392,6 @@ const loadedCategorySlugs = p.categories || [];
     if (isStoreOwner) {
       const nextFieldErrors: Record<string, string> = {};
       if (!form.name.trim()) nextFieldErrors.name = "Product name is required.";
-      if (isThriftStoreOwner && !form.brand.trim()) nextFieldErrors.brand = "Brand is required.";
       if (!form.price.trim()) nextFieldErrors.price = "Price is required.";
       if (!selectedParentSlug) nextFieldErrors.category = "Category is required.";
       if (Object.keys(nextFieldErrors).length > 0) {
@@ -2431,7 +2445,7 @@ const loadedCategorySlugs = p.categories || [];
         const body = new FormData();
         body.append("name", form.name);
         body.append("price", form.price);
-        body.append("brand", isRetailStoreOwner ? userStoreName : form.brand);
+        body.append("brand", form.brand);
         body.append("reference", form.reference);
         body.append("description", "");
         body.append("productType", "fashion");
@@ -2549,13 +2563,6 @@ const loadedCategorySlugs = p.categories || [];
       return;
     }
 
-    if (isThriftStoreOwner && !form.brand.trim()) {
-      setFieldErrors((current) => ({ ...current, brand: "Brand is required." }));
-      scrollToElement(productBasicsRef.current);
-      setLoading(false);
-      return;
-    }
-
     if (form.productType === "fashion") {
       const hasExistingMedia = generatedModelMedia.some((m) => !m.file);
       const hasEnhanced = hasExistingMedia || Boolean(generationInputs.front.file);
@@ -2573,7 +2580,7 @@ const loadedCategorySlugs = p.categories || [];
       }
     }
 
-    const brandToSend = isRetailStoreOwner ? userStoreName : form.brand;
+    const brandToSend = form.brand;
 
     try {
       const productCategories = [
@@ -2807,10 +2814,21 @@ const loadedCategorySlugs = p.categories || [];
                 <input type="text" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors" placeholder="e.g. Oversized Linen Shirt" />
                 <FieldError message={fieldErrors.name} />
               </div>
-              {isThriftStoreOwner && (
+              {isStoreOwner && (
                 <div>
-                  <FieldLabel>Brand *</FieldLabel>
-                  <input type="text" required value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors" placeholder="e.g. Zara" />
+                  <FieldLabel>Store</FieldLabel>
+                  <input
+                    type="text"
+                    readOnly
+                    value={userStoreName}
+                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm opacity-60 cursor-not-allowed"
+                  />
+                </div>
+              )}
+              {isStoreOwner && (
+                <div>
+                  <FieldLabel>Brand</FieldLabel>
+                  <input type="text" value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors" placeholder="e.g. Zara (optional)" />
                   <FieldError message={fieldErrors.brand} />
                 </div>
               )}
@@ -2825,22 +2843,50 @@ const loadedCategorySlugs = p.categories || [];
               </div>
               <div className={isThriftStoreOwner ? "" : "sm:col-span-2 xl:col-span-3"}>
                 <FieldLabel>Category</FieldLabel>
-                <input
-                  type="text"
-                  value={categorySearch}
-                  onChange={(e) => setCategorySearch(e.target.value)}
-                  placeholder="Search categories..."
-                  className="mb-2 w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
-                />
-                <select ref={categorySelectRef} value={selectedCategorySlug} onChange={(e) => {
-                  const value = e.target.value;
-                  if (!value) { setSelectedParentSlug(""); setSelectedChildSlug(""); setSelectedGrandchildSlug(""); setSelectedGreatGrandchildSlug(""); return; }
-                  const path = getCategoryPath(categories, [value]);
-                  setSelectedParentSlug(path.parent); setSelectedChildSlug(path.child); setSelectedGrandchildSlug(path.grandchild); setSelectedGreatGrandchildSlug(path.greatGrandchild || "");
-                }} className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm">
-                  <option value="">Select category</option>
-                  {filteredCategoryOptions.map((cat) => <option key={cat.slug} value={cat.slug}>{cat.label}</option>)}
-                </select>
+                <div className="relative">
+                  <input
+                    ref={categorySelectRef}
+                    type="text"
+                    value={categorySearch}
+                    onChange={(e) => {
+                      setCategorySearch(e.target.value);
+                      setCategoryDropdownOpen(true);
+                      if (!e.target.value.trim()) {
+                        setSelectedParentSlug("");
+                        setSelectedChildSlug("");
+                        setSelectedGrandchildSlug("");
+                        setSelectedGreatGrandchildSlug("");
+                      }
+                    }}
+                    onFocus={() => setCategoryDropdownOpen(true)}
+                    onBlur={() => setTimeout(() => setCategoryDropdownOpen(false), 150)}
+                    placeholder="Type to search categories..."
+                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
+                  />
+                  {categoryDropdownOpen && filteredCategoryOptions.length > 0 && (
+                    <div className="absolute z-20 mt-0.5 w-full border border-border bg-bg-card shadow-lg max-h-52 overflow-y-auto">
+                      {filteredCategoryOptions.map((cat) => (
+                        <button
+                          key={cat.slug}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            const path = getCategoryPath(categories, [cat.slug]);
+                            setSelectedParentSlug(path.parent);
+                            setSelectedChildSlug(path.child);
+                            setSelectedGrandchildSlug(path.grandchild);
+                            setSelectedGreatGrandchildSlug(path.greatGrandchild || "");
+                            setCategorySearch(cat.label);
+                            setCategoryDropdownOpen(false);
+                          }}
+                          className={`w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-bg-hover ${selectedCategorySlug === cat.slug ? "text-accent" : "text-text-primary"}`}
+                        >
+                          {cat.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <FieldError message={fieldErrors.category} />
               </div>
             </div>
@@ -2895,7 +2941,7 @@ const loadedCategorySlugs = p.categories || [];
                   colorway={cw}
                   index={cwIndex}
                   canRemove={colorways.length > 1}
-                  isThrift={isThriftStoreOwner}
+                  isThrift={isStoreOwner}
                   showGenerationPanel={isStoreOwner}
                   companionZones={companionZones}
                   companionTypeOptions={companionTypeOptions}
@@ -2978,14 +3024,13 @@ const loadedCategorySlugs = p.categories || [];
             )}
             {!isRetailStoreOwner && (
               <div>
-                <FieldLabel>Brand{isThriftStoreOwner ? " *" : ""}</FieldLabel>
+                <FieldLabel>Brand</FieldLabel>
                 <input
                   type="text"
-                  required={isThriftStoreOwner}
                   value={form.brand}
                   onChange={(e) => setForm({ ...form, brand: e.target.value })}
                   className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-                  placeholder={isThriftStoreOwner ? "Original brand, e.g. Zara" : "Brand name, e.g. Nike"}
+                  placeholder={isThriftStoreOwner ? "Original brand, e.g. Zara (optional)" : "Brand name, e.g. Nike"}
                 />
                 <FieldError message={fieldErrors.brand} />
               </div>
@@ -3015,42 +3060,51 @@ const loadedCategorySlugs = p.categories || [];
             </div>
             <div className="xl:col-span-3">
               <FieldLabel>Category</FieldLabel>
-              <input
-                type="text"
-                value={categorySearch}
-                onChange={(e) => setCategorySearch(e.target.value)}
-                placeholder="Search categories..."
-                className="mb-2 w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
-              />
-              <select
-                ref={categorySelectRef}
-                value={selectedCategorySlug}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  if (!value) {
-                    setSelectedParentSlug("");
-                    setSelectedChildSlug("");
-                    setSelectedGrandchildSlug("");
-                    setSelectedGreatGrandchildSlug("");
-                    return;
-                  }
-
-                  const path = getCategoryPath(categories, [value]);
-                  setSelectedParentSlug(path.parent);
-                  setSelectedChildSlug(path.child);
-                  setSelectedGrandchildSlug(path.grandchild);
-                  setSelectedGreatGrandchildSlug(path.greatGrandchild || "");
-                }}
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
-              >
-                <option value="">Select category</option>
-              {filteredCategoryOptions.map((category) => (
-                <option key={category.slug} value={category.slug}>
-                  {category.label}
-                </option>
-              ))}
-            </select>
-            <FieldError message={fieldErrors.category} />
+              <div className="relative">
+                <input
+                  ref={categorySelectRef}
+                  type="text"
+                  value={categorySearch}
+                  onChange={(e) => {
+                    setCategorySearch(e.target.value);
+                    setCategoryDropdownOpen(true);
+                    if (!e.target.value.trim()) {
+                      setSelectedParentSlug("");
+                      setSelectedChildSlug("");
+                      setSelectedGrandchildSlug("");
+                      setSelectedGreatGrandchildSlug("");
+                    }
+                  }}
+                  onFocus={() => setCategoryDropdownOpen(true)}
+                  onBlur={() => setTimeout(() => setCategoryDropdownOpen(false), 150)}
+                  placeholder="Type to search categories..."
+                  className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
+                />
+                {categoryDropdownOpen && filteredCategoryOptions.length > 0 && (
+                  <div className="absolute z-20 mt-0.5 w-full border border-border bg-bg-card shadow-lg max-h-52 overflow-y-auto">
+                    {filteredCategoryOptions.map((cat) => (
+                      <button
+                        key={cat.slug}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          const path = getCategoryPath(categories, [cat.slug]);
+                          setSelectedParentSlug(path.parent);
+                          setSelectedChildSlug(path.child);
+                          setSelectedGrandchildSlug(path.grandchild);
+                          setSelectedGreatGrandchildSlug(path.greatGrandchild || "");
+                          setCategorySearch(cat.label);
+                          setCategoryDropdownOpen(false);
+                        }}
+                        className={`w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-bg-hover ${selectedCategorySlug === cat.slug ? "text-accent" : "text-text-primary"}`}
+                      >
+                        {cat.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <FieldError message={fieldErrors.category} />
             </div>
             <div className="xl:col-span-3">
               <FieldLabel>Description</FieldLabel>
@@ -3255,24 +3309,32 @@ const loadedCategorySlugs = p.categories || [];
                       }}
                     />
                   </div>
-                  <div className="rounded border border-border bg-bg-card px-3 py-2">
-                    <FieldLabel>Condition</FieldLabel>
-                    <input
-                      type="range"
-                      min="1"
-                      max="10"
-                      step="1"
-                      value={variantDraft.conditionScore}
-                      onChange={(e) => setVariantDraft((current) => ({ ...current, conditionScore: e.target.value }))}
-                      className="w-full accent-accent cursor-pointer"
-                    />
-                  </div>
+                  {!variantDraft.colors.trim() && (
+                    <div className="rounded border border-border bg-bg-card px-3 py-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <FieldLabel>Condition</FieldLabel>
+                        <span className="text-[10px] uppercase tracking-wider text-text-secondary">{getConditionStatusFromScore(Number(variantDraft.conditionScore))}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="1"
+                        max="10"
+                        step="1"
+                        value={variantDraft.conditionScore}
+                        onChange={(e) => setVariantDraft((current) => ({ ...current, conditionScore: e.target.value }))}
+                        className="w-full accent-accent cursor-pointer"
+                      />
+                    </div>
+                  )}
                   <div className="md:col-span-4 flex justify-end">
                     <button
                       type="button"
                       onClick={() => {
-                        if (!variantDraft.size.trim() || !variantDraft.stock.trim() || !variantDraft.colors.trim() || !variantDraft.conditionScore.trim()) return;
+                        if (!variantDraft.size.trim() || !variantDraft.stock.trim()) return;
                         const stockValue = Math.max(0, Number(variantDraft.stock || 0));
+                        const conditionScore = variantDraft.colors.trim()
+                          ? "10"
+                          : String(Math.max(1, Math.min(10, Number(variantDraft.conditionScore || 10) || 10)));
                         setVariantRows((current) => [
                           ...current,
                           {
@@ -3280,7 +3342,7 @@ const loadedCategorySlugs = p.categories || [];
                             size: variantDraft.size.trim(),
                             colors: variantDraft.colors.trim(),
                             stock: String(stockValue),
-                            conditionScore: String(Math.max(1, Math.min(10, Number(variantDraft.conditionScore || 9) || 9))),
+                            conditionScore,
                           },
                         ]);
                         setVariantDraft({
@@ -3288,10 +3350,10 @@ const loadedCategorySlugs = p.categories || [];
                           size: "",
                           colors: "",
                           stock: "",
-                          conditionScore: "9",
+                          conditionScore: "10",
                         });
                       }}
-                      disabled={!variantDraft.size.trim() || !variantDraft.stock.trim() || !variantDraft.colors.trim() || !variantDraft.conditionScore.trim()}
+                      disabled={!variantDraft.size.trim() || !variantDraft.stock.trim()}
                       className="border border-border bg-foreground px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-background transition-colors hover:bg-accent disabled:opacity-60"
                     >
                       ADD
@@ -3347,24 +3409,29 @@ const loadedCategorySlugs = p.categories || [];
                             }}
                           />
                         </div>
-                        <div className="rounded border border-border bg-bg-secondary px-3 py-2">
-                          <FieldLabel>Condition</FieldLabel>
-                          <input
-                            type="range"
-                            min="1"
-                            max="10"
-                            step="1"
-                            value={row.conditionScore}
-                            onChange={(e) =>
-                              setVariantRows((current) =>
-                                current.map((item) =>
-                                  item.id === row.id ? { ...item, conditionScore: e.target.value } : item
+                        {!row.colors.trim() && (
+                          <div className="rounded border border-border bg-bg-secondary px-3 py-2">
+                            <div className="flex items-center justify-between mb-1">
+                              <FieldLabel>Condition</FieldLabel>
+                              <span className="text-[10px] uppercase tracking-wider text-text-secondary">{getConditionStatusFromScore(Number(row.conditionScore))}</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="1"
+                              max="10"
+                              step="1"
+                              value={row.conditionScore}
+                              onChange={(e) =>
+                                setVariantRows((current) =>
+                                  current.map((item) =>
+                                    item.id === row.id ? { ...item, conditionScore: e.target.value } : item
+                                  )
                                 )
-                              )
-                            }
-                            className="w-full accent-accent cursor-pointer"
-                          />
-                        </div>
+                              }
+                              className="w-full accent-accent cursor-pointer"
+                            />
+                          </div>
+                        )}
                         <button
                           type="button"
                           onClick={() => setVariantRows((current) => current.filter((item) => item.id !== row.id))}

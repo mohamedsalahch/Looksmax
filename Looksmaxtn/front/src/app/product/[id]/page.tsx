@@ -101,7 +101,7 @@ export async function generateMetadata({
   const image = dbProduct.images?.find((item) => item.isMain)?.url || dbProduct.images?.[0]?.url || "";
   const description =
     dbProduct.description ||
-    `${dbProduct.name} by ${dbProduct.brand || "LOOKSMAX"} available from LOOKSMAX Tunisia.`;
+    `${dbProduct.name}${dbProduct.brand ? ` by ${dbProduct.brand}` : ""} available from LOOKSMAX Tunisia.`;
 
   return buildPageMetadata({
     title: `${dbProduct.name} | LOOKSMAX Tunisia`,
@@ -170,7 +170,7 @@ export default async function ProductDetailPage({
     name: dbProduct.name,
     categories: dbProduct.categories || [],
     price: dbProduct.price.toFixed(2),
-    brand: dbProduct.brand || "LOOKSMAX",
+    brand: dbProduct.brand || "",
     storeName: dbProduct.storeName || dbProduct.createdBy?.name || "",
     storeType: dbProduct.storeType || null,
     image: dbProduct.images?.find((image) => image.isMain)?.url || dbProduct.images?.[0]?.url || "",

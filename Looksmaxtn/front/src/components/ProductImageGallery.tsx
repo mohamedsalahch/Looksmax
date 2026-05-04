@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type TouchEvent as ReactTouchEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type TouchEvent as ReactTouchEvent } from "react";
+import { createPortal } from "react-dom";
 
 interface ProductImage {
   url: string;
@@ -46,6 +47,160 @@ function MediaPreview({
   return <img src={url} alt={alt} className={className} loading="eager" fetchPriority="high" decoding="async" />;
 }
 
+function ProductLightbox({
+  images,
+  initialIndex,
+  onClose,
+}: {
+  images: ProductImage[];
+  initialIndex: number;
+  onClose: () => void;
+}) {
+  const [activeIndex, setActiveIndex] = useState(initialIndex);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const imageRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const thumbRef = useRef<HTMLDivElement | null>(null);
+  const scrollingProgrammatically = useRef(false);
+
+  // Initial scroll to the image that was clicked
+  useEffect(() => {
+    const el = imageRefs.current[initialIndex];
+    if (el) {
+      el.scrollIntoView({ behavior: "instant", block: "start" });
+    }
+  }, []);
+
+  // Scroll active thumbnail into view whenever active index changes
+  useEffect(() => {
+    const container = thumbRef.current;
+    if (!container) return;
+    const thumb = container.children[activeIndex] as HTMLElement | undefined;
+    if (thumb) {
+      thumb.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    }
+  }, [activeIndex]);
+
+  // Track which image is centered in the scroll container
+  const handleScroll = useCallback(() => {
+    if (scrollingProgrammatically.current) return;
+    const container = scrollRef.current;
+    if (!container) return;
+    const center = container.scrollTop + container.clientHeight / 2;
+    let closest = 0;
+    let minDist = Infinity;
+    imageRefs.current.forEach((ref, i) => {
+      if (!ref) return;
+      const dist = Math.abs(ref.offsetTop + ref.offsetHeight / 2 - center);
+      if (dist < minDist) { minDist = dist; closest = i; }
+    });
+    setActiveIndex(closest);
+  }, []);
+
+  const scrollToImage = (index: number) => {
+    setActiveIndex(index);
+    scrollingProgrammatically.current = true;
+    imageRefs.current[index]?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(() => { scrollingProgrammatically.current = false; }, 600);
+  };
+
+  // Close on Escape
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  // Prevent body scroll
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 bg-background flex flex-col"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      {/* Close button */}
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute top-4 right-4 z-10 w-9 h-9 flex items-center justify-center text-foreground/60 hover:text-foreground bg-surface/60 hover:bg-surface transition-colors"
+        aria-label="Close"
+      >
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <line x1="1" y1="1" x2="17" y2="17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <line x1="17" y1="1" x2="1" y2="17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      </button>
+
+      {/* Scrollable image stack */}
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto"
+        onScroll={handleScroll}
+      >
+        {images.map((img, i) => (
+          <div
+            key={i}
+            ref={(el) => { imageRefs.current[i] = el; }}
+            className="w-full bg-background flex justify-center"
+          >
+            {img.url ? (
+              <MediaPreview
+                url={img.url}
+                alt={`Photo ${i + 1}`}
+                className="w-3/5 h-auto object-cover block"
+                videoClassName="w-3/5 h-auto object-cover block"
+                showControls={isVideoUrl(img.url)}
+              />
+            ) : (
+              <div className="w-3/5 aspect-[3/4] bg-surface" />
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Bottom-left thumbnail strip */}
+      {images.length > 1 && (
+        <div className="absolute bottom-4 left-4 z-10">
+          <div
+            ref={thumbRef}
+            className="flex flex-col gap-1.5 max-h-64 overflow-y-auto"
+            style={{ scrollbarWidth: "none" }}
+          >
+            {images.map((img, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => scrollToImage(i)}
+                className={`shrink-0 w-12 h-16 overflow-hidden border-2 transition-all duration-200 cursor-pointer ${
+                  activeIndex === i
+                    ? "border-foreground opacity-100"
+                    : "border-transparent opacity-40 hover:opacity-70"
+                }`}
+              >
+                {img.url ? (
+                  <MediaPreview
+                    url={img.url}
+                    alt={`Thumb ${i + 1}`}
+                    className="w-full h-full object-cover"
+                    videoClassName="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-surface" />
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>,
+    document.body
+  );
+}
+
 export default function ProductImageGallery({
   images = [],
   colorImages,
@@ -84,6 +239,7 @@ export default function ProductImageGallery({
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [isZoomActive, setIsZoomActive] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   useEffect(() => {
     const filterHandler = (e: Event) => {
@@ -228,96 +384,111 @@ export default function ProductImageGallery({
     }
   };
 
-  return (
-    <div ref={galleryRef} className="flex flex-col-reverse md:flex-row gap-3">
-      {/* Thumbnails */}
-      {visibleImages.length > 1 && (
-        <div className="flex md:flex-col gap-2 overflow-x-auto md:overflow-y-auto md:max-h-[600px] scrollbar-hide">
-          {visibleImages.map((img, index) => (
-            <button
-              key={index}
-              onClick={() => setActiveIndex(index)}
-              className={`relative shrink-0 w-16 h-20 md:w-20 md:h-24 overflow-hidden cursor-pointer transition-all duration-200 ${
-                activeIndex === index
-                  ? "ring-2 ring-foreground ring-offset-2 ring-offset-background"
-                  : "opacity-60 hover:opacity-100"
-              }`}
-            >
-              {img.url ? (
-                <MediaPreview
-                  url={img.url}
-                  alt={`Thumbnail ${index + 1}`}
-                  className="w-full h-full object-contain"
-                  videoClassName="w-full h-full object-contain"
-                />
-              ) : (
-                <div className="absolute inset-0 placeholder-img" />
-              )}
-            </button>
-          ))}
-        </div>
-      )}
+  const handleImageClick = () => {
+    if (visibleImages[activeIndex]?.url && !isVideoUrl(visibleImages[activeIndex].url)) {
+      setLightboxOpen(true);
+    }
+  };
 
-      {/* Main Image */}
-      <div className="flex-1 w-full">
-        {visibleImages[activeIndex]?.url ? (
-          <div
-            ref={imageShellRef}
-            className={`relative mx-auto w-fit max-w-full bg-transparent overflow-visible touch-pan-y ${
-              isDesktop && visibleImages[activeIndex]?.url ? "cursor-zoom-in" : "cursor-default"
-            }`}
-            onMouseEnter={handleMouseEnter}
-            onMouseMove={updateZoomState}
-            onMouseLeave={handleMouseLeave}
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
-          >
-            <MediaPreview
-              url={visibleImages[activeIndex].url}
-              alt="Main product"
-              className="block max-w-full max-h-[600px] w-auto h-auto object-contain"
-              videoClassName="block max-w-full max-h-[600px] w-auto h-auto object-contain"
-              showControls
-            />
-            {isDesktop && isZoomActive && !isVideoUrl(visibleImages[activeIndex].url) && (
-              <div
-                className="absolute z-20 hidden md:block overflow-hidden border border-border-color bg-background shadow-[0_18px_48px_rgba(26,26,26,0.18)] pointer-events-none"
-                style={{
-                  left: `${zoomPosition.left}px`,
-                  top: `${zoomPosition.top}px`,
-                  width: "240px",
-                  height: "320px",
-                }}
+  return (
+    <>
+      <div ref={galleryRef} className="flex flex-col-reverse md:flex-row gap-3">
+        {/* Thumbnails */}
+        {visibleImages.length > 1 && (
+          <div className="flex md:flex-col gap-2 overflow-x-auto md:overflow-y-auto md:max-h-[600px] scrollbar-hide">
+            {visibleImages.map((img, index) => (
+              <button
+                key={index}
+                onClick={() => setActiveIndex(index)}
+                className={`relative shrink-0 w-16 h-20 md:w-20 md:h-24 overflow-hidden cursor-pointer transition-all duration-200 ${
+                  activeIndex === index
+                    ? "ring-2 ring-foreground ring-offset-2 ring-offset-background"
+                    : "opacity-60 hover:opacity-100"
+                }`}
               >
-                <div
-                  className="absolute inset-0 rounded-[14px]"
-                  style={{
-                    backgroundImage: `url(${visibleImages[activeIndex].url})`,
-                    backgroundRepeat: "no-repeat",
-                    backgroundSize: "450%",
-                    backgroundPosition: `${zoomPoint.x}% ${zoomPoint.y}%`,
-                    transform: "scale(1.01)",
-                  }}
-                />
-              </div>
-            )}
-          </div>
-        ) : (
-          <div
-            ref={imageShellRef}
-            className="relative mx-auto w-full aspect-[3/4] md:min-h-[600px] placeholder-img flex items-center justify-center"
-            onMouseEnter={handleMouseEnter}
-            onMouseMove={updateZoomState}
-            onMouseLeave={handleMouseLeave}
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
-          >
-            <span className="relative z-10 text-sm tracking-widest opacity-50">
-              PRODUCT VIEW
-            </span>
+                {img.url ? (
+                  <MediaPreview
+                    url={img.url}
+                    alt={`Thumbnail ${index + 1}`}
+                    className="w-full h-full object-contain"
+                    videoClassName="w-full h-full object-contain"
+                  />
+                ) : (
+                  <div className="absolute inset-0 placeholder-img" />
+                )}
+              </button>
+            ))}
           </div>
         )}
+
+        {/* Main Image */}
+        <div className="flex-1 w-full">
+          {visibleImages[activeIndex]?.url ? (
+            <div
+              ref={imageShellRef}
+              className={`relative mx-auto w-fit max-w-full bg-transparent overflow-visible touch-pan-y cursor-pointer`}
+              onMouseEnter={handleMouseEnter}
+              onMouseMove={updateZoomState}
+              onMouseLeave={handleMouseLeave}
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+              onClick={handleImageClick}
+            >
+              <MediaPreview
+                url={visibleImages[activeIndex].url}
+                alt="Main product"
+                className="block max-w-full max-h-[600px] w-auto h-auto object-contain"
+                videoClassName="block max-w-full max-h-[600px] w-auto h-auto object-contain"
+                showControls
+              />
+              {isDesktop && isZoomActive && !isVideoUrl(visibleImages[activeIndex].url) && (
+                <div
+                  className="absolute z-20 hidden md:block overflow-hidden border border-border-color bg-background shadow-[0_18px_48px_rgba(26,26,26,0.18)] pointer-events-none"
+                  style={{
+                    left: `${zoomPosition.left}px`,
+                    top: `${zoomPosition.top}px`,
+                    width: "240px",
+                    height: "320px",
+                  }}
+                >
+                  <div
+                    className="absolute inset-0 rounded-[14px]"
+                    style={{
+                      backgroundImage: `url(${visibleImages[activeIndex].url})`,
+                      backgroundRepeat: "no-repeat",
+                      backgroundSize: "450%",
+                      backgroundPosition: `${zoomPoint.x}% ${zoomPoint.y}%`,
+                      transform: "scale(1.01)",
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          ) : (
+            <div
+              ref={imageShellRef}
+              className="relative mx-auto w-full aspect-[3/4] md:min-h-[600px] placeholder-img flex items-center justify-center"
+              onMouseEnter={handleMouseEnter}
+              onMouseMove={updateZoomState}
+              onMouseLeave={handleMouseLeave}
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+            >
+              <span className="relative z-10 text-sm tracking-widest opacity-50">
+                PRODUCT VIEW
+              </span>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+
+      {lightboxOpen && (
+        <ProductLightbox
+          images={visibleImages}
+          initialIndex={activeIndex}
+          onClose={() => setLightboxOpen(false)}
+        />
+      )}
+    </>
   );
 }
