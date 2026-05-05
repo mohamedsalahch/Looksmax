@@ -111,9 +111,14 @@ export default function ProductCard({
   const [addedToCart, setAddedToCart] = useState(false);
   const [clonePreview, setClonePreview] = useState({ visible: false, x: 0, y: 0 });
   const colorwayHexes = useMemo(
-    () => (colorImages && Object.keys(colorImages).length > 0
-      ? Object.keys(colorImages)
-      : Array.from(new Set(allSizes.map((entry) => splitVariantLabel(entry).colorHex).filter(Boolean))) as string[]),
+    () => {
+      const fromColorImages = colorImages
+        ? Object.keys(colorImages).filter(Boolean)
+        : [];
+      return fromColorImages.length > 0
+        ? fromColorImages
+        : (Array.from(new Set(allSizes.map((entry) => splitVariantLabel(entry).colorHex).filter(Boolean))) as string[]);
+    },
     [allSizes, colorImages],
   );
   const [activeColorHex, setActiveColorHex] = useState<string | null>(colorwayHexes[0] || null);
@@ -133,7 +138,7 @@ export default function ProductCard({
   const [blockedByOrder, setBlockedByOrder] = useState(initialBlockedByOrder);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const isPerfume = productType === "perfume";
-  const hasCondition = storeType !== "retail" && conditionScore != null;
+  const hasCondition = colorwayHexes.length === 0 && conditionScore != null;
   const conditionPercent = hasCondition ? getConditionPercent(normalizedConditionScore) : 0;
   const conditionLabel = hasCondition ? getConditionLabel(normalizedConditionScore, conditionStatus ?? undefined) : "";
   const conditionColor = hasCondition ? getConditionColor(normalizedConditionScore) : "transparent";

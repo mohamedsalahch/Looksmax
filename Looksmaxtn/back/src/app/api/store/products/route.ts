@@ -130,8 +130,19 @@ export async function GET(req: NextRequest) {
         ? Object.fromEntries(product.colorImages)
         : (product.colorImages && typeof product.colorImages === "object" ? product.colorImages : null);
 
+      const conditionScore = product.conditionScore != null
+        ? product.conditionScore
+        : (() => {
+            const scores = sizeStockEntries
+              .map(([, entry]) => (entry as { conditionScore?: number | null }).conditionScore)
+              .filter((s): s is number => typeof s === "number");
+            if (scores.length === 0) return null;
+            return Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length);
+          })();
+
       return {
         ...product,
+        conditionScore,
         stock: displayStock,
         cartCount: reservationInfo.totalQuantity,
         blockedByOrder,

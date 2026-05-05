@@ -508,7 +508,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const productType = normalizeProductType(String(formData.get("productType") || "fashion"));
     const fashionSubtype =
       productType === "fashion" ? String(formData.get("fashionSubtype") || "clothes") : null;
-    const conditionScore =
+    const explicitConditionScore =
       productType === "perfume" ? Number(formData.get("conditionScore") || 9) : null;
     const rawFullStock = String(formData.get("fullStock") ?? formData.get("stock") ?? "").trim();
     if (rawFullStock.length === 0) {
@@ -605,6 +605,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         colorImagesMap = new Map(Object.entries(parsed));
       } catch { colorImagesMap = null; }
     }
+
+    const conditionScore = (() => {
+      if (explicitConditionScore !== null) return explicitConditionScore;
+      if (!sizeStockMap) return null;
+      const scores = Array.from(sizeStockMap.values())
+        .map((e) => e.conditionScore)
+        .filter((s): s is number => s !== null);
+      if (scores.length === 0) return null;
+      return Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length);
+    })();
 
     const body = {
       name: String(formData.get("name") || ""),

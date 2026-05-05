@@ -410,7 +410,7 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
   };
 
   const normalizedConditionScore = product.conditionScore ?? 0;
-  const hasCondition = product.storeType !== "retail" && product.conditionScore != null;
+  const hasCondition = uniqueColorHexes.length === 0 && product.conditionScore != null;
   const conditionPercent = hasCondition ? getConditionPercent(normalizedConditionScore) : 0;
   const conditionLabel = hasCondition ? getConditionLabel(normalizedConditionScore, product.conditionStatus ?? undefined) : "";
   const conditionColor = hasCondition ? getConditionColor(normalizedConditionScore) : "transparent";

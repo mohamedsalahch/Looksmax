@@ -148,7 +148,7 @@ function getProductPayload(
     productType === "fashion" ? String(formData.get("fashionSubtype") || "clothes") : null;
   const rawStockValue = String(formData.get("fullStock") ?? formData.get("stock") ?? "").trim();
   const rawStock = rawStockValue.length > 0 ? Number(rawStockValue) : NaN;
-  const conditionScore =
+  const explicitConditionScore =
     productType === "perfume" ? Number(formData.get("conditionScore") || 9) : null;
   const sizes = productType === "perfume" ? [] : parseStringArray(formData.get("sizes"));
   const colors = productType === "perfume" ? [] : parseStringArray(formData.get("colors"));
@@ -173,6 +173,17 @@ function getProductPayload(
       sizeStockMap = null;
     }
   }
+
+  // Derive product-level conditionScore from per-size values when not set explicitly
+  const conditionScore = (() => {
+    if (explicitConditionScore !== null) return explicitConditionScore;
+    if (!sizeStockMap) return null;
+    const scores = Array.from(sizeStockMap.values())
+      .map((e) => e.conditionScore)
+      .filter((s): s is number => s !== null);
+    if (scores.length === 0) return null;
+    return Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length);
+  })();
 
   const rawColorImages = String(formData.get("colorImages") || "").trim();
   let colorImagesMap: Map<string, number[]> | null = null;
