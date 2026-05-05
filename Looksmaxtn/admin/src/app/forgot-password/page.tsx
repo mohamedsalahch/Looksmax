@@ -181,7 +181,7 @@ export default function AdminForgotPasswordPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full border border-border bg-bg-secondary px-4 py-3 text-sm text-text-primary focus:border-accent transition-colors"
+              className="input-line"
               placeholder="admin@looksmax.com"
             />
           </div>
@@ -191,7 +191,7 @@ export default function AdminForgotPasswordPage() {
           <button
             type="submit"
             disabled={loading || (turnstileRequired && !turnstileToken)}
-            className="w-full bg-accent text-bg-primary py-3.5 text-sm font-semibold tracking-wide uppercase hover:bg-accent-hover transition-colors cursor-pointer disabled:opacity-50"
+            className="w-full bg-text-primary text-bg-primary py-3.5 text-sm font-medium tracking-[0.2em] uppercase hover:bg-accent transition-colors cursor-pointer disabled:bg-border disabled:text-text-secondary disabled:cursor-not-allowed"
           >
             {loading ? "Sending..." : "Send Reset Link"}
           </button>
@@ -206,7 +206,7 @@ export default function AdminForgotPasswordPage() {
               type="button"
               onClick={submitRequest}
               disabled={loading || resendCooldown > 0}
-              className="mt-3 w-full rounded-none border border-border bg-bg-primary px-3 py-2 text-[10px] uppercase tracking-[0.22em] text-text-primary transition-colors hover:bg-bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-3 w-full border border-border bg-bg-secondary/40 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-text-primary transition-colors hover:bg-bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading
                 ? "Sending..."
@@ -220,7 +220,7 @@ export default function AdminForgotPasswordPage() {
         <p className="text-center text-xs text-text-secondary mt-6">
           <Link
             href="/"
-            className="text-text-primary font-medium underline underline-offset-2 hover:text-accent transition-colors"
+            className="text-text-primary font-medium underline underline-offset-4 hover:text-text-secondary transition-colors"
           >
             Back to sign in
           </Link>

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -122,7 +122,7 @@ export default function ModelsPage() {
             setError("");
             setShowForm(true);
           }}
-          className="bg-accent text-bg-primary px-4 py-2 text-xs font-semibold tracking-wide uppercase hover:bg-accent-hover transition-colors cursor-pointer"
+          className="bg-text-primary text-bg-primary px-4 py-2 text-xs font-semibold tracking-wide uppercase hover:bg-accent transition-colors cursor-pointer"
         >
           + Add Model
         </button>
@@ -134,7 +134,7 @@ export default function ModelsPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search models by name..."
-          className="w-full bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
+          className="input-line"
         />
       </div>
 
@@ -150,12 +150,12 @@ export default function ModelsPage() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Model name"
-            className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+            className="input-line"
           />
           <select
             value={gender}
             onChange={(e) => setGender(e.target.value as ModelGender)}
-            className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+            className="input-line"
           >
             <option value="male">Male</option>
             <option value="female">Female</option>
@@ -227,7 +227,7 @@ export default function ModelsPage() {
             <button
               type="submit"
               disabled={saving}
-              className="bg-accent text-bg-primary px-6 py-3 text-xs font-semibold tracking-wide uppercase disabled:opacity-50"
+              className="bg-text-primary text-bg-primary px-6 py-3 text-xs font-semibold tracking-wide uppercase disabled:opacity-50"
             >
               {saving ? "Saving..." : "Add Model"}
             </button>

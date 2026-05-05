@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
@@ -90,7 +90,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
       case "returned":
         return "text-warning bg-warning/10";
       case "delivered":
-        return "text-[#6b6055] bg-[#f1ede8]";
+        return "bg-bg-secondary text-text-secondary";
       case "shipping":
         return "text-info bg-info/10";
       case "confirmed":
@@ -117,7 +117,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
               onClick={handleToggleBlock}
               className={`px-4 py-2 text-[10px] font-semibold uppercase tracking-wider cursor-pointer ${
                 user.isBlocked
-                  ? "bg-[#f1ede8] text-[#6b6055]"
+                  ? "bg-bg-secondary text-text-secondary"
                   : "bg-danger/10 text-danger"
               }`}
             >
@@ -180,12 +180,12 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
               )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-              <p><span className="text-text-secondary">Height:</span> {user.bodyProfile?.heightCm || "—"}</p>
-              <p><span className="text-text-secondary">Weight:</span> {user.bodyProfile?.weightKg || "—"}</p>
-              <p><span className="text-text-secondary">Usual Size:</span> {user.bodyProfile?.usualSize || "—"}</p>
-              <p><span className="text-text-secondary">Gender:</span> {user.bodyProfile?.gender || "—"}</p>
+              <p><span className="text-text-secondary">Height:</span> {user.bodyProfile?.heightCm || "â€”"}</p>
+              <p><span className="text-text-secondary">Weight:</span> {user.bodyProfile?.weightKg || "â€”"}</p>
+              <p><span className="text-text-secondary">Usual Size:</span> {user.bodyProfile?.usualSize || "â€”"}</p>
+              <p><span className="text-text-secondary">Gender:</span> {user.bodyProfile?.gender || "â€”"}</p>
               <p className="md:col-span-2 break-all">
-                <span className="text-text-secondary">Profile Image URL:</span> {user.bodyProfile?.profileImage || "—"}
+                <span className="text-text-secondary">Profile Image URL:</span> {user.bodyProfile?.profileImage || "â€”"}
               </p>
             </div>
           </div>
@@ -245,7 +245,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
                         <p>{order.shippingAddress.phone}</p>
                       </div>
                     ) : (
-                      "—"
+                      "â€”"
                     )}
                   </td>
                   <td className="px-4 py-3 text-xs text-text-secondary">

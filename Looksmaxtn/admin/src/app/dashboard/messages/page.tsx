@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { withAuthRequest } from "@/lib/authClient";
@@ -108,7 +108,7 @@ export default function MessagesPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search messages by sender, email, subject, or content..."
-          className="w-full bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
+          className="input-line"
         />
       </div>
 
@@ -138,7 +138,7 @@ export default function MessagesPage() {
                   <div className="min-w-0">
                     <p className="text-xs font-medium truncate">{msg.subject}</p>
                     <p className="text-[10px] text-text-secondary truncate">
-                      {msg.name} · {msg.email}
+                      {msg.name} Â· {msg.email}
                     </p>
                   </div>
                 </div>

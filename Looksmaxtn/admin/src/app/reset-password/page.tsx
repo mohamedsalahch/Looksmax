@@ -74,7 +74,7 @@ function ResetPasswordContent() {
             LOOKSMAX
           </h1>
         </Link>
-        <p className="text-xs text-accent mt-1 tracking-wider uppercase font-medium">
+        <p className="text-xs text-text-secondary mt-1 tracking-[0.22em] uppercase font-medium">
           Reset password
         </p>
       </div>
@@ -100,7 +100,7 @@ function ResetPasswordContent() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="w-full border border-border bg-bg-secondary px-4 py-3 text-sm text-text-primary focus:border-accent transition-colors"
+            className="input-line"
             placeholder="Min. 6 characters"
           />
         </div>
@@ -114,7 +114,7 @@ function ResetPasswordContent() {
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             required
-            className="w-full border border-border bg-bg-secondary px-4 py-3 text-sm text-text-primary focus:border-accent transition-colors"
+            className="input-line"
             placeholder="••••••••"
           />
         </div>
@@ -122,7 +122,7 @@ function ResetPasswordContent() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-accent text-bg-primary py-3.5 text-sm font-semibold tracking-wide uppercase hover:bg-accent-hover transition-colors cursor-pointer disabled:opacity-50"
+          className="w-full bg-text-primary text-bg-primary py-3.5 text-sm font-medium tracking-[0.2em] uppercase hover:bg-accent transition-colors cursor-pointer disabled:bg-border disabled:text-text-secondary disabled:cursor-not-allowed"
         >
           {loading ? "Updating..." : "Update Password"}
         </button>
@@ -131,7 +131,7 @@ function ResetPasswordContent() {
       <p className="text-center text-xs text-text-secondary mt-6">
         <Link
           href="/"
-          className="text-text-primary font-medium underline underline-offset-2 hover:text-accent transition-colors"
+          className="text-text-primary font-medium underline underline-offset-4 hover:text-text-secondary transition-colors"
         >
           Back to sign in
         </Link>

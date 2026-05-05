@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState, type FormEvent } from "react";
 import { withAuthRequest } from "@/lib/authClient";
@@ -192,7 +192,7 @@ export default function CouponsPage() {
       </div>
 
       {(error || success) && (
-        <div className={`border px-4 py-3 text-xs ${error ? "border-[#BD3100] bg-[#faf3f2] text-[#BD3100]" : "border-[#6b6055] bg-[#f1ede8] text-[#6b6055]"}`}>
+        <div className={`border px-4 py-3 text-xs ${error ? "border-[#BD3100] bg-[#faf3f2] text-[#BD3100]" : "border-[#6b6055] bg-bg-secondary text-text-secondary"}`}>
           {error || success}
         </div>
       )}
@@ -203,7 +203,7 @@ export default function CouponsPage() {
           <input
             value={form.code}
             onChange={(e) => setForm((current) => ({ ...current, code: e.target.value.toUpperCase() }))}
-            className="w-full border border-border bg-bg-secondary px-4 py-3 text-sm uppercase"
+            className="input-line uppercase"
             placeholder="SAVE10"
             required
           />
@@ -213,7 +213,7 @@ export default function CouponsPage() {
           <select
             value={form.discountType}
             onChange={(e) => setForm((current) => ({ ...current, discountType: e.target.value as "percentage" | "fixed" }))}
-            className="w-full border border-border bg-bg-secondary px-4 py-3 text-sm"
+            className="input-line"
           >
             <option value="percentage">Percentage</option>
             <option value="fixed">Fixed amount</option>
@@ -229,7 +229,7 @@ export default function CouponsPage() {
             step="0.01"
             value={form.discountValue}
             onChange={(e) => setForm((current) => ({ ...current, discountValue: e.target.value }))}
-            className="w-full border border-border bg-bg-secondary px-4 py-3 text-sm"
+            className="input-line"
             placeholder={form.discountType === "percentage" ? "10" : "25.00"}
             required
           />
@@ -244,7 +244,7 @@ export default function CouponsPage() {
             step="0.01"
             value={form.minimumOrderAmount}
             onChange={(e) => setForm((current) => ({ ...current, minimumOrderAmount: e.target.value }))}
-            className="w-full border border-border bg-bg-secondary px-4 py-3 text-sm"
+            className="input-line"
             placeholder="0"
           />
         </div>
@@ -258,7 +258,7 @@ export default function CouponsPage() {
             step="1"
             value={form.maxUses}
             onChange={(e) => setForm((current) => ({ ...current, maxUses: e.target.value }))}
-            className="w-full border border-border bg-bg-secondary px-4 py-3 text-sm"
+            className="input-line"
             placeholder="Unlimited"
           />
         </div>
@@ -270,7 +270,7 @@ export default function CouponsPage() {
             type="datetime-local"
             value={form.startsAt}
             onChange={(e) => setForm((current) => ({ ...current, startsAt: e.target.value }))}
-            className="w-full border border-border bg-bg-secondary px-4 py-3 text-sm"
+            className="input-line"
           />
         </div>
         <div>
@@ -281,7 +281,7 @@ export default function CouponsPage() {
             type="datetime-local"
             value={form.endsAt}
             onChange={(e) => setForm((current) => ({ ...current, endsAt: e.target.value }))}
-            className="w-full border border-border bg-bg-secondary px-4 py-3 text-sm"
+            className="input-line"
           />
         </div>
         <div>
@@ -291,7 +291,7 @@ export default function CouponsPage() {
           <input
             value={form.description}
             onChange={(e) => setForm((current) => ({ ...current, description: e.target.value }))}
-            className="w-full border border-border bg-bg-secondary px-4 py-3 text-sm"
+            className="input-line"
             placeholder="Seasonal promotion"
           />
         </div>
@@ -307,7 +307,7 @@ export default function CouponsPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="border border-foreground bg-foreground px-5 py-3 text-xs font-medium uppercase tracking-wide text-background transition-colors hover:bg-accent disabled:opacity-50"
+            className="bg-text-primary text-bg-primary px-5 py-3 text-xs font-medium uppercase tracking-[0.2em] hover:bg-accent transition-colors disabled:bg-border disabled:text-text-secondary disabled:cursor-not-allowed"
           >
             {submitting ? "Creating..." : "Create Coupon"}
           </button>
@@ -350,7 +350,7 @@ export default function CouponsPage() {
                     {typeof coupon.maxUses === "number" ? ` / ${coupon.maxUses}` : " / Unlimited"}
                   </td>
                   <td className="px-4 py-4">
-                    <span className={`inline-flex px-2.5 py-1 text-[10px] uppercase tracking-wider ${coupon.isActive ? "bg-[#f1ede8] text-[#6b6055]" : "bg-neutral-200 text-neutral-700"}`}>
+                    <span className={`inline-flex px-2.5 py-1 text-[10px] uppercase tracking-wider ${coupon.isActive ? "bg-bg-secondary text-text-secondary" : "bg-neutral-200 text-neutral-700"}`}>
                       {coupon.isActive ? "Active" : "Inactive"}
                     </span>
                   </td>

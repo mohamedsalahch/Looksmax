@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { withAuthRequest } from "@/lib/authClient";
@@ -142,7 +142,7 @@ export default function GeneratedImagePromptsPage() {
         <button
           type="button"
           onClick={resetForm}
-          className="bg-accent text-bg-primary px-4 py-2 text-xs font-semibold tracking-wide uppercase hover:bg-accent-hover transition-colors cursor-pointer"
+          className="bg-text-primary text-bg-primary px-4 py-2 text-xs font-semibold tracking-wide uppercase hover:bg-accent transition-colors cursor-pointer"
         >
           + New Prompt
         </button>
@@ -155,7 +155,7 @@ export default function GeneratedImagePromptsPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search prompts by title or description..."
-            className="w-full bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
+            className="input-line"
           />
 
           {loading ? (
@@ -215,20 +215,20 @@ export default function GeneratedImagePromptsPage() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Prompt title"
-              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+              className="input-line"
             />
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={9}
               placeholder="Prompt description"
-              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm resize-none"
+              className="input-line resize-none"
             />
             <div className="flex gap-3">
               <button
                 type="submit"
                 disabled={saving}
-                className="bg-accent text-bg-primary px-6 py-3 text-xs font-semibold tracking-wide uppercase disabled:opacity-50"
+                className="bg-text-primary text-bg-primary px-6 py-3 text-xs font-semibold tracking-wide uppercase disabled:opacity-50"
               >
                 {saving ? "Saving..." : selectedPromptId ? "Update Prompt" : "Create Prompt"}
               </button>

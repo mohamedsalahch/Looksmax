@@ -76,7 +76,7 @@ function getApprovalBadge(status?: ApprovalStatus) {
       return { label: "Rejected", className: "bg-danger/10 text-danger" };
     case "approved":
     default:
-      return { label: "Approved", className: "bg-[#f1ede8] text-[#6b6055]" };
+      return { label: "Approved", className: "bg-bg-secondary text-text-secondary" };
   }
 }
 
@@ -95,7 +95,7 @@ function getOrderBadge(status: OrderStatus) {
     case "returned":
       return { label: "Returned", className: "bg-neutral-200 text-neutral-700" };
     default:
-      return { label: status || "Pending", className: "bg-[#f1ede8] text-[#6b6055]" };
+      return { label: status || "Pending", className: "bg-bg-secondary text-text-secondary" };
   }
 }
 
@@ -288,7 +288,7 @@ export default function DashboardPage() {
 
   const cards = isStoreDashboard
     ? [
-        { label: "Total Revenue", value: formatMoney(stats.totalRevenue), icon: "💰", tone: "text-[#6b6055]" },
+        { label: "Total Revenue", value: formatMoney(stats.totalRevenue), icon: "💰", tone: "text-text-secondary" },
         { label: "Products", value: stats.totalProducts, icon: "📦", tone: "text-accent" },
         { label: "Pending Products", value: pendingProducts.length, icon: "⏳", tone: "text-warning" },
         { label: "Orders", value: stats.totalOrders, icon: "🛒", tone: "text-info" },

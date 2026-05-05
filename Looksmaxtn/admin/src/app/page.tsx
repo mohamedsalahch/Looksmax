@@ -135,7 +135,7 @@ export default function AdminLoginPage() {
           <h1 className="text-lg font-semibold tracking-[0.3em] uppercase text-text-primary">
             LOOKSMAX
           </h1>
-          <p className="text-xs text-accent mt-1 tracking-wider uppercase font-medium">
+          <p className="text-xs text-text-secondary mt-1 tracking-[0.22em] uppercase font-medium">
             Store Dashboard
           </p>
         </div>
@@ -154,7 +154,7 @@ export default function AdminLoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full border border-border bg-bg-secondary px-4 py-3 text-sm text-text-primary focus:border-accent transition-colors"
+              className="input-line"
               placeholder="admin@looksmax.com"
             />
           </div>
@@ -166,7 +166,7 @@ export default function AdminLoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full border border-border bg-bg-secondary px-4 py-3 text-sm text-text-primary focus:border-accent transition-colors"
+              className="input-line"
               placeholder="••••••••"
             />
           </div>
@@ -174,7 +174,7 @@ export default function AdminLoginPage() {
           <div className="flex justify-end">
             <Link
               href="/forgot-password"
-              className="text-[10px] uppercase tracking-[0.22em] text-text-secondary underline underline-offset-2 hover:text-accent transition-colors"
+              className="text-[10px] uppercase tracking-[0.22em] text-text-secondary underline underline-offset-4 hover:text-text-primary transition-colors"
             >
               Forgot password?
             </Link>
@@ -187,7 +187,7 @@ export default function AdminLoginPage() {
           <button
             type="submit"
             disabled={loading || (turnstileRequired && !turnstileToken)}
-            className="w-full bg-accent text-bg-primary py-3.5 text-sm font-semibold tracking-wide uppercase hover:bg-accent-hover transition-colors cursor-pointer disabled:opacity-50"
+            className="w-full bg-text-primary text-bg-primary py-3.5 text-sm font-medium tracking-[0.2em] uppercase hover:bg-accent transition-colors cursor-pointer disabled:bg-border disabled:text-text-secondary disabled:cursor-not-allowed"
           >
             {loading ? "Signing in..." : "Sign In"}
           </button>

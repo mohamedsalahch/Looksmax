@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { withAuthRequest } from "@/lib/authClient";
@@ -54,7 +54,7 @@ export default function NewsletterPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search newsletter subscribers by email..."
-          className="w-full bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
+          className="input-line"
         />
       </div>
 

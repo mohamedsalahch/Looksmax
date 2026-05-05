@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import AuditMetaCard from "@/components/AuditMetaCard";
 import Link from "next/link";
@@ -94,7 +94,7 @@ export default function ModelViewPage({ params }: { params: Promise<{ id: string
           href="/dashboard/models"
           className="text-xs text-text-secondary hover:text-text-primary transition-colors mb-2 inline-block"
         >
-          ← Back
+          â† Back
         </Link>
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -118,7 +118,7 @@ export default function ModelViewPage({ params }: { params: Promise<{ id: string
               setFrontImage(model.frontImage);
               setBackImage(model.backImage);
             }}
-            className="bg-accent text-bg-primary px-4 py-2 text-xs font-semibold tracking-wide uppercase hover:bg-accent-hover transition-colors cursor-pointer"
+            className="bg-text-primary text-bg-primary px-4 py-2 text-xs font-semibold tracking-wide uppercase hover:bg-accent transition-colors cursor-pointer"
           >
             {editing ? "Close Update" : "Update Model"}
           </button>
@@ -145,12 +145,12 @@ export default function ModelViewPage({ params }: { params: Promise<{ id: string
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Model name"
-            className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+            className="input-line"
           />
           <select
             value={gender}
             onChange={(e) => setGender(e.target.value as ModelGender)}
-            className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+            className="input-line"
           >
             <option value="male">Male</option>
             <option value="female">Female</option>
@@ -160,7 +160,7 @@ export default function ModelViewPage({ params }: { params: Promise<{ id: string
             <select
               value={frontImage}
               onChange={(e) => setFrontImage(e.target.value)}
-              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+              className="input-line"
             >
               <option value="">Select front image</option>
               {model.images.map((image, index) => (
@@ -172,7 +172,7 @@ export default function ModelViewPage({ params }: { params: Promise<{ id: string
             <select
               value={backImage}
               onChange={(e) => setBackImage(e.target.value)}
-              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+              className="input-line"
             >
               <option value="">Select back image</option>
               {model.images.map((image, index) => (
@@ -186,7 +186,7 @@ export default function ModelViewPage({ params }: { params: Promise<{ id: string
             <button
               type="submit"
               disabled={saving}
-              className="bg-accent text-bg-primary px-6 py-3 text-xs font-semibold tracking-wide uppercase disabled:opacity-50"
+              className="bg-text-primary text-bg-primary px-6 py-3 text-xs font-semibold tracking-wide uppercase disabled:opacity-50"
             >
               {saving ? "Saving..." : "Save Changes"}
             </button>

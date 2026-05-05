@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState, type FormEvent } from "react";
 import { withAuthRequest } from "@/lib/authClient";
@@ -153,7 +153,7 @@ export default function ShippingPricePage() {
                   step="0.01"
                   value={shippingCost}
                   onChange={(event) => setShippingCost(event.target.value)}
-                  className="w-full border border-border bg-bg-secondary px-4 py-3 text-sm text-text-primary"
+                  className="input-line text-text-primary"
                 />
               </div>
 
@@ -167,7 +167,7 @@ export default function ShippingPricePage() {
                   step="0.01"
                   value={freeShippingThreshold}
                   onChange={(event) => setFreeShippingThreshold(event.target.value)}
-                  className="w-full border border-border bg-bg-secondary px-4 py-3 text-sm text-text-primary"
+                  className="input-line text-text-primary"
                 />
               </div>
 

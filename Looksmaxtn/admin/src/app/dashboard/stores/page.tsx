@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -199,12 +199,12 @@ export default function StoresPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search stores by store name, owner, email, address, phone, or information..."
-          className="w-full bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
+          className="input-line"
         />
         <select
           value={filter}
           onChange={(e) => setFilter(e.target.value as StoreStatus | "all")}
-          className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
+          className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-text-primary transition-colors"
         >
           <option value="all">All statuses</option>
           <option value="pending">Pending</option>

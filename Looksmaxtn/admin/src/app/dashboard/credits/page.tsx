@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
@@ -120,7 +120,7 @@ export default function CreditsPage() {
             <div className="h-2 w-full rounded-full bg-bg-secondary overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all ${
-                  credits.remaining === 0 ? "bg-danger" : usedPct > 75 ? "bg-warning" : "bg-accent"
+                  credits.remaining === 0 ? "bg-danger" : usedPct > 75 ? "bg-warning" : "bg-text-primary"
                 }`}
                 style={{ width: `${usedPct}%` }}
               />
@@ -155,7 +155,7 @@ export default function CreditsPage() {
                   min={1}
                   value={buyAmount}
                   onChange={(event) => setBuyAmount(Number(event.target.value))}
-                  className="w-full rounded border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary outline-none focus:border-accent"
+                  className="input-line"
                 />
               </label>
               <label className="space-y-1">
@@ -165,18 +165,18 @@ export default function CreditsPage() {
                   value={buyCode}
                   onChange={(event) => setBuyCode(event.target.value)}
                   placeholder="Enter code"
-                  className="w-full rounded border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary outline-none focus:border-accent"
+                  className="input-line"
                 />
               </label>
             </div>
 
             {buyError && <p className="text-xs text-danger">{buyError}</p>}
-            {buySuccess && <p className="text-xs text-accent">{buySuccess}</p>}
+            {buySuccess && <p className="text-xs text-success">{buySuccess}</p>}
 
             <button
               type="submit"
               disabled={buyLoading}
-              className="inline-flex items-center justify-center rounded bg-accent px-4 py-2 text-xs font-medium text-bg-primary transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              className="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
             >
               {buyLoading ? "Processing..." : "Buy Credits"}
             </button>

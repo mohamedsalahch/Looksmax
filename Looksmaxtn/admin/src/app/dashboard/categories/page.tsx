@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { withAuthRequest } from "@/lib/authClient";
@@ -20,11 +20,11 @@ type SortKey = "order" | "name" | "parent" | "slug" | "visibility" | "created" |
 type SortDirection = "asc" | "desc";
 
 function formatAuditLine(date?: string, actor?: { name: string; email: string } | null) {
-  const actorLabel = actor?.name || actor?.email || "—";
+  const actorLabel = actor?.name || actor?.email || "â€”";
   if (!date) return actorLabel;
   const parsed = new Date(date);
-  const dateLabel = Number.isNaN(parsed.getTime()) ? "—" : parsed.toLocaleDateString();
-  return `${actorLabel} · ${dateLabel}`;
+  const dateLabel = Number.isNaN(parsed.getTime()) ? "â€”" : parsed.toLocaleDateString();
+  return `${actorLabel} Â· ${dateLabel}`;
 }
 
 export default function CategoriesPage() {
@@ -288,8 +288,8 @@ export default function CategoriesPage() {
   };
 
   const renderSortIndicator = (key: SortKey) => {
-    if (sortKey !== key) return <span className="text-[9px] text-text-secondary/60">↕</span>;
-    return <span className="text-[9px] text-accent">{sortDirection === "asc" ? "↑" : "↓"}</span>;
+    if (sortKey !== key) return <span className="text-[9px] text-text-secondary/60">â†•</span>;
+    return <span className="text-[9px] text-accent">{sortDirection === "asc" ? "â†‘" : "â†“"}</span>;
   };
 
   return (
@@ -298,7 +298,7 @@ export default function CategoriesPage() {
         <h1 className="text-xl font-semibold tracking-wide">Categories</h1>
         <button
           onClick={() => { resetForm(); setShowForm(true); }}
-          className="inline-flex w-full justify-center bg-accent text-bg-primary px-4 py-2 text-xs font-semibold tracking-wide uppercase hover:bg-accent-hover transition-colors cursor-pointer sm:w-auto"
+          className="inline-flex w-full justify-center bg-text-primary text-bg-primary px-4 py-2 text-xs font-semibold tracking-wide uppercase hover:bg-accent transition-colors cursor-pointer sm:w-auto"
         >
           + Add Category
         </button>
@@ -310,7 +310,7 @@ export default function CategoriesPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search categories by name, slug, or order..."
-          className="flex-1 bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
+          className="flex-1 bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-text-primary transition-colors"
         />
         {useTreeView && (
           <div className="flex gap-2">
@@ -352,7 +352,7 @@ export default function CategoriesPage() {
                 <input
                   type="text" required value={form.name}
                   onChange={(e) => handleNameChange(e.target.value)}
-                  className="w-full bg-bg-secondary border border-border px-4 py-2.5 text-sm focus:border-accent transition-colors"
+                  className="input-line"
                   placeholder="T-Shirts"
                 />
               </div>
@@ -363,7 +363,7 @@ export default function CategoriesPage() {
                 <input
                   type="text" required value={form.slug}
                   onChange={(e) => setForm({ ...form, slug: e.target.value })}
-                  className="w-full bg-bg-secondary border border-border px-4 py-2.5 text-sm focus:border-accent transition-colors"
+                  className="input-line"
                   placeholder="t-shirts"
                 />
               </div>
@@ -374,7 +374,7 @@ export default function CategoriesPage() {
                 <input
                   type="number" value={form.order}
                   onChange={(e) => setForm({ ...form, order: e.target.value })}
-                  className="w-full bg-bg-secondary border border-border px-4 py-2.5 text-sm focus:border-accent transition-colors"
+                  className="input-line"
                 />
               </div>
               <div>
@@ -384,7 +384,7 @@ export default function CategoriesPage() {
                 <select
                   value={form.parentSlug}
                   onChange={(e) => setForm({ ...form, parentSlug: e.target.value })}
-                  className="w-full bg-bg-secondary border border-border px-4 py-2.5 text-sm focus:border-accent transition-colors"
+                  className="input-line"
                 >
                   <option value="">Top level</option>
                   {availableParentCategories.map((cat) => (
@@ -407,7 +407,7 @@ export default function CategoriesPage() {
             </div>
             <div className="flex gap-3">
               <button type="submit" disabled={saving}
-                className="bg-accent text-bg-primary px-6 py-2.5 text-xs font-semibold tracking-wide uppercase hover:bg-accent-hover transition-colors cursor-pointer disabled:opacity-50">
+                className="bg-text-primary text-bg-primary px-6 py-2.5 text-xs font-semibold tracking-wide uppercase hover:bg-accent transition-colors cursor-pointer disabled:opacity-50">
                 {saving ? "Saving..." : editingId ? "Update" : "Create"}
               </button>
               <button type="button" onClick={resetForm}
@@ -491,7 +491,7 @@ export default function CategoriesPage() {
                                 aria-label={isCollapsed ? `Expand ${cat.name}` : `Collapse ${cat.name}`}
                                 className="mr-1.5 inline-flex h-4 w-4 items-center justify-center text-text-secondary hover:text-text-primary cursor-pointer"
                               >
-                                <span className="text-[10px]">{isCollapsed ? "▶" : "▼"}</span>
+                                <span className="text-[10px]">{isCollapsed ? "â–¶" : "â–¼"}</span>
                               </button>
                             ) : (
                               <span className="mr-1.5 inline-block h-4 w-4" aria-hidden="true" />

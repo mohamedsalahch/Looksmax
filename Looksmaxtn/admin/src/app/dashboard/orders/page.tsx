@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useDeferredValue, useEffect, useMemo, useState, type MouseEvent } from "react";
 import Link from "next/link";
@@ -132,8 +132,8 @@ export default function OrdersPage() {
   };
 
   const renderSortIndicator = (key: SortKey) => {
-    if (sortKey !== key) return <span className="text-[9px] text-text-secondary/60">↕</span>;
-    return <span className="text-[9px] text-accent">{sortDirection === "asc" ? "↑" : "↓"}</span>;
+    if (sortKey !== key) return <span className="text-[9px] text-text-secondary/60">â†•</span>;
+    return <span className="text-[9px] text-accent">{sortDirection === "asc" ? "â†‘" : "â†“"}</span>;
   };
 
   const handleDeleteOrder = async (orderId: string, event: MouseEvent<HTMLButtonElement>) => {
@@ -162,7 +162,7 @@ export default function OrdersPage() {
       case "processing": return "text-amber-300 bg-amber-500/10";
       case "confirmed": return "text-sky-300 bg-sky-500/10";
       case "shipping": return "text-violet-300 bg-violet-500/10";
-      case "delivered": return "text-[#6b6055] bg-[#f1ede8]";
+      case "delivered": return "bg-bg-secondary text-text-secondary";
       case "returned": return "text-orange-300 bg-orange-500/10";
       case "canceled": return "text-rose-300 bg-rose-500/10";
       default: return "text-text-secondary bg-bg-secondary";
@@ -180,7 +180,7 @@ export default function OrdersPage() {
         {["all", "processing", "confirmed", "canceled", "shipping", "delivered", "returned"].map((f) => (
           <button key={f} onClick={() => setFilter(f)}
             className={`text-[10px] px-3 py-1.5 uppercase tracking-wider font-medium transition-colors cursor-pointer ${
-              filter === f ? "bg-accent text-bg-primary" : "bg-bg-secondary text-text-secondary border border-border hover:text-text-primary"
+              filter === f ? "bg-text-primary text-bg-primary" : "bg-bg-secondary text-text-secondary border border-border hover:text-text-primary"
             }`}>
             {f} {f !== "all" && `(${orders.filter((o) => o.orderStatus === f).length})`}
           </button>
@@ -193,12 +193,12 @@ export default function OrdersPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by order, customer, email, product, or product ID..."
-          className="w-full bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
+          className="input-line"
         />
         <select
           value={archiveFilter}
           onChange={(e) => setArchiveFilter(e.target.value)}
-          className="w-full bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
+          className="input-line"
         >
           <option value="all">All archive states</option>
           <option value="active">Active</option>
@@ -289,7 +289,7 @@ export default function OrdersPage() {
                   <td className="px-4 py-3">
                     <span
                       className={`text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider ${
-                        o.isArchived ? "text-neutral-700 bg-neutral-200" : "text-[#6b6055] bg-[#f1ede8]"
+                        o.isArchived ? "text-neutral-700 bg-neutral-200" : "bg-bg-secondary text-text-secondary"
                       }`}
                     >
                       {o.isArchived ? "Archived" : "Active"}

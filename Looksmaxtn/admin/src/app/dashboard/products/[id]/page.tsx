@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
@@ -70,7 +70,7 @@ function getProductStatus(product: ProductDetail) {
     return { label: "Low Stock", className: "bg-warning/10 text-warning" };
   }
   if (product.availabilityStatus === "in-stock") {
-    return { label: "In Stock", className: "bg-[#f1ede8] text-[#6b6055]" };
+    return { label: "In Stock", className: "bg-bg-secondary text-text-secondary" };
   }
 
   if (product.productType === "perfume") {
@@ -80,11 +80,11 @@ function getProductStatus(product: ProductDetail) {
     if (product.stock <= 3) {
       return { label: "Low Stock", className: "bg-warning/10 text-warning" };
     }
-    return { label: "In Stock", className: "bg-[#f1ede8] text-[#6b6055]" };
+    return { label: "In Stock", className: "bg-bg-secondary text-text-secondary" };
   }
 
   return product.stock > 0
-    ? { label: "Available", className: "bg-[#f1ede8] text-[#6b6055]" }
+    ? { label: "Available", className: "bg-bg-secondary text-text-secondary" }
     : { label: "Reserved", className: "bg-warning/10 text-warning" };
 }
 
@@ -103,7 +103,7 @@ function getApprovalStatusBadge(approvalStatus: ProductDetail["approvalStatus"] 
       return { label: "Rejected", className: "bg-danger/10 text-danger" };
     case "approved":
     default:
-      return { label: "Approved", className: "bg-[#f1ede8] text-[#6b6055]" };
+      return { label: "Approved", className: "bg-bg-secondary text-text-secondary" };
   }
 }
 
@@ -202,7 +202,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
         {userRole === "store_owner" ? (
           <Link
             href={`/dashboard/products/${product._id}/edit`}
-            className="bg-accent text-bg-primary px-4 py-2 text-xs font-semibold tracking-wide uppercase hover:bg-accent-hover transition-colors"
+            className="bg-text-primary text-bg-primary px-4 py-2 text-xs font-semibold tracking-wide uppercase hover:bg-accent transition-colors"
           >
             Edit Product
           </Link>
@@ -212,7 +212,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
               type="button"
               onClick={() => void handleApprovalUpdate("approved")}
               disabled={!canModerateProduct || updatingApproval || approvalStatus === "approved"}
-              className="border border-border bg-bg-card px-4 py-2 text-[10px] uppercase tracking-wider text-[#6b6055] transition-colors hover:text-text-primary disabled:opacity-50"
+              className="border border-border bg-bg-card px-4 py-2 text-[10px] uppercase tracking-wider text-text-secondary transition-colors hover:text-text-primary disabled:opacity-50"
             >
               Approve
             </button>
@@ -293,7 +293,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
               </div>
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-text-secondary">Reference</p>
-                <p className="mt-1 text-sm text-text-primary font-mono">{product.reference || "—"}</p>
+                <p className="mt-1 text-sm text-text-primary font-mono">{product.reference || "â€”"}</p>
               </div>
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-text-secondary">Product ID</p>
@@ -305,7 +305,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
               <span className={`inline-flex w-fit text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${status.className}`}>
                 {status.label}
               </span>
-              <div className={`inline-flex w-fit text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${isInactive ? "bg-neutral-200 text-neutral-700" : "bg-[#f1ede8] text-[#6b6055]"}`}>
+              <div className={`inline-flex w-fit text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${isInactive ? "bg-neutral-200 text-neutral-700" : "bg-bg-secondary text-text-secondary"}`}>
                 {isInactive ? "Inactive" : "Active"}
               </div>
               <span className={`inline-flex w-fit text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${approvalBadge.className}`}>

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
@@ -94,7 +94,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       case "processing": return "text-amber-300 bg-amber-500/10";
       case "confirmed": return "text-sky-300 bg-sky-500/10";
       case "shipping": return "text-violet-300 bg-violet-500/10";
-      case "delivered": return "text-[#6b6055] bg-[#f1ede8]";
+      case "delivered": return "bg-bg-secondary text-text-secondary";
       case "returned": return "text-orange-300 bg-orange-500/10";
       case "canceled": return "text-rose-300 bg-rose-500/10";
       default: return "text-text-secondary bg-bg-secondary";
@@ -122,7 +122,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               Archived
             </span>
           ) : (
-            <span className="text-[10px] px-3 py-1 font-medium uppercase tracking-wider text-[#6b6055] bg-[#f1ede8]">
+            <span className="text-[10px] px-3 py-1 font-medium uppercase tracking-wider bg-bg-secondary text-text-secondary">
               Active
             </span>
           )}
@@ -157,7 +157,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           <div>
             <p className="text-[10px] uppercase tracking-[0.3em]">LOOKSMAX</p>
             <h2 className="text-xl font-semibold mt-2">BON DE COMMANDE #{order._id.slice(-8).toUpperCase()}</h2>
-            <p className="text-xs mt-1">Imprimé le : {new Date().toLocaleString()}</p>
+            <p className="text-xs mt-1">ImprimÃ© le : {new Date().toLocaleString()}</p>
           </div>
         </div>
 
@@ -181,7 +181,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               <tr className="text-[10px] uppercase tracking-wider">
                 <th className="px-3 py-2 border-b border-black">Produit</th>
                 <th className="px-3 py-2 border-b border-black">Taille</th>
-                <th className="px-3 py-2 border-b border-black">Qté</th>
+                <th className="px-3 py-2 border-b border-black">QtÃ©</th>
                 <th className="px-3 py-2 border-b border-black text-right">Prix (TND)</th>
               </tr>
             </thead>

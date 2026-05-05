@@ -1,16 +1,15 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
 :root {
-  --bg-primary: #f6eddc;
-  --bg-secondary: #efe3cf;
-  --bg-card: #f8f1e4;
-  --bg-hover: #eadcc5;
-  --text-primary: #000000;
-  --text-secondary: #000000;
-  --border: #decfb7;
-  --accent: #c9a96e;
-  --accent-hover: #b89558;
+  --bg-primary: #F3E9D8;
+  --bg-secondary: #EDE1CE;
+  --bg-card: #EDE1CE;
+  --bg-hover: #E8DCCB;
+  --text-primary: #1A1A1A;
+  --text-secondary: #6B6055;
+  --border: #DDD3C2;
+  --accent: #2D2D2D;
+  --accent-hover: #1A1A1A;
   --success: #5d7f4f;
   --warning: #b7791f;
   --danger: #b65454;
@@ -31,24 +30,15 @@
   --color-warning: var(--warning);
   --color-danger: var(--danger);
   --color-info: var(--info);
-  --font-sans: 'Inter', sans-serif;
+  --font-sans: "House Minimalist", "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
 body {
   background: var(--bg-primary);
   color: var(--text-primary);
-  font-family: 'Inter', sans-serif;
-}
-
-body,
-body * {
-  color: #000000 !important;
-}
-
-body input::placeholder,
-body textarea::placeholder {
-  color: #000000 !important;
-  opacity: 0.55;
+  font-family: "House Minimalist", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.01em;
 }
 
 html { scroll-behavior: smooth; }
@@ -75,8 +65,8 @@ html { scroll-behavior: smooth; }
 
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg-primary); }
-::-webkit-scrollbar-thumb { background: #d7c7ad; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #b9a889; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #C7BBA3; }
 
 input:focus, select:focus, textarea:focus { outline: none; }
 
@@ -96,4 +86,25 @@ textarea {
   background: color-mix(in srgb, var(--bg-card) 76%, white 24%);
   box-shadow: 0 14px 34px rgba(120, 98, 63, 0.1);
   transform: translateY(-2px);
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 bg-text-primary text-bg-primary px-4 py-2.5 text-xs font-medium uppercase tracking-[0.2em] transition-colors hover:bg-accent disabled:bg-border disabled:text-text-secondary disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 border border-border bg-bg-secondary/40 text-text-primary px-4 py-2.5 text-xs font-medium uppercase tracking-[0.2em] transition-colors hover:bg-bg-secondary;
+  }
+  .btn-ghost {
+    @apply text-xs uppercase tracking-wider font-medium text-text-primary underline underline-offset-4 hover:text-text-secondary transition-colors;
+  }
+  .input-line {
+    @apply w-full border-0 border-b border-border bg-transparent px-1 py-2 text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors;
+  }
+  .card {
+    @apply border border-border bg-bg-card p-5;
+  }
+  .label-meta {
+    @apply text-[10px] uppercase tracking-[0.22em] text-text-secondary;
+  }
 }

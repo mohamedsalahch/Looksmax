@@ -913,7 +913,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         <div className="flex items-center justify-between p-4">
           {sidebarOpen && (
             <div>
-              <h1 className="text-xs font-bold tracking-[0.2em] uppercase text-accent">
+              <h1 className="text-xs font-semibold tracking-[0.3em] uppercase text-text-primary">
                 LOOKSMAX
               </h1>
               <p className="text-[9px] text-text-secondary uppercase tracking-wider">
@@ -933,8 +933,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded text-xs transition-colors ${
-                  isActive ? "bg-accent/10 text-accent font-medium" : "text-text-secondary hover:text-text-primary hover:bg-bg-hover"
+                className={`flex items-center gap-3 px-3 py-2.5 text-xs transition-colors border-l-2 ${
+                  isActive
+                    ? "bg-bg-hover text-text-primary font-medium border-text-primary"
+                    : "text-text-secondary hover:text-text-primary hover:bg-bg-hover border-transparent"
                 }`}
               >
                 <span className="text-sm">{item.icon}</span>
@@ -953,7 +955,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 <button
                   type="button"
                   onClick={() => router.back()}
-                  className="inline-flex items-center gap-2 border border-border bg-bg-secondary px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-text-secondary transition-colors hover:text-text-primary"
+                  className="inline-flex items-center gap-2 border border-border bg-bg-secondary/40 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-text-secondary transition-colors hover:bg-bg-secondary hover:text-text-primary"
                 >
                   <span>←</span>
                   Back
@@ -962,7 +964,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               <button
                 type="button"
                 onClick={() => setMobileSidebarOpen((current) => !current)}
-                className="inline-flex items-center gap-2 border border-border bg-bg-secondary px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-text-secondary transition-colors hover:text-text-primary md:hidden"
+                className="inline-flex items-center gap-2 border border-border bg-bg-secondary/40 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-text-secondary transition-colors hover:bg-bg-secondary hover:text-text-primary md:hidden"
               >
                 <span>☰</span>
                 Menu

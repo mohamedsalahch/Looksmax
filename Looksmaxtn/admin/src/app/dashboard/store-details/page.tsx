@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { withAuthRequest } from "@/lib/authClient";
@@ -158,7 +158,7 @@ export default function StoreDetailsPage() {
         </div>
       )}
       {success && (
-        <div className="mb-6 border border-[#d8c9b8] bg-[#f1ede8] px-4 py-3 text-xs text-[#6b6055]">
+        <div className="mb-6 border border-border bg-bg-secondary px-4 py-3 text-xs text-text-secondary">
           {success}
         </div>
       )}

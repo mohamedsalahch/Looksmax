@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -35,7 +35,7 @@ function getProductStatus(product: Product) {
     return { label: "Low Stock", className: "bg-warning/10 text-warning" };
   }
   if (product.availabilityStatus === "in-stock") {
-    return { label: "In Stock", className: "bg-[#f1ede8] text-[#6b6055]" };
+    return { label: "In Stock", className: "bg-bg-secondary text-text-secondary" };
   }
 
   if (product.productType === "perfume") {
@@ -45,11 +45,11 @@ function getProductStatus(product: Product) {
     if (product.stock <= 3) {
       return { label: "Low Stock", className: "bg-warning/10 text-warning" };
     }
-    return { label: "In Stock", className: "bg-[#f1ede8] text-[#6b6055]" };
+    return { label: "In Stock", className: "bg-bg-secondary text-text-secondary" };
   }
 
   return product.stock > 0
-    ? { label: "Available", className: "bg-[#f1ede8] text-[#6b6055]" }
+    ? { label: "Available", className: "bg-bg-secondary text-text-secondary" }
     : { label: "Reserved", className: "bg-warning/10 text-warning" };
 }
 
@@ -60,7 +60,7 @@ function getApprovalStatus(product: Product) {
     case "rejected":
       return { label: "Rejected", className: "bg-danger/10 text-danger" };
     default:
-      return { label: "Approved", className: "bg-[#f1ede8] text-[#6b6055]" };
+      return { label: "Approved", className: "bg-bg-secondary text-text-secondary" };
   }
 }
 
@@ -246,8 +246,8 @@ export default function ProductsPage() {
   };
 
   const renderSortIndicator = (key: SortKey) => {
-    if (sortKey !== key) return <span className="text-[9px] text-text-secondary/60">↕</span>;
-    return <span className="text-[9px] text-accent">{sortDirection === "asc" ? "↑" : "↓"}</span>;
+    if (sortKey !== key) return <span className="text-[9px] text-text-secondary/60">â†•</span>;
+    return <span className="text-[9px] text-accent">{sortDirection === "asc" ? "â†‘" : "â†“"}</span>;
   };
 
   return (
@@ -255,7 +255,7 @@ export default function ProductsPage() {
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-xl font-semibold tracking-wide">Products</h1>
         {canManageProducts ? (
-          <Link href="/dashboard/products/new" className="inline-flex w-full justify-center bg-accent text-bg-primary px-4 py-2 text-xs font-semibold tracking-wide uppercase hover:bg-accent-hover transition-colors sm:w-auto">
+          <Link href="/dashboard/products/new" className="inline-flex w-full justify-center bg-text-primary text-bg-primary px-4 py-2 text-xs font-semibold tracking-wide uppercase hover:bg-accent transition-colors sm:w-auto">
             + Add Product
           </Link>
         ) : (
@@ -271,12 +271,12 @@ export default function ProductsPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by name, brand, tag, category, or ID..."
-          className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
+          className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-text-primary transition-colors"
         />
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
-          className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
+          className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-text-primary transition-colors"
         >
           <option value="all">All categories</option>
           {categoryOptions.map((option) => (
@@ -288,7 +288,7 @@ export default function ProductsPage() {
         <select
           value={visibilityFilter}
           onChange={(e) => setVisibilityFilter(e.target.value)}
-          className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
+          className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-text-primary transition-colors"
         >
           <option value="all">All visibility</option>
           <option value="active">Active</option>
@@ -297,7 +297,7 @@ export default function ProductsPage() {
         <select
           value={approvalFilter}
           onChange={(e) => setApprovalFilter(e.target.value)}
-          className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
+          className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-text-primary transition-colors"
         >
           <option value="all">All approvals</option>
           <option value="pending">Pending</option>
@@ -376,7 +376,7 @@ export default function ProductsPage() {
                     <p className="text-[10px] text-text-secondary">{p.brand}</p>
                   </td>
                   <td className="px-4 py-3 text-xs text-text-secondary capitalize">{(p.categories || []).join(", ")}</td>
-                  <td className="px-4 py-3 text-xs text-text-secondary">{p.reference || "—"}</td>
+                  <td className="px-4 py-3 text-xs text-text-secondary">{p.reference || "â€”"}</td>
                   <td className="px-4 py-3 text-xs font-medium">{p.price.toFixed(2)} TND</td>
                   <td className="px-4 py-3">
                     <div className="flex h-16 w-16 overflow-hidden rounded border border-border bg-bg-secondary">
@@ -435,7 +435,7 @@ export default function ProductsPage() {
                         />
                       </button>
                     ) : (
-                      <span className={`text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${p.isActive === false || p.visibilityStatus === "inactive" ? "bg-neutral-200 text-neutral-700" : "bg-[#f1ede8] text-[#6b6055]"}`}>
+                      <span className={`text-[10px] px-2 py-1 font-medium uppercase tracking-wider ${p.isActive === false || p.visibilityStatus === "inactive" ? "bg-neutral-200 text-neutral-700" : "bg-bg-secondary text-text-secondary"}`}>
                         {p.isActive === false || p.visibilityStatus === "inactive" ? "Inactive" : "Active"}
                       </span>
                     )}
@@ -450,7 +450,7 @@ export default function ProductsPage() {
                           <Link
                             href={`/dashboard/products/${p._id}/edit`}
                             onClick={(e) => e.stopPropagation()}
-                            className="inline-flex items-center justify-center border border-accent bg-accent px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-bg-primary transition-colors hover:bg-accent-hover rounded-none"
+                            className="inline-flex items-center justify-center border border-accent bg-accent px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-bg-primary transition-colors hover:bg-accent rounded-none"
                           >
                             Edit
                           </Link>

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import AuditMetaCard from "@/components/AuditMetaCard";
@@ -236,7 +236,7 @@ export default function HomePageEditor() {
   );
   const lookbookCount = lookbookPreview.length;
   const messageTone = message.toLowerCase().includes("success")
-    ? "border-[#d8c9b8] bg-[#f1ede8] text-[#6b6055]"
+    ? "border-border bg-bg-secondary text-text-secondary"
     : "border-[#e2c9c4] bg-[#faf3f2] text-[#8a5f57]";
 
   const updateStat = (index: number, field: keyof HomeStat, value: string) => {
@@ -441,7 +441,7 @@ export default function HomePageEditor() {
                 value={content.hero.eyebrow}
                 onChange={(e) => setContent({ ...content, hero: { ...content.hero, eyebrow: e.target.value } })}
                 placeholder="Eyebrow"
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
+                className="input-line"
               />
               </div>
               <div className="space-y-2">
@@ -451,7 +451,7 @@ export default function HomePageEditor() {
                 value={content.hero.title}
                 onChange={(e) => setContent({ ...content, hero: { ...content.hero, title: e.target.value } })}
                 placeholder="Title"
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
+                className="input-line"
               />
               </div>
               <div className="space-y-2">
@@ -461,7 +461,7 @@ export default function HomePageEditor() {
                 onChange={(e) => setContent({ ...content, hero: { ...content.hero, subtitle: e.target.value } })}
                 placeholder="Subtitle"
                 rows={4}
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm resize-none transition-colors focus:border-accent"
+                className="input-line resize-none"
               />
               </div>
               <div className="space-y-2">
@@ -471,7 +471,7 @@ export default function HomePageEditor() {
                 value={content.hero.link}
                 onChange={(e) => setContent({ ...content, hero: { ...content.hero, link: e.target.value } })}
                 placeholder="/category/all"
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
+                className="input-line"
               />
               </div>
               <div className="space-y-2">
@@ -523,7 +523,7 @@ export default function HomePageEditor() {
               value={content.brandStory.eyebrow}
               onChange={(e) => setContent({ ...content, brandStory: { ...content.brandStory, eyebrow: e.target.value } })}
               placeholder="Section eyebrow"
-              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
+              className="input-line"
             />
             </div>
             <div className="space-y-2">
@@ -533,7 +533,7 @@ export default function HomePageEditor() {
               value={content.brandStory.title}
               onChange={(e) => setContent({ ...content, brandStory: { ...content.brandStory, title: e.target.value } })}
               placeholder="Section title"
-              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
+              className="input-line"
             />
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
@@ -544,7 +544,7 @@ export default function HomePageEditor() {
               onChange={(e) => setContent({ ...content, brandStory: { ...content.brandStory, paragraphOne: e.target.value } })}
               placeholder="First paragraph"
               rows={4}
-              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm resize-none transition-colors focus:border-accent"
+              className="input-line resize-none"
             />
               </div>
               <div className="space-y-2">
@@ -554,7 +554,7 @@ export default function HomePageEditor() {
               onChange={(e) => setContent({ ...content, brandStory: { ...content.brandStory, paragraphTwo: e.target.value } })}
               placeholder="Second paragraph"
               rows={4}
-              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm resize-none transition-colors focus:border-accent"
+              className="input-line resize-none"
             />
               </div>
             </div>
@@ -572,7 +572,7 @@ export default function HomePageEditor() {
                     value={stat.value}
                     onChange={(e) => updateStat(index, "value", e.target.value)}
                     placeholder="Value"
-                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
+                    className="input-line"
                   />
                   <FieldLabel>Label</FieldLabel>
                   <input
@@ -580,7 +580,7 @@ export default function HomePageEditor() {
                     value={stat.label}
                     onChange={(e) => updateStat(index, "label", e.target.value)}
                     placeholder="Label"
-                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
+                    className="input-line"
                   />
                 </div>
               ))}
@@ -602,7 +602,7 @@ export default function HomePageEditor() {
             value={content.lookbook.caption}
             onChange={(e) => setContent({ ...content, lookbook: { ...content.lookbook, caption: e.target.value } })}
             placeholder="Lookbook caption"
-            className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
+            className="input-line"
           />
           </div>
           <div className="space-y-2">
@@ -646,7 +646,7 @@ export default function HomePageEditor() {
                   <select
                     value={content.lookbook.categorySlugs[index] || ""}
                     onChange={(e) => updateLookbookCategory(index, e.target.value)}
-                    className="w-full bg-bg-card border border-border px-3 py-2.5 text-xs transition-colors focus:border-accent"
+                    className="w-full bg-bg-card border border-border px-3 py-2.5 text-xs transition-colors focus:border-text-primary"
                   >
                     <option value="">Select category</option>
                     {categories.map((category) => (
@@ -681,7 +681,7 @@ export default function HomePageEditor() {
                 value={content.editorial.eyebrow}
                 onChange={(e) => setContent({ ...content, editorial: { ...content.editorial, eyebrow: e.target.value } })}
                 placeholder="Editorial eyebrow"
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
+                className="input-line"
               />
               </div>
               <div className="space-y-2">
@@ -691,7 +691,7 @@ export default function HomePageEditor() {
                 value={content.editorial.label}
                 onChange={(e) => setContent({ ...content, editorial: { ...content.editorial, label: e.target.value } })}
                 placeholder="Editorial label"
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
+                className="input-line"
               />
               </div>
               <div className="space-y-2">
@@ -701,7 +701,7 @@ export default function HomePageEditor() {
                 value={content.featured.title}
                 onChange={(e) => setContent({ ...content, featured: { ...content.featured, title: e.target.value } })}
                 placeholder="Featured products title"
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm transition-colors focus:border-accent"
+                className="input-line"
               />
               </div>
               <div className="space-y-2">
@@ -743,7 +743,7 @@ export default function HomePageEditor() {
           <button
             type="submit"
             disabled={saving}
-            className="border border-border bg-accent text-bg-primary px-8 py-3 text-xs font-semibold tracking-[0.18em] uppercase shadow-lg shadow-accent/20 hover:bg-accent-hover transition-colors disabled:opacity-50 cursor-pointer"
+            className="border border-border bg-text-primary text-bg-primary px-8 py-3 text-xs font-semibold tracking-[0.18em] uppercase shadow-lg shadow-accent/20 hover:bg-accent transition-colors disabled:opacity-50 cursor-pointer"
           >
             {saving ? "Saving..." : "Save Home Page"}
           </button>

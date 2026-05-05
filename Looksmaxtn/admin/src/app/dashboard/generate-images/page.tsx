@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { withAuthRequest } from "@/lib/authClient";
@@ -209,7 +209,7 @@ export default function GenerateImagesPage() {
             setError("");
             setShowForm(true);
           }}
-          className="bg-accent text-bg-primary px-4 py-2 text-xs font-semibold tracking-wide uppercase hover:bg-accent-hover transition-colors cursor-pointer"
+          className="bg-text-primary text-bg-primary px-4 py-2 text-xs font-semibold tracking-wide uppercase hover:bg-accent transition-colors cursor-pointer"
         >
           + Add Generated Image
         </button>
@@ -220,7 +220,7 @@ export default function GenerateImagesPage() {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Search generated images by name or prompt..."
-        className="w-full bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
+        className="input-line"
       />
 
       {showForm && (
@@ -235,7 +235,7 @@ export default function GenerateImagesPage() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Generated image name"
-            className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+            className="input-line"
           />
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
@@ -268,7 +268,7 @@ export default function GenerateImagesPage() {
                     value={promptSearch}
                     onChange={(e) => setPromptSearch(e.target.value)}
                     placeholder="Search saved prompts..."
-                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                    className="input-line"
                   />
                   <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
                     {promptsLoading ? (
@@ -301,7 +301,7 @@ export default function GenerateImagesPage() {
                     onChange={(e) => setCustomPromptDescription(e.target.value)}
                     rows={8}
                     placeholder="Prompt description used only for this generation..."
-                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm resize-none"
+                    className="input-line resize-none"
                   />
                 </div>
               )}
@@ -354,7 +354,7 @@ export default function GenerateImagesPage() {
             <button
               type="submit"
               disabled={saving}
-              className="bg-accent text-bg-primary px-6 py-3 text-xs font-semibold tracking-wide uppercase disabled:opacity-50"
+              className="bg-text-primary text-bg-primary px-6 py-3 text-xs font-semibold tracking-wide uppercase disabled:opacity-50"
             >
               {saving ? "Generating..." : "Generate Images"}
             </button>
@@ -431,9 +431,9 @@ export default function GenerateImagesPage() {
                   </button>
                 </div>
                 <p className="text-[10px] text-text-secondary uppercase tracking-wider">
-                  {item.sourceImages.length} source image{item.sourceImages.length !== 1 ? "s" : ""} · {item.images.length} result{item.images.length !== 1 ? "s" : ""}
-                  {item.status === "processing" && " · PROCESSING"}
-                  {item.status === "failed" && ` · FAILED${item.errorMessage ? ` - ${item.errorMessage}` : ""}`}
+                  {item.sourceImages.length} source image{item.sourceImages.length !== 1 ? "s" : ""} Â· {item.images.length} result{item.images.length !== 1 ? "s" : ""}
+                  {item.status === "processing" && " Â· PROCESSING"}
+                  {item.status === "failed" && ` Â· FAILED${item.errorMessage ? ` - ${item.errorMessage}` : ""}`}
                 </p>
                 <div className="space-y-0.5 pt-0.5 text-[9px] text-text-secondary">
                   <p>Created at: {formatAuditDate(item.createdAt)}</p>

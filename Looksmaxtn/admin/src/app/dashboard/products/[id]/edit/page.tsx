@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState, use } from "react";
 import { useRouter } from "next/navigation";
@@ -169,7 +169,7 @@ View & Layout:
 
 Fabric Preparation:
 
-* Ironing clothes removes wrinkles — remove all wrinkles and creases
+* Ironing clothes removes wrinkles â€” remove all wrinkles and creases
 * Make the garment look freshly ironed or professionally steamed
 * Keep natural fabric texture (do NOT over-smooth or make it look artificial)
 
@@ -606,7 +606,7 @@ function ColorwayGenerationCard({
           {companionZones.includes("top") && (
             <div className="space-y-2">
               <p className="text-[9px] uppercase tracking-wider text-text-secondary">Top</p>
-              <select value={colorway.companionTopType} onChange={(e) => onUpdate({ companionTopType: e.target.value })} className="w-full bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-accent transition-colors">
+              <select value={colorway.companionTopType} onChange={(e) => onUpdate({ companionTopType: e.target.value })} className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors">
                 <option value="">Select type</option>
                 {companionTypeOptions.top.map((cat) => <option key={cat.slug} value={cat.slug}>{cat.name}</option>)}
               </select>
@@ -620,7 +620,7 @@ function ColorwayGenerationCard({
           {companionZones.includes("bottom") && (
             <div className="space-y-2">
               <p className="text-[9px] uppercase tracking-wider text-text-secondary">Bottom</p>
-              <select value={colorway.companionBottomType} onChange={(e) => onUpdate({ companionBottomType: e.target.value })} className="w-full bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-accent transition-colors">
+              <select value={colorway.companionBottomType} onChange={(e) => onUpdate({ companionBottomType: e.target.value })} className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors">
                 <option value="">Select type</option>
                 {companionTypeOptions.bottom.map((cat) => <option key={cat.slug} value={cat.slug}>{cat.name}</option>)}
               </select>
@@ -634,7 +634,7 @@ function ColorwayGenerationCard({
           {companionZones.includes("footwear") && (
             <div className="space-y-2">
               <p className="text-[9px] uppercase tracking-wider text-text-secondary">Footwear</p>
-              <select value={colorway.companionFootwearType} onChange={(e) => onUpdate({ companionFootwearType: e.target.value })} className="w-full bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-accent transition-colors">
+              <select value={colorway.companionFootwearType} onChange={(e) => onUpdate({ companionFootwearType: e.target.value })} className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors">
                 <option value="">Select type</option>
                 {companionTypeOptions.footwear.map((cat) => <option key={cat.slug} value={cat.slug}>{cat.name}</option>)}
               </select>
@@ -668,14 +668,14 @@ function ColorwayGenerationCard({
           )}
           <button type="button" onClick={canGenerate && colorway.generateStatus !== "completed" ? onGenerate : undefined} disabled={!canGenerate || colorway.generateStatus === "processing" || colorway.generateStatus === "completed"} className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity">
             {colorway.generateStatus === "processing" && <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />}
-            {colorway.generateStatus === "completed" ? "Generated ✓" : colorway.generateStatus === "processing" ? "Generating..." : "Generate"}
+            {colorway.generateStatus === "completed" ? "Generated âœ“" : colorway.generateStatus === "processing" ? "Generating..." : "Generate"}
           </button>
         </div>
       </div>
       {zoomedUrl && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setZoomedUrl(null)}>
           <div className="relative max-h-[92vh] w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
-            <button type="button" onClick={() => setZoomedUrl(null)} className="absolute right-0 top-0 z-10 h-9 w-9 border border-white/30 bg-black/60 text-xl leading-none text-white hover:bg-black transition-colors">×</button>
+            <button type="button" onClick={() => setZoomedUrl(null)} className="absolute right-0 top-0 z-10 h-9 w-9 border border-white/30 bg-black/60 text-xl leading-none text-white hover:bg-black transition-colors">Ã—</button>
             <div className="flex max-h-[92vh] items-center justify-center bg-bg-card p-4">
               <img src={zoomedUrl} alt="Generated model" className="max-h-[86vh] max-w-full object-contain" />
             </div>
@@ -728,7 +728,7 @@ function ColorwayCard({
     <div data-colorway-id={colorway.id} className="flex-none w-[270px] rounded-2xl border border-border bg-bg-card p-4 space-y-4">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
-          {canRemove && <button type="button" onClick={onRemove} title="Remove colorway" className="text-sm leading-none text-text-secondary hover:text-danger transition-colors">×</button>}
+          {canRemove && <button type="button" onClick={onRemove} title="Remove colorway" className="text-sm leading-none text-text-secondary hover:text-danger transition-colors">Ã—</button>}
           <span className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">Colorway {index + 1}</span>
         </div>
         <div className="flex items-center gap-1.5">
@@ -786,7 +786,7 @@ function ColorwayCard({
       {zoomedPreview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setZoomedPreview(null)}>
           <div className="relative max-h-[92vh] w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
-            <button type="button" onClick={() => setZoomedPreview(null)} aria-label="Close preview" className="absolute right-0 top-0 z-10 h-9 w-9 border border-white/30 bg-black/60 text-xl leading-none text-white hover:bg-black transition-colors">×</button>
+            <button type="button" onClick={() => setZoomedPreview(null)} aria-label="Close preview" className="absolute right-0 top-0 z-10 h-9 w-9 border border-white/30 bg-black/60 text-xl leading-none text-white hover:bg-black transition-colors">Ã—</button>
             <div className="flex max-h-[92vh] items-center justify-center bg-bg-card p-4">
               <img src={zoomedPreview} alt="Image preview" className="max-h-[86vh] max-w-full object-contain" />
             </div>
@@ -798,15 +798,15 @@ function ColorwayCard({
         {colorway.sizes.map((sizeRow) => (
           <div key={sizeRow.id} className="space-y-1">
             <div className="flex items-center gap-1">
-              <input type="text" value={sizeRow.size} onChange={(e) => onUpdateSize(sizeRow.id, { size: e.target.value })} placeholder="Size" className="min-w-0 flex-1 bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-accent transition-colors" />
-              <input type="number" min="0" value={sizeRow.stock} onChange={(e) => onUpdateSize(sizeRow.id, { stock: e.target.value })} placeholder="Qty" className="w-14 flex-none bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-accent transition-colors" />
-              <button type="button" onClick={() => onRemoveSize(sizeRow.id)} disabled={colorway.sizes.length === 1} className="flex-none text-sm leading-none text-text-secondary hover:text-danger transition-colors disabled:opacity-30">×</button>
+              <input type="text" value={sizeRow.size} onChange={(e) => onUpdateSize(sizeRow.id, { size: e.target.value })} placeholder="Size" className="min-w-0 flex-1 bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-text-primary transition-colors" />
+              <input type="number" min="0" value={sizeRow.stock} onChange={(e) => onUpdateSize(sizeRow.id, { stock: e.target.value })} placeholder="Qty" className="w-14 flex-none bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-text-primary transition-colors" />
+              <button type="button" onClick={() => onRemoveSize(sizeRow.id)} disabled={colorway.sizes.length === 1} className="flex-none text-sm leading-none text-text-secondary hover:text-danger transition-colors disabled:opacity-30">Ã—</button>
             </div>
             {isThrift && (
               <div className="space-y-0.5 px-0.5">
                 <div className="flex items-center justify-between">
                   <span className="text-[8px] uppercase tracking-wider text-text-secondary">Condition</span>
-                  <span className="text-[8px] text-text-secondary">{sizeRow.conditionScore}/10 · {getConditionStatusFromScore(Number(sizeRow.conditionScore)).toUpperCase()}</span>
+                  <span className="text-[8px] text-text-secondary">{sizeRow.conditionScore}/10 Â· {getConditionStatusFromScore(Number(sizeRow.conditionScore)).toUpperCase()}</span>
                 </div>
                 <input type="range" min="1" max="10" step="1" value={sizeRow.conditionScore} onChange={(e) => onUpdateSize(sizeRow.id, { conditionScore: e.target.value })} className="w-full accent-accent cursor-pointer" />
               </div>
@@ -836,7 +836,7 @@ function ColorwayCard({
           )}
           <button type="button" onClick={colorway.enhanceStatus !== "completed" ? onEnhance : undefined} disabled={!canEnhance || colorway.enhanceStatus === "processing" || colorway.enhanceStatus === "completed"} className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity">
             {colorway.enhanceStatus === "processing" && <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />}
-            {colorway.enhanceStatus === "completed" ? "Enhanced ✓" : colorway.enhanceStatus === "processing" ? "Enhancing..." : "Enhance"}
+            {colorway.enhanceStatus === "completed" ? "Enhanced âœ“" : colorway.enhanceStatus === "processing" ? "Enhancing..." : "Enhance"}
           </button>
         </div>
       </div>
@@ -853,7 +853,7 @@ function ColorwayCard({
                     <select
                       value={colorway.companionTopType}
                       onChange={(e) => onUpdate({ companionTopType: e.target.value })}
-                      className="w-full bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-accent transition-colors"
+                      className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
                     >
                       <option value="">Select type</option>
                       {companionTypeOptions?.top.map((cat) => (
@@ -873,7 +873,7 @@ function ColorwayCard({
                     <select
                       value={colorway.companionBottomType}
                       onChange={(e) => onUpdate({ companionBottomType: e.target.value })}
-                      className="w-full bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-accent transition-colors"
+                      className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
                     >
                       <option value="">Select type</option>
                       {companionTypeOptions?.bottom.map((cat) => (
@@ -893,7 +893,7 @@ function ColorwayCard({
                     <select
                       value={colorway.companionFootwearType}
                       onChange={(e) => onUpdate({ companionFootwearType: e.target.value })}
-                      className="w-full bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-accent transition-colors"
+                      className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
                     >
                       <option value="">Select type</option>
                       {companionTypeOptions?.footwear.map((cat) => (
@@ -926,7 +926,7 @@ function ColorwayCard({
           <div className="flex items-center justify-end gap-2">
             <button type="button" onClick={canGenerate ? onGenerate : undefined} disabled={!canGenerate || colorway.generateStatus === "processing" || colorway.generateStatus === "completed"} className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity">
               {colorway.generateStatus === "processing" && <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />}
-              {colorway.generateStatus === "completed" ? "Generated ✓" : colorway.generateStatus === "processing" ? "Generating..." : "Generate"}
+              {colorway.generateStatus === "completed" ? "Generated âœ“" : colorway.generateStatus === "processing" ? "Generating..." : "Generate"}
             </button>
           </div>
         </div>
@@ -1377,9 +1377,9 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           const colorwayMap = new Map<string, SizeRow[]>();
           for (const [key, entry] of sizeStockEntries) {
             const parts = key.split(" / ");
-            const hex = parts.length >= 2 ? parts[parts.length - 1] : "";
-            const sizeName = parts.length >= 2 ? parts.slice(0, -1).join(" / ") : key;
-            if (!hex.startsWith("#")) { continue; }
+            const hasHex = parts.length >= 2 && parts[parts.length - 1].startsWith("#");
+            const hex = hasHex ? parts[parts.length - 1] : "";
+            const sizeName = hasHex ? parts.slice(0, -1).join(" / ") : key;
             if (!colorwayMap.has(hex)) colorwayMap.set(hex, []);
             colorwayMap.get(hex)!.push({
               id: generateId(),
@@ -1413,6 +1413,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                     .filter((g) => g.url)
                 : [];
               const generateStatus: ColorwayEnhanceStatus = generatedImages.length > 0 ? "completed" : "idle";
+              const enhanceStatus: ColorwayEnhanceStatus = (resolvedFrontUrl && resolvedBackUrl) ? "completed" : "idle";
               const cs = savedCompanion?.[hex];
               return {
                 ...createEmptyColorway(),
@@ -1422,6 +1423,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 backPreview: resolvedBackUrl,
                 enhancedFrontUrl: resolvedFrontUrl,
                 enhancedBackUrl: resolvedBackUrl,
+                enhanceStatus,
                 generatedImages, generateStatus,
                 companionTopType: cs?.topType || "",
                 companionTopColor: cs?.topColor || null,
@@ -2510,7 +2512,7 @@ const loadedCategorySlugs = p.categories || [];
           const backUrl = cw.enhancedBackUrl || cw.backPreview;
           if (backFile) indices.push(pushNew(backFile));
           else if (isUploadableUrl(backUrl)) indices.push(pushExisting(backUrl));
-          if (colorKey && indices.length > 0) colorImagesPayload[colorKey] = indices;
+          if (indices.length > 0) colorImagesPayload[colorKey] = indices;
         }
         const compressedImages = await Promise.all(imageFiles.map((f) => compressImageFile(f)));
         compressedImages.forEach((f) => body.append("images", f));
@@ -2811,7 +2813,7 @@ const loadedCategorySlugs = p.categories || [];
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <div className="sm:col-span-2 xl:col-span-3">
                 <FieldLabel>Product Name</FieldLabel>
-                <input type="text" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors" placeholder="e.g. Oversized Linen Shirt" />
+                <input type="text" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input-line" placeholder="e.g. Oversized Linen Shirt" />
                 <FieldError message={fieldErrors.name} />
               </div>
               {isStoreOwner && (
@@ -2821,24 +2823,24 @@ const loadedCategorySlugs = p.categories || [];
                     type="text"
                     readOnly
                     value={userStoreName}
-                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm opacity-60 cursor-not-allowed"
+                    className="input-line opacity-60 cursor-not-allowed"
                   />
                 </div>
               )}
               {isStoreOwner && (
                 <div>
                   <FieldLabel>Brand</FieldLabel>
-                  <input type="text" value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors" placeholder="e.g. Zara (optional)" />
+                  <input type="text" value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} className="input-line" placeholder="e.g. Zara (optional)" />
                   <FieldError message={fieldErrors.brand} />
                 </div>
               )}
               <div>
                 <FieldLabel>Reference</FieldLabel>
-                <input type="text" value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors" placeholder="SKU or internal reference" />
+                <input type="text" value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} className="input-line" placeholder="SKU or internal reference" />
               </div>
               <div>
                 <FieldLabel>Price (TND)</FieldLabel>
-                <input type="number" step="0.01" required value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors" placeholder="0.00" />
+                <input type="number" step="0.01" required value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="input-line" placeholder="0.00" />
                 <FieldError message={fieldErrors.price} />
               </div>
               <div className={isThriftStoreOwner ? "" : "sm:col-span-2 xl:col-span-3"}>
@@ -2861,7 +2863,7 @@ const loadedCategorySlugs = p.categories || [];
                     onFocus={() => setCategoryDropdownOpen(true)}
                     onBlur={() => setTimeout(() => setCategoryDropdownOpen(false), 150)}
                     placeholder="Type to search categories..."
-                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
+                    className="input-line"
                   />
                   {categoryDropdownOpen && filteredCategoryOptions.length > 0 && (
                     <div className="absolute z-20 mt-0.5 w-full border border-border bg-bg-card shadow-lg max-h-52 overflow-y-auto">
@@ -2967,7 +2969,7 @@ const loadedCategorySlugs = p.categories || [];
           </div>
 
           <div className="flex gap-3">
-            <button type="submit" disabled={loading} className="bg-accent text-bg-primary px-8 py-3 text-xs font-semibold tracking-wide uppercase disabled:opacity-50">
+            <button type="submit" disabled={loading} className="bg-text-primary text-bg-primary px-8 py-3 text-xs font-semibold tracking-wide uppercase disabled:opacity-50">
               {loading ? "Saving..." : "Save Changes"}
             </button>
             <button type="button" onClick={() => router.back()} className="border border-border px-6 py-3 text-xs text-text-secondary uppercase tracking-wider">Cancel</button>
@@ -2999,7 +3001,7 @@ const loadedCategorySlugs = p.categories || [];
                 required
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                className="input-line"
                 placeholder="e.g. Vintage Denim Jacket"
               />
               <FieldError message={fieldErrors.name} />
@@ -3015,7 +3017,7 @@ const loadedCategorySlugs = p.categories || [];
                       productType: e.target.value as ProductType,
                     }))
                   }
-                  className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                  className="input-line"
                 >
                   <option value="fashion">Fashion (Clothes & Shoes)</option>
                   <option value="perfume">Perfume</option>
@@ -3029,7 +3031,7 @@ const loadedCategorySlugs = p.categories || [];
                   type="text"
                   value={form.brand}
                   onChange={(e) => setForm({ ...form, brand: e.target.value })}
-                  className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                  className="input-line"
                   placeholder={isThriftStoreOwner ? "Original brand, e.g. Zara (optional)" : "Brand name, e.g. Nike"}
                 />
                 <FieldError message={fieldErrors.brand} />
@@ -3041,7 +3043,7 @@ const loadedCategorySlugs = p.categories || [];
                 type="text"
                 value={form.reference}
                 onChange={(e) => setForm({ ...form, reference: e.target.value })}
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                className="input-line"
                 placeholder="SKU or internal reference"
               />
             </div>
@@ -3053,7 +3055,7 @@ const loadedCategorySlugs = p.categories || [];
                 required
                 value={form.price}
                 onChange={(e) => setForm({ ...form, price: e.target.value })}
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                className="input-line"
                 placeholder="0.00"
               />
               <FieldError message={fieldErrors.price} />
@@ -3078,7 +3080,7 @@ const loadedCategorySlugs = p.categories || [];
                   onFocus={() => setCategoryDropdownOpen(true)}
                   onBlur={() => setTimeout(() => setCategoryDropdownOpen(false), 150)}
                   placeholder="Type to search categories..."
-                  className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
+                  className="input-line"
                 />
                 {categoryDropdownOpen && filteredCategoryOptions.length > 0 && (
                   <div className="absolute z-20 mt-0.5 w-full border border-border bg-bg-card shadow-lg max-h-52 overflow-y-auto">
@@ -3112,7 +3114,7 @@ const loadedCategorySlugs = p.categories || [];
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                 rows={4}
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm resize-none"
+                className="input-line resize-none"
                 placeholder="Describe fit, materials, condition, and any notable details"
               />
             </div>
@@ -3130,7 +3132,7 @@ const loadedCategorySlugs = p.categories || [];
                     type="text"
                     value={form.cloneSourceName}
                     onChange={(e) => setForm({ ...form, cloneSourceName: e.target.value })}
-                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                    className="input-line"
                     placeholder="e.g. Bleu de Chanel"
                   />
                   <FieldError message={fieldErrors.cloneSourceName} />
@@ -3243,7 +3245,7 @@ const loadedCategorySlugs = p.categories || [];
                                     [size]: e.target.value,
                                   }))
                                 }
-                                className="min-w-0 flex-1 bg-bg-card border border-border px-3 py-2 text-sm focus:border-accent transition-colors"
+                                className="min-w-0 flex-1 bg-bg-card border border-border px-3 py-2 text-sm focus:border-text-primary transition-colors"
                                 placeholder="Restock amount"
                               />
                               <button
@@ -3284,7 +3286,7 @@ const loadedCategorySlugs = p.categories || [];
                     type="text"
                     value={variantDraft.size}
                     onChange={(e) => setVariantDraft((current) => ({ ...current, size: e.target.value }))}
-                    className="w-full bg-bg-card border border-border px-3 py-2 text-sm focus:border-accent transition-colors"
+                    className="w-full bg-bg-card border border-border px-3 py-2 text-sm focus:border-text-primary transition-colors"
                     placeholder="Size, e.g. 42"
                   />
                   <input
@@ -3292,7 +3294,7 @@ const loadedCategorySlugs = p.categories || [];
                     min="0"
                     value={variantDraft.stock}
                     onChange={(e) => setVariantDraft((current) => ({ ...current, stock: e.target.value }))}
-                    className="w-full bg-bg-card border border-border px-3 py-2 text-sm focus:border-accent transition-colors"
+                    className="w-full bg-bg-card border border-border px-3 py-2 text-sm focus:border-text-primary transition-colors"
                     placeholder="Stock"
                   />
                   <div className="flex flex-wrap items-center gap-2">
@@ -3372,7 +3374,7 @@ const loadedCategorySlugs = p.categories || [];
                               current.map((item) => (item.id === row.id ? { ...item, size: e.target.value } : item))
                             )
                           }
-                          className="w-full bg-bg-secondary border border-border px-3 py-2 text-sm focus:border-accent transition-colors"
+                          className="w-full border-0 border-b border-border bg-transparent px-1 py-2 text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
                           placeholder="Size"
                         />
                         <input
@@ -3384,7 +3386,7 @@ const loadedCategorySlugs = p.categories || [];
                               current.map((item) => (item.id === row.id ? { ...item, stock: e.target.value } : item))
                             )
                           }
-                          className="w-full bg-bg-secondary border border-border px-3 py-2 text-sm focus:border-accent transition-colors"
+                          className="w-full border-0 border-b border-border bg-transparent px-1 py-2 text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
                           placeholder="Stock"
                         />
                         <div className="flex flex-wrap items-center gap-2">
@@ -3438,7 +3440,7 @@ const loadedCategorySlugs = p.categories || [];
                           className="shrink-0 border border-border px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-text-secondary transition-colors hover:border-accent hover:text-accent"
                           aria-label={`Remove variant ${index + 1}`}
                         >
-                          ×
+                          Ã—
                         </button>
                       </div>
                     ))}
@@ -3461,7 +3463,7 @@ const loadedCategorySlugs = p.categories || [];
                 aria-label="Close image preview"
                 className="absolute right-0 top-0 z-10 h-9 w-9 border border-white/30 bg-black/60 text-xl leading-none text-white transition-colors hover:bg-black"
               >
-                ×
+                Ã—
               </button>
               <div className="flex max-h-[92vh] items-center justify-center bg-bg-card p-4">
                 <img
@@ -3565,7 +3567,7 @@ const loadedCategorySlugs = p.categories || [];
                   <select
                     value={form.tag}
                     onChange={(e) => setForm({ ...form, tag: e.target.value })}
-                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                    className="input-line"
                   >
                     <option value="">None</option>
                     <option value="NEW">NEW</option>
@@ -3579,7 +3581,7 @@ const loadedCategorySlugs = p.categories || [];
                         min={1}
                         value={form.newTagDurationDays}
                         onChange={(e) => setForm({ ...form, newTagDurationDays: e.target.value })}
-                        className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                        className="input-line"
                         placeholder="3 days"
                       />
                     </div>
@@ -3659,7 +3661,7 @@ const loadedCategorySlugs = p.categories || [];
                       aria-label="Cancel enhancement"
                       className="inline-flex h-9 w-9 items-center justify-center border border-border text-xs text-text-secondary hover:bg-bg-hover"
                     >
-                      ×
+                      Ã—
                     </button>
                   )}
                   <button
@@ -3756,7 +3758,7 @@ const loadedCategorySlugs = p.categories || [];
                       aria-label="Cancel generation"
                       className="inline-flex h-9 w-9 items-center justify-center border border-border text-xs text-text-secondary hover:bg-bg-hover"
                     >
-                      ×
+                      Ã—
                     </button>
                   )}
                   <button
@@ -3807,7 +3809,7 @@ const loadedCategorySlugs = p.categories || [];
         )}
 
         <div className="flex gap-3">
-          <button type="submit" disabled={loading} className="bg-accent text-bg-primary px-8 py-3 text-xs font-semibold tracking-wide uppercase disabled:opacity-50">
+          <button type="submit" disabled={loading} className="bg-text-primary text-bg-primary px-8 py-3 text-xs font-semibold tracking-wide uppercase disabled:opacity-50">
             {loading ? "Saving..." : "Save Changes"}
           </button>
           <button type="button" onClick={handleCancel} className="border border-border px-6 py-3 text-xs text-text-secondary uppercase tracking-wider">

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -159,7 +159,7 @@ View & Layout:
 
 Fabric Preparation:
 
-* Ironing clothes removes wrinkles — remove all wrinkles and creases
+* Ironing clothes removes wrinkles â€” remove all wrinkles and creases
 * Make the garment look freshly ironed or professionally steamed
 * Keep natural fabric texture (do NOT over-smooth or make it look artificial)
 
@@ -581,7 +581,7 @@ function ColorwayGenerationCard({
               <select
                 value={colorway.companionTopType}
                 onChange={(e) => onUpdate({ companionTopType: e.target.value })}
-                className="w-full bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-accent transition-colors"
+                className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
               >
                 <option value="">Select type</option>
                 {companionTypeOptions.top.map((cat) => (
@@ -602,7 +602,7 @@ function ColorwayGenerationCard({
               <select
                 value={colorway.companionBottomType}
                 onChange={(e) => onUpdate({ companionBottomType: e.target.value })}
-                className="w-full bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-accent transition-colors"
+                className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
               >
                 <option value="">Select type</option>
                 {companionTypeOptions.bottom.map((cat) => (
@@ -623,7 +623,7 @@ function ColorwayGenerationCard({
               <select
                 value={colorway.companionFootwearType}
                 onChange={(e) => onUpdate({ companionFootwearType: e.target.value })}
-                className="w-full bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-accent transition-colors"
+                className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
               >
                 <option value="">Select type</option>
                 {companionTypeOptions.footwear.map((cat) => (
@@ -683,7 +683,7 @@ function ColorwayGenerationCard({
               <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />
             )}
             {colorway.generateStatus === "completed"
-              ? "Generated ✓"
+              ? "Generated âœ“"
               : colorway.generateStatus === "processing"
               ? "Generating..."
               : "Generate"}
@@ -703,7 +703,7 @@ function ColorwayGenerationCard({
               onClick={() => setZoomedUrl(null)}
               className="absolute right-0 top-0 z-10 h-9 w-9 border border-white/30 bg-black/60 text-xl leading-none text-white hover:bg-black transition-colors"
             >
-              ×
+              Ã—
             </button>
             <div className="flex max-h-[92vh] items-center justify-center bg-bg-card p-4">
               <img src={zoomedUrl} alt="Generated model" className="max-h-[86vh] max-w-full object-contain" />
@@ -772,7 +772,7 @@ function ColorwayCard({
         onUpdate({ hex: result.sRGBHex.toUpperCase() });
         return;
       } catch {
-        // cancelled or unsupported — fall through to color input
+        // cancelled or unsupported â€” fall through to color input
       }
     }
     colorInputRef.current?.click();
@@ -808,7 +808,7 @@ function ColorwayCard({
               title="Remove colorway"
               className="text-sm leading-none text-text-secondary hover:text-danger transition-colors"
             >
-              ×
+              Ã—
             </button>
           )}
           <span className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">
@@ -919,7 +919,7 @@ function ColorwayCard({
               aria-label="Close preview"
               className="absolute right-0 top-0 z-10 h-9 w-9 border border-white/30 bg-black/60 text-xl leading-none text-white hover:bg-black transition-colors"
             >
-              ×
+              Ã—
             </button>
             <div className="flex max-h-[92vh] items-center justify-center bg-bg-card p-4">
               <img
@@ -943,7 +943,7 @@ function ColorwayCard({
                 value={sizeRow.size}
                 onChange={(e) => onUpdateSize(sizeRow.id, { size: e.target.value })}
                 placeholder="Size"
-                className="min-w-0 flex-1 bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-accent transition-colors"
+                className="min-w-0 flex-1 bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-text-primary transition-colors"
               />
               <input
                 type="number"
@@ -951,7 +951,7 @@ function ColorwayCard({
                 value={sizeRow.stock}
                 onChange={(e) => onUpdateSize(sizeRow.id, { stock: e.target.value })}
                 placeholder="Qty"
-                className="w-14 flex-none bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-accent transition-colors"
+                className="w-14 flex-none bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-text-primary transition-colors"
               />
               <button
                 type="button"
@@ -959,14 +959,14 @@ function ColorwayCard({
                 disabled={colorway.sizes.length === 1}
                 className="flex-none text-sm leading-none text-text-secondary hover:text-danger transition-colors disabled:opacity-30"
               >
-                ×
+                Ã—
               </button>
             </div>
             {isThrift && (
               <div className="space-y-0.5 px-0.5">
                 <div className="flex items-center justify-between">
                   <span className="text-[8px] uppercase tracking-wider text-text-secondary">Condition</span>
-                  <span className="text-[8px] text-text-secondary">{sizeRow.conditionScore}/10 · {getConditionStatusFromScore(Number(sizeRow.conditionScore)).toUpperCase()}</span>
+                  <span className="text-[8px] text-text-secondary">{sizeRow.conditionScore}/10 Â· {getConditionStatusFromScore(Number(sizeRow.conditionScore)).toUpperCase()}</span>
                 </div>
                 <input
                   type="range"
@@ -1027,7 +1027,7 @@ function ColorwayCard({
               <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />
             )}
             {colorway.enhanceStatus === "completed"
-              ? "Enhanced ✓"
+              ? "Enhanced âœ“"
               : colorway.enhanceStatus === "processing"
               ? "Enhancing..."
               : "Enhance"}
@@ -1047,7 +1047,7 @@ function ColorwayCard({
                     <select
                       value={colorway.companionTopType}
                       onChange={(e) => onUpdate({ companionTopType: e.target.value })}
-                      className="w-full bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-accent transition-colors"
+                      className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
                     >
                       <option value="">Select type</option>
                       {companionTypeOptions?.top.map((cat) => (
@@ -1067,7 +1067,7 @@ function ColorwayCard({
                     <select
                       value={colorway.companionBottomType}
                       onChange={(e) => onUpdate({ companionBottomType: e.target.value })}
-                      className="w-full bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-accent transition-colors"
+                      className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
                     >
                       <option value="">Select type</option>
                       {companionTypeOptions?.bottom.map((cat) => (
@@ -1087,7 +1087,7 @@ function ColorwayCard({
                     <select
                       value={colorway.companionFootwearType}
                       onChange={(e) => onUpdate({ companionFootwearType: e.target.value })}
-                      className="w-full bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-accent transition-colors"
+                      className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
                     >
                       <option value="">Select type</option>
                       {companionTypeOptions?.footwear.map((cat) => (
@@ -1133,7 +1133,7 @@ function ColorwayCard({
                 <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />
               )}
               {colorway.generateStatus === "completed"
-                ? "Generated ✓"
+                ? "Generated âœ“"
                 : colorway.generateStatus === "processing"
                 ? "Generating..."
                 : "Generate"}
@@ -2516,7 +2516,7 @@ export default function NewProductPage() {
         body.append("companionSettings", JSON.stringify(companionSettingsPayload));
 
         // Generated model images come first, then enhanced/raw origin pictures
-        // Build colorImages mapping: hex → array of image indices
+        // Build colorImages mapping: hex â†’ array of image indices
         const imageFiles: File[] = [];
         const colorImagesPayload: Record<string, number[]> = {};
         for (const cw of colorways) {
@@ -2529,7 +2529,7 @@ export default function NewProductPage() {
           const back = cw.enhancedBackFile || cw.backFile;
           if (front) { indices.push(imageFiles.length); imageFiles.push(front); }
           if (back) { indices.push(imageFiles.length); imageFiles.push(back); }
-          if (colorKey && indices.length > 0) colorImagesPayload[colorKey] = indices;
+          if (indices.length > 0) colorImagesPayload[colorKey] = indices;
         }
         const compressedImages = await Promise.all(imageFiles.map((f) => compressImageFile(f)));
         compressedImages.forEach((f) => body.append("images", f));
@@ -2798,7 +2798,7 @@ export default function NewProductPage() {
                   required
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
+                  className="input-line"
                   placeholder="e.g. Oversized Linen Shirt"
                 />
                 <FieldError message={fieldErrors.name} />
@@ -2810,7 +2810,7 @@ export default function NewProductPage() {
                     type="text"
                     readOnly
                     value={userStoreName}
-                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm opacity-60 cursor-not-allowed"
+                    className="input-line opacity-60 cursor-not-allowed"
                   />
                 </div>
               )}
@@ -2821,7 +2821,7 @@ export default function NewProductPage() {
                     type="text"
                     value={form.brand}
                     onChange={(e) => setForm({ ...form, brand: e.target.value })}
-                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
+                    className="input-line"
                     placeholder="e.g. Zara (optional)"
                   />
                   <FieldError message={fieldErrors.brand} />
@@ -2833,7 +2833,7 @@ export default function NewProductPage() {
                   type="text"
                   value={form.reference}
                   onChange={(e) => setForm({ ...form, reference: e.target.value })}
-                  className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
+                  className="input-line"
                   placeholder="SKU or internal reference"
                 />
               </div>
@@ -2845,7 +2845,7 @@ export default function NewProductPage() {
                   required
                   value={form.price}
                   onChange={(e) => setForm({ ...form, price: e.target.value })}
-                  className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
+                  className="input-line"
                   placeholder="0.00"
                 />
                 <FieldError message={fieldErrors.price} />
@@ -2870,7 +2870,7 @@ export default function NewProductPage() {
                     onFocus={() => setCategoryDropdownOpen(true)}
                     onBlur={() => setTimeout(() => setCategoryDropdownOpen(false), 150)}
                     placeholder="Type to search categories..."
-                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
+                    className="input-line"
                   />
                   {categoryDropdownOpen && filteredCategoryOptions.length > 0 && (
                     <div className="absolute z-20 mt-0.5 w-full border border-border bg-bg-card shadow-lg max-h-52 overflow-y-auto">
@@ -2936,7 +2936,7 @@ export default function NewProductPage() {
                   </div>
                 </div>
 
-                {/* Per-colorway generation cards — only shown once a model is picked */}
+                {/* Per-colorway generation cards â€” only shown once a model is picked */}
                 {selectedModelId && !isStoreOwner && (
                   <div className="mt-4 flex items-start gap-3 overflow-x-auto pb-2">
                     {colorways.map((cw, cwIndex) => (
@@ -3010,7 +3010,7 @@ export default function NewProductPage() {
             <button
               type="submit"
               disabled={loading}
-              className="bg-accent text-bg-primary px-8 py-3 text-xs font-semibold tracking-wide uppercase disabled:opacity-50"
+              className="bg-text-primary text-bg-primary px-8 py-3 text-xs font-semibold tracking-wide uppercase disabled:opacity-50"
             >
               {loading ? "Creating..." : "Create Product"}
             </button>
@@ -3053,7 +3053,7 @@ export default function NewProductPage() {
               required
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
+              className="input-line"
               placeholder="e.g. Vintage Denim Jacket"
             />
             <FieldError message={fieldErrors.name} />
@@ -3069,7 +3069,7 @@ export default function NewProductPage() {
                       productType: e.target.value as ProductType,
                     }))
                   }
-                  className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
+                  className="input-line"
                 >
                   <option value="fashion">Fashion (Clothes & Shoes)</option>
                   <option value="perfume">Perfume</option>
@@ -3083,7 +3083,7 @@ export default function NewProductPage() {
                   type="text"
                   value={form.brand}
                   onChange={(e) => setForm({ ...form, brand: e.target.value })}
-                  className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
+                  className="input-line"
                   placeholder={isThriftStoreOwner ? "Original brand, e.g. Zara (optional)" : "Brand name, e.g. Nike"}
                 />
                 <FieldError message={fieldErrors.brand} />
@@ -3095,7 +3095,7 @@ export default function NewProductPage() {
                 type="text"
                 value={form.reference}
                 onChange={(e) => setForm({ ...form, reference: e.target.value })}
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
+                className="input-line"
                 placeholder="SKU or internal reference"
               />
             </div>
@@ -3107,7 +3107,7 @@ export default function NewProductPage() {
                 required
                 value={form.price}
                 onChange={(e) => setForm({ ...form, price: e.target.value })}
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
+                className="input-line"
                 placeholder="0.00"
               />
               <FieldError message={fieldErrors.price} />
@@ -3132,7 +3132,7 @@ export default function NewProductPage() {
                   onFocus={() => setCategoryDropdownOpen(true)}
                   onBlur={() => setTimeout(() => setCategoryDropdownOpen(false), 150)}
                   placeholder="Type to search categories..."
-                  className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm focus:border-accent transition-colors"
+                  className="input-line"
                 />
                 {categoryDropdownOpen && filteredCategoryOptions.length > 0 && (
                   <div className="absolute z-20 mt-0.5 w-full border border-border bg-bg-card shadow-lg max-h-52 overflow-y-auto">
@@ -3166,7 +3166,7 @@ export default function NewProductPage() {
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                 rows={4}
-                className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm resize-none"
+                className="input-line resize-none"
                 placeholder="Describe fit, materials, condition, and any notable details"
             />
             </div>
@@ -3187,7 +3187,7 @@ export default function NewProductPage() {
                     type="text"
                     value={form.cloneSourceName}
                     onChange={(e) => setForm({ ...form, cloneSourceName: e.target.value })}
-                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                    className="input-line"
                     placeholder="e.g. Bleu de Chanel"
                   />
                   <FieldError message={fieldErrors.cloneSourceName} />
@@ -3265,7 +3265,7 @@ export default function NewProductPage() {
                     type="text"
                     value={draftVariantRow.size}
                     onChange={(e) => setVariantDraft((current) => ({ ...current, size: e.target.value }))}
-                    className="w-full bg-bg-card border border-border px-3 py-2 text-sm focus:border-accent transition-colors"
+                    className="w-full bg-bg-card border border-border px-3 py-2 text-sm focus:border-text-primary transition-colors"
                     placeholder="Size, e.g. 42"
                   />
                   <input
@@ -3273,7 +3273,7 @@ export default function NewProductPage() {
                     min="0"
                     value={draftVariantRow.stock}
                     onChange={(e) => setVariantDraft((current) => ({ ...current, stock: e.target.value }))}
-                    className="w-full bg-bg-card border border-border px-3 py-2 text-sm focus:border-accent transition-colors"
+                    className="w-full bg-bg-card border border-border px-3 py-2 text-sm focus:border-text-primary transition-colors"
                     placeholder="Stock"
                   />
                   <div className="flex flex-wrap items-center gap-2">
@@ -3348,7 +3348,7 @@ export default function NewProductPage() {
                               current.map((item) => (item.id === row.id ? { ...item, size: e.target.value } : item))
                             )
                           }
-                          className="w-full bg-bg-secondary border border-border px-3 py-2 text-sm focus:border-accent transition-colors"
+                          className="w-full border-0 border-b border-border bg-transparent px-1 py-2 text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
                           placeholder="Size"
                         />
                         <input
@@ -3360,7 +3360,7 @@ export default function NewProductPage() {
                               current.map((item) => (item.id === row.id ? { ...item, stock: e.target.value } : item))
                             )
                           }
-                          className="w-full bg-bg-secondary border border-border px-3 py-2 text-sm focus:border-accent transition-colors"
+                          className="w-full border-0 border-b border-border bg-transparent px-1 py-2 text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
                           placeholder="Stock"
                         />
                         <div className="flex flex-wrap items-center gap-2">
@@ -3421,7 +3421,7 @@ export default function NewProductPage() {
                           className="shrink-0 border border-border px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-text-secondary transition-colors hover:border-accent hover:text-accent"
                           aria-label={`Remove variant ${index + 1}`}
                           >
-                          ×
+                          Ã—
                         </button>
                       </div>
                     ))}
@@ -3444,7 +3444,7 @@ export default function NewProductPage() {
                 aria-label="Close image preview"
                 className="absolute right-0 top-0 z-10 h-9 w-9 border border-white/30 bg-black/60 text-xl leading-none text-white transition-colors hover:bg-black"
               >
-                ×
+                Ã—
               </button>
               <div className="flex max-h-[92vh] items-center justify-center bg-bg-card p-4">
                 <img
@@ -3548,7 +3548,7 @@ export default function NewProductPage() {
                   <select
                     value={form.tag}
                     onChange={(e) => setForm({ ...form, tag: e.target.value })}
-                    className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                    className="input-line"
                   >
                     <option value="">None</option>
                     <option value="NEW">NEW</option>
@@ -3562,7 +3562,7 @@ export default function NewProductPage() {
                         min={1}
                         value={form.newTagDurationDays}
                         onChange={(e) => setForm({ ...form, newTagDurationDays: e.target.value })}
-                        className="w-full bg-bg-secondary border border-border px-4 py-3 text-sm"
+                        className="input-line"
                         placeholder="3 days"
                       />
                     </div>
@@ -3643,7 +3643,7 @@ export default function NewProductPage() {
                       aria-label="Cancel enhancement"
                       className="inline-flex h-9 w-9 items-center justify-center border border-border text-xs text-text-secondary hover:bg-bg-hover"
                     >
-                      ×
+                      Ã—
                     </button>
                   )}
                   <button
@@ -3740,7 +3740,7 @@ export default function NewProductPage() {
                       aria-label="Cancel generation"
                       className="inline-flex h-9 w-9 items-center justify-center border border-border text-xs text-text-secondary hover:bg-bg-hover"
                     >
-                      ×
+                      Ã—
                     </button>
                   )}
                   <button
@@ -3794,7 +3794,7 @@ export default function NewProductPage() {
           <button
             type="submit"
             disabled={loading}
-            className="bg-accent text-bg-primary px-8 py-3 text-xs font-semibold tracking-wide uppercase disabled:opacity-50"
+            className="bg-text-primary text-bg-primary px-8 py-3 text-xs font-semibold tracking-wide uppercase disabled:opacity-50"
           >
             {loading ? "Creating..." : "Create Product"}
           </button>

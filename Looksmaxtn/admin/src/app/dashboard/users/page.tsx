@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -161,8 +161,8 @@ export default function UsersPage() {
   };
 
   const renderSortIndicator = (key: SortKey) => {
-    if (sortKey !== key) return <span className="text-[9px] text-text-secondary/60">↕</span>;
-    return <span className="text-[9px] text-accent">{sortDirection === "asc" ? "↑" : "↓"}</span>;
+    if (sortKey !== key) return <span className="text-[9px] text-text-secondary/60">â†•</span>;
+    return <span className="text-[9px] text-accent">{sortDirection === "asc" ? "â†‘" : "â†“"}</span>;
   };
 
   const normalizedSearch = deferredSearch.trim();
@@ -179,12 +179,12 @@ export default function UsersPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by name, email, city, phone, role, or status..."
-          className="w-full bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
+          className="input-line"
         />
         <select
           value={roleFilter}
           onChange={(e) => setRoleFilter(e.target.value)}
-          className="w-full bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
+          className="input-line"
         >
           <option value="all">All roles</option>
           <option value="user">Users</option>
@@ -193,7 +193,7 @@ export default function UsersPage() {
         <select
           value={accessFilter}
           onChange={(e) => setAccessFilter(e.target.value)}
-          className="w-full bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-accent transition-colors"
+          className="input-line"
         >
           <option value="all">All access</option>
           <option value="verified">Verified</option>
@@ -282,7 +282,7 @@ export default function UsersPage() {
                             ? "text-warning bg-warning/10"
                             : u.emailVerified === false
                             ? "text-warning bg-warning/10"
-                            : "text-[#6b6055] bg-[#f1ede8]"
+                            : "bg-bg-secondary text-text-secondary"
                       }`}
                     >
                       {u.isBlocked
@@ -296,11 +296,11 @@ export default function UsersPage() {
                   </td>
                   <td className="px-4 py-3 text-xs text-text-secondary">
                     {u.role === "store_owner"
-                      ? `${u.storeName || "—"}${u.storeType ? ` · ${u.storeType}` : ""}`
-                      : "—"}
+                      ? `${u.storeName || "â€”"}${u.storeType ? ` Â· ${u.storeType}` : ""}`
+                      : "â€”"}
                   </td>
                   <td className="px-4 py-3 text-xs text-text-secondary">
-                    {u.address?.city ? `${u.address.city}, ${u.address.state}` : "—"}
+                    {u.address?.city ? `${u.address.city}, ${u.address.state}` : "â€”"}
                   </td>
                   <td className="px-4 py-3 text-xs text-text-secondary">
                     {new Date(u.createdAt).toLocaleDateString()}
@@ -317,7 +317,7 @@ export default function UsersPage() {
                         <button
                           onClick={() => handleToggleBlock(u)}
                           className={`text-[10px] uppercase font-medium cursor-pointer ${
-                            u.isBlocked ? "text-[#6b6055] hover:text-[#5a4f46]" : "text-warning hover:text-warning/80"
+                            u.isBlocked ? "text-text-secondary hover:text-text-primary" : "text-warning hover:text-warning/80"
                           }`}
                         >
                           {u.isBlocked ? "Unblock" : "Block"}
