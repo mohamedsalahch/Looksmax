@@ -1,12 +1,7 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import { withAuthRequest } from "@/lib/authClient";
-
-const storeTypes = [
-  { value: "retail", label: "Retail Store" },
-  { value: "thrift", label: "Thrift Store" },
-] as const;
 
 const categoryLabels: Record<string, string> = {
   clothes: "Clothes",
@@ -14,12 +9,17 @@ const categoryLabels: Record<string, string> = {
   accessories: "Accessories",
 };
 
+const statusConfig: Record<string, { label: string; color: string }> = {
+  pending:  { label: "Pending Review", color: "var(--warning)" },
+  approved: { label: "Approved",       color: "var(--success)" },
+  rejected: { label: "Rejected",       color: "var(--danger)"  },
+};
+
 export default function StoreDetailsPage() {
   const [form, setForm] = useState({
     name: "",
     storeName: "",
     email: "",
-    storeType: "retail" as "thrift" | "retail",
     address: "",
     phoneNumber: "",
     additionalInformation: "",
@@ -30,8 +30,6 @@ export default function StoreDetailsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const fieldClass =
-    "w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm transition-colors placeholder:text-text-secondary/70 focus:border-foreground focus:outline-none";
 
   useEffect(() => {
     let cancelled = false;
@@ -41,14 +39,12 @@ export default function StoreDetailsPage() {
       .then((res) => res.json())
       .then((data) => {
         if (cancelled) return;
-
         const store = data.store || {};
         const user = data.user || {};
         setForm({
           name: store.ownerName || user.name || "",
           storeName: store.storeName || user.storeName || "",
           email: store.email || user.email || "",
-          storeType: store.storeType || user.storeType || "retail",
           address: store.address || "",
           phoneNumber: store.phoneNumber || "",
           additionalInformation: store.additionalInformation || "",
@@ -63,9 +59,7 @@ export default function StoreDetailsPage() {
         if (!cancelled) setLoading(false);
       });
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -104,185 +98,158 @@ export default function StoreDetailsPage() {
   };
 
   if (loading) {
-    return <p className="text-xs text-text-secondary animate-pulse">Loading store details...</p>;
+    return (
+      <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.3em] text-text-secondary animate-pulse">
+        <span className="inline-block h-px w-8 bg-border" />
+        Loading store details
+      </div>
+    );
   }
 
+  const statusKey = storeApprovalStatus ?? "approved";
+  const status = statusConfig[statusKey] ?? statusConfig.approved;
+
   return (
-    <div className="max-w-2xl">
-      <div className="mb-12 text-right">
-        <p className="text-xs uppercase tracking-[0.3em] text-text-secondary mb-3">Store Owner</p>
-        <h1 className="text-3xl md:text-4xl font-semibold tracking-wide uppercase mb-4">
-          Store Details
-        </h1>
-        <div className="w-16 h-px bg-foreground ml-auto mb-6" />
-        <p className="text-sm text-text-secondary max-w-lg ml-auto leading-relaxed">
-          Update your store profile. Any change sends the store back to pending review.
-        </p>
-      </div>
+    <div className="max-w-2xl space-y-10">
 
-      <div className="mb-6 text-xs text-text-secondary uppercase tracking-[0.22em]">
-        Current status: <span className="text-foreground">{storeApprovalStatus || "approved"}</span>
-      </div>
+      {/* ── Page header ── */}
+      <div className="flex items-start justify-between gap-6">
+        <div className="space-y-1">
+          <p className="label-meta">Store Owner</p>
+          <h1 className="text-3xl font-semibold uppercase tracking-wide text-text-primary">
+            Store Details
+          </h1>
+        </div>
 
-      <div className="mb-8 border border-border-color bg-bg-secondary/40 px-4 py-4 text-xs">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <p className="mb-1 uppercase tracking-wider text-text-secondary">Selected Categories</p>
-            <div className="flex flex-wrap gap-2">
-              {storeCategories.length > 0 ? (
-                storeCategories.map((category) => (
-                  <span
-                    key={category}
-                    className="border border-border-color px-2 py-1 uppercase tracking-wider text-text-primary"
-                  >
-                    {categoryLabels[category] || category}
-                  </span>
-                ))
-              ) : (
-                <span className="text-text-secondary">Not provided</span>
-              )}
-            </div>
-          </div>
-          <div>
-            <p className="mb-1 uppercase tracking-wider text-text-secondary">Selected Store Type</p>
-            <p className="text-text-primary">
-              {form.storeType === "thrift" ? "Thrift Store" : "Retail Store"}
-            </p>
-          </div>
+        {/* Status badge */}
+        <div
+          className="mt-1 border px-3 py-1.5 text-[10px] uppercase tracking-[0.22em] font-medium"
+          style={{ borderColor: status.color, color: status.color }}
+        >
+          {status.label}
         </div>
       </div>
 
+      <div className="h-px bg-border" />
+
+      {/* ── Categories info card ── */}
+      <div className="card">
+        <p className="label-meta mb-3">Selected Categories</p>
+        <div className="flex flex-wrap gap-2">
+          {storeCategories.length > 0 ? (
+            storeCategories.map((cat) => (
+              <span
+                key={cat}
+                className="bg-text-primary text-bg-primary px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] font-medium"
+              >
+                {categoryLabels[cat] || cat}
+              </span>
+            ))
+          ) : (
+            <span className="text-xs text-text-secondary">Not provided</span>
+          )}
+        </div>
+      </div>
+
+      {/* ── Feedback banners ── */}
       {error && (
-        <div className="mb-6 border border-[#430C05] bg-[#faf3f2] px-4 py-3 text-xs text-[#430C05]">
+        <div className="border border-danger/40 bg-danger/5 px-4 py-3 text-xs text-danger">
           {error}
         </div>
       )}
       {success && (
-        <div className="mb-6 border border-border bg-bg-secondary px-4 py-3 text-xs text-text-secondary">
+        <div className="border border-success/40 bg-success/5 px-4 py-3 text-xs text-success">
           {success}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {/* ── Form ── */}
+      <form onSubmit={handleSubmit} className="space-y-8">
+
+        {/* Row 1: owner + store name */}
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <div>
-            <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
-              Owner Name
-            </label>
+            <label className="label-meta block mb-2">Owner Name</label>
             <input
               type="text"
               required
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className={fieldClass}
+              className="input-line"
               placeholder="Store owner name"
             />
           </div>
           <div>
-            <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
-              Store Name
-            </label>
+            <label className="label-meta block mb-2">Store Name</label>
             <input
               type="text"
               required
               value={form.storeName}
               onChange={(e) => setForm({ ...form, storeName: e.target.value })}
-              className={fieldClass}
+              className="input-line"
               placeholder="Your store name"
             />
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Row 2: email + phone */}
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <div>
-            <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
-              Email
-            </label>
+            <label className="label-meta block mb-2">Email</label>
             <input
               type="email"
               required
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className={fieldClass}
+              className="input-line opacity-60 cursor-not-allowed"
               placeholder="store@email.com"
               readOnly
             />
           </div>
           <div>
-            <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
-              Phone Number
-            </label>
+            <label className="label-meta block mb-2">Phone Number</label>
             <input
               type="tel"
               value={form.phoneNumber}
               onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
-              className={fieldClass}
+              className="input-line"
               placeholder="+216 00 000 000"
             />
           </div>
         </div>
 
+        {/* Row 3: address */}
         <div>
-          <label className="block text-xs text-text-secondary uppercase tracking-wider mb-2">
-            Store Type
-          </label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {storeTypes.map((type) => (
-              <label
-                key={type.value}
-                className={`border px-4 py-3 text-xs uppercase tracking-wider cursor-pointer transition-colors ${
-                  form.storeType === type.value
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-border-color text-text-secondary hover:text-foreground"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="storeType"
-                  value={type.value}
-                  checked={form.storeType === type.value}
-                  onChange={(e) => setForm({ ...form, storeType: e.target.value as "thrift" | "retail" })}
-                  className="sr-only"
-                />
-                {type.label}
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
-            Address
-          </label>
+          <label className="label-meta block mb-2">Address</label>
           <input
             type="text"
             value={form.address}
             onChange={(e) => setForm({ ...form, address: e.target.value })}
-            className={fieldClass}
+            className="input-line"
             placeholder="Store address"
           />
         </div>
 
+        {/* Row 4: additional info */}
         <div>
-          <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
-            Additional Information
-          </label>
+          <label className="label-meta block mb-2">Additional Information</label>
           <textarea
             value={form.additionalInformation}
             onChange={(e) => setForm({ ...form, additionalInformation: e.target.value })}
-            rows={6}
-            className={`${fieldClass} resize-none`}
+            rows={5}
+            className="input-line resize-none"
             placeholder="Tell us more about your store, products, or brand..."
           />
         </div>
 
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            disabled={saving}
-            className="bg-black text-white px-6 py-3 text-xs font-medium tracking-wide uppercase hover:bg-black transition-colors cursor-pointer disabled:opacity-50"
-          >
-            {saving ? "Saving..." : "Save Store Details"}
+        <div className="h-px bg-border" />
+
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] uppercase tracking-[0.22em] text-text-secondary">
+            Changes trigger a new review cycle
+          </p>
+          <button type="submit" disabled={saving} className="btn-primary min-w-[160px]">
+            {saving ? "Saving..." : "Save Details"}
           </button>
         </div>
       </form>
