@@ -282,82 +282,86 @@ portrait orientation, exact 9:16 aspect ratio, full-body framing, model centered
 """
 
 SHOES_PROMPT_TEMPLATE = """
+Here’s a clean, fully rewritten version of your prompt with the background fix integrated and no internal contradictions:
+
 You are a professional product photography generator specialized in high-end fashion e-commerce.
 
 Your task is to generate a photorealistic image of the provided shoe.
 
---------------------------------
 PRODUCT REFERENCE:
 The shoe is provided as input image(s).
 
-REQUIREMENTS:
-- The product must match EXACTLY in:
-  - Color
-  - Shape
-  - Material
-  - Texture
-  - Stitching and details
+FIDELITY REQUIREMENTS (STRICT):
 
-- Do NOT modify or redesign the shoe
-- Do NOT add logos, patterns, or elements not present in the reference
-- Maintain absolute fidelity to the original product
+The product must match EXACTLY in:
+Color
+Shape
+Material
+Texture
+Stitching and all fine details
+Do NOT modify, redesign, or reinterpret the product in any way
+Do NOT add logos, patterns, or elements not present in the reference
+Preserve absolute visual accuracy to the original product
 
---------------------------------
-BACKGROUND (STRICT):
-- Use a minimalist studio background
-- EXACT color: soft light gray (similar to RGB ~240,240,240)
-- The background MUST remain identical across all generated images
-- No gradients, no texture, no shadows on the wall
-- Clean, uniform, and consistent
+BACKGROUND (LOCKED):
 
---------------------------------
+Use a minimalist studio background
+EXACT color: warm off-white (#F2EFEA)
+Background must remain perfectly uniform and flat
+No gradients, textures, noise, or wall shadows
+Background color must remain IDENTICAL across all generated images (no variation or reinterpretation)
+
 SURFACE:
-- Neutral studio floor matching the background tone
-- Subtle natural shadow under the shoe (soft and diffused)
 
---------------------------------
+Studio floor must match the background tone (#F2EFEA)
+Clean, seamless transition between floor and background
+Add a subtle, soft, diffused natural shadow under the shoe only
+
 LIGHTING:
-- Soft, diffused studio lighting
-- Even illumination across the product
-- No harsh shadows or strong highlights
-- Maintain consistent lighting across all outputs
 
---------------------------------
+Soft, diffused studio lighting
+Even illumination across the entire product
+No harsh shadows, hotspots, or strong reflections
+Lighting setup must remain consistent across all outputs
+
 COMPOSITION:
-- Center the shoe in the frame
-- Keep consistent framing and scale across all images
-- Ensure the product size remains the same between generations
 
---------------------------------
+Center the shoe in the frame
+Maintain consistent framing, spacing, and margins
+Product scale must remain identical across all generated images
+
 CAMERA:
-- Professional product photography
-- Sharp focus, high resolution
-- Natural perspective (no distortion)
 
---------------------------------
+Professional product photography setup
+Sharp focus, high resolution
+Natural perspective (no distortion, no wide-angle effects)
+
 STYLE:
-- Premium e-commerce aesthetic (Zara / COS / Nike product style)
 
---------------------------------
-CONSISTENCY (VERY IMPORTANT):
-If multiple images are generated:
+Premium fashion e-commerce aesthetic (clean, minimal, high-end)
 
-- Maintain EXACT SAME:
-  - Background color and lighting
-  - Camera angle and distance
-  - Product scale and positioning
+CONSISTENCY (CRITICAL):
+If generating multiple images, maintain EXACT SAME:
 
---------------------------------
+Background color (#F2EFEA)
+Lighting setup
+Camera angle and distance
+Product scale and positioning
+
 STRICT CONSTRAINTS:
-- No background changes
-- No color shifts
-- No added props
-- No reflections unless explicitly present
-- No artifacts or distortions
 
---------------------------------
-FINAL REQUIREMENT:
-portrait orientation, exact 9:16 aspect ratio, product centered, consistent margins, clean studio composition
+Do NOT change or reinterpret the background color (#F2EFEA)
+No color shifts or white balance drift
+No props or additional elements
+No reflections unless explicitly present in the reference
+No visual artifacts, distortions, or inconsistencies
+
+FINAL OUTPUT REQUIREMENTS:
+
+Portrait orientation
+Exact 9:16 aspect ratio
+Product perfectly centered
+Clean, balanced, studio composition
 """
 
 FRONT_VIEW_PROMPT_TEMPLATE = """

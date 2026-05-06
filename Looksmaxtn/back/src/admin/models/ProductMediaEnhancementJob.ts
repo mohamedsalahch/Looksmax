@@ -5,10 +5,14 @@ export interface IProductMediaEnhancementJob extends Document {
   sourceImages: {
     front: string;
     back: string;
+    left?: string;
+    right?: string;
   };
   images: {
     front: string;
     back: string;
+    left?: string;
+    right?: string;
   };
   errorMessage?: string;
   createdAt: Date;
@@ -25,10 +29,14 @@ const productMediaEnhancementJobSchema = new Schema<IProductMediaEnhancementJob>
     sourceImages: {
       front: { type: String, default: "" },
       back: { type: String, default: "" },
+      left: { type: String, default: "" },
+      right: { type: String, default: "" },
     },
     images: {
       front: { type: String, default: "" },
       back: { type: String, default: "" },
+      left: { type: String, default: "" },
+      right: { type: String, default: "" },
     },
     errorMessage: { type: String, default: "" },
   },

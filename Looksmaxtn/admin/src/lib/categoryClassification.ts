@@ -27,6 +27,17 @@ const ZONE_PREFIXES: Record<Exclude<CategoryZone, "other">, string> = {
   handbag: "handbag-",
 };
 
+function isFootwearSlug(slug: string): boolean {
+  return (
+    slug === "shoes" ||
+    slug === "footwear" ||
+    slug.startsWith("footwear-") ||
+    slug.endsWith("-footwear") ||
+    slug.endsWith("-shoes") ||
+    slug.startsWith("shoes-")
+  );
+}
+
 export function getCategoryAncestors<T extends ClassifiableCategory>(
   categories: T[],
   slug: string
@@ -62,6 +73,7 @@ export function getCategoryZone<T extends ClassifiableCategory>(
   if (!slug) return "other";
   const chain = getCategoryAncestors(categories, slug);
   for (const ancestor of chain) {
+    if (isFootwearSlug(ancestor.slug)) return "footwear";
     for (const [zone, prefix] of Object.entries(ZONE_PREFIXES)) {
       if (ancestor.slug.startsWith(prefix)) return zone as CategoryZone;
     }

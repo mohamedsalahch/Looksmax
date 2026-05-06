@@ -97,13 +97,21 @@ type Colorway = {
   frontPreview: string;
   backFile: File | null;
   backPreview: string;
+  leftFile: File | null;
+  leftPreview: string;
+  rightFile: File | null;
+  rightPreview: string;
   enhanceStatus: ColorwayEnhanceStatus;
   enhanceJobId: string;
   enhanceError: string;
   enhancedFrontUrl: string;
   enhancedBackUrl: string;
+  enhancedLeftUrl: string;
+  enhancedRightUrl: string;
   enhancedFrontFile: File | null;
   enhancedBackFile: File | null;
+  enhancedLeftFile: File | null;
+  enhancedRightFile: File | null;
   sizes: SizeRow[];
   generateStatus: ColorwayEnhanceStatus;
   generateJobId: string;
@@ -123,9 +131,13 @@ function createEmptyColorway(hex = ""): Colorway {
     hex,
     frontFile: null, frontPreview: "",
     backFile: null, backPreview: "",
+    leftFile: null, leftPreview: "",
+    rightFile: null, rightPreview: "",
     enhanceStatus: "idle", enhanceJobId: "", enhanceError: "",
     enhancedFrontUrl: "", enhancedBackUrl: "",
+    enhancedLeftUrl: "", enhancedRightUrl: "",
     enhancedFrontFile: null, enhancedBackFile: null,
+    enhancedLeftFile: null, enhancedRightFile: null,
     sizes: [{ id: generateId(), size: "", stock: "", conditionScore: "10" }],
     generateStatus: "idle", generateJobId: "", generateError: "",
     generatedImages: [],
@@ -686,24 +698,34 @@ function ColorwayGenerationCard({
   );
 }
 
+type ColorwayView = "front" | "back" | "left" | "right";
+
 function ColorwayCard({
-  colorway, index, canRemove, isThrift, showGenerationPanel, companionZones, companionTypeOptions, canGenerate, onRemove, onUpdate, onEnhance, onGenerate, onAddSize, onRemoveSize, onUpdateSize, onReset,
+  colorway, index, canRemove, isThrift, showGenerationPanel, companionZones, companionTypeOptions, canGenerate, requiredViews, onRemove, onUpdate, onEnhance, onGenerate, onAddSize, onRemoveSize, onUpdateSize, onReset,
 }: {
   colorway: Colorway; index: number; canRemove: boolean; isThrift: boolean;
   showGenerationPanel?: boolean;
   companionZones?: CompanionZone[];
   companionTypeOptions?: { top: { slug: string; name: string }[]; bottom: { slug: string; name: string }[]; footwear: { slug: string; name: string }[] };
   canGenerate?: boolean;
+  requiredViews?: ColorwayView[];
   onRemove: () => void; onUpdate: (patch: Partial<Colorway>) => void; onEnhance: () => void;
   onGenerate?: () => void;
   onAddSize: () => void; onRemoveSize: (sizeId: string) => void; onUpdateSize: (sizeId: string, patch: Partial<SizeRow>) => void; onReset: () => void;
 }) {
-  const frontInputId = `cw-front-${colorway.id}`;
-  const backInputId = `cw-back-${colorway.id}`;
+  const views: ColorwayView[] = requiredViews && requiredViews.length > 0 ? requiredViews : ["front", "back"];
   const colorInputRef = useRef<HTMLInputElement>(null);
   const [zoomedPreview, setZoomedPreview] = useState<string | null>(null);
-  const canEnhance = (Boolean(colorway.frontFile) || Boolean(colorway.frontPreview)) && (Boolean(colorway.backFile) || Boolean(colorway.backPreview));
   const hasColor = Boolean(colorway.hex.trim());
+
+  const fileKeyFor = (view: ColorwayView): "frontFile" | "backFile" | "leftFile" | "rightFile" =>
+    `${view}File` as "frontFile" | "backFile" | "leftFile" | "rightFile";
+  const previewKeyFor = (view: ColorwayView): "frontPreview" | "backPreview" | "leftPreview" | "rightPreview" =>
+    `${view}Preview` as "frontPreview" | "backPreview" | "leftPreview" | "rightPreview";
+
+  const canEnhance = views.every(
+    (view) => Boolean(colorway[fileKeyFor(view)]) || Boolean(colorway[previewKeyFor(view)])
+  );
 
   const handlePickColor = async () => {
     const EyeDropperCtor = (window as Window & { EyeDropper?: new () => { open: () => Promise<{ sRGBHex: string }> } }).EyeDropper;
@@ -713,15 +735,16 @@ function ColorwayCard({
     colorInputRef.current?.click();
   };
 
-  const handleFrontFile = (file: File | null) => {
+  const handleViewFile = (view: ColorwayView, file: File | null) => {
     const generating = colorway.generateStatus === "processing";
-    if (!file) { onUpdate({ frontFile: null, frontPreview: "", ...(generating ? {} : { enhanceStatus: "idle" as const, enhanceJobId: "" }) }); return; }
-    onUpdate({ frontFile: file, frontPreview: URL.createObjectURL(file), ...(generating ? {} : { enhanceStatus: "idle" as const, enhanceJobId: "" }) });
-  };
-  const handleBackFile = (file: File | null) => {
-    const generating = colorway.generateStatus === "processing";
-    if (!file) { onUpdate({ backFile: null, backPreview: "", ...(generating ? {} : { enhanceStatus: "idle" as const, enhanceJobId: "" }) }); return; }
-    onUpdate({ backFile: file, backPreview: URL.createObjectURL(file), ...(generating ? {} : { enhanceStatus: "idle" as const, enhanceJobId: "" }) });
+    const fileKey = fileKeyFor(view);
+    const previewKey = previewKeyFor(view);
+    const enhanceReset = generating ? {} : { enhanceStatus: "idle" as const, enhanceJobId: "" };
+    if (!file) {
+      onUpdate({ [fileKey]: null, [previewKey]: "", ...enhanceReset } as Partial<Colorway>);
+      return;
+    }
+    onUpdate({ [fileKey]: file, [previewKey]: URL.createObjectURL(file), ...enhanceReset } as Partial<Colorway>);
   };
 
   return (
@@ -767,18 +790,17 @@ function ColorwayCard({
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2">
-        {(["front", "back"] as const).map((slot) => {
-          const inputId = slot === "front" ? frontInputId : backInputId;
-          const preview = slot === "front" ? colorway.frontPreview : colorway.backPreview;
-          const handleFile = slot === "front" ? handleFrontFile : handleBackFile;
+        {views.map((slot) => {
+          const inputId = `cw-${slot}-${colorway.id}`;
+          const preview = colorway[previewKeyFor(slot)];
           return (
             <div key={slot} className="space-y-1">
               <p className="text-[9px] uppercase tracking-wider text-text-secondary">{slot}</p>
-              <input id={inputId} type="file" accept="image/*" className="hidden" onChange={(e) => handleFile(e.target.files?.[0] || null)} onClick={(e) => { e.currentTarget.value = ""; }} />
-              <div onClick={() => { if (preview) { setZoomedPreview(preview); } else { document.getElementById(inputId)?.click(); } }} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); handleFile(e.dataTransfer.files?.[0] || null); }} className={`aspect-[4/5] overflow-hidden rounded border border-dashed border-border bg-bg-secondary transition-colors flex items-center justify-center ${preview ? "cursor-zoom-in hover:border-accent/60" : "cursor-pointer hover:border-accent"}`}>
+              <input id={inputId} type="file" accept="image/*" className="hidden" onChange={(e) => handleViewFile(slot, e.target.files?.[0] || null)} onClick={(e) => { e.currentTarget.value = ""; }} />
+              <div onClick={() => { if (preview) { setZoomedPreview(preview); } else { document.getElementById(inputId)?.click(); } }} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); handleViewFile(slot, e.dataTransfer.files?.[0] || null); }} className={`aspect-[4/5] overflow-hidden rounded border border-dashed border-border bg-bg-secondary transition-colors flex items-center justify-center ${preview ? "cursor-zoom-in hover:border-accent/60" : "cursor-pointer hover:border-accent"}`}>
                 {preview ? <img src={preview} alt={slot} className="h-full w-full object-cover" /> : <span className="text-[8px] uppercase tracking-wider text-text-secondary/60">Upload</span>}
               </div>
-              {preview && <button type="button" onClick={() => handleFile(null)} className="text-[8px] uppercase tracking-wider text-danger/70 underline hover:text-danger hover:font-bold transition-colors">Clear</button>}
+              {preview && <button type="button" onClick={() => handleViewFile(slot, null)} className="text-[8px] uppercase tracking-wider text-danger/70 underline hover:text-danger hover:font-bold transition-colors">Clear</button>}
             </div>
           );
         })}
@@ -1002,7 +1024,11 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   });
   const [colorways, setColorways] = useState<Colorway[]>([createEmptyColorway()]);
   const generationAbortRef = useRef<AbortController | null>(null);
+  const hasHydratedProductRef = useRef(false);
+  const hasSyncedInitialCategoriesRef = useRef(false);
   const previousProductTypeRef = useRef<ProductType | null>(null);
+  const previousFashionSubtypeRef = useRef<FashionSubtype | null>(null);
+  const previousGenerationTargetRef = useRef<GenerationTarget | null>(null);
   const savedSnapshot = useRef<{
     form: typeof initialForm;
     images: ProductImage[];
@@ -1069,35 +1095,51 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const updateSizeRow = (colorwayId: string, sizeId: string, patch: Partial<SizeRow>) => setColorways((prev) => prev.map((c) => c.id === colorwayId ? { ...c, sizes: c.sizes.map((s) => s.id === sizeId ? { ...s, ...patch } : s) } : c));
   const resetColorway = (colorwayId: string) =>
     updateColorway(colorwayId, {
-      frontFile: null,
-      frontPreview: "",
-      backFile: null,
-      backPreview: "",
-      enhanceStatus: "idle",
-      enhanceJobId: "",
-      enhanceError: "",
-      enhancedFrontUrl: "",
-      enhancedBackUrl: "",
-      enhancedFrontFile: null,
-      enhancedBackFile: null,
-      generateStatus: "idle",
-      generateJobId: "",
-      generateError: "",
+      frontFile: null, frontPreview: "",
+      backFile: null, backPreview: "",
+      leftFile: null, leftPreview: "",
+      rightFile: null, rightPreview: "",
+      enhanceStatus: "idle", enhanceJobId: "", enhanceError: "",
+      enhancedFrontUrl: "", enhancedBackUrl: "",
+      enhancedLeftUrl: "", enhancedRightUrl: "",
+      enhancedFrontFile: null, enhancedBackFile: null,
+      enhancedLeftFile: null, enhancedRightFile: null,
+      generateStatus: "idle", generateJobId: "", generateError: "",
       generatedImages: [],
     });
 
   const handleEnhanceColorway = async (colorwayId: string) => {
     const cw = colorways.find((c) => c.id === colorwayId);
     if (!cw?.frontFile || !cw?.backFile) return;
+    const isShoes = selectedCategoryZone === "footwear";
+    if (isShoes && (!cw.leftFile || !cw.rightFile)) {
+      updateColorway(colorwayId, { enhanceStatus: "failed", enhanceError: "Please upload front, back, left, and right images first." });
+      return;
+    }
     updateColorway(colorwayId, { enhanceStatus: "processing", enhanceError: "", enhanceJobId: "" });
     try {
-      const [front, back] = await Promise.all([compressImageFile(cw.frontFile), compressImageFile(cw.backFile)]);
-      const body = new FormData();
-      body.append("front", front); body.append("back", back);
-      const res = await fetch("/api/products/enhance", withAuthRequest({ method: "POST", body }));
-      const data = await res.json();
-      if (!res.ok) { updateColorway(colorwayId, { enhanceStatus: "failed", enhanceError: data.error || "Unable to start enhancement." }); return; }
-      updateColorway(colorwayId, { enhanceJobId: data.job_id || "", enhanceStatus: data.status || "processing" });
+      if (isShoes) {
+        const [front, back, left, right] = await Promise.all([
+          compressImageFile(cw.frontFile),
+          compressImageFile(cw.backFile),
+          compressImageFile(cw.leftFile!),
+          compressImageFile(cw.rightFile!),
+        ]);
+        const body = new FormData();
+        body.append("front", front); body.append("back", back); body.append("left", left); body.append("right", right);
+        const res = await fetch("/api/products/enhance-shoes", withAuthRequest({ method: "POST", body }));
+        const data = await res.json();
+        if (!res.ok) { updateColorway(colorwayId, { enhanceStatus: "failed", enhanceError: data.error || "Unable to start enhancement." }); return; }
+        updateColorway(colorwayId, { enhanceJobId: data.job_id || "", enhanceStatus: data.status || "processing" });
+      } else {
+        const [front, back] = await Promise.all([compressImageFile(cw.frontFile), compressImageFile(cw.backFile)]);
+        const body = new FormData();
+        body.append("front", front); body.append("back", back);
+        const res = await fetch("/api/products/enhance", withAuthRequest({ method: "POST", body }));
+        const data = await res.json();
+        if (!res.ok) { updateColorway(colorwayId, { enhanceStatus: "failed", enhanceError: data.error || "Unable to start enhancement." }); return; }
+        updateColorway(colorwayId, { enhanceJobId: data.job_id || "", enhanceStatus: data.status || "processing" });
+      }
     } catch { updateColorway(colorwayId, { enhanceStatus: "failed", enhanceError: "Network error" }); }
   };
 
@@ -1113,8 +1155,24 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
             if (data.status === "completed") {
               const frontUrl: string = data.images?.front || "";
               const backUrl: string = data.images?.back || "";
-              Promise.all([frontUrl ? imageUrlToFile(frontUrl, "front-enhanced") : Promise.resolve(null), backUrl ? imageUrlToFile(backUrl, "back-enhanced") : Promise.resolve(null)])
-                .then(([frontFile, backFile]) => updateColorway(cw.id, { enhanceStatus: "completed", enhanceJobId: "", enhanceError: "", enhancedFrontUrl: frontUrl, enhancedBackUrl: backUrl, enhancedFrontFile: frontFile, enhancedBackFile: backFile, ...(frontUrl ? { frontPreview: frontUrl } : {}), ...(backUrl ? { backPreview: backUrl } : {}) }));
+              const leftUrl: string = data.images?.left || "";
+              const rightUrl: string = data.images?.right || "";
+              Promise.all([
+                frontUrl ? imageUrlToFile(frontUrl, "front-enhanced") : Promise.resolve(null),
+                backUrl ? imageUrlToFile(backUrl, "back-enhanced") : Promise.resolve(null),
+                leftUrl ? imageUrlToFile(leftUrl, "left-enhanced") : Promise.resolve(null),
+                rightUrl ? imageUrlToFile(rightUrl, "right-enhanced") : Promise.resolve(null),
+              ]).then(([frontFile, backFile, leftFile, rightFile]) => updateColorway(cw.id, {
+                enhanceStatus: "completed", enhanceJobId: "", enhanceError: "",
+                enhancedFrontUrl: frontUrl, enhancedBackUrl: backUrl,
+                enhancedLeftUrl: leftUrl, enhancedRightUrl: rightUrl,
+                enhancedFrontFile: frontFile, enhancedBackFile: backFile,
+                enhancedLeftFile: leftFile, enhancedRightFile: rightFile,
+                ...(frontUrl ? { frontPreview: frontUrl } : {}),
+                ...(backUrl ? { backPreview: backUrl } : {}),
+                ...(leftUrl ? { leftPreview: leftUrl } : {}),
+                ...(rightUrl ? { rightPreview: rightUrl } : {}),
+              }));
             } else if (data.status === "failed") { updateColorway(cw.id, { enhanceStatus: "failed", enhanceError: data.error || "Enhancement failed.", enhanceJobId: "" }); }
           }).catch(() => updateColorway(cw.id, { enhanceStatus: "failed", enhanceError: "Unable to poll enhancement status.", enhanceJobId: "" }));
       });
@@ -1187,7 +1245,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   }, [colorways]);
 
   useEffect(() => {
-    if (form.productType !== "fashion" || form.fashionSubtype !== "clothes") {
+    if (form.productType !== "fashion" || (form.fashionSubtype !== "clothes" && form.fashionSubtype !== "shoes")) {
       clearProductMediaEnhancement();
       return;
     }
@@ -1209,23 +1267,21 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           if (data.status === "completed") {
             const frontUrl = data.images?.front || "";
             const backUrl = data.images?.back || "";
+            const leftUrl = data.images?.left || "";
+            const rightUrl = data.images?.right || "";
             Promise.all([
               frontUrl ? imageUrlToFile(frontUrl, "front-enhanced") : Promise.resolve(null),
               backUrl ? imageUrlToFile(backUrl, "back-enhanced") : Promise.resolve(null),
+              leftUrl ? imageUrlToFile(leftUrl, "left-enhanced") : Promise.resolve(null),
+              rightUrl ? imageUrlToFile(rightUrl, "right-enhanced") : Promise.resolve(null),
             ])
-              .then(([frontFile, backFile]) => {
+              .then(([frontFile, backFile, leftFile, rightFile]) => {
                 if (frontUrl) {
                   setForm((current) => ({
                     ...current,
-                    originPictures: {
-                      ...current.originPictures,
-                      front: frontUrl,
-                    },
+                    originPictures: { ...current.originPictures, front: frontUrl },
                   }));
-                  setOriginPictureFiles((current) => ({
-                    ...current,
-                    front: null,
-                  }));
+                  setOriginPictureFiles((current) => ({ ...current, front: null }));
                   if (frontFile) {
                     setGenerationInputs((current) => ({
                       ...current,
@@ -1236,19 +1292,39 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 if (backUrl) {
                   setForm((current) => ({
                     ...current,
-                    originPictures: {
-                      ...current.originPictures,
-                      back: backUrl,
-                    },
+                    originPictures: { ...current.originPictures, back: backUrl },
                   }));
-                  setOriginPictureFiles((current) => ({
-                    ...current,
-                    back: null,
-                  }));
+                  setOriginPictureFiles((current) => ({ ...current, back: null }));
                   if (backFile) {
                     setGenerationInputs((current) => ({
                       ...current,
                       back: { file: backFile, previewUrl: backUrl },
+                    }));
+                  }
+                }
+                if (leftUrl) {
+                  setForm((current) => ({
+                    ...current,
+                    originPictures: { ...current.originPictures, left: leftUrl },
+                  }));
+                  setOriginPictureFiles((current) => ({ ...current, left: null }));
+                  if (leftFile) {
+                    setGenerationInputs((current) => ({
+                      ...current,
+                      left: { file: leftFile, previewUrl: leftUrl },
+                    }));
+                  }
+                }
+                if (rightUrl) {
+                  setForm((current) => ({
+                    ...current,
+                    originPictures: { ...current.originPictures, right: rightUrl },
+                  }));
+                  setOriginPictureFiles((current) => ({ ...current, right: null }));
+                  if (rightFile) {
+                    setGenerationInputs((current) => ({
+                      ...current,
+                      right: { file: rightFile, previewUrl: rightUrl },
                     }));
                   }
                 }
@@ -1277,6 +1353,12 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   }, [productMediaJobId, productMediaStatus]);
 
   useEffect(() => {
+    hasHydratedProductRef.current = false;
+    hasSyncedInitialCategoriesRef.current = false;
+    previousProductTypeRef.current = null;
+    previousFashionSubtypeRef.current = null;
+    previousGenerationTargetRef.current = null;
+
     fetch("/api/categories", withAuthRequest())
       .then((r) => r.json())
       .then((d) => setCategories(d.categories || []));
@@ -1461,10 +1543,25 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           file: null,
           kind: "source" as const,
         }));
-const loadedCategorySlugs = p.categories || [];
-        const hasPersistedProductMedia = loadedProductMedia.length > 0 || Boolean(p.modelId);
+        const loadedCategorySlugs = p.categories || [];
+        const loadedGenerationInputs: GenerationInputs = {
+          front: p.originPictures?.front ? { file: null, previewUrl: p.originPictures.front } : createEmptySlot(),
+          back: p.originPictures?.back ? { file: null, previewUrl: p.originPictures.back } : createEmptySlot(),
+          left: p.originPictures?.left ? { file: null, previewUrl: p.originPictures.left } : createEmptySlot(),
+          right: p.originPictures?.right ? { file: null, previewUrl: p.originPictures.right } : createEmptySlot(),
+        };
+        const hasPersistedProductMedia =
+          loadedProductMedia.length > 0 ||
+          Boolean(p.modelId) ||
+          Boolean(
+            loadedGenerationInputs.front.previewUrl ||
+              loadedGenerationInputs.back.previewUrl ||
+              loadedGenerationInputs.left.previewUrl ||
+              loadedGenerationInputs.right.previewUrl
+          );
         setGeneratedModelMedia(loadedProductMedia);
         setShowProductMediaSection(hasPersistedProductMedia);
+        setGenerationInputs(loadedGenerationInputs);
         if (p.modelId) setSelectedModelId(p.modelId);
         const globalCs = (p.companionSettings as Record<string, { topType?: string; topColor?: { name: string; hex: string } | null; bottomType?: string; bottomColor?: { name: string; hex: string } | null; footwearType?: string; footwearColor?: { name: string; hex: string } | null; }> | null)?.["__global__"];
         if (globalCs) {
@@ -1480,10 +1577,11 @@ const loadedCategorySlugs = p.categories || [];
           form: loadedFormData,
           images: loadedImages,
           generatedModelMedia: loadedProductMedia,
-          generationInputs: initialGenerationInputs,
+          generationInputs: loadedGenerationInputs,
           initialCategorySlugs: loadedCategorySlugs,
           showProductMediaSection: hasPersistedProductMedia,
         };
+        hasHydratedProductRef.current = true;
       })
       .catch(() => {})
       .finally(() => setFetching(false));
@@ -1499,6 +1597,7 @@ const loadedCategorySlugs = p.categories || [];
     const leafSlug = path.greatGrandchild || path.grandchild || path.child || path.parent;
     const leaf = categories.find((c) => c.slug === leafSlug);
     if (leaf) setCategorySearch(getCategoryPathLabel(categories, leaf));
+    hasSyncedInitialCategoriesRef.current = true;
   }, [categories, initialCategorySlugs]);
 
   const selectedCategorySlug =
@@ -1953,8 +2052,22 @@ const loadedCategorySlugs = p.categories || [];
   };
 
   useEffect(() => {
+    if (!hasHydratedProductRef.current || !hasSyncedInitialCategoriesRef.current) return;
+
     const previousProductType = previousProductTypeRef.current;
+    const previousFashionSubtype = previousFashionSubtypeRef.current;
+    const previousGenerationTarget = previousGenerationTargetRef.current;
     previousProductTypeRef.current = form.productType;
+    previousFashionSubtypeRef.current = generationRequirements.fashionSubtype;
+    previousGenerationTargetRef.current = generationRequirements.generationTarget;
+
+    const isFirstHydratedRun =
+      previousProductType === null &&
+      previousFashionSubtype === null &&
+      previousGenerationTarget === null;
+    if (isFirstHydratedRun) {
+      return;
+    }
 
     if (form.productType !== "fashion") {
       setGenerationTarget("");
@@ -1983,21 +2096,30 @@ const loadedCategorySlugs = p.categories || [];
       return { ...current, fashionSubtype: generationRequirements.fashionSubtype as FashionSubtype };
     });
 
-    if (!previousProductType || previousProductType === form.productType) {
-      return;
-    }
+    const fashionSubtypeChanged =
+      previousFashionSubtype !== null &&
+      previousFashionSubtype !== generationRequirements.fashionSubtype;
+    const generationTargetChanged =
+      previousGenerationTarget !== null &&
+      previousGenerationTarget !== generationRequirements.generationTarget;
 
-    setSelectedModelId("");
-    setCompanionTopType("");
-    setCompanionBottomType("");
-    setFootwearType("");
-    setSecondaryTopColor(null);
-    setSecondaryBottomColor(null);
-    setShoesColor(null);
-    setGenerationInputs(initialGenerationInputs);
-    setOriginPictureFiles(emptyOriginPictureFiles);
-    setGeneratedModelMedia([]);
-    setShowProductMediaSection(false);
+    if (
+      (previousProductType && previousProductType !== form.productType) ||
+      fashionSubtypeChanged ||
+      generationTargetChanged
+    ) {
+      setSelectedModelId("");
+      setCompanionTopType("");
+      setCompanionBottomType("");
+      setFootwearType("");
+      setSecondaryTopColor(null);
+      setSecondaryBottomColor(null);
+      setShoesColor(null);
+      setGenerationInputs(initialGenerationInputs);
+      setOriginPictureFiles(emptyOriginPictureFiles);
+      setGeneratedModelMedia([]);
+      setShowProductMediaSection(false);
+    }
   }, [form.productType, generationRequirements.fashionSubtype, generationRequirements.generationTarget]);
 
   const canGenerate =
@@ -2187,8 +2309,15 @@ const loadedCategorySlugs = p.categories || [];
       return;
     }
 
+    const isShoes = form.fashionSubtype === "shoes";
+
     if (!generationInputs.front.file || !generationInputs.back.file) {
-      setProductMediaError("Please upload front and back images first.");
+      setProductMediaError(isShoes ? "Please upload front, back, left, and right images first." : "Please upload front and back images first.");
+      return;
+    }
+
+    if (isShoes && (!generationInputs.left.file || !generationInputs.right.file)) {
+      setProductMediaError("Please upload front, back, left, and right images first.");
       return;
     }
 
@@ -2196,26 +2325,53 @@ const loadedCategorySlugs = p.categories || [];
     setProductMediaStatus("processing");
 
     try {
-      const [frontFile, backFile] = await Promise.all([
-        compressImageFile(generationInputs.front.file),
-        compressImageFile(generationInputs.back.file),
-      ]);
+      if (isShoes) {
+        const [frontFile, backFile, leftFile, rightFile] = await Promise.all([
+          compressImageFile(generationInputs.front.file),
+          compressImageFile(generationInputs.back.file),
+          compressImageFile(generationInputs.left.file!),
+          compressImageFile(generationInputs.right.file!),
+        ]);
 
-      const body = new FormData();
-      body.append("front", frontFile);
-      body.append("back", backFile);
+        const body = new FormData();
+        body.append("front", frontFile);
+        body.append("back", backFile);
+        body.append("left", leftFile);
+        body.append("right", rightFile);
 
-      const res = await fetch("/api/products/enhance", withAuthRequest({ method: "POST", body }));
-      const data = await res.json();
+        const res = await fetch("/api/products/enhance-shoes", withAuthRequest({ method: "POST", body }));
+        const data = await res.json();
 
-      if (!res.ok) {
-        setProductMediaStatus("failed");
-        setProductMediaError(data.error || "Unable to start product media enhancement.");
-        return;
+        if (!res.ok) {
+          setProductMediaStatus("failed");
+          setProductMediaError(data.error || "Unable to start shoe image enhancement.");
+          return;
+        }
+
+        setProductMediaJobId(data.job_id || "");
+        setProductMediaStatus(data.status || "processing");
+      } else {
+        const [frontFile, backFile] = await Promise.all([
+          compressImageFile(generationInputs.front.file),
+          compressImageFile(generationInputs.back.file),
+        ]);
+
+        const body = new FormData();
+        body.append("front", frontFile);
+        body.append("back", backFile);
+
+        const res = await fetch("/api/products/enhance", withAuthRequest({ method: "POST", body }));
+        const data = await res.json();
+
+        if (!res.ok) {
+          setProductMediaStatus("failed");
+          setProductMediaError(data.error || "Unable to start product media enhancement.");
+          return;
+        }
+
+        setProductMediaJobId(data.job_id || "");
+        setProductMediaStatus(data.status || "processing");
       }
-
-      setProductMediaJobId(data.job_id || "");
-      setProductMediaStatus(data.status || "processing");
     } catch {
       setProductMediaStatus("failed");
       setProductMediaError("Network error");
@@ -2948,6 +3104,7 @@ const loadedCategorySlugs = p.categories || [];
                   companionZones={companionZones}
                   companionTypeOptions={companionTypeOptions}
                   canGenerate={canGenerateColorway(cw)}
+                  requiredViews={selectedCategoryZone === "footwear" ? ["front", "back", "left", "right"] : ["front", "back"]}
                   onRemove={() => removeColorway(cw.id)}
                   onUpdate={(patch) => updateColorway(cw.id, patch)}
                   onEnhance={() => void handleEnhanceColorway(cw.id)}

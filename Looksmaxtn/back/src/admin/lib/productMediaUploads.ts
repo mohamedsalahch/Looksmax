@@ -57,13 +57,13 @@ async function persistBuffer(buffer: Buffer, filenameBase: string, extension: st
   return saveBuffer(buffer, filenameBase, extension);
 }
 
-export async function saveProductMediaSourceImage(file: File, view: "front" | "back") {
+export async function saveProductMediaSourceImage(file: File, view: "front" | "back" | "left" | "right") {
   const bytes = await file.arrayBuffer();
   const buffer = Buffer.from(bytes);
   return persistBuffer(buffer, `${view}-${sanitizeBaseName(file.name)}`, extensionFromType(file.type, file.name));
 }
 
-export async function saveProductMediaResultBase64(base64: string, view: "front" | "back") {
+export async function saveProductMediaResultBase64(base64: string, view: "front" | "back" | "left" | "right") {
   const dataUrl = base64.startsWith("data:") ? base64 : `data:image/png;base64,${base64}`;
   const [meta, payload] = dataUrl.split(",");
   const mime = /data:(.*?);base64/.exec(meta)?.[1] || "image/png";

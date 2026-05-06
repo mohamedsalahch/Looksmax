@@ -86,7 +86,8 @@ export async function proxy(request: NextRequest) {
     !isPublicAdminPath(pathname) &&
     pathname !== "/api/admin/generated-images/webhook" &&
     pathname !== "/api/admin/products/generate/webhook" &&
-    pathname !== "/api/admin/products/enhance/webhook"
+    pathname !== "/api/admin/products/enhance/webhook" &&
+    pathname !== "/api/admin/products/enhance-shoes/webhook"
   ) {
     const token =
       getBearerToken(request.headers.get("authorization")) ||

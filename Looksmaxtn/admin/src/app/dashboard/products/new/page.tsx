@@ -104,13 +104,21 @@ type Colorway = {
   frontPreview: string;
   backFile: File | null;
   backPreview: string;
+  leftFile: File | null;
+  leftPreview: string;
+  rightFile: File | null;
+  rightPreview: string;
   enhanceStatus: ColorwayEnhanceStatus;
   enhanceJobId: string;
   enhanceError: string;
   enhancedFrontUrl: string;
   enhancedBackUrl: string;
+  enhancedLeftUrl: string;
+  enhancedRightUrl: string;
   enhancedFrontFile: File | null;
   enhancedBackFile: File | null;
+  enhancedLeftFile: File | null;
+  enhancedRightFile: File | null;
   sizes: SizeRow[];
   // Generation
   generateStatus: ColorwayEnhanceStatus;
@@ -237,13 +245,21 @@ function createEmptyColorway(hex = ""): Colorway {
     frontPreview: "",
     backFile: null,
     backPreview: "",
+    leftFile: null,
+    leftPreview: "",
+    rightFile: null,
+    rightPreview: "",
     enhanceStatus: "idle",
     enhanceJobId: "",
     enhanceError: "",
     enhancedFrontUrl: "",
     enhancedBackUrl: "",
+    enhancedLeftUrl: "",
+    enhancedRightUrl: "",
     enhancedFrontFile: null,
     enhancedBackFile: null,
+    enhancedLeftFile: null,
+    enhancedRightFile: null,
     sizes: [{ id: generateId(), size: "", stock: "", conditionScore: "10" }],
     generateStatus: "idle",
     generateJobId: "",
@@ -715,6 +731,8 @@ function ColorwayGenerationCard({
   );
 }
 
+type ColorwayView = "front" | "back" | "left" | "right";
+
 function ColorwayCard({
   colorway,
   index,
@@ -725,6 +743,7 @@ function ColorwayCard({
   companionZones,
   companionTypeOptions,
   canGenerate,
+  requiredViews,
   onRemove,
   onUpdate,
   onEnhance,
@@ -743,6 +762,7 @@ function ColorwayCard({
   companionZones?: CompanionZone[];
   companionTypeOptions?: { top: { slug: string; name: string }[]; bottom: { slug: string; name: string }[]; footwear: { slug: string; name: string }[] };
   canGenerate?: boolean;
+  requiredViews?: ColorwayView[];
   onRemove: () => void;
   onUpdate: (patch: Partial<Colorway>) => void;
   onEnhance: () => void;
@@ -752,14 +772,31 @@ function ColorwayCard({
   onUpdateSize: (sizeId: string, patch: Partial<SizeRow>) => void;
   onReset: () => void;
 }) {
-  const frontInputId = `cw-front-${colorway.id}`;
-  const backInputId = `cw-back-${colorway.id}`;
+  const views: ColorwayView[] = requiredViews && requiredViews.length > 0 ? requiredViews : ["front", "back"];
   const colorInputRef = useRef<HTMLInputElement>(null);
   const [zoomedPreview, setZoomedPreview] = useState<string | null>(null);
   const hasColor = Boolean(colorway.hex.trim());
-  const canEnhance =
-    (Boolean(colorway.frontFile) || Boolean(colorway.frontPreview)) &&
-    (Boolean(colorway.backFile) || Boolean(colorway.backPreview));
+
+  const fileKeyFor = (view: ColorwayView): "frontFile" | "backFile" | "leftFile" | "rightFile" =>
+    `${view}File` as "frontFile" | "backFile" | "leftFile" | "rightFile";
+  const previewKeyFor = (view: ColorwayView): "frontPreview" | "backPreview" | "leftPreview" | "rightPreview" =>
+    `${view}Preview` as "frontPreview" | "backPreview" | "leftPreview" | "rightPreview";
+
+  const handleViewFile = (view: ColorwayView, file: File | null) => {
+    const generating = colorway.generateStatus === "processing";
+    const fileKey = fileKeyFor(view);
+    const previewKey = previewKeyFor(view);
+    const enhanceReset = generating ? {} : { enhanceStatus: "idle" as const, enhanceJobId: "" };
+    if (!file) {
+      onUpdate({ [fileKey]: null, [previewKey]: "", ...enhanceReset } as Partial<Colorway>);
+      return;
+    }
+    onUpdate({ [fileKey]: file, [previewKey]: URL.createObjectURL(file), ...enhanceReset } as Partial<Colorway>);
+  };
+
+  const canEnhance = views.every(
+    (view) => Boolean(colorway[fileKeyFor(view)]) || Boolean(colorway[previewKeyFor(view)])
+  );
 
   const handlePickColor = async () => {
     const EyeDropperCtor = (window as Window & {
@@ -778,23 +815,6 @@ function ColorwayCard({
     colorInputRef.current?.click();
   };
 
-  const handleFrontFile = (file: File | null) => {
-    const generating = colorway.generateStatus === "processing";
-    if (!file) {
-      onUpdate({ frontFile: null, frontPreview: "", ...(generating ? {} : { enhanceStatus: "idle" as const, enhanceJobId: "" }) });
-      return;
-    }
-    onUpdate({ frontFile: file, frontPreview: URL.createObjectURL(file), ...(generating ? {} : { enhanceStatus: "idle" as const, enhanceJobId: "" }) });
-  };
-
-  const handleBackFile = (file: File | null) => {
-    const generating = colorway.generateStatus === "processing";
-    if (!file) {
-      onUpdate({ backFile: null, backPreview: "", ...(generating ? {} : { enhanceStatus: "idle" as const, enhanceJobId: "" }) });
-      return;
-    }
-    onUpdate({ backFile: file, backPreview: URL.createObjectURL(file), ...(generating ? {} : { enhanceStatus: "idle" as const, enhanceJobId: "" }) });
-  };
 
   return (
     <div data-colorway-id={colorway.id} className="flex-none w-[270px] rounded-2xl border border-border bg-bg-card p-4 space-y-4">
@@ -858,11 +878,10 @@ function ColorwayCard({
       </div>
 
       {/* Upload slots */}
-      <div className="grid grid-cols-2 gap-2">
-        {(["front", "back"] as const).map((slot) => {
-          const inputId = slot === "front" ? frontInputId : backInputId;
-          const preview = slot === "front" ? colorway.frontPreview : colorway.backPreview;
-          const handleFile = slot === "front" ? handleFrontFile : handleBackFile;
+      <div className={`grid gap-2 ${views.length === 4 ? "grid-cols-2" : "grid-cols-2"}`}>
+        {views.map((slot) => {
+          const inputId = `cw-${slot}-${colorway.id}`;
+          const preview = colorway[previewKeyFor(slot)];
           return (
             <div key={slot} className="space-y-1">
               <p className="text-[9px] uppercase tracking-wider text-text-secondary">{slot}</p>
@@ -871,7 +890,7 @@ function ColorwayCard({
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={(e) => handleFile(e.target.files?.[0] || null)}
+                onChange={(e) => handleViewFile(slot, e.target.files?.[0] || null)}
                 onClick={(e) => { e.currentTarget.value = ""; }}
               />
               <div
@@ -883,7 +902,7 @@ function ColorwayCard({
                   }
                 }}
                 onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => { e.preventDefault(); handleFile(e.dataTransfer.files?.[0] || null); }}
+                onDrop={(e) => { e.preventDefault(); handleViewFile(slot, e.dataTransfer.files?.[0] || null); }}
                 className={`aspect-[4/5] overflow-hidden rounded border border-dashed border-border bg-bg-secondary transition-colors flex items-center justify-center ${preview ? "cursor-zoom-in hover:border-accent/60" : "cursor-pointer hover:border-accent"}`}
               >
                 {preview ? (
@@ -895,7 +914,7 @@ function ColorwayCard({
               {preview && (
                 <button
                   type="button"
-                  onClick={() => handleFile(null)}
+                  onClick={() => handleViewFile(slot, null)}
                   className="text-[8px] uppercase tracking-wider text-danger/70 underline hover:text-danger hover:font-bold transition-colors"
                 >
                   Clear
@@ -1426,13 +1445,21 @@ export default function NewProductPage() {
       frontPreview: "",
       backFile: null,
       backPreview: "",
+      leftFile: null,
+      leftPreview: "",
+      rightFile: null,
+      rightPreview: "",
       enhanceStatus: "idle",
       enhanceJobId: "",
       enhanceError: "",
       enhancedFrontUrl: "",
       enhancedBackUrl: "",
+      enhancedLeftUrl: "",
+      enhancedRightUrl: "",
       enhancedFrontFile: null,
       enhancedBackFile: null,
+      enhancedLeftFile: null,
+      enhancedRightFile: null,
       generateStatus: "idle",
       generateJobId: "",
       generateError: "",
@@ -1490,33 +1517,68 @@ export default function NewProductPage() {
   const handleEnhanceColorway = async (colorwayId: string) => {
     const cw = colorways.find((c) => c.id === colorwayId);
     if (!cw) return;
+    const isShoes = selectedCategoryZone === "footwear";
     const frontSrc = cw.frontFile;
     const backSrc = cw.backFile;
     if (!frontSrc || !backSrc) return;
+    if (isShoes && (!cw.leftFile || !cw.rightFile)) {
+      updateColorway(colorwayId, {
+        enhanceStatus: "failed",
+        enhanceError: "Please upload front, back, left, and right images first.",
+      });
+      return;
+    }
 
     updateColorway(colorwayId, { enhanceStatus: "processing", enhanceError: "", enhanceJobId: "" });
 
     try {
-      const [front, back] = await Promise.all([
-        compressImageFile(frontSrc),
-        compressImageFile(backSrc),
-      ]);
-      const body = new FormData();
-      body.append("front", front);
-      body.append("back", back);
-      const res = await fetch("/api/products/enhance", withAuthRequest({ method: "POST", body }));
-      const data = await res.json();
-      if (!res.ok) {
+      if (isShoes) {
+        const [front, back, left, right] = await Promise.all([
+          compressImageFile(frontSrc),
+          compressImageFile(backSrc),
+          compressImageFile(cw.leftFile!),
+          compressImageFile(cw.rightFile!),
+        ]);
+        const body = new FormData();
+        body.append("front", front);
+        body.append("back", back);
+        body.append("left", left);
+        body.append("right", right);
+        const res = await fetch("/api/products/enhance-shoes", withAuthRequest({ method: "POST", body }));
+        const data = await res.json();
+        if (!res.ok) {
+          updateColorway(colorwayId, {
+            enhanceStatus: "failed",
+            enhanceError: data.error || "Unable to start enhancement.",
+          });
+          return;
+        }
         updateColorway(colorwayId, {
-          enhanceStatus: "failed",
-          enhanceError: data.error || "Unable to start enhancement.",
+          enhanceJobId: data.job_id || "",
+          enhanceStatus: data.status || "processing",
         });
-        return;
+      } else {
+        const [front, back] = await Promise.all([
+          compressImageFile(frontSrc),
+          compressImageFile(backSrc),
+        ]);
+        const body = new FormData();
+        body.append("front", front);
+        body.append("back", back);
+        const res = await fetch("/api/products/enhance", withAuthRequest({ method: "POST", body }));
+        const data = await res.json();
+        if (!res.ok) {
+          updateColorway(colorwayId, {
+            enhanceStatus: "failed",
+            enhanceError: data.error || "Unable to start enhancement.",
+          });
+          return;
+        }
+        updateColorway(colorwayId, {
+          enhanceJobId: data.job_id || "",
+          enhanceStatus: data.status || "processing",
+        });
       }
-      updateColorway(colorwayId, {
-        enhanceJobId: data.job_id || "",
-        enhanceStatus: data.status || "processing",
-      });
     } catch {
       updateColorway(colorwayId, { enhanceStatus: "failed", enhanceError: "Network error" });
     }
@@ -1542,20 +1604,30 @@ export default function NewProductPage() {
             if (data.status === "completed") {
               const frontUrl: string = data.images?.front || "";
               const backUrl: string = data.images?.back || "";
+              const leftUrl: string = data.images?.left || "";
+              const rightUrl: string = data.images?.right || "";
               Promise.all([
                 frontUrl ? imageUrlToFile(frontUrl, "front-enhanced") : Promise.resolve(null),
                 backUrl ? imageUrlToFile(backUrl, "back-enhanced") : Promise.resolve(null),
-              ]).then(([frontFile, backFile]) => {
+                leftUrl ? imageUrlToFile(leftUrl, "left-enhanced") : Promise.resolve(null),
+                rightUrl ? imageUrlToFile(rightUrl, "right-enhanced") : Promise.resolve(null),
+              ]).then(([frontFile, backFile, leftFile, rightFile]) => {
                 updateColorway(cw.id, {
                   enhanceStatus: "completed",
                   enhanceJobId: "",
                   enhanceError: "",
                   enhancedFrontUrl: frontUrl,
                   enhancedBackUrl: backUrl,
+                  enhancedLeftUrl: leftUrl,
+                  enhancedRightUrl: rightUrl,
                   enhancedFrontFile: frontFile,
                   enhancedBackFile: backFile,
+                  enhancedLeftFile: leftFile,
+                  enhancedRightFile: rightFile,
                   ...(frontUrl ? { frontPreview: frontUrl } : {}),
                   ...(backUrl ? { backPreview: backUrl } : {}),
+                  ...(leftUrl ? { leftPreview: leftUrl } : {}),
+                  ...(rightUrl ? { rightPreview: rightUrl } : {}),
                 });
               });
             } else if (data.status === "failed") {
@@ -2088,8 +2160,15 @@ export default function NewProductPage() {
       return;
     }
 
+    const isShoes = form.fashionSubtype === "shoes";
+
     if (!generationInputs.front.file || !generationInputs.back.file) {
-      setProductMediaError("Please upload front and back images first.");
+      setProductMediaError(isShoes ? "Please upload front, back, left, and right images first." : "Please upload front and back images first.");
+      return;
+    }
+
+    if (isShoes && (!generationInputs.left.file || !generationInputs.right.file)) {
+      setProductMediaError("Please upload front, back, left, and right images first.");
       return;
     }
 
@@ -2097,26 +2176,53 @@ export default function NewProductPage() {
     setProductMediaStatus("processing");
 
     try {
-      const [frontFile, backFile] = await Promise.all([
-        compressImageFile(generationInputs.front.file),
-        compressImageFile(generationInputs.back.file),
-      ]);
+      if (isShoes) {
+        const [frontFile, backFile, leftFile, rightFile] = await Promise.all([
+          compressImageFile(generationInputs.front.file),
+          compressImageFile(generationInputs.back.file),
+          compressImageFile(generationInputs.left.file!),
+          compressImageFile(generationInputs.right.file!),
+        ]);
 
-      const body = new FormData();
-      body.append("front", frontFile);
-      body.append("back", backFile);
+        const body = new FormData();
+        body.append("front", frontFile);
+        body.append("back", backFile);
+        body.append("left", leftFile);
+        body.append("right", rightFile);
 
-      const res = await fetch("/api/products/enhance", withAuthRequest({ method: "POST", body }));
-      const data = await res.json();
+        const res = await fetch("/api/products/enhance-shoes", withAuthRequest({ method: "POST", body }));
+        const data = await res.json();
 
-      if (!res.ok) {
-        setProductMediaStatus("failed");
-        setProductMediaError(data.error || "Unable to start product media enhancement.");
-        return;
+        if (!res.ok) {
+          setProductMediaStatus("failed");
+          setProductMediaError(data.error || "Unable to start shoe image enhancement.");
+          return;
+        }
+
+        setProductMediaJobId(data.job_id || "");
+        setProductMediaStatus(data.status || "processing");
+      } else {
+        const [frontFile, backFile] = await Promise.all([
+          compressImageFile(generationInputs.front.file),
+          compressImageFile(generationInputs.back.file),
+        ]);
+
+        const body = new FormData();
+        body.append("front", frontFile);
+        body.append("back", backFile);
+
+        const res = await fetch("/api/products/enhance", withAuthRequest({ method: "POST", body }));
+        const data = await res.json();
+
+        if (!res.ok) {
+          setProductMediaStatus("failed");
+          setProductMediaError(data.error || "Unable to start product media enhancement.");
+          return;
+        }
+
+        setProductMediaJobId(data.job_id || "");
+        setProductMediaStatus(data.status || "processing");
       }
-
-      setProductMediaJobId(data.job_id || "");
-      setProductMediaStatus(data.status || "processing");
     } catch {
       setProductMediaStatus("failed");
       setProductMediaError("Network error");
@@ -2124,7 +2230,7 @@ export default function NewProductPage() {
   };
 
   useEffect(() => {
-    if (form.productType !== "fashion" || form.fashionSubtype !== "clothes") {
+    if (form.productType !== "fashion" || (form.fashionSubtype !== "clothes" && form.fashionSubtype !== "shoes")) {
       clearProductMediaEnhancement();
       return;
     }
@@ -2146,23 +2252,21 @@ export default function NewProductPage() {
           if (data.status === "completed") {
             const frontUrl = data.images?.front || "";
             const backUrl = data.images?.back || "";
+            const leftUrl = data.images?.left || "";
+            const rightUrl = data.images?.right || "";
             Promise.all([
               frontUrl ? imageUrlToFile(frontUrl, "front-enhanced") : Promise.resolve(null),
               backUrl ? imageUrlToFile(backUrl, "back-enhanced") : Promise.resolve(null),
+              leftUrl ? imageUrlToFile(leftUrl, "left-enhanced") : Promise.resolve(null),
+              rightUrl ? imageUrlToFile(rightUrl, "right-enhanced") : Promise.resolve(null),
             ])
-              .then(([frontFile, backFile]) => {
+              .then(([frontFile, backFile, leftFile, rightFile]) => {
                 if (frontUrl) {
                   setForm((current) => ({
                     ...current,
-                    originPictures: {
-                      ...current.originPictures,
-                      front: frontUrl,
-                    },
+                    originPictures: { ...current.originPictures, front: frontUrl },
                   }));
-                  setOriginPictureFiles((current) => ({
-                    ...current,
-                    front: null,
-                  }));
+                  setOriginPictureFiles((current) => ({ ...current, front: null }));
                   if (frontFile) {
                     setGenerationInputs((current) => ({
                       ...current,
@@ -2173,19 +2277,39 @@ export default function NewProductPage() {
                 if (backUrl) {
                   setForm((current) => ({
                     ...current,
-                    originPictures: {
-                      ...current.originPictures,
-                      back: backUrl,
-                    },
+                    originPictures: { ...current.originPictures, back: backUrl },
                   }));
-                  setOriginPictureFiles((current) => ({
-                    ...current,
-                    back: null,
-                  }));
+                  setOriginPictureFiles((current) => ({ ...current, back: null }));
                   if (backFile) {
                     setGenerationInputs((current) => ({
                       ...current,
                       back: { file: backFile, previewUrl: backUrl },
+                    }));
+                  }
+                }
+                if (leftUrl) {
+                  setForm((current) => ({
+                    ...current,
+                    originPictures: { ...current.originPictures, left: leftUrl },
+                  }));
+                  setOriginPictureFiles((current) => ({ ...current, left: null }));
+                  if (leftFile) {
+                    setGenerationInputs((current) => ({
+                      ...current,
+                      left: { file: leftFile, previewUrl: leftUrl },
+                    }));
+                  }
+                }
+                if (rightUrl) {
+                  setForm((current) => ({
+                    ...current,
+                    originPictures: { ...current.originPictures, right: rightUrl },
+                  }));
+                  setOriginPictureFiles((current) => ({ ...current, right: null }));
+                  if (rightFile) {
+                    setGenerationInputs((current) => ({
+                      ...current,
+                      right: { file: rightFile, previewUrl: rightUrl },
                     }));
                   }
                 }
@@ -2976,6 +3100,7 @@ export default function NewProductPage() {
                     canRemove={colorways.length > 1}
                     isThrift={isStoreOwner}
                     conditionLocked={Boolean(cw.hex.trim())}
+                    requiredViews={selectedCategoryZone === "footwear" ? ["front", "back", "left", "right"] : ["front", "back"]}
                     onRemove={() => removeColorway(cw.id)}
                   onUpdate={(patch) => updateColorway(cw.id, patch)}
                   onEnhance={() => void handleEnhanceColorway(cw.id)}
