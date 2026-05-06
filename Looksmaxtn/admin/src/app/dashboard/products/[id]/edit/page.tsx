@@ -88,7 +88,7 @@ type SizeRow = {
   conditionScore: string;
 };
 
-type ColorwayEnhanceStatus = "idle" | "processing" | "completed" | "failed";
+type ColorwayEnhanceStatus = "idle" | "processing" | "completed" | "failed" | "original";
 
 type Colorway = {
   id: string;
@@ -316,10 +316,12 @@ function getPrimaryColor(value: unknown) {
 function SectionCard({
   title,
   description,
+  error,
   children,
 }: {
   title: string;
   description?: string;
+  error?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -328,6 +330,11 @@ function SectionCard({
         <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-text-primary">{title}</h2>
         {description && <p className="mt-1 text-[11px] text-text-secondary">{description}</p>}
       </div>
+      {error && (
+        <div className="border border-[#8B3520]/40 bg-[#8B3520]/5 px-4 py-3 text-xs text-[#8B3520]">
+          {error}
+        </div>
+      )}
       {children}
     </section>
   );
@@ -587,7 +594,7 @@ function ColorwayGenerationCard({
   const enhancedFrontPreview = colorway.enhancedFrontUrl || colorway.frontPreview;
   const enhancedBackPreview = colorway.enhancedBackUrl || colorway.backPreview;
   return (
-    <div data-colorway-id={colorway.id} className="flex-none w-[270px] rounded-2xl border border-border bg-bg-card p-4 space-y-4">
+    <div data-colorway-id={colorway.id} className="w-full sm:flex-none sm:w-[270px] rounded-2xl border border-border bg-bg-card p-4 space-y-4">
       <div className="flex items-center gap-2">
         <span
           className={`h-4 w-4 flex-none border border-border/60 ${hasColor ? "rounded-full" : "rounded border-dashed bg-transparent"}`}
@@ -676,7 +683,7 @@ function ColorwayGenerationCard({
         )}
         <div className="flex items-center justify-end gap-2">
           {colorway.generateStatus === "completed" && (
-            <button type="button" onClick={onReset} className="text-[8px] uppercase tracking-wider text-text-secondary hover:text-accent transition-colors">Reset</button>
+            <button type="button" onClick={onReset} className="text-[8px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary">Reset</button>
           )}
           <button type="button" onClick={canGenerate && colorway.generateStatus !== "completed" ? onGenerate : undefined} disabled={!canGenerate || colorway.generateStatus === "processing" || colorway.generateStatus === "completed"} className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity">
             {colorway.generateStatus === "processing" && <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />}
@@ -748,7 +755,7 @@ function ColorwayCard({
   };
 
   return (
-    <div data-colorway-id={colorway.id} className="flex-none w-[270px] rounded-2xl border border-border bg-bg-card p-4 space-y-4">
+    <div data-colorway-id={colorway.id} className="w-full sm:flex-none sm:w-[270px] rounded-2xl border border-border bg-bg-card p-4 space-y-4">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           {canRemove && <button type="button" onClick={onRemove} title="Remove colorway" className="text-sm leading-none text-text-secondary hover:text-danger transition-colors">×</button>}
@@ -800,7 +807,7 @@ function ColorwayCard({
               <div onClick={() => { if (preview) { setZoomedPreview(preview); } else { document.getElementById(inputId)?.click(); } }} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); handleViewFile(slot, e.dataTransfer.files?.[0] || null); }} className={`aspect-[4/5] overflow-hidden rounded border border-dashed border-border bg-bg-secondary transition-colors flex items-center justify-center ${preview ? "cursor-zoom-in hover:border-accent/60" : "cursor-pointer hover:border-accent"}`}>
                 {preview ? <img src={preview} alt={slot} className="h-full w-full object-cover" /> : <span className="text-[8px] uppercase tracking-wider text-text-secondary/60">Upload</span>}
               </div>
-              {preview && <button type="button" onClick={() => handleViewFile(slot, null)} className="text-[8px] uppercase tracking-wider text-danger/70 underline hover:text-danger hover:font-bold transition-colors">Clear</button>}
+              {preview && <button type="button" onClick={() => handleViewFile(slot, null)} className="text-[8px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary">Clear</button>}
             </div>
           );
         })}
@@ -815,27 +822,25 @@ function ColorwayCard({
           </div>
         </div>
       )}
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <p className="text-[9px] uppercase tracking-wider text-text-secondary">Sizes</p>
         {colorway.sizes.map((sizeRow) => (
-          <div key={sizeRow.id} className="space-y-1">
-            <div className="flex items-center gap-1">
-              <input type="text" value={sizeRow.size} onChange={(e) => onUpdateSize(sizeRow.id, { size: e.target.value })} placeholder="Size" className="min-w-0 flex-1 bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-text-primary transition-colors" />
-              <input type="number" min="0" value={sizeRow.stock} onChange={(e) => onUpdateSize(sizeRow.id, { stock: e.target.value })} placeholder="Qty" className="w-14 flex-none bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-text-primary transition-colors" />
-              <button type="button" onClick={() => onRemoveSize(sizeRow.id)} disabled={colorway.sizes.length === 1} className="flex-none text-sm leading-none text-text-secondary hover:text-danger transition-colors disabled:opacity-30">×</button>
-            </div>
-            {isThrift && (
-              <div className="space-y-0.5 px-0.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[8px] uppercase tracking-wider text-text-secondary">Condition</span>
-                  <span className="text-[8px] text-text-secondary">{sizeRow.conditionScore}/10 · {getConditionStatusFromScore(Number(sizeRow.conditionScore)).toUpperCase()}</span>
-                </div>
-                <input type="range" min="1" max="10" step="1" value={sizeRow.conditionScore} onChange={(e) => onUpdateSize(sizeRow.id, { conditionScore: e.target.value })} className="w-full accent-accent cursor-pointer" />
-              </div>
-            )}
+          <div key={sizeRow.id} className="flex items-end gap-2">
+            <input type="text" value={sizeRow.size} onChange={(e) => onUpdateSize(sizeRow.id, { size: e.target.value })} placeholder="Size" className="min-w-0 flex-1 border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors" />
+            <input type="number" min="0" value={sizeRow.stock} onChange={(e) => onUpdateSize(sizeRow.id, { stock: e.target.value })} placeholder="Qty" className="w-12 flex-none border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors" />
+            <button type="button" onClick={() => onRemoveSize(sizeRow.id)} disabled={colorway.sizes.length === 1} className="flex-none pb-1.5 text-sm leading-none text-text-secondary hover:text-danger transition-colors disabled:opacity-30">×</button>
           </div>
         ))}
-        <button type="button" onClick={onAddSize} className="text-[9px] uppercase tracking-wider text-text-secondary hover:text-accent transition-colors">+ Add size</button>
+        <button type="button" onClick={onAddSize} className="text-[9px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary">+ Add size</button>
+        {isThrift && colorway.sizes.map((sizeRow) => (
+          <div key={sizeRow.id} className="space-y-0.5 pt-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[8px] uppercase tracking-wider text-text-secondary">Condition</span>
+              <span className="text-[8px] text-text-secondary">{sizeRow.conditionScore}/10 · {getConditionStatusFromScore(Number(sizeRow.conditionScore)).toUpperCase()}</span>
+            </div>
+            <input type="range" min="1" max="10" step="1" value={sizeRow.conditionScore} onChange={(e) => onUpdateSize(sizeRow.id, { conditionScore: e.target.value })} className="w-full accent-accent cursor-pointer" />
+          </div>
+        ))}
       </div>
       <div className="space-y-1.5 border-t border-border pt-3">
         {colorway.enhanceError && (
@@ -844,14 +849,14 @@ function ColorwayCard({
           </div>
         )}
         <div className="flex items-center justify-end gap-2">
-          {colorway.enhanceStatus === "completed" && (
-            <button type="button" onClick={onReset} className="text-[8px] uppercase tracking-wider text-text-secondary hover:text-accent transition-colors">Reset</button>
+          {(colorway.enhanceStatus === "completed" || colorway.enhanceStatus === "original") && (
+            <button type="button" onClick={onReset} className="text-[8px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary">Reset</button>
           )}
           {colorway.enhanceStatus === "idle" && canEnhance && (
             <button
               type="button"
-              onClick={() => onUpdate({ enhanceStatus: "completed" })}
-              className="text-[8px] uppercase tracking-wider text-text-secondary hover:text-text-primary transition-colors"
+              onClick={() => onUpdate({ enhanceStatus: "original" })}
+              className="text-[8px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary"
             >
               Use original
             </button>
@@ -863,7 +868,7 @@ function ColorwayCard({
         </div>
       </div>
 
-      {showGenerationPanel && (colorway.enhanceStatus === "completed" || colorway.generateStatus !== "idle") && (
+      {showGenerationPanel && (colorway.enhanceStatus === "completed" || colorway.enhanceStatus === "original" || colorway.generateStatus !== "idle") && (
         <div className="space-y-3 border-t border-border pt-3">
           <div className="space-y-1.5">
             <p className="text-[9px] uppercase tracking-wider text-text-secondary">Zones</p>
@@ -967,7 +972,12 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const [productMediaJobId, setProductMediaJobId] = useState("");
   const [productMediaError, setProductMediaError] = useState("");
   const [showProductMediaSection, setShowProductMediaSection] = useState(false);
-  const [error, setError] = useState("");
+  type SectionErrorKey = "basics" | "media" | "model" | "colorways" | "general";
+  const [sectionErrors, setSectionErrors] = useState<Partial<Record<SectionErrorKey, string>>>({});
+  const setError = (msg: string, section: SectionErrorKey = "general") => {
+    if (!msg) { setSectionErrors({}); return; }
+    setSectionErrors({ [section]: msg });
+  };
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [categories, setCategories] = useState<Category[]>([]);
   const [models, setModels] = useState<ModelAsset[]>([]);
@@ -1083,7 +1093,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const handleAddColorway = () => {
     const blankColorway = colorways.find((cw) => !cw.hex.trim());
     if (blankColorway) {
-      setError("Please assign a color to the current colorway before adding another.");
+      setError("Please assign a color to the current colorway before adding another.", "colorways");
       scrollToColorwayCard(blankColorway.id);
       return;
     }
@@ -1183,7 +1193,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 
   const canGenerateColorway = (cw: Colorway) => {
     if (!selectedModelId) return false;
-    if (cw.enhanceStatus !== "completed") return false;
+    if (cw.enhanceStatus !== "completed" && cw.enhanceStatus !== "original") return false;
     if (!Boolean(cw.enhancedFrontFile || cw.enhancedFrontUrl || cw.frontPreview) || !Boolean(cw.enhancedBackFile || cw.enhancedBackUrl || cw.backPreview)) return false;
     if (companionZones.includes("top") && (!cw.companionTopType || !cw.companionTopColor)) return false;
     if (companionZones.includes("bottom") && (!cw.companionBottomType || !cw.companionBottomColor)) return false;
@@ -1789,14 +1799,14 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       );
       const data = await response.json();
       if (!response.ok || !data.product) {
-        setError(data.error || "Unable to save size stock.");
+        setError(data.error || "Unable to save size stock.", "basics");
         return;
       }
 
       syncInventoryState(data.product);
       setRestockAmounts((current) => ({ ...current, [size]: "0" }));
     } catch {
-      setError("Network error");
+      setError("Network error", "basics");
     } finally {
       setSavingSizeStockFor("");
     }
@@ -1833,7 +1843,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       );
       const data = await response.json();
       if (!response.ok || !data.product) {
-        setError(data.error || "Unable to remove size.");
+        setError(data.error || "Unable to remove size.", "basics");
         return;
       }
 
@@ -1858,7 +1868,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         return next;
       });
     } catch {
-      setError("Network error");
+      setError("Network error", "basics");
     } finally {
       setSavingSizeStockFor("");
     }
@@ -1883,7 +1893,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       );
       const data = await response.json();
       if (!response.ok || !data.product) {
-        setError(data.error || "Unable to add stock.");
+        setError(data.error || "Unable to add stock.", "basics");
         return;
       }
 
@@ -1894,7 +1904,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       setSoldQuantity(Math.max(Number(data.product.soldQuantity ?? soldQuantity), 0));
       setRestockAmount("0");
     } catch {
-      setError("Network error");
+      setError("Network error", "basics");
     } finally {
       setRestocking(false);
     }
@@ -1970,7 +1980,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       const file = await productImageToFile(image, key);
       handleOriginPictureSelect(key, file);
     } catch {
-      setError(`Unable to use this image for the ${key} origin picture.`);
+      setError(`Unable to use this image for the ${key} origin picture.`, "media");
     }
   };
 
@@ -1994,7 +2004,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         },
       ]);
     } catch {
-      setError("Unable to import generated image.");
+      setError("Unable to import generated image.", "media");
     } finally {
       setImportingGeneratedImage(null);
     }
@@ -2047,7 +2057,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         handleOriginPictureSelect(key as OriginPictureKey, file);
       }
     } catch {
-      setError(`Unable to use this image for the ${key} slot.`);
+      setError(`Unable to use this image for the ${key} slot.`, "media");
     }
   };
 
@@ -2382,28 +2392,28 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     setError("");
 
     if (!form.fashionSubtype) {
-      setError("Please select what you want to generate first.");
+      setError("Please select what you want to generate first.", "model");
       return;
     }
 
     if (form.fashionSubtype === "clothes" && !selectedModelId) {
-      setError("Please select a model first.");
+      setError("Please select a model first.", "model");
       return;
     }
 
     if (form.fashionSubtype === "clothes") {
       if (companionZones.includes("top") && (!companionTopType || !secondaryTopColor)) {
-        setError("Please select the top type and color.");
+        setError("Please select the top type and color.", "model");
         return;
       }
 
       if (companionZones.includes("bottom") && (!companionBottomType || !secondaryBottomColor)) {
-        setError("Please select the bottom type and color.");
+        setError("Please select the bottom type and color.", "model");
         return;
       }
 
       if (companionZones.includes("footwear") && (!footwearType || !shoesColor)) {
-        setError("Please select the footwear type and color.");
+        setError("Please select the footwear type and color.", "model");
         return;
       }
     }
@@ -2416,7 +2426,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       setError(
         form.fashionSubtype === "shoes"
           ? "Please upload front, back, left, and right product images before generating."
-          : "Please upload front and back product images before generating."
+          : "Please upload front and back product images before generating.",
+        "media"
       );
       return;
     }
@@ -2477,7 +2488,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       const triggerData = await triggerRes.json();
 
       if (!triggerRes.ok) {
-        setError(triggerData.error || "Unable to start generation.");
+        setError(triggerData.error || "Unable to start generation.", "model");
         return;
       }
 
@@ -2499,7 +2510,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           isCompleted = true;
           finalImages = statusData.images;
         } else if (statusData.status === "failed") {
-          setError(statusData.error || "Generation failed.");
+          setError(statusData.error || "Generation failed.", "model");
           setGenerating(false);
           return;
         }
@@ -2531,7 +2542,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       setShowProductMediaSection(true);
     } catch {
       if (!controller.signal.aborted) {
-        setError("Generation request failed.");
+        setError("Generation request failed.", "model");
       }
     } finally {
       if (generationAbortRef.current === controller) {
@@ -2558,18 +2569,18 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         setLoading(false);
         return;
       }
-      if (colorways.length === 0) { setError("Please add at least one colorway."); scrollToElement(colorwaysSectionRef.current); setLoading(false); return; }
+      if (colorways.length === 0) { setError("Please add at least one colorway.", "colorways"); scrollToElement(colorwaysSectionRef.current); setLoading(false); return; }
       if (colorways.length > 1 && colorways.some((cw) => !cw.hex.trim())) {
-        setError("Please assign a color to every colorway before adding more than one.");
+        setError("Please assign a color to every colorway before adding more than one.", "colorways");
         scrollToColorwayCard(colorways.find((cw) => !cw.hex.trim())?.id);
         setLoading(false);
         return;
       }
-      if (!selectedModelId) { setError("Please select a model first."); scrollToElement(modelPicturesSectionRef.current); setLoading(false); return; }
+      if (!selectedModelId) { setError("Please select a model first.", "model"); scrollToElement(modelPicturesSectionRef.current); setLoading(false); return; }
       for (const cw of colorways) {
-        if (!cw.frontFile && !cw.frontPreview) { setError("Please upload a front image for each colorway."); scrollToColorwayCard(cw.id); setLoading(false); return; }
-        if (!cw.backFile && !cw.backPreview) { setError("Please upload a back image for each colorway."); scrollToColorwayCard(cw.id); setLoading(false); return; }
-        if (cw.sizes.filter((s) => s.size.trim() && s.stock.trim()).length === 0) { setError("Please add at least one size and stock for each colorway."); scrollToColorwayCard(cw.id); setLoading(false); return; }
+        if (!cw.frontFile && !cw.frontPreview) { setError("Please upload a front image for each colorway.", "colorways"); scrollToColorwayCard(cw.id); setLoading(false); return; }
+        if (!cw.backFile && !cw.backPreview) { setError("Please upload a back image for each colorway.", "colorways"); scrollToColorwayCard(cw.id); setLoading(false); return; }
+        if (cw.sizes.filter((s) => s.size.trim() && s.stock.trim()).length === 0) { setError("Please add at least one size and stock for each colorway.", "colorways"); scrollToColorwayCard(cw.id); setLoading(false); return; }
       }
       try {
         const productCategories = [selectedParentSlug, selectedChildSlug, selectedGrandchildSlug, selectedGreatGrandchildSlug].filter(Boolean);
@@ -2688,15 +2699,14 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         if (!res.ok) {
           const d = await res.json();
           const message = d.error || "Unable to save product.";
-          setError(message);
-          if (res.status === 409 || /reference must be unique within the same store/i.test(message)) {
-            scrollToElement(productBasicsRef.current);
-          }
+          const isBasicsError = res.status === 409 || /reference must be unique within the same store/i.test(message);
+          setError(message, isBasicsError ? "basics" : "general");
+          if (isBasicsError) scrollToElement(productBasicsRef.current);
           setLoading(false);
           return;
         }
         router.push("/dashboard/products");
-      } catch { setError("Network error"); setLoading(false); }
+      } catch { setError("Network error", "general"); setLoading(false); }
       return;
     }
 
@@ -2715,7 +2725,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     }
 
     if (form.stock.trim() === "") {
-      setError("Please enter a full stock value.");
+      setError("Please enter a full stock value.", "basics");
       scrollToElement(productBasicsRef.current);
       setLoading(false);
       return;
@@ -2725,13 +2735,13 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       const hasExistingMedia = generatedModelMedia.some((m) => !m.file);
       const hasEnhanced = hasExistingMedia || Boolean(generationInputs.front.file);
       if (!hasEnhanced) {
-        setError("Please enhance the product images before saving.");
+        setError("Please enhance the product images before saving.", "media");
         scrollToElement(productMediaSectionRef.current);
         setLoading(false);
         return;
       }
       if (generatedModelMedia.length === 0) {
-        setError("Please generate at least one model picture before saving.");
+        setError("Please generate at least one model picture before saving.", "model");
         scrollToElement(modelPicturesSectionRef.current) || scrollToElement(productMediaSectionRef.current);
         setLoading(false);
         return;
@@ -2761,7 +2771,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
             ? snapshotMedia
             : snapshotSourceMedia;
       if (effectiveProductMedia.length === 0) {
-        setError("Please keep or upload at least one product image.");
+        setError("Please keep or upload at least one product image.", "basics");
         setLoading(false);
         return;
       }
@@ -2922,17 +2932,16 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       if (!res.ok) {
         const d = await res.json();
         const message = d.error || "Unable to save product.";
-        setError(message);
-        if (res.status === 409 || /reference must be unique within the same store/i.test(message)) {
-          scrollToElement(productBasicsRef.current);
-        }
+        const isBasicsError = res.status === 409 || /reference must be unique within the same store/i.test(message);
+        setError(message, isBasicsError ? "basics" : "general");
+        if (isBasicsError) scrollToElement(productBasicsRef.current);
         setLoading(false);
         return;
       }
 
       router.push("/dashboard/products");
     } catch {
-      setError("Network error");
+      setError("Network error", "general");
       setLoading(false);
     }
   };
@@ -2959,12 +2968,17 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       <div className="space-y-6">
         <div><h1 className="text-xl font-semibold tracking-wide">Edit Product</h1></div>
         <form onSubmit={handleSubmit} className="space-y-6">
-          {error && <div className="border border-[#BD3100] bg-[#faf3f2] px-4 py-3 text-xs text-[#BD3100]">{error}</div>}
+          {sectionErrors.general && (
+            <div className="border border-[#8B3520]/40 bg-[#8B3520]/5 px-4 py-3 text-xs text-[#8B3520]">
+              {sectionErrors.general}
+            </div>
+          )}
 
           <div ref={productBasicsRef}>
             <SectionCard
               title="Product Basics"
               description="Set the core product info first, then add colorways and other variants."
+              error={sectionErrors.basics}
             >
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <div className="sm:col-span-2 xl:col-span-3">
@@ -3053,15 +3067,15 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 
           {selectedCategorySlug && (
             <div ref={modelPicturesSectionRef}>
-              <SectionCard title="Model Pictures" description="Choose one model for all colorways, then configure each colorway's companion outfit and generate.">
+              <SectionCard title="Model Pictures" description="Choose one model for all colorways, then configure each colorway's companion outfit and generate." error={sectionErrors.model}>
               <div className="space-y-2">
                 <FieldLabel>Model</FieldLabel>
                 <p className="text-[11px] text-text-secondary">Pick the model first, then enhance each colorway independently.</p>
-                <div className="flex flex-wrap gap-3">
+                <div className="flex gap-3 overflow-x-auto pb-2">
                   {filteredModels.map((model) => {
                     const active = selectedModelId === model._id;
                     return (
-                      <button key={model._id} type="button" onClick={() => setSelectedModelId(model._id)} className={`w-[96px] overflow-hidden rounded border text-left transition-colors ${active ? "border-accent" : "border-border hover:border-accent"}`}>
+                      <button key={model._id} type="button" onClick={() => setSelectedModelId(model._id)} className={`flex-none w-[288px] overflow-hidden rounded border text-left transition-colors ${active ? "border-accent" : "border-border hover:border-accent"}`}>
                         <div className="aspect-[4/5] bg-bg-secondary"><img src={model.frontImage || model.images?.[0] || ""} alt={model.name} className="h-full w-full object-cover" /></div>
                         <div className="p-1.5"><p className="truncate text-[9px] font-medium">{model.name}</p></div>
                       </button>
@@ -3070,7 +3084,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 </div>
               </div>
               {selectedModelId && !isStoreOwner && (
-                <div className="mt-4 flex items-start gap-3 overflow-x-auto pb-2">
+                <div className="mt-4 flex flex-col sm:flex-row sm:items-start gap-3 sm:overflow-x-auto pb-2">
                   {colorways.map((cw, cwIndex) => (
                     <ColorwayGenerationCard
                       key={cw.id}
@@ -3091,8 +3105,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           )}
 
           <div ref={colorwaysSectionRef}>
-            <SectionCard title="Colorways" description="Each colorway is a color variant with its own images and sizes. Use the eyedropper on the swatch to pick the color directly from the uploaded photo.">
-            <div className="flex items-start gap-3 overflow-x-auto pb-2">
+            <SectionCard title="Colorways" description="Each colorway is a color variant with its own images and sizes. Use the eyedropper on the swatch to pick the color directly from the uploaded photo." error={sectionErrors.colorways}>
+            <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:overflow-x-auto pb-2">
               {colorways.map((cw, cwIndex) => (
                 <ColorwayCard
                   key={cw.id}
@@ -3143,12 +3157,17 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {error && <div className="border border-[#BD3100] bg-[#faf3f2] px-4 py-3 text-xs text-[#BD3100]">{error}</div>}
+        {sectionErrors.general && (
+          <div className="border border-[#8B3520]/40 bg-[#8B3520]/5 px-4 py-3 text-xs text-[#8B3520]">
+            {sectionErrors.general}
+          </div>
+        )}
 
         <div ref={productBasicsRef}>
           <SectionCard
             title="Product Basics"
             description="Set the core product info first, then add colorways and other variants."
+            error={sectionErrors.basics}
           >
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             <div className="xl:col-span-2">
@@ -3715,7 +3734,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           <div ref={productMediaSectionRef}>
             <SectionCard
               title="Origin Pictures"
-
+              error={sectionErrors.media}
             >
             {!isStoreOwner && (
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
@@ -3757,7 +3776,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                         <button
                           type="button"
                           onClick={() => clearGenerationInput(key)}
-                          className="text-[10px] text-danger uppercase tracking-wider"
+                          className="text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary"
                         >
                           Clear
                         </button>
@@ -3864,7 +3883,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                       <p className="text-[10px] uppercase tracking-wider text-text-secondary">
                         Select a model
                       </p>
-                      <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+                      <div className="mt-3 flex gap-3 overflow-x-auto pb-2">
                         {filteredModels.map((model) => {
                           const active = selectedModelId === model._id;
                           return (
@@ -3872,7 +3891,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                               key={model._id}
                               type="button"
                               onClick={() => setSelectedModelId(model._id)}
-                              className={`mx-auto w-full max-w-[150px] overflow-hidden rounded border text-left transition-colors ${
+                              className={`flex-none w-[288px] overflow-hidden rounded border text-left transition-colors ${
                                 active ? "border-accent" : "border-border hover:border-accent"
                               }`}
                             >
@@ -3931,6 +3950,11 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
             )}
             {showProductMediaSection && productMediaItems.length > 0 && (
               <div ref={modelPicturesSectionRef} className="mt-6 space-y-5 border-t border-border pt-5">
+                {sectionErrors.model && (
+                  <div className="border border-[#8B3520]/40 bg-[#8B3520]/5 px-4 py-3 text-xs text-[#8B3520]">
+                    {sectionErrors.model}
+                  </div>
+                )}
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
