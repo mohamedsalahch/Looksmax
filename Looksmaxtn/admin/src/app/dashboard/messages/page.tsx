@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import { withAuthRequest } from "@/lib/authClient";
@@ -138,7 +138,7 @@ export default function MessagesPage() {
                   <div className="min-w-0">
                     <p className="text-xs font-medium truncate">{msg.subject}</p>
                     <p className="text-[10px] text-text-secondary truncate">
-                      {msg.name} Â· {msg.email}
+                      {msg.name} · {msg.email}
                     </p>
                   </div>
                 </div>

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { withAuthRequest } from "@/lib/authClient";
@@ -431,9 +431,9 @@ export default function GenerateImagesPage() {
                   </button>
                 </div>
                 <p className="text-[10px] text-text-secondary uppercase tracking-wider">
-                  {item.sourceImages.length} source image{item.sourceImages.length !== 1 ? "s" : ""} Â· {item.images.length} result{item.images.length !== 1 ? "s" : ""}
-                  {item.status === "processing" && " Â· PROCESSING"}
-                  {item.status === "failed" && ` Â· FAILED${item.errorMessage ? ` - ${item.errorMessage}` : ""}`}
+                  {item.sourceImages.length} source image{item.sourceImages.length !== 1 ? "s" : ""} · {item.images.length} result{item.images.length !== 1 ? "s" : ""}
+                  {item.status === "processing" && " · PROCESSING"}
+                  {item.status === "failed" && ` · FAILED${item.errorMessage ? ` - ${item.errorMessage}` : ""}`}
                 </p>
                 <div className="space-y-0.5 pt-0.5 text-[9px] text-text-secondary">
                   <p>Created at: {formatAuditDate(item.createdAt)}</p>

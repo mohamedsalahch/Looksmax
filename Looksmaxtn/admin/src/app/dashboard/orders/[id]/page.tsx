@@ -157,7 +157,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           <div>
             <p className="text-[10px] uppercase tracking-[0.3em]">LOOKSMAX</p>
             <h2 className="text-xl font-semibold mt-2">BON DE COMMANDE #{order._id.slice(-8).toUpperCase()}</h2>
-            <p className="text-xs mt-1">ImprimÃ© le : {new Date().toLocaleString()}</p>
+            <p className="text-xs mt-1">Imprimé le : {new Date().toLocaleString()}</p>
           </div>
         </div>
 
@@ -181,7 +181,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               <tr className="text-[10px] uppercase tracking-wider">
                 <th className="px-3 py-2 border-b border-black">Produit</th>
                 <th className="px-3 py-2 border-b border-black">Taille</th>
-                <th className="px-3 py-2 border-b border-black">QtÃ©</th>
+                <th className="px-3 py-2 border-b border-black">Qté</th>
                 <th className="px-3 py-2 border-b border-black text-right">Prix (TND)</th>
               </tr>
             </thead>

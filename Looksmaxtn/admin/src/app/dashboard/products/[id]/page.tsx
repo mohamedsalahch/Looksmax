@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
@@ -293,7 +293,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
               </div>
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-text-secondary">Reference</p>
-                <p className="mt-1 text-sm text-text-primary font-mono">{product.reference || "â€”"}</p>
+                <p className="mt-1 text-sm text-text-primary font-mono">{product.reference || "—"}</p>
               </div>
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-text-secondary">Product ID</p>

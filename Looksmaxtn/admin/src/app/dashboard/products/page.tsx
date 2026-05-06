@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -246,8 +246,8 @@ export default function ProductsPage() {
   };
 
   const renderSortIndicator = (key: SortKey) => {
-    if (sortKey !== key) return <span className="text-[9px] text-text-secondary/60">â†•</span>;
-    return <span className="text-[9px] text-accent">{sortDirection === "asc" ? "â†‘" : "â†“"}</span>;
+    if (sortKey !== key) return <span className="text-[9px] text-text-secondary/60">↕</span>;
+    return <span className="text-[9px] text-accent">{sortDirection === "asc" ? "↑" : "↓"}</span>;
   };
 
   return (
@@ -376,7 +376,7 @@ export default function ProductsPage() {
                     <p className="text-[10px] text-text-secondary">{p.brand}</p>
                   </td>
                   <td className="px-4 py-3 text-xs text-text-secondary capitalize">{(p.categories || []).join(", ")}</td>
-                  <td className="px-4 py-3 text-xs text-text-secondary">{p.reference || "â€”"}</td>
+                  <td className="px-4 py-3 text-xs text-text-secondary">{p.reference || "—"}</td>
                   <td className="px-4 py-3 text-xs font-medium">{p.price.toFixed(2)} TND</td>
                   <td className="px-4 py-3">
                     <div className="flex h-16 w-16 overflow-hidden rounded border border-border bg-bg-secondary">
@@ -420,17 +420,17 @@ export default function ProductsPage() {
                         aria-label={`Toggle visibility for ${p.name}`}
                       >
                         <span
-                          className={`absolute inset-0 transition-colors ${
+                          className={`absolute inset-0 rounded-full transition-colors ${
                             p.isActive === false || p.visibilityStatus === "inactive"
-                              ? "bg-[#d9d3c9]"
+                              ? "bg-bg-secondary"
                               : "bg-[#d7c08c]"
                           }`}
                         />
                         <span
-                          className={`absolute top-[2px] h-5 w-5 bg-[#1a1a1a] transition-all duration-200 ease-out ${
+                          className={`absolute top-[2px] h-5 w-5 rounded-full bg-bg-primary shadow-sm ring-1 ring-black/5 transition-all duration-200 ease-out ${
                             p.isActive === false || p.visibilityStatus === "inactive"
                               ? "left-[2px]"
-                              : "left-[25px]"
+                              : "left-[26px]"
                           }`}
                         />
                       </button>

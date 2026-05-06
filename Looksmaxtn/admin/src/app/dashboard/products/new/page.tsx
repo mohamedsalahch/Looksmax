@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -167,7 +167,7 @@ View & Layout:
 
 Fabric Preparation:
 
-* Ironing clothes removes wrinkles â€” remove all wrinkles and creases
+* Ironing clothes removes wrinkles — remove all wrinkles and creases
 * Make the garment look freshly ironed or professionally steamed
 * Keep natural fabric texture (do NOT over-smooth or make it look artificial)
 
@@ -699,7 +699,7 @@ function ColorwayGenerationCard({
               <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />
             )}
             {colorway.generateStatus === "completed"
-              ? "Generated âœ“"
+              ? "Generated ✓"
               : colorway.generateStatus === "processing"
               ? "Generating..."
               : "Generate"}
@@ -719,7 +719,7 @@ function ColorwayGenerationCard({
               onClick={() => setZoomedUrl(null)}
               className="absolute right-0 top-0 z-10 h-9 w-9 border border-white/30 bg-black/60 text-xl leading-none text-white hover:bg-black transition-colors"
             >
-              Ã—
+              ×
             </button>
             <div className="flex max-h-[92vh] items-center justify-center bg-bg-card p-4">
               <img src={zoomedUrl} alt="Generated model" className="max-h-[86vh] max-w-full object-contain" />
@@ -809,7 +809,7 @@ function ColorwayCard({
         onUpdate({ hex: result.sRGBHex.toUpperCase() });
         return;
       } catch {
-        // cancelled or unsupported â€” fall through to color input
+        // cancelled or unsupported — fall through to color input
       }
     }
     colorInputRef.current?.click();
@@ -828,7 +828,7 @@ function ColorwayCard({
               title="Remove colorway"
               className="text-sm leading-none text-text-secondary hover:text-danger transition-colors"
             >
-              Ã—
+              ×
             </button>
           )}
           <span className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">
@@ -938,7 +938,7 @@ function ColorwayCard({
               aria-label="Close preview"
               className="absolute right-0 top-0 z-10 h-9 w-9 border border-white/30 bg-black/60 text-xl leading-none text-white hover:bg-black transition-colors"
             >
-              Ã—
+              ×
             </button>
             <div className="flex max-h-[92vh] items-center justify-center bg-bg-card p-4">
               <img
@@ -978,14 +978,14 @@ function ColorwayCard({
                 disabled={colorway.sizes.length === 1}
                 className="flex-none text-sm leading-none text-text-secondary hover:text-danger transition-colors disabled:opacity-30"
               >
-                Ã—
+                ×
               </button>
             </div>
             {isThrift && (
               <div className="space-y-0.5 px-0.5">
                 <div className="flex items-center justify-between">
                   <span className="text-[8px] uppercase tracking-wider text-text-secondary">Condition</span>
-                  <span className="text-[8px] text-text-secondary">{sizeRow.conditionScore}/10 Â· {getConditionStatusFromScore(Number(sizeRow.conditionScore)).toUpperCase()}</span>
+                  <span className="text-[8px] text-text-secondary">{sizeRow.conditionScore}/10 · {getConditionStatusFromScore(Number(sizeRow.conditionScore)).toUpperCase()}</span>
                 </div>
                 <input
                   type="range"
@@ -1046,7 +1046,7 @@ function ColorwayCard({
               <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />
             )}
             {colorway.enhanceStatus === "completed"
-              ? "Enhanced âœ“"
+              ? "Enhanced ✓"
               : colorway.enhanceStatus === "processing"
               ? "Enhancing..."
               : "Enhance"}
@@ -1152,7 +1152,7 @@ function ColorwayCard({
                 <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />
               )}
               {colorway.generateStatus === "completed"
-                ? "Generated âœ“"
+                ? "Generated ✓"
                 : colorway.generateStatus === "processing"
                 ? "Generating..."
                 : "Generate"}
@@ -2640,7 +2640,7 @@ export default function NewProductPage() {
         body.append("companionSettings", JSON.stringify(companionSettingsPayload));
 
         // Generated model images come first, then enhanced/raw origin pictures
-        // Build colorImages mapping: hex â†’ array of image indices
+        // Build colorImages mapping: hex → array of image indices
         const imageFiles: File[] = [];
         const colorImagesPayload: Record<string, number[]> = {};
         for (const cw of colorways) {
@@ -3060,7 +3060,7 @@ export default function NewProductPage() {
                   </div>
                 </div>
 
-                {/* Per-colorway generation cards â€” only shown once a model is picked */}
+                {/* Per-colorway generation cards — only shown once a model is picked */}
                 {selectedModelId && !isStoreOwner && (
                   <div className="mt-4 flex items-start gap-3 overflow-x-auto pb-2">
                     {colorways.map((cw, cwIndex) => (
@@ -3546,7 +3546,7 @@ export default function NewProductPage() {
                           className="shrink-0 border border-border px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-text-secondary transition-colors hover:border-accent hover:text-accent"
                           aria-label={`Remove variant ${index + 1}`}
                           >
-                          Ã—
+                          ×
                         </button>
                       </div>
                     ))}
@@ -3569,7 +3569,7 @@ export default function NewProductPage() {
                 aria-label="Close image preview"
                 className="absolute right-0 top-0 z-10 h-9 w-9 border border-white/30 bg-black/60 text-xl leading-none text-white transition-colors hover:bg-black"
               >
-                Ã—
+                ×
               </button>
               <div className="flex max-h-[92vh] items-center justify-center bg-bg-card p-4">
                 <img
@@ -3768,7 +3768,7 @@ export default function NewProductPage() {
                       aria-label="Cancel enhancement"
                       className="inline-flex h-9 w-9 items-center justify-center border border-border text-xs text-text-secondary hover:bg-bg-hover"
                     >
-                      Ã—
+                      ×
                     </button>
                   )}
                   <button
@@ -3865,7 +3865,7 @@ export default function NewProductPage() {
                       aria-label="Cancel generation"
                       className="inline-flex h-9 w-9 items-center justify-center border border-border text-xs text-text-secondary hover:bg-bg-hover"
                     >
-                      Ã—
+                      ×
                     </button>
                   )}
                   <button

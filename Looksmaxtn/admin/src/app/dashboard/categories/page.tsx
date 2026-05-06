@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { withAuthRequest } from "@/lib/authClient";
@@ -20,11 +20,11 @@ type SortKey = "order" | "name" | "parent" | "slug" | "visibility" | "created" |
 type SortDirection = "asc" | "desc";
 
 function formatAuditLine(date?: string, actor?: { name: string; email: string } | null) {
-  const actorLabel = actor?.name || actor?.email || "â€”";
+  const actorLabel = actor?.name || actor?.email || "—";
   if (!date) return actorLabel;
   const parsed = new Date(date);
-  const dateLabel = Number.isNaN(parsed.getTime()) ? "â€”" : parsed.toLocaleDateString();
-  return `${actorLabel} Â· ${dateLabel}`;
+  const dateLabel = Number.isNaN(parsed.getTime()) ? "—" : parsed.toLocaleDateString();
+  return `${actorLabel} · ${dateLabel}`;
 }
 
 export default function CategoriesPage() {
@@ -288,8 +288,8 @@ export default function CategoriesPage() {
   };
 
   const renderSortIndicator = (key: SortKey) => {
-    if (sortKey !== key) return <span className="text-[9px] text-text-secondary/60">â†•</span>;
-    return <span className="text-[9px] text-accent">{sortDirection === "asc" ? "â†‘" : "â†“"}</span>;
+    if (sortKey !== key) return <span className="text-[9px] text-text-secondary/60">↕</span>;
+    return <span className="text-[9px] text-accent">{sortDirection === "asc" ? "↑" : "↓"}</span>;
   };
 
   return (
@@ -491,7 +491,7 @@ export default function CategoriesPage() {
                                 aria-label={isCollapsed ? `Expand ${cat.name}` : `Collapse ${cat.name}`}
                                 className="mr-1.5 inline-flex h-4 w-4 items-center justify-center text-text-secondary hover:text-text-primary cursor-pointer"
                               >
-                                <span className="text-[10px]">{isCollapsed ? "â–¶" : "â–¼"}</span>
+                                <span className="text-[10px]">{isCollapsed ? "▶" : "▼"}</span>
                               </button>
                             ) : (
                               <span className="mr-1.5 inline-block h-4 w-4" aria-hidden="true" />
@@ -517,13 +517,13 @@ export default function CategoriesPage() {
                       aria-label={`Toggle visibility for ${cat.name}`}
                     >
                       <span
-                        className={`absolute inset-0 transition-colors ${
-                          cat.isActive ? "bg-[#d7c08c]" : "bg-[#d9d3c9]"
+                        className={`absolute inset-0 rounded-full transition-colors ${
+                          cat.isActive ? "bg-[#d7c08c]" : "bg-bg-secondary"
                         }`}
                       />
                       <span
-                        className={`absolute top-[2px] h-5 w-5 bg-[#1a1a1a] transition-all duration-200 ease-out ${
-                          cat.isActive ? "left-[25px]" : "left-[2px]"
+                        className={`absolute top-[2px] h-5 w-5 rounded-full bg-bg-primary shadow-sm ring-1 ring-black/5 transition-all duration-200 ease-out ${
+                          cat.isActive ? "left-[26px]" : "left-[2px]"
                         }`}
                       />
                     </button>
