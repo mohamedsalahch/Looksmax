@@ -93,6 +93,7 @@ export async function POST(req: NextRequest) {
       productType: type,
       fashionSubtype,
       garmentZone,
+      createdBy: new mongoose.Types.ObjectId(session.userId),
     });
 
     const payload =

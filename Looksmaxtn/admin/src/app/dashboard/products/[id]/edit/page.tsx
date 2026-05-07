@@ -6,6 +6,7 @@ import { getConditionStatusFromScore } from "@/lib/productCondition";
 import { generateId } from "@/lib/uuid";
 import { withAuthRequest } from "@/lib/authClient";
 import { compressImageFile } from "@/lib/imageCompression";
+import { subscribeToJob } from "@/lib/jobEvents";
 import {
   SECONDARY_GARMENT_PALETTE,
   PaletteColor,
@@ -160,70 +161,6 @@ function buildVariantKey(row: FashionVariantRow) {
   const color = row.colors.trim();
   return color ? `${size} / ${color}` : size;
 }
-
-const PRODUCT_MEDIA_ENHANCEMENT_PROMPT = `You are a professional e-commerce product retouching assistant.
-
-Task:
-
-* Transform the provided product image into a clean, mannequin-free product image suitable for a professional catalog.
-
-Main Actions:
-
-* Remove the mannequin completely
-* Keep only the garment visible
-* Reconstruct missing parts naturally if needed
-
-View & Layout:
-
-* The final image must be a top-down view (flat lay)
-* The garment must be laid flat on a surface
-* Ensure a natural and symmetrical flat presentation
-* Keep proportions accurate and realistic
-
-Fabric Preparation:
-
-* Ironing clothes removes wrinkles — remove all wrinkles and creases
-* Make the garment look freshly ironed or professionally steamed
-* Keep natural fabric texture (do NOT over-smooth or make it look artificial)
-
-Strict Preservation Rules:
-
-* Preserve the product EXACTLY:
-
-  * shape and proportions
-  * color
-  * fabric and texture
-  * stitching and details
-  * logos and branding
-* Do NOT redesign or alter the garment
-
-Background:
-
-* Use a clean solid background with color #EAE9E7
-* Flat surface, smooth and uniform
-* No gradients, no texture, no distractions
-
-Lighting:
-
-* Soft, even studio lighting
-* Minimal shadows
-* Clean, catalog-style illumination
-
-Constraints:
-
-* No mannequin
-* No human model
-* No props
-* No text or graphics
-* No added elements
-
-Output:
-
-* High-resolution image
-* Clean, ironed, flat-lay garment
-* Professional e-commerce ready (Instagram & catalog quality)
-
-- Background color must remain exactly #EAE9E7 with no variation`;
 
 const initialForm = {
   name: "",
@@ -1311,34 +1248,32 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   useEffect(() => {
     const processing = colorways.filter((c) => c.enhanceStatus === "processing" && c.enhanceJobId);
     if (processing.length === 0) return;
-    const intervalId = window.setInterval(() => {
-      processing.forEach((cw) => {
-        fetch(`/api/products/enhance?job_id=${cw.enhanceJobId}`, withAuthRequest())
-          .then((r) => r.json().then((data) => ({ ok: r.ok, data })))
-          .then(({ ok, data }) => {
-            if (!ok) { updateColorway(cw.id, { enhanceStatus: "failed", enhanceError: data.error || "Enhancement failed.", enhanceJobId: "" }); return; }
-            if (data.status === "completed") {
-              const frontUrl: string = data.images?.front || "";
-              const backUrl: string = data.images?.back || "";
-              const leftUrl: string = data.images?.left || "";
-              const rightUrl: string = data.images?.right || "";
-              Promise.all([
-                frontUrl ? imageUrlToFile(frontUrl, "front-enhanced") : Promise.resolve(null),
-                backUrl ? imageUrlToFile(backUrl, "back-enhanced") : Promise.resolve(null),
-                leftUrl ? imageUrlToFile(leftUrl, "left-enhanced") : Promise.resolve(null),
-                rightUrl ? imageUrlToFile(rightUrl, "right-enhanced") : Promise.resolve(null),
-              ]).then(([frontFile, backFile, leftFile, rightFile]) => updateColorway(cw.id, {
-                enhanceStatus: "completed", enhanceJobId: "", enhanceError: "",
-                enhancedFrontUrl: frontUrl, enhancedBackUrl: backUrl,
-                enhancedLeftUrl: leftUrl, enhancedRightUrl: rightUrl,
-                enhancedFrontFile: frontFile, enhancedBackFile: backFile,
-                enhancedLeftFile: leftFile, enhancedRightFile: rightFile,
-              }));
-            } else if (data.status === "failed") { updateColorway(cw.id, { enhanceStatus: "failed", enhanceError: data.error || "Enhancement failed.", enhanceJobId: "" }); }
-          }).catch(() => updateColorway(cw.id, { enhanceStatus: "failed", enhanceError: "Unable to poll enhancement status.", enhanceJobId: "" }));
-      });
-    }, 4000);
-    return () => window.clearInterval(intervalId);
+    const unsubscribers = processing.map((cw) =>
+      subscribeToJob(cw.enhanceJobId, (update) => {
+        if (update.status === "failed") {
+          updateColorway(cw.id, { enhanceStatus: "failed", enhanceError: update.error || "Enhancement failed.", enhanceJobId: "" });
+          return;
+        }
+        if (update.status !== "completed") return;
+        const frontUrl: string = update.images?.front || "";
+        const backUrl: string = update.images?.back || "";
+        const leftUrl: string = update.images?.left || "";
+        const rightUrl: string = update.images?.right || "";
+        Promise.all([
+          frontUrl ? imageUrlToFile(frontUrl, "front-enhanced") : Promise.resolve(null),
+          backUrl ? imageUrlToFile(backUrl, "back-enhanced") : Promise.resolve(null),
+          leftUrl ? imageUrlToFile(leftUrl, "left-enhanced") : Promise.resolve(null),
+          rightUrl ? imageUrlToFile(rightUrl, "right-enhanced") : Promise.resolve(null),
+        ]).then(([frontFile, backFile, leftFile, rightFile]) => updateColorway(cw.id, {
+          enhanceStatus: "completed", enhanceJobId: "", enhanceError: "",
+          enhancedFrontUrl: frontUrl, enhancedBackUrl: backUrl,
+          enhancedLeftUrl: leftUrl, enhancedRightUrl: rightUrl,
+          enhancedFrontFile: frontFile, enhancedBackFile: backFile,
+          enhancedLeftFile: leftFile, enhancedRightFile: rightFile,
+        }));
+      })
+    );
+    return () => unsubscribers.forEach((fn) => fn());
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [colorways]);
 
@@ -1402,24 +1337,24 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   useEffect(() => {
     const processing = colorways.filter((c) => c.generateStatus === "processing" && c.generateJobId);
     if (processing.length === 0) return;
-    const intervalId = window.setInterval(() => {
-      processing.forEach((cw) => {
-        fetch(`/api/products/generate?job_id=${cw.generateJobId}`, withAuthRequest())
-          .then((r) => r.json().then((data) => ({ ok: r.ok, data })))
-          .then(({ ok, data }) => {
-            if (!ok) { updateColorway(cw.id, { generateStatus: "failed", generateError: data.error || "Generation failed.", generateJobId: "" }); return; }
-            if (data.status === "completed") {
-              const subtype = form.fashionSubtype || savedFashionSubtype || "clothes";
-              const viewList = subtype === "shoes" ? ["front", "back", "left", "right"] : ["front", "back"];
-              Promise.all(viewList.map(async (view, i) => {
-                const base64: string = data.images?.[view]; if (!base64) return null;
-                const file = await base64ToFile(base64, i); return { url: URL.createObjectURL(file), file };
-              })).then((results) => updateColorway(cw.id, { generateStatus: "completed", generateJobId: "", generateError: "", generatedImages: results.filter((r): r is { url: string; file: File } => r !== null) }));
-            } else if (data.status === "failed") { updateColorway(cw.id, { generateStatus: "failed", generateError: data.error || "Generation failed.", generateJobId: "" }); }
-          }).catch(() => updateColorway(cw.id, { generateStatus: "failed", generateError: "Unable to poll generation status.", generateJobId: "" }));
-      });
-    }, 5000);
-    return () => window.clearInterval(intervalId);
+    const unsubscribers = processing.map((cw) =>
+      subscribeToJob(cw.generateJobId, (update) => {
+        if (update.status === "failed") {
+          updateColorway(cw.id, { generateStatus: "failed", generateError: update.error || "Generation failed.", generateJobId: "" });
+          return;
+        }
+        if (update.status !== "completed") return;
+        const subtype = form.fashionSubtype || savedFashionSubtype || "clothes";
+        const viewList = subtype === "shoes" ? ["front", "back", "left", "right"] : ["front", "back"];
+        Promise.all(viewList.map(async (view, i) => {
+          const base64 = update.images?.[view];
+          if (!base64) return null;
+          const file = await base64ToFile(base64, i);
+          return { url: URL.createObjectURL(file), file };
+        })).then((results) => updateColorway(cw.id, { generateStatus: "completed", generateJobId: "", generateError: "", generatedImages: results.filter((r): r is { url: string; file: File } => r !== null) }));
+      })
+    );
+    return () => unsubscribers.forEach((fn) => fn());
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [colorways]);
 
@@ -1433,28 +1368,25 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   useEffect(() => {
     if (productMediaStatus !== "processing" || !productMediaJobId) return;
 
-    const intervalId = window.setInterval(() => {
-      fetch(`/api/products/enhance?job_id=${productMediaJobId}`, withAuthRequest())
-        .then((response) => response.json().then((data) => ({ ok: response.ok, data })))
-        .then(({ ok, data }) => {
-          if (!ok) {
-            setProductMediaStatus("failed");
-            setProductMediaError(data.error || "Unable to load enhanced product media.");
-            return;
-          }
-
-          if (data.status === "completed") {
-            const frontUrl = data.images?.front || "";
-            const backUrl = data.images?.back || "";
-            const leftUrl = data.images?.left || "";
-            const rightUrl = data.images?.right || "";
-            Promise.all([
-              frontUrl ? imageUrlToFile(frontUrl, "front-enhanced") : Promise.resolve(null),
-              backUrl ? imageUrlToFile(backUrl, "back-enhanced") : Promise.resolve(null),
-              leftUrl ? imageUrlToFile(leftUrl, "left-enhanced") : Promise.resolve(null),
-              rightUrl ? imageUrlToFile(rightUrl, "right-enhanced") : Promise.resolve(null),
-            ])
-              .then(([frontFile, backFile, leftFile, rightFile]) => {
+    const unsubscribe = subscribeToJob(productMediaJobId, (update) => {
+      if (update.status === "failed") {
+        setProductMediaStatus("failed");
+        setProductMediaError(update.error || "Product media enhancement failed.");
+        setProductMediaJobId("");
+        return;
+      }
+      if (update.status !== "completed") return;
+      const frontUrl = update.images?.front || "";
+      const backUrl = update.images?.back || "";
+      const leftUrl = update.images?.left || "";
+      const rightUrl = update.images?.right || "";
+      Promise.all([
+        frontUrl ? imageUrlToFile(frontUrl, "front-enhanced") : Promise.resolve(null),
+        backUrl ? imageUrlToFile(backUrl, "back-enhanced") : Promise.resolve(null),
+        leftUrl ? imageUrlToFile(leftUrl, "left-enhanced") : Promise.resolve(null),
+        rightUrl ? imageUrlToFile(rightUrl, "right-enhanced") : Promise.resolve(null),
+      ])
+        .then(([frontFile, backFile, leftFile, rightFile]) => {
                 if (frontUrl) {
                   setForm((current) => ({
                     ...current,
@@ -1508,27 +1440,14 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                   }
                 }
               })
-              .finally(() => {
-                setProductMediaStatus("completed");
-                setProductMediaError("");
-                setProductMediaJobId("");
-              });
-            return;
-          }
-
-          if (data.status === "failed") {
-            setProductMediaStatus("failed");
-            setProductMediaError(data.error || "Product media enhancement failed.");
-            setProductMediaJobId("");
-          }
-        })
-        .catch(() => {
-          setProductMediaStatus("failed");
-          setProductMediaError("Unable to load enhanced product media.");
+        .finally(() => {
+          setProductMediaStatus("completed");
+          setProductMediaError("");
+          setProductMediaJobId("");
         });
-    }, 4000);
+    });
 
-    return () => window.clearInterval(intervalId);
+    return () => unsubscribe();
   }, [productMediaJobId, productMediaStatus]);
 
   useEffect(() => {

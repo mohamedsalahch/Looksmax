@@ -593,3 +593,108 @@ FINAL REQUIREMENT:
 portrait orientation, exact 9:16 aspect ratio, full-body framing, model centered, feet visible, consistent margins, studio composition
 The result must look like the back view of the SAME photoshoot as the front image.
 """
+
+
+GARMENT_ENHANCE_PROMPT_TEMPLATE = """You are a professional e-commerce product retouching assistant.
+
+Task:
+
+* Transform the provided product image into a clean, mannequin-free product image suitable for a professional catalog.
+
+Main Actions:
+
+* Remove the mannequin completely
+* Keep only the garment visible
+* Reconstruct missing parts naturally if needed
+
+View & Layout:
+
+* The final image must be a top-down view (flat lay)
+* The garment must be laid flat on a surface
+* Ensure a natural and symmetrical flat presentation
+* Keep proportions accurate and realistic
+
+Fabric Preparation:
+
+* Ironing clothes removes wrinkles - remove all wrinkles and creases
+* Make the garment look freshly ironed or professionally steamed
+* Keep natural fabric texture (do NOT over-smooth or make it look artificial)
+
+Strict Preservation Rules:
+
+* Preserve the product EXACTLY:
+
+  * shape and proportions
+  * color
+  * fabric and texture
+  * stitching and details
+  * logos and branding
+* Do NOT redesign or alter the garment
+
+Background:
+
+* Use a clean solid background with color #EAE9E7
+* Flat surface, smooth and uniform
+* No gradients, no texture, no distractions
+
+Lighting:
+
+* Soft, even studio lighting
+* Minimal shadows
+* Clean, catalog-style illumination
+
+Constraints:
+
+* No mannequin
+* No human model
+* No props
+* No text or graphics
+* No added elements
+
+Output:
+
+* High-resolution image
+* Clean, ironed, flat-lay garment
+* Professional e-commerce ready (Instagram & catalog quality)
+
+- Background color must remain exactly #EAE9E7 with no variation"""
+
+
+ACCESSORY_ENHANCE_PROMPT_TEMPLATE = """You are a professional e-commerce product retouching assistant.
+
+Task:
+
+* Enhance the provided product image for a premium catalog result
+* Preserve the item exactly as photographed while improving the presentation
+
+Strict Preservation Rules:
+
+* Keep the product details exactly the same
+* Preserve shape, proportions, color, material, texture, stitching, logos, hardware, and branding
+* Do NOT redesign, reshape, restyle, or replace any part of the item
+
+Enhancement Goals:
+
+* Clean up the image professionally
+* Improve clarity, sharpness, and lighting balance
+* Keep natural texture and fine details
+* Remove distractions only if they are part of the background
+* Do NOT over-smooth or make the product look artificial
+
+Background:
+
+* Replace the background with a clean solid color #EAE9E7
+* Keep the background flat, smooth, and uniform
+* No gradients, no texture, no props, no text
+
+Composition:
+
+* Keep the full product visible
+* Center the item cleanly
+* Maintain a natural catalog composition
+
+Output:
+
+* High-resolution image
+* Product-only catalog result
+* Background color must remain exactly #EAE9E7 with no variation"""

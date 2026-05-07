@@ -58,6 +58,34 @@ class ShoesRequest(BaseModel):
     product_pictures: ShoesProductPictures
 
 
+class GarmentProductPictures(BaseModel):
+    """Garment product pictures (front + back)."""
+    front: str
+    back: str
+
+
+class GarmentEnhanceRequest(BaseModel):
+    """Request for garment image enhancement (mannequin removal, flat lay)."""
+    job_id: str | None = None
+    webhook_url: str | None = None
+    product_pictures: GarmentProductPictures
+
+
+class AccessoryProductPictures(BaseModel):
+    """Accessory product pictures. Any subset of views may be provided."""
+    front: str = ""
+    back: str = ""
+    left: str = ""
+    right: str = ""
+
+
+class AccessoryEnhanceRequest(BaseModel):
+    """Request for accessory image enhancement (background cleanup)."""
+    job_id: str | None = None
+    webhook_url: str | None = None
+    product_pictures: AccessoryProductPictures
+
+
 class ProxyRequest(BaseModel):
     """Request for proxy endpoint."""
     job_id: str | None = None

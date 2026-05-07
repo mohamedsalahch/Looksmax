@@ -14,6 +14,8 @@ from app.prompts.templates import (
     SHOES_PROMPT_TEMPLATE,
     FRONT_VIEW_PROMPT_TEMPLATE,
     BACK_VIEW_PROMPT_TEMPLATE,
+    GARMENT_ENHANCE_PROMPT_TEMPLATE,
+    ACCESSORY_ENHANCE_PROMPT_TEMPLATE,
 )
 from app.utils.image import b64_to_part
 
@@ -212,6 +214,80 @@ class ImageGenerator:
                 return base64.b64encode(image_bytes).decode("utf-8")
 
         raise HTTPException(status_code=500, detail=f"Failed to generate {view_name} view")
+
+    async def enhance_garment_view(self, view_name: str, image_b64: str) -> str:
+        """Enhance a single garment image (mannequin removal, flat lay).
+
+        Args:
+            view_name: The view label ("front" or "back")
+            image_b64: Base64 encoded source image for that view
+
+        Returns:
+            Base64 encoded enhanced image
+        """
+        if not image_b64:
+            raise HTTPException(status_code=400, detail=f"Missing garment image for {view_name} view")
+
+        parts = [
+            types.Part(text=GARMENT_ENHANCE_PROMPT_TEMPLATE),
+            b64_to_part(image_b64),
+        ]
+
+        try:
+            response = await self.client.aio.models.generate_content(
+                model=self.model,
+                contents=[types.Content(parts=parts)],
+                config=self.default_config,
+            )
+        except Exception as e:
+            logger.error(f"enhance_garment_view({view_name}): Gemini API error: {e}")
+            raise
+
+        if not response.candidates:
+            raise HTTPException(status_code=500, detail=f"No response from Gemini for {view_name} view")
+
+        for part in response.candidates[0].content.parts:
+            if part.inline_data is not None:
+                return base64.b64encode(part.inline_data.data).decode("utf-8")
+
+        raise HTTPException(status_code=500, detail=f"Failed to enhance {view_name} garment view")
+
+    async def enhance_accessory_view(self, view_name: str, image_b64: str) -> str:
+        """Enhance a single accessory image (background cleanup).
+
+        Args:
+            view_name: The view label ("front", "back", "left", or "right")
+            image_b64: Base64 encoded source image for that view
+
+        Returns:
+            Base64 encoded enhanced image
+        """
+        if not image_b64:
+            raise HTTPException(status_code=400, detail=f"Missing accessory image for {view_name} view")
+
+        parts = [
+            types.Part(text=ACCESSORY_ENHANCE_PROMPT_TEMPLATE),
+            b64_to_part(image_b64),
+        ]
+
+        try:
+            response = await self.client.aio.models.generate_content(
+                model=self.model,
+                contents=[types.Content(parts=parts)],
+                config=self.default_config,
+            )
+        except Exception as e:
+            logger.error(f"enhance_accessory_view({view_name}): Gemini API error: {e}")
+            raise
+
+        if not response.candidates:
+            raise HTTPException(status_code=500, detail=f"No response from Gemini for {view_name} view")
+
+        for part in response.candidates[0].content.parts:
+            if part.inline_data is not None:
+                return base64.b64encode(part.inline_data.data).decode("utf-8")
+
+        raise HTTPException(status_code=500, detail=f"Failed to enhance {view_name} accessory view")
 
     async def generate_front_view(
         self,

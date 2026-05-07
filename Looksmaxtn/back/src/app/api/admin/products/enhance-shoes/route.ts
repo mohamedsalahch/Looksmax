@@ -91,6 +91,7 @@ export async function POST(req: NextRequest) {
       status: "processing",
       sourceImages: { front: frontSource, back: backSource, left: leftSource, right: rightSource },
       images: { front: "", back: "", left: "", right: "" },
+      createdBy: new mongoose.Types.ObjectId(session.userId),
     });
 
     const webhookBaseUrl = getWebhookBaseUrl(req);

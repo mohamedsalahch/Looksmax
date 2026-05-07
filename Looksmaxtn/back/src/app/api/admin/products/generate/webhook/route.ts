@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
 import ProductGenerationJob from "@/admin/models/ProductGenerationJob";
 import { requireWebhookSecret } from "@/lib/webhookAuth";
+import { publishJobEvent } from "@/admin/lib/jobEvents";
 
 export async function POST(req: NextRequest) {
   try {
@@ -27,6 +28,15 @@ export async function POST(req: NextRequest) {
       job.status = "failed";
       job.error = "Generation failed.";
       await job.save();
+      if (job.createdBy) {
+        publishJobEvent(job.createdBy.toString(), {
+          type: "job:update",
+          kind: "generate",
+          jobId: String(job._id),
+          status: "failed",
+          error: job.error,
+        });
+      }
       return NextResponse.json({ ok: true });
     }
 
@@ -57,6 +67,17 @@ export async function POST(req: NextRequest) {
     }
 
     await job.save();
+
+    if (job.status === "completed" && job.createdBy) {
+      publishJobEvent(job.createdBy.toString(), {
+        type: "job:update",
+        kind: "generate",
+        jobId: String(job._id),
+        status: "completed",
+        images: { ...(job.images as Record<string, string>) },
+      });
+    }
+
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("Product Webhook error:", error);

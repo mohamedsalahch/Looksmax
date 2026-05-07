@@ -12,6 +12,7 @@ export interface IProductGenerationJob extends Document {
     right?: string;
   };
   error?: string;
+  createdBy?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -33,6 +34,7 @@ const ProductGenerationJobSchema = new Schema<IProductGenerationJob>(
       right: { type: String, default: "" },
     },
     error: { type: String },
+    createdBy: { type: Schema.Types.ObjectId, ref: "User", index: true },
   },
   { timestamps: true }
 );

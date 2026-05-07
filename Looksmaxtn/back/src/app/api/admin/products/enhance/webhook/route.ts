@@ -3,6 +3,7 @@ import dbConnect from "@/admin/lib/mongodb";
 import ProductMediaEnhancementJob from "@/admin/models/ProductMediaEnhancementJob";
 import { saveProductMediaResultBase64 } from "@/admin/lib/productMediaUploads";
 import { requireWebhookSecret } from "@/lib/webhookAuth";
+import { publishJobEvent } from "@/admin/lib/jobEvents";
 
 type WebhookBody = {
   job_id?: string;
@@ -50,6 +51,15 @@ export async function POST(req: NextRequest) {
       job.status = "failed";
       job.errorMessage = "Product media enhancement failed.";
       await job.save();
+      if (job.createdBy) {
+        publishJobEvent(job.createdBy.toString(), {
+          type: "job:update",
+          kind: "enhance",
+          jobId: String(job._id),
+          status: "failed",
+          error: job.errorMessage,
+        });
+      }
       return NextResponse.json({ ok: true });
     }
 
@@ -66,11 +76,25 @@ export async function POST(req: NextRequest) {
     job.images[view] = savedPath;
     job.markModified("images");
 
-    if (hasAllEnhancedResults(job as unknown as { sourceImages: Record<EnhancementView, string>; images: Record<EnhancementView, string> })) {
+    const wasCompleted = hasAllEnhancedResults(
+      job as unknown as { sourceImages: Record<EnhancementView, string>; images: Record<EnhancementView, string> }
+    );
+    if (wasCompleted) {
       job.status = "completed";
     }
 
     await job.save();
+
+    if (wasCompleted && job.createdBy) {
+      publishJobEvent(job.createdBy.toString(), {
+        type: "job:update",
+        kind: "enhance",
+        jobId: String(job._id),
+        status: "completed",
+        images: { ...(job.images as Record<string, string>) },
+      });
+    }
+
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("[product-media-webhook] Error:", error);

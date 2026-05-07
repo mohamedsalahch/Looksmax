@@ -9,109 +9,6 @@ import {
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
 import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
 
-const PRODUCT_MEDIA_ENHANCEMENT_PROMPT = `You are a professional e-commerce product retouching assistant.
-
-Task:
-
-* Transform the provided product image into a clean, mannequin-free product image suitable for a professional catalog.
-
-Main Actions:
-
-* Remove the mannequin completely
-* Keep only the garment visible
-* Reconstruct missing parts naturally if needed
-
-View & Layout:
-
-* The final image must be a top-down view (flat lay)
-* The garment must be laid flat on a surface
-* Ensure a natural and symmetrical flat presentation
-* Keep proportions accurate and realistic
-
-Fabric Preparation:
-
-* Ironing clothes removes wrinkles — remove all wrinkles and creases
-* Make the garment look freshly ironed or professionally steamed
-* Keep natural fabric texture (do NOT over-smooth or make it look artificial)
-
-Strict Preservation Rules:
-
-* Preserve the product EXACTLY:
-
-  * shape and proportions
-  * color
-  * fabric and texture
-  * stitching and details
-  * logos and branding
-* Do NOT redesign or alter the garment
-
-Background:
-
-* Use a clean solid background with color #EAE9E7
-* Flat surface, smooth and uniform
-* No gradients, no texture, no distractions
-
-Lighting:
-
-* Soft, even studio lighting
-* Minimal shadows
-* Clean, catalog-style illumination
-
-Constraints:
-
-* No mannequin
-* No human model
-* No props
-* No text or graphics
-* No added elements
-
-Output:
-
-* High-resolution image
-* Clean, ironed, flat-lay garment
-* Professional e-commerce ready (Instagram & catalog quality)
-
-- Background color must remain exactly #EAE9E7 with no variation`;
-
-const ACCESSORY_MEDIA_ENHANCEMENT_PROMPT = `You are a professional e-commerce product retouching assistant.
-
-Task:
-
-* Enhance the provided product image for a premium catalog result
-* Preserve the item exactly as photographed while improving the presentation
-
-Strict Preservation Rules:
-
-* Keep the product details exactly the same
-* Preserve shape, proportions, color, material, texture, stitching, logos, hardware, and branding
-* Do NOT redesign, reshape, restyle, or replace any part of the item
-
-Enhancement Goals:
-
-* Clean up the image professionally
-* Improve clarity, sharpness, and lighting balance
-* Keep natural texture and fine details
-* Remove distractions only if they are part of the background
-* Do NOT over-smooth or make the product look artificial
-
-Background:
-
-* Replace the background with a clean solid color #EAE9E7
-* Keep the background flat, smooth, and uniform
-* No gradients, no texture, no props, no text
-
-Composition:
-
-* Keep the full product visible
-* Center the item cleanly
-* Maintain a natural catalog composition
-
-Output:
-
-* High-resolution image
-* Product-only catalog result
-* Background color must remain exactly #EAE9E7 with no variation`;
-
 const ALL_VIEWS = ["front", "back", "left", "right"] as const;
 type EnhancementView = typeof ALL_VIEWS[number];
 
@@ -120,23 +17,25 @@ async function fileToBase64(file: File) {
   return Buffer.from(bytes).toString("base64");
 }
 
-async function compareFrontBackImages(baseUrl: string, frontBase64: string, backBase64: string) {
+function buildGeneratorEndpoint(baseUrl: string, path: string) {
   const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
-  const compareUrl = normalizedBaseUrl.endsWith("/api")
-    ? `${normalizedBaseUrl}/compare-front-back`
-    : `${normalizedBaseUrl}/api/compare-front-back`;
+  return normalizedBaseUrl.endsWith("/api")
+    ? `${normalizedBaseUrl}/${path}`
+    : `${normalizedBaseUrl}/api/${path}`;
+}
 
-    const response = await fetch(compareUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        front: frontBase64,
-        back: backBase64,
-        front_label: "front",
-        back_label: "back",
-      }),
-    });
-
+async function compareFrontBackImages(baseUrl: string, frontBase64: string, backBase64: string) {
+  const compareUrl = buildGeneratorEndpoint(baseUrl, "compare-front-back");
+  const response = await fetch(compareUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      front: frontBase64,
+      back: backBase64,
+      front_label: "front",
+      back_label: "back",
+    }),
+  });
   const data = await response.json().catch(() => ({}));
   return { ok: response.ok, data };
 }
@@ -163,7 +62,6 @@ export async function POST(req: NextRequest) {
 
     await dbConnect();
 
-    // Check and consume a try for store_owners
     if (session.role === "store_owner") {
       const requestingUser = await User.findById(new mongoose.Types.ObjectId(session.userId))
         .select("storeOwnerStats")
@@ -188,53 +86,67 @@ export async function POST(req: NextRequest) {
       (view) => filesByView[view] instanceof File && (filesByView[view] as File).size > 0
     );
 
+    const webhookBaseUrl = getWebhookBaseUrl(req);
+    const webhookUrl = `${webhookBaseUrl}/api/admin/products/enhance/webhook`;
+
     if (mode === "accessory") {
       if (uploadedViews.length === 0) {
         return NextResponse.json({ error: "At least one image is required." }, { status: 400 });
       }
 
-      const sourceImages = {
+      const sourceImages: Record<EnhancementView, string> = {
         front: "",
         back: "",
         left: "",
         right: "",
       };
-      const base64ByView = await Promise.all(
+      const productPictures: Record<EnhancementView, string> = {
+        front: "",
+        back: "",
+        left: "",
+        right: "",
+      };
+
+      await Promise.all(
         uploadedViews.map(async (view) => {
           const file = filesByView[view] as File;
           sourceImages[view] = await saveProductMediaSourceImage(file, view);
-          return [view, await fileToBase64(file)] as const;
+          productPictures[view] = await fileToBase64(file);
         })
       );
 
       const job = await ProductMediaEnhancementJob.create({
         status: "processing",
         sourceImages,
-        images: {
-          front: "",
-          back: "",
-          left: "",
-          right: "",
-        },
+        images: { front: "", back: "", left: "", right: "" },
+        createdBy: new mongoose.Types.ObjectId(session.userId),
       });
 
-      const webhookBaseUrl = getWebhookBaseUrl(req);
-      const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
-      const triggers = base64ByView.map(([view, imageBase64]) =>
-        fetch(`${normalizedBaseUrl}/api/proxy`, {
+      let generationResponse: Response;
+      try {
+        generationResponse = await fetch(buildGeneratorEndpoint(baseUrl, "enhance-accessory"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             job_id: job._id.toString(),
-            webhook_url: `${webhookBaseUrl}/api/admin/products/enhance/webhook?view=${view}`,
-            prompt: ACCESSORY_MEDIA_ENHANCEMENT_PROMPT,
-            images: [imageBase64],
+            webhook_url: webhookUrl,
+            product_pictures: productPictures,
           }),
-        })
-      );
+        });
+      } catch (fetchErr: unknown) {
+        const cause = fetchErr instanceof Error ? (fetchErr.cause ?? fetchErr) : fetchErr;
+        console.error("[enhance] fetch to generator failed:", cause);
+        logRequestError("admin.products.enhance.post", req, fetchErr);
+        job.status = "failed";
+        job.errorMessage = "Generation service unreachable.";
+        await job.save();
+        return NextResponse.json(
+          { error: `Generation service unreachable. Make sure the generator API is running.` },
+          { status: 503 }
+        );
+      }
 
-      const responses = await Promise.all(triggers);
-      if (responses.some((response) => !response.ok)) {
+      if (!generationResponse.ok) {
         job.status = "failed";
         job.errorMessage = "Failed to reach generation service.";
         await job.save();
@@ -260,7 +172,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Back image is required." }, { status: 400 });
     }
 
-    const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
     const [frontBase64, backBase64] = await Promise.all([
       fileToBase64(frontFile),
       fileToBase64(backFile),
@@ -268,13 +179,13 @@ export async function POST(req: NextRequest) {
 
     let compare: Awaited<ReturnType<typeof compareFrontBackImages>>;
     try {
-      compare = await compareFrontBackImages(normalizedBaseUrl, frontBase64, backBase64);
+      compare = await compareFrontBackImages(baseUrl, frontBase64, backBase64);
     } catch (fetchErr: unknown) {
       const cause = fetchErr instanceof Error ? (fetchErr.cause ?? fetchErr) : fetchErr;
       console.error("[enhance] fetch to generator failed:", cause);
       logRequestError("admin.products.enhance.post", req, fetchErr);
       return NextResponse.json(
-        { error: `Generation service unreachable at ${normalizedBaseUrl}. Make sure the generator API is running.` },
+        { error: `Generation service unreachable. Make sure the generator API is running.` },
         { status: 503 }
       );
     }
@@ -298,39 +209,35 @@ export async function POST(req: NextRequest) {
     const job = await ProductMediaEnhancementJob.create({
       status: "processing",
       sourceImages,
-      images: {
-        front: "",
-        back: "",
-      },
+      images: { front: "", back: "" },
+      createdBy: new mongoose.Types.ObjectId(session.userId),
     });
 
-    const webhookBaseUrl = getWebhookBaseUrl(req);
+    let generationResponse: Response;
+    try {
+      generationResponse = await fetch(buildGeneratorEndpoint(baseUrl, "enhance-garment"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_id: job._id.toString(),
+          webhook_url: webhookUrl,
+          product_pictures: { front: frontBase64, back: backBase64 },
+        }),
+      });
+    } catch (fetchErr: unknown) {
+      const cause = fetchErr instanceof Error ? (fetchErr.cause ?? fetchErr) : fetchErr;
+      console.error("[enhance] fetch to generator failed:", cause);
+      logRequestError("admin.products.enhance.post", req, fetchErr);
+      job.status = "failed";
+      job.errorMessage = "Generation service unreachable.";
+      await job.save();
+      return NextResponse.json(
+        { error: `Generation service unreachable. Make sure the generator API is running.` },
+        { status: 503 }
+      );
+    }
 
-    const frontTrigger = fetch(`${normalizedBaseUrl}/api/proxy`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        job_id: job._id.toString(),
-        webhook_url: `${webhookBaseUrl}/api/admin/products/enhance/webhook?view=front`,
-        prompt: PRODUCT_MEDIA_ENHANCEMENT_PROMPT,
-        images: [frontBase64],
-      }),
-    });
-
-    const backTrigger = fetch(`${normalizedBaseUrl}/api/proxy`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        job_id: job._id.toString(),
-        webhook_url: `${webhookBaseUrl}/api/admin/products/enhance/webhook?view=back`,
-        prompt: PRODUCT_MEDIA_ENHANCEMENT_PROMPT,
-        images: [backBase64],
-      }),
-    });
-
-    const [frontResponse, backResponse] = await Promise.all([frontTrigger, backTrigger]);
-
-    if (!frontResponse.ok || !backResponse.ok) {
+    if (!generationResponse.ok) {
       job.status = "failed";
       job.errorMessage = "Failed to reach generation service.";
       await job.save();

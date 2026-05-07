@@ -15,6 +15,7 @@ export interface IProductMediaEnhancementJob extends Document {
     right?: string;
   };
   errorMessage?: string;
+  createdBy?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -39,6 +40,7 @@ const productMediaEnhancementJobSchema = new Schema<IProductMediaEnhancementJob>
       right: { type: String, default: "" },
     },
     errorMessage: { type: String, default: "" },
+    createdBy: { type: Schema.Types.ObjectId, ref: "User", index: true },
   },
   { timestamps: true }
 );
