@@ -83,17 +83,17 @@ function getApprovalBadge(status?: ApprovalStatus) {
 function getOrderBadge(status: OrderStatus) {
   switch (status) {
     case "processing":
-      return { label: "Processing", className: "bg-warning/10 text-warning" };
+      return { label: "Processing", className: "bg-amber-100 text-amber-900" };
     case "confirmed":
-      return { label: "Confirmed", className: "bg-info/10 text-info" };
+      return { label: "Confirmed", className: "bg-sky-100 text-sky-900" };
     case "shipping":
-      return { label: "Shipping", className: "bg-accent/10 text-accent" };
+      return { label: "Shipping", className: "bg-violet-100 text-violet-900" };
     case "delivered":
-      return { label: "Delivered", className: "bg-success/10 text-success" };
+      return { label: "Delivered", className: "bg-emerald-100 text-emerald-900" };
     case "canceled":
-      return { label: "Canceled", className: "bg-danger/10 text-danger" };
+      return { label: "Canceled", className: "bg-rose-100 text-rose-900" };
     case "returned":
-      return { label: "Returned", className: "bg-neutral-200 text-neutral-700" };
+      return { label: "Returned", className: "bg-orange-100 text-orange-900" };
     default:
       return { label: status || "Pending", className: "bg-bg-secondary text-text-secondary" };
   }

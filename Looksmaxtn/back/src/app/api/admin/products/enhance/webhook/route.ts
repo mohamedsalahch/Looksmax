@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
 import ProductMediaEnhancementJob from "@/admin/models/ProductMediaEnhancementJob";
 import { saveProductMediaResultBase64 } from "@/admin/lib/productMediaUploads";
+import { requireWebhookSecret } from "@/lib/webhookAuth";
 
 type WebhookBody = {
   job_id?: string;
@@ -12,18 +13,27 @@ type WebhookBody = {
   error?: string;
 };
 
+const VALID_VIEWS = ["front", "back", "left", "right"] as const;
+type EnhancementView = typeof VALID_VIEWS[number];
+
+function hasAllEnhancedResults(job: {
+  sourceImages: Record<EnhancementView, string>;
+  images: Record<EnhancementView, string>;
+}) {
+  return VALID_VIEWS.every((view) => {
+    if (!job.sourceImages[view]) return true;
+    return Boolean(job.images[view]);
+  });
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const configuredSecret = process.env.OUTFIT_WEBHOOK_SECRET || "";
-    const requestSecret = req.headers.get("x-webhook-secret") || "";
-
-    if (configuredSecret && requestSecret !== configuredSecret) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const unauthorized = requireWebhookSecret(req);
+    if (unauthorized) return unauthorized;
 
     const body = (await req.json()) as WebhookBody;
     const jobId = body.job_id || body.jobId;
-    const view = req.nextUrl.searchParams.get("view") || String(body.view || "");
+    const view = (req.nextUrl.searchParams.get("view") || String(body.view || "")) as EnhancementView;
 
     if (!jobId) {
       return NextResponse.json({ error: "Missing job id" }, { status: 400 });
@@ -48,14 +58,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing image" }, { status: 400 });
     }
 
-    if (view !== "front" && view !== "back") {
+    if (!(VALID_VIEWS as readonly string[]).includes(view)) {
       return NextResponse.json({ error: "Missing view" }, { status: 400 });
     }
 
     const savedPath = await saveProductMediaResultBase64(imageBase64, view);
     job.images[view] = savedPath;
+    job.markModified("images");
 
-    if (job.images.front && job.images.back) {
+    if (hasAllEnhancedResults(job as unknown as { sourceImages: Record<EnhancementView, string>; images: Record<EnhancementView, string> })) {
       job.status = "completed";
     }
 

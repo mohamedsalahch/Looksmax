@@ -85,7 +85,7 @@ const BODY_ZONES = [
 const ZONE_BUTTON_LABELS: Record<(typeof BODY_ZONES)[number]["id"], string> = {
     headwear: "Headwear",
     outerwear: "Outerwear",
-    dress: "Dress",
+    dress: "Dress / Set",
     top: "Top",
     bottom: "Bottom",
     footwear: "Shoes",
@@ -105,7 +105,7 @@ const ZONE_PREVIEW_POSITIONS: Record<
     },
     dress: {
         className: "left-[-14px] top-[176px]",
-        label: "Dress",
+        label: "Dress / Set",
     },
     top: {
         className: "left-[-14px] top-[176px]",
@@ -140,8 +140,8 @@ const ZONE_DETAILS: Record<
         care: "Best with structure",
     },
     dress: {
-        title: "Dress",
-        type: "One-piece garment",
+        title: "Dress / Set",
+        type: "Full-body garment",
         fit: "Full-body silhouette",
         season: "All seasons",
         care: "Replaces top and bottom",
@@ -175,7 +175,7 @@ const ZONE_CATEGORY_KEYWORDS: Record<
 > = {
     headwear: ["headwear", "hat", "hats", "cap", "caps", "beanie", "beanies"],
     outerwear: ["outerwear", "jacket", "jackets", "coat", "coats", "veste", "vestes", "blazer", "blazers"],
-    dress: ["dress", "dresses", "robe", "robes", "gown", "gowns"],
+    dress: ["dress", "dresses", "robe", "robes", "gown", "gowns", "set", "sets", "coord", "coords", "co ord", "two piece", "two pieces", "matching set"],
     top: [
         "top",
         "tops",
@@ -239,6 +239,7 @@ function getZoneButtonLabel(
     isWomen: boolean
 ) {
     if (isWomen && zoneId === "headwear") return "Handbag";
+    if (!isWomen && zoneId === "dress") return "Set";
     return ZONE_BUTTON_LABELS[zoneId];
 }
 
@@ -247,6 +248,7 @@ function getZonePreviewLabel(
     isWomen: boolean
 ) {
     if (isWomen && zoneId === "headwear") return "Handbag";
+    if (!isWomen && zoneId === "dress") return "Set";
     return ZONE_PREVIEW_POSITIONS[zoneId].label;
 }
 
@@ -258,6 +260,13 @@ function getZonePreviewPosition(
         return {
             className: "right-[-6px] top-[236px]",
             label: "Handbag",
+        };
+    }
+
+    if (!isWomen && zoneId === "dress") {
+        return {
+            ...ZONE_PREVIEW_POSITIONS.dress,
+            label: "Set",
         };
     }
 
@@ -275,6 +284,16 @@ function getZoneDetails(
             fit: "Carried accessory",
             season: "All seasons",
             care: "Best paired as a finishing piece",
+        };
+    }
+
+    if (!isWomen && zoneId === "dress") {
+        return {
+            title: "Set",
+            type: "Full-body garment",
+            fit: "Full-body silhouette",
+            season: "All seasons",
+            care: "Replaces top and bottom",
         };
     }
 
@@ -914,7 +933,10 @@ export default function OutfitStudioPage() {
     }, [activeCategory, searchTerm]);
 
     useEffect(() => {
-        if (!user?.bodyProfile?.gender) return;
+        if (!isAuthenticated) {
+            setSuggestedProducts([]);
+            return;
+        }
 
         const params = new URLSearchParams();
         params.set("category", genderCollectionSlug);
@@ -928,7 +950,7 @@ export default function OutfitStudioPage() {
                 )
             )
             .catch(() => setSuggestedProducts([]));
-    }, [genderCollectionSlug, user?.bodyProfile?.gender]);
+    }, [genderCollectionSlug, isAuthenticated]);
 
     const activeZoneIdForSelection = selectedZoneId;
     const selectedZoneMeta = showAllSelectedItems
@@ -949,8 +971,6 @@ export default function OutfitStudioPage() {
             name: cartItem.name,
             fashionSubtype: cartItem.fashionSubtype,
         });
-        const zoneId = !isWomen && inferredZoneId === "dress" ? "top" : inferredZoneId;
-
         return [{
             id: cartItem.id,
             name: cartItem.name,
@@ -959,7 +979,7 @@ export default function OutfitStudioPage() {
             price: cartItem.price,
             fashionSubtype: cartItem.fashionSubtype,
             originPictures: cartItem.originPictures,
-            zoneId,
+            zoneId: inferredZoneId,
         }];
     });
     const selectedZoneHistory: OutfitViewItem[] = showAllSelectedItems
@@ -978,38 +998,19 @@ export default function OutfitStudioPage() {
     const visibleSelectedZoneHistory = selectedZoneHistory.length > 0
         ? selectedZoneHistory
         : fallbackSelectedZoneHistory;
-    const visibleBodyZones = isWomen ? BODY_ZONES : BODY_ZONES.filter((zone) => zone.id !== "dress");
+    const visibleBodyZones = BODY_ZONES;
     const hasSelectedOutfitItems = visibleBodyZones.some((zone) => Boolean(outfit[zone.id]));
     const selectedOutfitTotalPrice = visibleBodyZones.reduce((total, zone) => {
         const amount = Number(outfit[zone.id]?.price || 0);
         return Number.isFinite(amount) ? total + amount : total;
     }, 0);
     const dressSelected = Boolean(outfit.dress);
-    const dressVisible = isWomen && (selectedZoneId === "dress" || (dressSelected && !DRESS_CONFLICT_ZONES.includes(selectedZoneId as StudioZoneId)));
-    const dressSelectable = isWomen && (dressSelected && dressVisible && selectedZoneId !== "dress");
+    const dressVisible = selectedZoneId === "dress" || (dressSelected && !DRESS_CONFLICT_ZONES.includes(selectedZoneId as StudioZoneId));
+    const dressSelectable = dressSelected && dressVisible && selectedZoneId !== "dress";
     const remainingGenerationRequests = outfitStudioStats.isAdmin ? Infinity : outfitStudioStats.triesRemaining;
     const generationLimitReached = !outfitStudioStats.isAdmin && remainingGenerationRequests <= 0;
     const canGenerateOutfit = profileReady && hasSelectedOutfitItems && !generationLimitReached;
     const shouldOpenProfileSettings = !profileReady;
-
-    useEffect(() => {
-        if (isWomen) return;
-
-        if (selectedZoneId === "dress") {
-            setSelectedZoneId("");
-        }
-
-        if (!outfit.dress && zoneOverrides.dress == null) return;
-
-        setZoneOverrides((current) => ({
-            ...current,
-            dress: null,
-        }));
-        setOutfit((current) => ({
-            ...current,
-            dress: null,
-        }));
-    }, [isWomen, outfit.dress, selectedZoneId, zoneOverrides.dress]);
 
     const applyAssignmentToZone = (zoneId: StudioZoneId, item: StudioAssignmentItem) => {
         const nextItem: OutfitSlotItem = {
@@ -1239,9 +1240,8 @@ export default function OutfitStudioPage() {
             let lastZoneId: StudioZoneId | null = null;
             for (const item of pendingAssignments) {
                 const inferredZoneId = item.preferredZoneId || inferStudioAssignmentZone(item);
-                const zoneId = !isWomen && inferredZoneId === "dress" ? "top" : inferredZoneId;
-                applyAssignmentToZone(zoneId, item);
-                lastZoneId = zoneId;
+                applyAssignmentToZone(inferredZoneId, item);
+                lastZoneId = inferredZoneId;
             }
 
             if (lastZoneId) {
@@ -1259,7 +1259,6 @@ export default function OutfitStudioPage() {
     }, [isWomen, studioStateHydrated]);
 
     const handleSelectZone = (zoneId: (typeof BODY_ZONES)[number]["id"]) => {
-        if (!isWomen && zoneId === "dress") return;
         setShowAllSelectedItems(false);
         setSelectedZoneId(zoneId);
     };
@@ -1279,7 +1278,6 @@ export default function OutfitStudioPage() {
         item: OutfitViewItem,
         keepAllView = false
     ) => {
-        if (!isWomen && zoneId === "dress") return;
         const normalizedItemId = item.id;
         setShowAllSelectedItems(keepAllView);
         setSelectedZoneId(zoneId);
@@ -1403,7 +1401,7 @@ export default function OutfitStudioPage() {
                         BODY_ZONES.map((zone) => [
                             zone.id,
                             {
-                                status: isWomen || zone.id !== "dress" ? Boolean(outfit[zone.id]) : false,
+                                status: Boolean(outfit[zone.id]),
                                 productId: getCartItemProductId(outfit[zone.id]?.id || ""),
                                 fashionSubtype: outfit[zone.id]?.fashionSubtype || "",
                                 color: outfit[zone.id]?.color || "",
@@ -2122,7 +2120,7 @@ export default function OutfitStudioPage() {
                         {suggestedProducts.length === 0 && (
                             <div className="col-span-full bg-[#ede1ce] px-4 py-6 text-sm text-[#6B6055]">
                                 {isAuthenticated
-                                    ? "Add a gender in your Studio Profile to unlock tailored suggestions."
+                                    ? "No suggestions available yet."
                                     : "Sign in to unlock tailored suggestions for your profile."}
                             </div>
                         )}

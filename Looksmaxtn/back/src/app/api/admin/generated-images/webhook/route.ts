@@ -4,17 +4,14 @@ import GeneratedImageAsset from "@/admin/models/GeneratedImageAsset";
 import {
   saveGeneratedResultBase64,
 } from "@/admin/lib/generatedImageUploads";
+import { requireWebhookSecret } from "@/lib/webhookAuth";
 
 export async function POST(req: NextRequest) {
   try {
-    const configuredSecret = process.env.OUTFIT_WEBHOOK_SECRET || "";
-    const requestSecret = req.headers.get("x-webhook-secret") || "";
+    const unauthorized = requireWebhookSecret(req);
+    if (unauthorized) return unauthorized;
 
-    if (configuredSecret && requestSecret !== configuredSecret) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const body = (await req.json()) as Record<string, any>;
+    const body = (await req.json()) as Record<string, unknown>;
     const jobId = body.job_id || body.jobId;
 
     if (!jobId) {
@@ -36,7 +33,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    const imageBase64 = body.image || body.base64;
+    const imageBase64 =
+      typeof body.image === "string"
+        ? body.image
+        : typeof body.base64 === "string"
+          ? body.base64
+          : "";
     const view = body.view; // "front", "back", "left", "right" or "result"
     
     if (imageBase64) {
@@ -54,11 +56,11 @@ export async function POST(req: NextRequest) {
       } else if (view === "right" && asset.images.length >= 4) {
          asset.status = "completed";
       }
-    } else if (body.images && Array.isArray(body.images)) {
+    } else if (Array.isArray(body.images)) {
       // Direct array response
       const savedImages = await Promise.all(
-        body.images.map((img: any, i: number) => {
-           const b64 = typeof img === "string" ? img : img.base64;
+        body.images.map((img: unknown, i: number) => {
+           const b64 = typeof img === "string" ? img : typeof img === "object" && img !== null && "base64" in img ? String(img.base64 || "") : "";
            return saveGeneratedResultBase64(b64, i);
         })
       );

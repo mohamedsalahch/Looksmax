@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/store/lib/mongodb";
 import StoreApplication, { StoreApplicationCategory } from "@/store/models/StoreApplication";
+import User from "@/store/models/User";
 import { broadcastAdminEvent } from "@/admin/lib/adminEvents";
 
 const VALID_CATEGORIES = new Set<StoreApplicationCategory>([
@@ -74,6 +75,43 @@ export async function POST(req: NextRequest) {
 
     if (categories.some((category) => !VALID_CATEGORIES.has(category))) {
       return NextResponse.json({ error: "Select a valid category" }, { status: 400 });
+    }
+
+    const existingStoreApplication = await StoreApplication.findOne({
+      email,
+      status: { $in: ["pending", "approved", "rejected"] },
+    })
+      .select("status")
+      .lean();
+
+    if (existingStoreApplication) {
+      const status = String(existingStoreApplication.status || "pending");
+      const label =
+        status === "approved" ? "approved" : status === "rejected" ? "rejected" : "pending";
+
+      return NextResponse.json(
+        { error: `A store request already exists for this email and is ${label}.` },
+        { status: 409 }
+      );
+    }
+
+    const existingStoreOwner = await User.findOne({
+      email,
+      role: "store_owner",
+      storeApprovalStatus: { $in: ["pending", "approved", "rejected"] },
+    })
+      .select("storeApprovalStatus")
+      .lean();
+
+    if (existingStoreOwner) {
+      const status = String(existingStoreOwner.storeApprovalStatus || "pending");
+      const label =
+        status === "approved" ? "approved" : status === "rejected" ? "rejected" : "pending";
+
+      return NextResponse.json(
+        { error: `This email already belongs to a store account with ${label} status.` },
+        { status: 409 }
+      );
     }
 
     const store = await StoreApplication.create({

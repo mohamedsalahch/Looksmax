@@ -895,7 +895,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const visibleNavItems = user.role === "store_owner" ? storeOwnerNavItems : navItems;
 
   return (
-    <div className="min-h-screen bg-bg-primary md:flex print:block print:bg-white print:text-black print:[&_*:not(.print\\:block)]:hidden">
+    <div className="min-h-screen bg-bg-primary md:flex print:block print:bg-white print:text-black">
       {mobileSidebarOpen && (
         <button
           type="button"

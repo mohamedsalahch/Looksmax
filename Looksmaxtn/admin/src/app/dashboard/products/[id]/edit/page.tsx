@@ -12,6 +12,7 @@ import {
 } from "@/lib/generationPalette";
 import ColorPicker from "@/components/ColorPicker";
 import {
+  getCategoryAncestors,
   getCategoryGender,
   getCategoryZone,
   getCompanionZonesForCategory,
@@ -265,6 +266,32 @@ const emptyOriginPictureFiles: OriginPictureFiles = {
   right: null,
 };
 
+const FOUR_IMAGE_VIEWS: OriginPictureKey[] = ["front", "back", "left", "right"];
+const ACCESSORY_VIEW_LABELS: Record<OriginPictureKey, string> = {
+  front: "Image 1",
+  back: "Image 2",
+  left: "Image 3",
+  right: "Image 4",
+};
+const FOOTWEAR_VIEW_VERIFICATION_COPY =
+  "Footwear verification: upload four different shoe angles: front, back, left side, and right side. Each slot is sent separately to the generator.";
+
+function hasAccessoryWorkflowCategory(categories: Category[], slug: string, zone: string) {
+  if (!slug) return false;
+  if (zone === "handbag" || zone === "headwear") return true;
+  const chain = getCategoryAncestors(categories, slug);
+  return chain.some((category) => /accessor/i.test(category.slug) || /accessor/i.test(category.name));
+}
+
+function buildColorwayVariantKey(size: string, color: string) {
+  const trimmedSize = size.trim();
+  const trimmedColor = color.trim();
+  if (trimmedSize && trimmedColor) return `${trimmedSize} / ${trimmedColor}`;
+  if (trimmedColor) return trimmedColor;
+  if (trimmedSize) return trimmedSize;
+  return "__default__";
+}
+
 function normalizeSizeList(value: string) {
   return value
     .split(",")
@@ -417,7 +444,18 @@ async function productImageToFile(image: ProductImage, label: keyof GenerationIn
 }
 
 async function imageUrlToFile(url: string, label: string) {
-  const blob = await fetch(url, { cache: "reload" }).then((response) => response.blob());
+  const isDirectFetchable =
+    url.startsWith("blob:") ||
+    url.startsWith("data:") ||
+    url.startsWith("/") ||
+    (!url.startsWith("http://") && !url.startsWith("https://"));
+  const fetchUrl = isDirectFetchable ? url : `/api/media-fetch?url=${encodeURIComponent(url)}`;
+  const blob = await fetch(fetchUrl, { cache: "no-store" }).then(async (response) => {
+    if (!response.ok) {
+      throw new Error(`Media fetch failed with status ${response.status}`);
+    }
+    return response.blob();
+  });
   const extension = blob.type.split("/")[1] || "png";
   return new File([blob], `${label}-${Date.now()}.${extension}`, {
     type: blob.type || "image/png",
@@ -579,7 +617,7 @@ function toggleColorToken(value: string, token: string) {
 }
 
 function ColorwayGenerationCard({
-  colorway, index, companionZones, companionTypeOptions, onUpdate, onGenerate, canGenerate, onReset,
+  colorway, index, companionZones, companionTypeOptions, onUpdate, onGenerate, canGenerate,
 }: {
   colorway: Colorway; index: number;
   companionZones: CompanionZone[];
@@ -587,7 +625,6 @@ function ColorwayGenerationCard({
   onUpdate: (patch: Partial<Colorway>) => void;
   onGenerate: () => void;
   canGenerate: boolean;
-  onReset: () => void;
 }) {
   const [zoomedUrl, setZoomedUrl] = useState<string | null>(null);
   const hasColor = Boolean(colorway.hex.trim());
@@ -600,7 +637,7 @@ function ColorwayGenerationCard({
           className={`h-4 w-4 flex-none border border-border/60 ${hasColor ? "rounded-full" : "rounded border-dashed bg-transparent"}`}
           style={hasColor ? { backgroundColor: colorway.hex } : undefined}
         />
-        <span className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">Colorway {index + 1}</span>
+        <span className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">Product {index + 1}</span>
         <span className="ml-auto text-[9px] font-mono text-text-secondary/60">{hasColor ? colorway.hex : "No color"}</span>
       </div>
       {(enhancedFrontPreview || enhancedBackPreview) && (
@@ -622,6 +659,7 @@ function ColorwayGenerationCard({
       )}
       {companionZones.length > 0 && (
         <div className="space-y-3">
+          <p className="text-[9px] uppercase tracking-wider text-text-secondary">Model Generation</p>
           {companionZones.includes("top") && (
             <div className="space-y-2">
               <p className="text-[9px] uppercase tracking-wider text-text-secondary">Top</p>
@@ -683,11 +721,14 @@ function ColorwayGenerationCard({
         )}
         <div className="flex items-center justify-end gap-2">
           {colorway.generateStatus === "completed" && (
-            <button type="button" onClick={onReset} className="text-[8px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary">Reset</button>
+            <button type="button" onClick={onGenerate} className="text-[8px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary">Regenerate</button>
+          )}
+          {colorway.generateStatus === "processing" && (
+            <span className="text-[8px] uppercase tracking-wider text-text-secondary">Generating...</span>
           )}
           <button type="button" onClick={canGenerate && colorway.generateStatus !== "completed" ? onGenerate : undefined} disabled={!canGenerate || colorway.generateStatus === "processing" || colorway.generateStatus === "completed"} className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity">
             {colorway.generateStatus === "processing" && <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />}
-            {colorway.generateStatus === "completed" ? "Generated ✓" : colorway.generateStatus === "processing" ? "Generating..." : "Generate"}
+            {colorway.generateStatus === "completed" ? "Generated" : colorway.generateStatus === "processing" ? "Generating..." : "Generate"}
           </button>
         </div>
       </div>
@@ -708,7 +749,7 @@ function ColorwayGenerationCard({
 type ColorwayView = "front" | "back" | "left" | "right";
 
 function ColorwayCard({
-  colorway, index, canRemove, isThrift, showGenerationPanel, companionZones, companionTypeOptions, canGenerate, requiredViews, onRemove, onUpdate, onEnhance, onGenerate, onAddSize, onRemoveSize, onUpdateSize, onReset,
+  colorway, index, canRemove, isThrift, showGenerationPanel, companionZones, companionTypeOptions, canGenerate, requiredViews, viewLabels, enhanceRequiresAllViews = true, hideSizeInput = false, onRemove, onUpdate, onEnhance, onGenerate, onAddSize, onRemoveSize, onUpdateSize,
 }: {
   colorway: Colorway; index: number; canRemove: boolean; isThrift: boolean;
   showGenerationPanel?: boolean;
@@ -716,9 +757,12 @@ function ColorwayCard({
   companionTypeOptions?: { top: { slug: string; name: string }[]; bottom: { slug: string; name: string }[]; footwear: { slug: string; name: string }[] };
   canGenerate?: boolean;
   requiredViews?: ColorwayView[];
+  viewLabels?: Partial<Record<ColorwayView, string>>;
+  enhanceRequiresAllViews?: boolean;
+  hideSizeInput?: boolean;
   onRemove: () => void; onUpdate: (patch: Partial<Colorway>) => void; onEnhance: () => void;
   onGenerate?: () => void;
-  onAddSize: () => void; onRemoveSize: (sizeId: string) => void; onUpdateSize: (sizeId: string, patch: Partial<SizeRow>) => void; onReset: () => void;
+  onAddSize: () => void; onRemoveSize: (sizeId: string) => void; onUpdateSize: (sizeId: string, patch: Partial<SizeRow>) => void;
 }) {
   const views: ColorwayView[] = requiredViews && requiredViews.length > 0 ? requiredViews : ["front", "back"];
   const colorInputRef = useRef<HTMLInputElement>(null);
@@ -729,10 +773,38 @@ function ColorwayCard({
     `${view}File` as "frontFile" | "backFile" | "leftFile" | "rightFile";
   const previewKeyFor = (view: ColorwayView): "frontPreview" | "backPreview" | "leftPreview" | "rightPreview" =>
     `${view}Preview` as "frontPreview" | "backPreview" | "leftPreview" | "rightPreview";
+  const enhancedUrlKeyFor = (
+    view: ColorwayView
+  ): "enhancedFrontUrl" | "enhancedBackUrl" | "enhancedLeftUrl" | "enhancedRightUrl" =>
+    `enhanced${view.charAt(0).toUpperCase()}${view.slice(1)}Url` as
+      | "enhancedFrontUrl"
+      | "enhancedBackUrl"
+      | "enhancedLeftUrl"
+      | "enhancedRightUrl";
+  const enhancedFileKeyFor = (
+    view: ColorwayView
+  ): "enhancedFrontFile" | "enhancedBackFile" | "enhancedLeftFile" | "enhancedRightFile" =>
+    `enhanced${view.charAt(0).toUpperCase()}${view.slice(1)}File` as
+      | "enhancedFrontFile"
+      | "enhancedBackFile"
+      | "enhancedLeftFile"
+      | "enhancedRightFile";
 
-  const canEnhance = views.every(
-    (view) => Boolean(colorway[fileKeyFor(view)]) || Boolean(colorway[previewKeyFor(view)])
+  const uploadedViews = views.filter(
+    (view) => Boolean(colorway[fileKeyFor(view)] || colorway[previewKeyFor(view)])
   );
+  const hasEnhancedResults =
+    uploadedViews.length > 0 &&
+    uploadedViews.every((view) => Boolean(colorway[enhancedUrlKeyFor(view)] || colorway[enhancedFileKeyFor(view)]));
+  const isShowingEnhanced = hasEnhancedResults && colorway.enhanceStatus === "completed";
+  const isUsingOriginal = colorway.enhanceStatus === "original";
+
+  const getDisplayedPreview = (view: ColorwayView) =>
+    isShowingEnhanced
+      ? colorway[enhancedUrlKeyFor(view)] || colorway[previewKeyFor(view)]
+      : colorway[previewKeyFor(view)];
+
+  const canEnhance = enhanceRequiresAllViews ? uploadedViews.length === views.length : uploadedViews.length > 0;
 
   const handlePickColor = async () => {
     const EyeDropperCtor = (window as Window & { EyeDropper?: new () => { open: () => Promise<{ sRGBHex: string }> } }).EyeDropper;
@@ -746,7 +818,21 @@ function ColorwayCard({
     const generating = colorway.generateStatus === "processing";
     const fileKey = fileKeyFor(view);
     const previewKey = previewKeyFor(view);
-    const enhanceReset = generating ? {} : { enhanceStatus: "idle" as const, enhanceJobId: "" };
+    const enhanceReset = generating
+      ? {}
+      : {
+          enhanceStatus: "idle" as const,
+          enhanceJobId: "",
+          enhanceError: "",
+          enhancedFrontUrl: "",
+          enhancedBackUrl: "",
+          enhancedLeftUrl: "",
+          enhancedRightUrl: "",
+          enhancedFrontFile: null,
+          enhancedBackFile: null,
+          enhancedLeftFile: null,
+          enhancedRightFile: null,
+        };
     if (!file) {
       onUpdate({ [fileKey]: null, [previewKey]: "", ...enhanceReset } as Partial<Colorway>);
       return;
@@ -759,7 +845,7 @@ function ColorwayCard({
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           {canRemove && <button type="button" onClick={onRemove} title="Remove colorway" className="text-sm leading-none text-text-secondary hover:text-danger transition-colors">×</button>}
-          <span className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">Colorway {index + 1}</span>
+          <span className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">Product {index + 1}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <button
@@ -796,13 +882,18 @@ function ColorwayCard({
           <input ref={colorInputRef} type="color" value={colorway.hex} onChange={(e) => onUpdate({ hex: e.target.value.toUpperCase() })} className="sr-only" />
         </div>
       </div>
+      {views.length === 4 && !viewLabels && (
+        <div className="rounded border border-accent/30 bg-accent/5 px-3 py-2 text-[10px] leading-relaxed text-text-secondary">
+          {FOOTWEAR_VIEW_VERIFICATION_COPY}
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-2">
         {views.map((slot) => {
           const inputId = `cw-${slot}-${colorway.id}`;
-          const preview = colorway[previewKeyFor(slot)];
+          const preview = getDisplayedPreview(slot);
           return (
             <div key={slot} className="space-y-1">
-              <p className="text-[9px] uppercase tracking-wider text-text-secondary">{slot}</p>
+              <p className="text-[9px] uppercase tracking-wider text-text-secondary">{viewLabels?.[slot] || slot}</p>
               <input id={inputId} type="file" accept="image/*" className="hidden" onChange={(e) => handleViewFile(slot, e.target.files?.[0] || null)} onClick={(e) => { e.currentTarget.value = ""; }} />
               <div onClick={() => { if (preview) { setZoomedPreview(preview); } else { document.getElementById(inputId)?.click(); } }} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); handleViewFile(slot, e.dataTransfer.files?.[0] || null); }} className={`aspect-[4/5] overflow-hidden rounded border border-dashed border-border bg-bg-secondary transition-colors flex items-center justify-center ${preview ? "cursor-zoom-in hover:border-accent/60" : "cursor-pointer hover:border-accent"}`}>
                 {preview ? <img src={preview} alt={slot} className="h-full w-full object-cover" /> : <span className="text-[8px] uppercase tracking-wider text-text-secondary/60">Upload</span>}
@@ -823,15 +914,15 @@ function ColorwayCard({
         </div>
       )}
       <div className="space-y-1.5">
-        <p className="text-[9px] uppercase tracking-wider text-text-secondary">Sizes</p>
+        <p className="text-[9px] uppercase tracking-wider text-text-secondary">{hideSizeInput ? "Stock" : "Sizes"}</p>
         {colorway.sizes.map((sizeRow) => (
           <div key={sizeRow.id} className="flex items-end gap-2">
-            <input type="text" value={sizeRow.size} onChange={(e) => onUpdateSize(sizeRow.id, { size: e.target.value })} placeholder="Size" className="min-w-0 flex-1 border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors" />
-            <input type="number" min="0" value={sizeRow.stock} onChange={(e) => onUpdateSize(sizeRow.id, { stock: e.target.value })} placeholder="Qty" className="w-12 flex-none border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors" />
+            {!hideSizeInput && <input type="text" value={sizeRow.size} onChange={(e) => onUpdateSize(sizeRow.id, { size: e.target.value })} placeholder="Size" className="min-w-0 flex-1 border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors" />}
+            <input type="number" min="0" value={sizeRow.stock} onChange={(e) => onUpdateSize(sizeRow.id, { stock: e.target.value })} placeholder="Qty" className={`${hideSizeInput ? "flex-1" : "w-12"} flex-none border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors`} />
             <button type="button" onClick={() => onRemoveSize(sizeRow.id)} disabled={colorway.sizes.length === 1} className="flex-none pb-1.5 text-sm leading-none text-text-secondary hover:text-danger transition-colors disabled:opacity-30">×</button>
           </div>
         ))}
-        <button type="button" onClick={onAddSize} className="text-[9px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary">+ Add size</button>
+        {!hideSizeInput && <button type="button" onClick={onAddSize} className="text-[9px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary">+ Add size</button>}
         {isThrift && colorway.sizes.map((sizeRow) => (
           <div key={sizeRow.id} className="space-y-0.5 pt-1">
             <div className="flex items-center justify-between">
@@ -849,10 +940,7 @@ function ColorwayCard({
           </div>
         )}
         <div className="flex items-center justify-end gap-2">
-          {(colorway.enhanceStatus === "completed" || colorway.enhanceStatus === "original") && (
-            <button type="button" onClick={onReset} className="text-[8px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary">Reset</button>
-          )}
-          {colorway.enhanceStatus === "idle" && canEnhance && (
+          {!hasEnhancedResults && canEnhance && !isUsingOriginal && (
             <button
               type="button"
               onClick={() => onUpdate({ enhanceStatus: "original" })}
@@ -861,9 +949,49 @@ function ColorwayCard({
               Use original
             </button>
           )}
-          <button type="button" onClick={colorway.enhanceStatus !== "completed" ? onEnhance : undefined} disabled={!canEnhance || colorway.enhanceStatus === "processing" || colorway.enhanceStatus === "completed"} className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity">
+          {hasEnhancedResults && colorway.enhanceStatus === "completed" && canEnhance && (
+            <button
+              type="button"
+              onClick={() => onUpdate({ enhanceStatus: "original" })}
+              className="text-[8px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary"
+            >
+              Use original
+            </button>
+          )}
+          {hasEnhancedResults && canEnhance && colorway.enhanceStatus !== "processing" && (
+            <button
+              type="button"
+              onClick={onEnhance}
+              className="text-[8px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary"
+            >
+              Re-enhance
+            </button>
+          )}
+          {hasEnhancedResults && colorway.enhanceStatus === "processing" && (
+            <span className="text-[8px] uppercase tracking-wider text-text-secondary">Enhancing...</span>
+          )}
+          <button
+            type="button"
+            onClick={
+              colorway.enhanceStatus === "processing"
+                ? undefined
+                : hasEnhancedResults
+                ? isUsingOriginal
+                  ? () => onUpdate({ enhanceStatus: "completed" })
+                  : undefined
+                : onEnhance
+            }
+            disabled={!canEnhance || colorway.enhanceStatus === "processing" || (hasEnhancedResults && !isUsingOriginal)}
+            className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity"
+          >
             {colorway.enhanceStatus === "processing" && <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />}
-            {colorway.enhanceStatus === "completed" ? "Enhanced ✓" : colorway.enhanceStatus === "processing" ? "Enhancing..." : "Enhance"}
+            {hasEnhancedResults
+              ? isUsingOriginal
+                ? "Use enhanced"
+                : "Enhanced"
+              : colorway.enhanceStatus === "processing"
+              ? "Enhancing..."
+              : "Enhance"}
           </button>
         </div>
       </div>
@@ -871,7 +999,7 @@ function ColorwayCard({
       {showGenerationPanel && (colorway.enhanceStatus === "completed" || colorway.enhanceStatus === "original" || colorway.generateStatus !== "idle") && (
         <div className="space-y-3 border-t border-border pt-3">
           <div className="space-y-1.5">
-            <p className="text-[9px] uppercase tracking-wider text-text-secondary">Zones</p>
+            <p className="text-[9px] uppercase tracking-wider text-text-secondary">Model Generation</p>
             {companionZones && companionZones.length > 0 ? (
               <div className="space-y-3">
                 {companionZones.includes("top") && (
@@ -943,7 +1071,7 @@ function ColorwayCard({
           {colorway.generatedImages.length > 0 && (
             <div className="grid grid-cols-2 gap-1.5">
               {colorway.generatedImages.map((img, i) => (
-                <button key={i} type="button" onClick={() => setZoomedUrl(img.url)} className="aspect-[4/5] overflow-hidden rounded border border-border bg-bg-secondary cursor-zoom-in">
+                <button key={i} type="button" onClick={() => setZoomedPreview(img.url)} className="aspect-[4/5] overflow-hidden rounded border border-border bg-bg-secondary cursor-zoom-in">
                   <img src={img.url} alt={`Generated ${i + 1}`} className="h-full w-full object-cover" />
                 </button>
               ))}
@@ -951,9 +1079,15 @@ function ColorwayCard({
           )}
 
           <div className="flex items-center justify-end gap-2">
-            <button type="button" onClick={canGenerate ? onGenerate : undefined} disabled={!canGenerate || colorway.generateStatus === "processing" || colorway.generateStatus === "completed"} className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity">
+            {colorway.generateStatus === "completed" && canGenerate && (
+              <button type="button" onClick={onGenerate} className="text-[8px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary">Regenerate</button>
+            )}
+            {colorway.generateStatus === "processing" && (
+              <span className="text-[8px] uppercase tracking-wider text-text-secondary">Generating...</span>
+            )}
+            <button type="button" onClick={canGenerate && colorway.generateStatus !== "completed" ? onGenerate : undefined} disabled={!canGenerate || colorway.generateStatus === "processing" || colorway.generateStatus === "completed"} className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity">
               {colorway.generateStatus === "processing" && <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />}
-              {colorway.generateStatus === "completed" ? "Generated ✓" : colorway.generateStatus === "processing" ? "Generating..." : "Generate"}
+              {colorway.generateStatus === "completed" ? "Generated" : colorway.generateStatus === "processing" ? "Generating..." : "Generate"}
             </button>
           </div>
         </div>
@@ -1103,37 +1237,47 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const addSizeRow = (colorwayId: string) => setColorways((prev) => prev.map((c) => c.id === colorwayId ? { ...c, sizes: [...c.sizes, { id: generateId(), size: "", stock: "", conditionScore: "10" }] } : c));
   const removeSizeRow = (colorwayId: string, sizeId: string) => setColorways((prev) => prev.map((c) => c.id === colorwayId ? { ...c, sizes: c.sizes.length === 1 ? c.sizes : c.sizes.filter((s) => s.id !== sizeId) } : c));
   const updateSizeRow = (colorwayId: string, sizeId: string, patch: Partial<SizeRow>) => setColorways((prev) => prev.map((c) => c.id === colorwayId ? { ...c, sizes: c.sizes.map((s) => s.id === sizeId ? { ...s, ...patch } : s) } : c));
-  const resetColorway = (colorwayId: string) =>
-    updateColorway(colorwayId, {
-      frontFile: null, frontPreview: "",
-      backFile: null, backPreview: "",
-      leftFile: null, leftPreview: "",
-      rightFile: null, rightPreview: "",
-      enhanceStatus: "idle", enhanceJobId: "", enhanceError: "",
-      enhancedFrontUrl: "", enhancedBackUrl: "",
-      enhancedLeftUrl: "", enhancedRightUrl: "",
-      enhancedFrontFile: null, enhancedBackFile: null,
-      enhancedLeftFile: null, enhancedRightFile: null,
-      generateStatus: "idle", generateJobId: "", generateError: "",
-      generatedImages: [],
-    });
-
   const handleEnhanceColorway = async (colorwayId: string) => {
     const cw = colorways.find((c) => c.id === colorwayId);
-    if (!cw?.frontFile || !cw?.backFile) return;
+    if (!cw) return;
     const isShoes = selectedCategoryZone === "footwear";
-    if (isShoes && (!cw.leftFile || !cw.rightFile)) {
-      updateColorway(colorwayId, { enhanceStatus: "failed", enhanceError: "Please upload front, back, left, and right images first." });
+    const [frontSource, backSource, leftSource, rightSource] = await Promise.all([
+      cw.frontFile ? Promise.resolve(cw.frontFile) : cw.frontPreview ? imageUrlToFile(cw.frontPreview, "front-original") : Promise.resolve(null),
+      cw.backFile ? Promise.resolve(cw.backFile) : cw.backPreview ? imageUrlToFile(cw.backPreview, "back-original") : Promise.resolve(null),
+      cw.leftFile ? Promise.resolve(cw.leftFile) : cw.leftPreview ? imageUrlToFile(cw.leftPreview, "left-original") : Promise.resolve(null),
+      cw.rightFile ? Promise.resolve(cw.rightFile) : cw.rightPreview ? imageUrlToFile(cw.rightPreview, "right-original") : Promise.resolve(null),
+    ]);
+    const uploadedEntries = [
+      ["front", frontSource],
+      ["back", backSource],
+      ["left", leftSource],
+      ["right", rightSource],
+    ] as const;
+    const availableEntries = uploadedEntries.filter((entry): entry is readonly [OriginPictureKey, File] => Boolean(entry[1]));
+
+    if (usesAccessoryImageWorkflow && availableEntries.length === 0) {
+      updateColorway(colorwayId, {
+        enhanceStatus: "failed",
+        enhanceError: "Please upload at least one image first.",
+      });
+      return;
+    }
+    if (!usesAccessoryImageWorkflow && (!frontSource || !backSource)) return;
+    if (isShoes && (!leftSource || !rightSource)) {
+      updateColorway(colorwayId, {
+        enhanceStatus: "failed",
+        enhanceError: "Please upload front, back, left, and right images first.",
+      });
       return;
     }
     updateColorway(colorwayId, { enhanceStatus: "processing", enhanceError: "", enhanceJobId: "" });
     try {
       if (isShoes) {
         const [front, back, left, right] = await Promise.all([
-          compressImageFile(cw.frontFile),
-          compressImageFile(cw.backFile),
-          compressImageFile(cw.leftFile!),
-          compressImageFile(cw.rightFile!),
+          compressImageFile(frontSource!),
+          compressImageFile(backSource!),
+          compressImageFile(leftSource!),
+          compressImageFile(rightSource!),
         ]);
         const body = new FormData();
         body.append("front", front); body.append("back", back); body.append("left", left); body.append("right", right);
@@ -1141,8 +1285,19 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         const data = await res.json();
         if (!res.ok) { updateColorway(colorwayId, { enhanceStatus: "failed", enhanceError: data.error || "Unable to start enhancement." }); return; }
         updateColorway(colorwayId, { enhanceJobId: data.job_id || "", enhanceStatus: data.status || "processing" });
+      } else if (usesAccessoryImageWorkflow) {
+        const compressedEntries = await Promise.all(
+          availableEntries.map(async ([view, file]) => [view, await compressImageFile(file)] as const)
+        );
+        const body = new FormData();
+        body.append("mode", "accessory");
+        compressedEntries.forEach(([view, file]) => body.append(view, file));
+        const res = await fetch("/api/products/enhance", withAuthRequest({ method: "POST", body }));
+        const data = await res.json();
+        if (!res.ok) { updateColorway(colorwayId, { enhanceStatus: "failed", enhanceError: data.error || "Unable to start enhancement." }); return; }
+        updateColorway(colorwayId, { enhanceJobId: data.job_id || "", enhanceStatus: data.status || "processing" });
       } else {
-        const [front, back] = await Promise.all([compressImageFile(cw.frontFile), compressImageFile(cw.backFile)]);
+        const [front, back] = await Promise.all([compressImageFile(frontSource!), compressImageFile(backSource!)]);
         const body = new FormData();
         body.append("front", front); body.append("back", back);
         const res = await fetch("/api/products/enhance", withAuthRequest({ method: "POST", body }));
@@ -1178,10 +1333,6 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 enhancedLeftUrl: leftUrl, enhancedRightUrl: rightUrl,
                 enhancedFrontFile: frontFile, enhancedBackFile: backFile,
                 enhancedLeftFile: leftFile, enhancedRightFile: rightFile,
-                ...(frontUrl ? { frontPreview: frontUrl } : {}),
-                ...(backUrl ? { backPreview: backUrl } : {}),
-                ...(leftUrl ? { leftPreview: leftUrl } : {}),
-                ...(rightUrl ? { rightPreview: rightUrl } : {}),
               }));
             } else if (data.status === "failed") { updateColorway(cw.id, { enhanceStatus: "failed", enhanceError: data.error || "Enhancement failed.", enhanceJobId: "" }); }
           }).catch(() => updateColorway(cw.id, { enhanceStatus: "failed", enhanceError: "Unable to poll enhancement status.", enhanceJobId: "" }));
@@ -1192,6 +1343,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   }, [colorways]);
 
   const canGenerateColorway = (cw: Colorway) => {
+    if (!needsModelSelection) return false;
     if (!selectedModelId) return false;
     if (cw.enhanceStatus !== "completed" && cw.enhanceStatus !== "original") return false;
     if (!Boolean(cw.enhancedFrontFile || cw.enhancedFrontUrl || cw.frontPreview) || !Boolean(cw.enhancedBackFile || cw.enhancedBackUrl || cw.backPreview)) return false;
@@ -1201,11 +1353,28 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     return true;
   };
 
+  const getColorwayViewInputFile = (
+    colorway: Colorway,
+    side: ColorwayView
+  ): File | null => {
+    const enhancedFileKey = `enhanced${side.charAt(0).toUpperCase()}${side.slice(1)}File` as
+      | "enhancedFrontFile"
+      | "enhancedBackFile"
+      | "enhancedLeftFile"
+      | "enhancedRightFile";
+    const fileKey = `${side}File` as "frontFile" | "backFile" | "leftFile" | "rightFile";
+    if (colorway.enhanceStatus === "original") {
+      return colorway[fileKey];
+    }
+
+    return colorway[enhancedFileKey] || colorway[fileKey];
+  };
+
   const handleGenerateColorway = async (colorwayId: string) => {
     const cw = colorways.find((c) => c.id === colorwayId);
-    if (!cw || !selectedModelId) return;
-    const frontSrc = cw.enhancedFrontFile || cw.frontFile;
-    const backSrc = cw.enhancedBackFile || cw.backFile;
+    if (!cw || !selectedModelId || !needsModelSelection) return;
+    const frontSrc = getColorwayViewInputFile(cw, "front");
+    const backSrc = getColorwayViewInputFile(cw, "back");
     if (!frontSrc || !backSrc) return;
     updateColorway(colorwayId, { generateStatus: "processing", generateError: "", generateJobId: "" });
     try {
@@ -1465,13 +1634,15 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 
         // Initialize colorways from sizeStock for store owners
         if (p.sizeStock && typeof p.sizeStock === "object") {
+          const isShoesProduct = p.fashionSubtype === "shoes";
           const sizeStockEntries = Object.entries(p.sizeStock as Record<string, { fullStock: number; stock: number; conditionScore: number | null }>);
           const colorwayMap = new Map<string, SizeRow[]>();
           for (const [key, entry] of sizeStockEntries) {
+            const isHexOnlyKey = key.startsWith("#");
             const parts = key.split(" / ");
-            const hasHex = parts.length >= 2 && parts[parts.length - 1].startsWith("#");
-            const hex = hasHex ? parts[parts.length - 1] : "";
-            const sizeName = hasHex ? parts.slice(0, -1).join(" / ") : key;
+            const hasHex = isHexOnlyKey || (parts.length >= 2 && parts[parts.length - 1].startsWith("#"));
+            const hex = isHexOnlyKey ? key : hasHex ? parts[parts.length - 1] : "";
+            const sizeName = isHexOnlyKey ? "" : hasHex ? parts.slice(0, -1).join(" / ") : key === "__default__" ? "" : key;
             if (!colorwayMap.has(hex)) colorwayMap.set(hex, []);
             colorwayMap.get(hex)!.push({
               id: generateId(),
@@ -1483,8 +1654,12 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           if (colorwayMap.size > 0) {
             const productImages: { url: string }[] = p.images || [];
             const colorImagesMap = p.colorImages as Record<string, number[]> | null;
-            const originFrontUrl = p.originPictures?.front || "";
-            const originBackUrl = p.originPictures?.back || "";
+            const originPictureUrls: Record<ColorwayView, string> = {
+              front: p.originPictures?.front || "",
+              back: p.originPictures?.back || "",
+              left: p.originPictures?.left || "",
+              right: p.originPictures?.right || "",
+            };
             type SavedCompanionSettings = {
               topType?: string; topColor?: { name: string; hex: string } | null;
               bottomType?: string; bottomColor?: { name: string; hex: string } | null;
@@ -1493,28 +1668,49 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
             const savedCompanion = p.companionSettings as Record<string, SavedCompanionSettings> | null;
             const loadedColorways: Colorway[] = Array.from(colorwayMap.entries()).map(([hex, sizes]) => {
               const indices = colorImagesMap?.[hex] || [];
-              const frontUrl = indices.length >= 2
-                ? productImages[indices[indices.length - 2]]?.url || ""
-                : indices.length === 1 ? productImages[indices[0]]?.url || "" : "";
-              const backUrl = indices.length >= 2 ? productImages[indices[indices.length - 1]]?.url || "" : "";
-              const resolvedFrontUrl = frontUrl || originFrontUrl;
-              const resolvedBackUrl = backUrl || originBackUrl;
-              const generatedImages = indices.length > 2
-                ? indices.slice(0, -2)
+              const colorwayViews: ColorwayView[] = isShoesProduct ? FOUR_IMAGE_VIEWS : ["front", "back"];
+              const originIndexStart = indices.length >= colorwayViews.length
+                ? indices.length - colorwayViews.length
+                : indices.length;
+              const savedViewUrls = Object.fromEntries(
+                colorwayViews.map((view, offset) => [
+                  view,
+                  indices.length >= colorwayViews.length
+                    ? productImages[indices[originIndexStart + offset]]?.url || ""
+                    : "",
+                ])
+              ) as Partial<Record<ColorwayView, string>>;
+              if (!isShoesProduct && indices.length === 1) {
+                savedViewUrls.front = productImages[indices[0]]?.url || "";
+              }
+              const resolvedViewUrls: Record<ColorwayView, string> = {
+                front: originPictureUrls.front || savedViewUrls.front || "",
+                back: originPictureUrls.back || savedViewUrls.back || "",
+                left: originPictureUrls.left || savedViewUrls.left || "",
+                right: originPictureUrls.right || savedViewUrls.right || "",
+              };
+              const generatedImages = indices.length > colorwayViews.length
+                ? indices.slice(0, -colorwayViews.length)
                     .map((i) => ({ url: productImages[i]?.url || "", file: null }))
                     .filter((g) => g.url)
                 : [];
               const generateStatus: ColorwayEnhanceStatus = generatedImages.length > 0 ? "completed" : "idle";
-              const enhanceStatus: ColorwayEnhanceStatus = (resolvedFrontUrl && resolvedBackUrl) ? "completed" : "idle";
+              const enhanceStatus: ColorwayEnhanceStatus = colorwayViews.every((view) =>
+                Boolean(savedViewUrls[view] || originPictureUrls[view])
+              ) ? "completed" : "idle";
               const cs = savedCompanion?.[hex];
               return {
                 ...createEmptyColorway(),
                 hex,
                 sizes,
-                frontPreview: resolvedFrontUrl,
-                backPreview: resolvedBackUrl,
-                enhancedFrontUrl: resolvedFrontUrl,
-                enhancedBackUrl: resolvedBackUrl,
+                frontPreview: resolvedViewUrls.front,
+                backPreview: resolvedViewUrls.back,
+                leftPreview: resolvedViewUrls.left,
+                rightPreview: resolvedViewUrls.right,
+                enhancedFrontUrl: savedViewUrls.front || "",
+                enhancedBackUrl: savedViewUrls.back || "",
+                enhancedLeftUrl: savedViewUrls.left || "",
+                enhancedRightUrl: savedViewUrls.right || "",
                 enhanceStatus,
                 generatedImages, generateStatus,
                 companionTopType: cs?.topType || "",
@@ -1630,6 +1826,14 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     () => getZoneRequirements(selectedCategoryZone),
     [selectedCategoryZone]
   );
+  const usesAccessoryImageWorkflow = useMemo(
+    () => hasAccessoryWorkflowCategory(categories, selectedCategorySlug, selectedCategoryZone),
+    [categories, selectedCategorySlug, selectedCategoryZone]
+  );
+  const isSizelessCategory = usesAccessoryImageWorkflow;
+  const requiresFourImageInputs = selectedCategoryZone === "footwear" || usesAccessoryImageWorkflow;
+  const needsModelSelection = generationRequirements.needsModel;
+  const canRunAnyGeneration = needsModelSelection;
   const companionZones = useMemo(
     () => getCompanionZonesForCategory(selectedCategoryZone),
     [selectedCategoryZone]
@@ -1679,12 +1883,14 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const selectedModel = filteredModels.find((model) => model._id === selectedModelId);
   const requiredOriginPictureKeys = useMemo(
     () =>
-      selectedCategoryZone === "footwear"
-        ? (["front", "back", "left", "right"] as OriginPictureKey[])
+      requiresFourImageInputs
+        ? FOUR_IMAGE_VIEWS
         : (["front", "back"] as OriginPictureKey[]),
-    [selectedCategoryZone]
+    [requiresFourImageInputs]
   );
-  const hasRequiredOriginPictures = requiredOriginPictureKeys.every((key) => Boolean(generationInputs[key].file));
+  const hasRequiredOriginPictures = usesAccessoryImageWorkflow
+    ? requiredOriginPictureKeys.some((key) => Boolean(generationInputs[key].file || generationInputs[key].previewUrl || form.originPictures[key]))
+    : requiredOriginPictureKeys.every((key) => Boolean(generationInputs[key].file || generationInputs[key].previewUrl || form.originPictures[key]));
   const hasPendingEnhanceOriginPictures = requiredOriginPictureKeys.some((key) => Boolean(originPictureFiles[key]));
   const hasRequiredEnhanceInputs = Boolean(selectedCategorySlug) && form.productType === "fashion";
   const canSelectOriginPictures = Boolean(selectedCategorySlug);
@@ -1711,8 +1917,21 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       ...(generationInputs.back.previewUrl
         ? [{ label: "Enhanced back", url: generationInputs.back.previewUrl }]
         : []),
+      ...(generationInputs.left.previewUrl
+        ? [{ label: usesAccessoryImageWorkflow ? "Enhanced image 3" : "Enhanced left", url: generationInputs.left.previewUrl }]
+        : []),
+      ...(generationInputs.right.previewUrl
+        ? [{ label: usesAccessoryImageWorkflow ? "Enhanced image 4" : "Enhanced right", url: generationInputs.right.previewUrl }]
+        : []),
     ],
-    [generatedModelMedia, generationInputs.front.previewUrl, generationInputs.back.previewUrl]
+    [
+      generatedModelMedia,
+      generationInputs.front.previewUrl,
+      generationInputs.back.previewUrl,
+      generationInputs.left.previewUrl,
+      generationInputs.right.previewUrl,
+      usesAccessoryImageWorkflow,
+    ]
   );
 
   const scrollToElement = (element: HTMLElement | null | undefined) => {
@@ -2321,7 +2540,13 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 
     const isShoes = form.fashionSubtype === "shoes";
 
-    if (!generationInputs.front.file || !generationInputs.back.file) {
+    const uploadedViews = requiredOriginPictureKeys.filter((key) => Boolean(generationInputs[key].file));
+    if (usesAccessoryImageWorkflow && uploadedViews.length === 0) {
+      setProductMediaError("Please upload at least one image first.");
+      return;
+    }
+
+    if (!usesAccessoryImageWorkflow && (!generationInputs.front.file || !generationInputs.back.file)) {
       setProductMediaError(isShoes ? "Please upload front, back, left, and right images first." : "Please upload front and back images first.");
       return;
     }
@@ -2337,8 +2562,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     try {
       if (isShoes) {
         const [frontFile, backFile, leftFile, rightFile] = await Promise.all([
-          compressImageFile(generationInputs.front.file),
-          compressImageFile(generationInputs.back.file),
+          compressImageFile(generationInputs.front.file!),
+          compressImageFile(generationInputs.back.file!),
           compressImageFile(generationInputs.left.file!),
           compressImageFile(generationInputs.right.file!),
         ]);
@@ -2360,10 +2585,30 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 
         setProductMediaJobId(data.job_id || "");
         setProductMediaStatus(data.status || "processing");
+      } else if (usesAccessoryImageWorkflow) {
+        const compressedEntries = await Promise.all(
+          uploadedViews.map(async (view) => [view, await compressImageFile(generationInputs[view].file!)] as const)
+        );
+
+        const body = new FormData();
+        body.append("mode", "accessory");
+        compressedEntries.forEach(([view, file]) => body.append(view, file));
+
+        const res = await fetch("/api/products/enhance", withAuthRequest({ method: "POST", body }));
+        const data = await res.json();
+
+        if (!res.ok) {
+          setProductMediaStatus("failed");
+          setProductMediaError(data.error || "Unable to start product media enhancement.");
+          return;
+        }
+
+        setProductMediaJobId(data.job_id || "");
+        setProductMediaStatus(data.status || "processing");
       } else {
         const [frontFile, backFile] = await Promise.all([
-          compressImageFile(generationInputs.front.file),
-          compressImageFile(generationInputs.back.file),
+          compressImageFile(generationInputs.front.file!),
+          compressImageFile(generationInputs.back.file!),
         ]);
 
         const body = new FormData();
@@ -2396,12 +2641,12 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       return;
     }
 
-    if (form.fashionSubtype === "clothes" && !selectedModelId) {
+    if (needsModelSelection && form.fashionSubtype === "clothes" && !selectedModelId) {
       setError("Please select a model first.", "model");
       return;
     }
 
-    if (form.fashionSubtype === "clothes") {
+    if (needsModelSelection && form.fashionSubtype === "clothes") {
       if (companionZones.includes("top") && (!companionTopType || !secondaryTopColor)) {
         setError("Please select the top type and color.", "model");
         return;
@@ -2419,12 +2664,16 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     }
 
     if (
-      !generationInputs.front.file ||
-      !generationInputs.back.file ||
-      (form.fashionSubtype === "shoes" && (!generationInputs.left.file || !generationInputs.right.file))
+      (usesAccessoryImageWorkflow && !requiredOriginPictureKeys.some((key) => Boolean(generationInputs[key].file))) ||
+      (!usesAccessoryImageWorkflow &&
+        (!generationInputs.front.file ||
+          !generationInputs.back.file ||
+          (form.fashionSubtype === "shoes" && (!generationInputs.left.file || !generationInputs.right.file))))
     ) {
       setError(
-        form.fashionSubtype === "shoes"
+        usesAccessoryImageWorkflow
+          ? "Please upload at least one product image before generating."
+          : form.fashionSubtype === "shoes"
           ? "Please upload front, back, left, and right product images before generating."
           : "Please upload front and back product images before generating.",
         "media"
@@ -2469,8 +2718,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         }
       }
       const [frontFile, backFile, leftFile, rightFile] = await Promise.all([
-        compressImageFile(generationInputs.front.file),
-        compressImageFile(generationInputs.back.file),
+        compressImageFile(generationInputs.front.file!),
+        compressImageFile(generationInputs.back.file!),
         generationInputs.left.file ? compressImageFile(generationInputs.left.file) : Promise.resolve(null),
         generationInputs.right.file ? compressImageFile(generationInputs.right.file) : Promise.resolve(null),
       ]);
@@ -2496,7 +2745,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 
       // 2. Poll for status
       let isCompleted = false;
-      let finalImages: any = null;
+      let finalImages: Record<string, string> | null = null;
 
       while (!isCompleted) {
         await waitFor(5000, controller.signal);
@@ -2523,7 +2772,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 
       const generatedImages = await Promise.all(
         viewList.map(async (view, index) => {
-          const base64 = finalImages[view];
+          const base64 = finalImages?.[view];
           if (!base64) return null;
           const file = await base64ToFile(base64, index);
           return {
@@ -2536,7 +2785,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         })
       );
 
-      const nextGeneratedImages = generatedImages.filter((img): img is any => !!img);
+      type GeneratedProductImage = NonNullable<(typeof generatedImages)[number]>;
+      const nextGeneratedImages = generatedImages.filter((img): img is GeneratedProductImage => img !== null);
       setImages((current) => [...current, ...nextGeneratedImages]);
       setGeneratedModelMedia(nextGeneratedImages);
       setShowProductMediaSection(true);
@@ -2576,11 +2826,16 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         setLoading(false);
         return;
       }
-      if (!selectedModelId) { setError("Please select a model first.", "model"); scrollToElement(modelPicturesSectionRef.current); setLoading(false); return; }
+      if (needsModelSelection && !selectedModelId) { setError("Please select a model first.", "model"); scrollToElement(modelPicturesSectionRef.current); setLoading(false); return; }
       for (const cw of colorways) {
-        if (!cw.frontFile && !cw.frontPreview) { setError("Please upload a front image for each colorway.", "colorways"); scrollToColorwayCard(cw.id); setLoading(false); return; }
-        if (!cw.backFile && !cw.backPreview) { setError("Please upload a back image for each colorway.", "colorways"); scrollToColorwayCard(cw.id); setLoading(false); return; }
-        if (cw.sizes.filter((s) => s.size.trim() && s.stock.trim()).length === 0) { setError("Please add at least one size and stock for each colorway.", "colorways"); scrollToColorwayCard(cw.id); setLoading(false); return; }
+        if (usesAccessoryImageWorkflow) {
+          if (!FOUR_IMAGE_VIEWS.some((view) => Boolean(cw[`${view}File` as keyof Colorway] || cw[`${view}Preview` as keyof Colorway]))) { setError("Please upload at least one image for each product.", "colorways"); scrollToColorwayCard(cw.id); setLoading(false); return; }
+        } else {
+          if (!cw.frontFile && !cw.frontPreview) { setError("Please upload a front image for each colorway.", "colorways"); scrollToColorwayCard(cw.id); setLoading(false); return; }
+          if (!cw.backFile && !cw.backPreview) { setError("Please upload a back image for each colorway.", "colorways"); scrollToColorwayCard(cw.id); setLoading(false); return; }
+          if (selectedCategoryZone === "footwear" && (!(cw.leftFile || cw.leftPreview) || !(cw.rightFile || cw.rightPreview))) { setError("Please upload front, back, left, and right images for each colorway.", "colorways"); scrollToColorwayCard(cw.id); setLoading(false); return; }
+        }
+        if (cw.sizes.filter((s) => (isSizelessCategory ? s.stock.trim() : s.size.trim() && s.stock.trim())).length === 0) { setError(isSizelessCategory ? "Please add stock for each product." : "Please add at least one size and stock for each colorway.", "colorways"); scrollToColorwayCard(cw.id); setLoading(false); return; }
       }
       try {
         const productCategories = [selectedParentSlug, selectedChildSlug, selectedGrandchildSlug, selectedGreatGrandchildSlug].filter(Boolean);
@@ -2588,10 +2843,10 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         const allVariants: VariantEntry[] = [];
         for (const cw of colorways) {
           const colorKey = cw.hex.trim();
-          for (const s of cw.sizes.filter((s) => s.size.trim() && s.stock.trim())) {
-            const size = s.size.trim();
+          for (const s of cw.sizes.filter((s) => (isSizelessCategory ? s.stock.trim() : s.size.trim() && s.stock.trim()))) {
+            const size = isSizelessCategory ? "" : s.size.trim();
             allVariants.push({
-              key: colorKey ? `${size} / ${colorKey}` : size,
+              key: buildColorwayVariantKey(size, colorKey),
               size,
               color: colorKey,
               stock: Math.max(0, Number(s.stock || 0)),
@@ -2627,7 +2882,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         body.append("sizeStock", JSON.stringify(sizeStockPayload));
         body.append("variants", JSON.stringify(variantsPayload));
         body.append("mainImageIndex", "0");
-        if (selectedModelId) body.append("modelId", selectedModelId);
+        if (needsModelSelection && selectedModelId) body.append("modelId", selectedModelId);
         const companionSettingsPayload: Record<string, object> = {};
         for (const cw of colorways) {
           const colorKey = cw.hex.trim();
@@ -2671,14 +2926,15 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
             if (gi.file) indices.push(pushNew(gi.file));
             else if (isUploadableUrl(gi.url)) indices.push(pushExisting(gi.url));
           }
-          const frontFile = cw.enhancedFrontFile || cw.frontFile;
-          const frontUrl = cw.enhancedFrontUrl || cw.frontPreview;
-          if (frontFile) indices.push(pushNew(frontFile));
-          else if (isUploadableUrl(frontUrl)) indices.push(pushExisting(frontUrl));
-          const backFile = cw.enhancedBackFile || cw.backFile;
-          const backUrl = cw.enhancedBackUrl || cw.backPreview;
-          if (backFile) indices.push(pushNew(backFile));
-          else if (isUploadableUrl(backUrl)) indices.push(pushExisting(backUrl));
+          for (const view of requiredOriginPictureKeys) {
+            const imageFile = getColorwayViewInputFile(cw, view);
+            const imageUrl =
+              cw.enhanceStatus === "completed"
+                ? cw[`enhanced${view.charAt(0).toUpperCase()}${view.slice(1)}Url` as keyof Colorway] || cw[`${view}Preview` as keyof Colorway]
+                : cw[`${view}Preview` as keyof Colorway];
+            if (imageFile) indices.push(pushNew(imageFile));
+            else if (typeof imageUrl === "string" && isUploadableUrl(imageUrl)) indices.push(pushExisting(imageUrl));
+          }
           if (indices.length > 0) colorImagesPayload[colorKey] = indices;
         }
         const compressedImages = await Promise.all(imageFiles.map((f) => compressImageFile(f)));
@@ -2687,14 +2943,22 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         body.append("existingImages", JSON.stringify(existingImagesPayload));
         body.append("imageOrder", JSON.stringify(imageOrder));
         const firstCw = colorways[0];
-        const frontOriginFile = firstCw.enhancedFrontFile || firstCw.frontFile;
-        const backOriginFile = firstCw.enhancedBackFile || firstCw.backFile;
+        const frontOriginFile = firstCw.frontFile;
+        const backOriginFile = firstCw.backFile;
+        const leftOriginFile = firstCw.leftFile;
+        const rightOriginFile = firstCw.rightFile;
         if (frontOriginFile) body.append("originPictureFrontFile", await compressImageFile(frontOriginFile));
         else if (isUploadableUrl(form.originPictures.front)) body.append("originPictureFront", form.originPictures.front);
-        else if (isUploadableUrl(firstCw.enhancedFrontUrl || firstCw.frontPreview)) body.append("originPictureFront", firstCw.enhancedFrontUrl || firstCw.frontPreview);
+        else if (isUploadableUrl(firstCw.frontPreview)) body.append("originPictureFront", firstCw.frontPreview);
         if (backOriginFile) body.append("originPictureBackFile", await compressImageFile(backOriginFile));
         else if (isUploadableUrl(form.originPictures.back)) body.append("originPictureBack", form.originPictures.back);
-        else if (isUploadableUrl(firstCw.enhancedBackUrl || firstCw.backPreview)) body.append("originPictureBack", firstCw.enhancedBackUrl || firstCw.backPreview);
+        else if (isUploadableUrl(firstCw.backPreview)) body.append("originPictureBack", firstCw.backPreview);
+        if (leftOriginFile) body.append("originPictureLeftFile", await compressImageFile(leftOriginFile));
+        else if (isUploadableUrl(form.originPictures.left)) body.append("originPictureLeft", form.originPictures.left);
+        else if (isUploadableUrl(firstCw.leftPreview)) body.append("originPictureLeft", firstCw.leftPreview);
+        if (rightOriginFile) body.append("originPictureRightFile", await compressImageFile(rightOriginFile));
+        else if (isUploadableUrl(form.originPictures.right)) body.append("originPictureRight", form.originPictures.right);
+        else if (isUploadableUrl(firstCw.rightPreview)) body.append("originPictureRight", firstCw.rightPreview);
         const res = await fetch(`/api/products/${id}`, withAuthRequest({ method: "PUT", body }));
         if (!res.ok) {
           const d = await res.json();
@@ -2733,14 +2997,14 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 
     if (form.productType === "fashion") {
       const hasExistingMedia = generatedModelMedia.some((m) => !m.file);
-      const hasEnhanced = hasExistingMedia || Boolean(generationInputs.front.file);
+      const hasEnhanced = hasExistingMedia || hasRequiredOriginPictures;
       if (!hasEnhanced) {
         setError("Please enhance the product images before saving.", "media");
         scrollToElement(productMediaSectionRef.current);
         setLoading(false);
         return;
       }
-      if (generatedModelMedia.length === 0) {
+      if (needsModelSelection && generatedModelMedia.length === 0) {
         setError("Please generate at least one model picture before saving.", "model");
         scrollToElement(modelPicturesSectionRef.current) || scrollToElement(productMediaSectionRef.current);
         setLoading(false);
@@ -3065,7 +3329,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
             </SectionCard>
           </div>
 
-          {selectedCategorySlug && (
+          {selectedCategorySlug && canRunAnyGeneration && (
             <div ref={modelPicturesSectionRef}>
               <SectionCard title="Model Pictures" description="Choose one model for all colorways, then configure each colorway's companion outfit and generate." error={sectionErrors.model}>
               <div className="space-y-2">
@@ -3095,7 +3359,6 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                       onUpdate={(patch) => updateColorway(cw.id, patch)}
                       canGenerate={canGenerateColorway(cw)}
                       onGenerate={() => { if (!canGenerateColorway(cw)) return; void handleGenerateColorway(cw.id); }}
-                      onReset={() => resetColorway(cw.id)}
                     />
                   ))}
                 </div>
@@ -3114,11 +3377,14 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                   index={cwIndex}
                   canRemove={colorways.length > 1}
                   isThrift={isStoreOwner}
-                  showGenerationPanel={isStoreOwner}
+                  showGenerationPanel={isStoreOwner && needsModelSelection}
                   companionZones={companionZones}
                   companionTypeOptions={companionTypeOptions}
                   canGenerate={canGenerateColorway(cw)}
-                  requiredViews={selectedCategoryZone === "footwear" ? ["front", "back", "left", "right"] : ["front", "back"]}
+                  requiredViews={requiresFourImageInputs ? ["front", "back", "left", "right"] : ["front", "back"]}
+                  viewLabels={usesAccessoryImageWorkflow ? ACCESSORY_VIEW_LABELS : undefined}
+                  enhanceRequiresAllViews={!usesAccessoryImageWorkflow}
+                  hideSizeInput={isSizelessCategory}
                   onRemove={() => removeColorway(cw.id)}
                   onUpdate={(patch) => updateColorway(cw.id, patch)}
                   onEnhance={() => void handleEnhanceColorway(cw.id)}
@@ -3126,7 +3392,6 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                   onAddSize={() => addSizeRow(cw.id)}
                   onRemoveSize={(sizeId) => removeSizeRow(cw.id, sizeId)}
                   onUpdateSize={(sizeId, patch) => updateSizeRow(cw.id, sizeId, patch)}
-                  onReset={() => resetColorway(cw.id)}
                 />
               ))}
               <button type="button" onClick={handleAddColorway} className="group mt-0 flex h-10 flex-none items-center gap-2 rounded border border-dashed border-border px-3 text-lg text-text-secondary transition-colors hover:border-accent hover:text-accent self-start">
@@ -3765,13 +4030,19 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 </div>
               </div>
             )}
+            {form.fashionSubtype === "shoes" && (
+              <div className="mt-4 rounded border border-accent/30 bg-accent/5 px-4 py-3 text-xs leading-relaxed text-text-secondary">
+                {FOOTWEAR_VIEW_VERIFICATION_COPY}
+              </div>
+            )}
+
             <div className={`mt-4 grid justify-items-center gap-4 ${requiredOriginPictureKeys.length === 4 ? "md:grid-cols-2 xl:grid-cols-4" : "md:grid-cols-2"}`}>
               {requiredOriginPictureKeys.map((key) => {
                 const preview = generationInputs[key].previewUrl || form.originPictures[key];
                 return (
                   <div key={key} className="mx-auto w-full max-w-[260px] justify-self-center space-y-3 rounded border border-border bg-bg-secondary p-3">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-[10px] text-text-secondary uppercase tracking-wider">{key} view</p>
+                      <p className="text-[10px] text-text-secondary uppercase tracking-wider">{usesAccessoryImageWorkflow ? ACCESSORY_VIEW_LABELS[key] : `${key} view`}</p>
                       {preview && (
                         <button
                           type="button"
@@ -3793,7 +4064,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                         </button>
                       ) : (
                         <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[10px] text-text-secondary uppercase tracking-wider">
-                          <span>Upload {key}</span>
+                          <span>{usesAccessoryImageWorkflow ? `Upload ${ACCESSORY_VIEW_LABELS[key]}` : `Upload ${key}`}</span>
                           <span className="text-[8px] tracking-normal normal-case text-text-secondary/80">
                             One image only
                           </span>
@@ -3861,7 +4132,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               </div>
             )}
 
-            {!showProductMediaSection && selectedCategoryZone !== "other" && (generationRequirements.needsModel || selectedCategoryZone === "footwear") && productMediaStatus === "completed" && (
+            {!showProductMediaSection && selectedCategoryZone !== "other" && canRunAnyGeneration && productMediaStatus === "completed" && (
               <div className="mt-6 space-y-5 border-t border-border pt-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
@@ -3877,7 +4148,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                   </span>
                 </div>
 
-                {generationRequirements.needsModel ? (
+                {needsModelSelection ? (
                   <div className="space-y-5">
                     <div>
                       <p className="text-[10px] uppercase tracking-wider text-text-secondary">
@@ -3961,13 +4232,15 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                       Product Media
                     </h3>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleRegenerateModel}
-                    className="border border-border px-3 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:bg-bg-hover"
-                  >
-                    Regenerate model
-                  </button>
+                  {canRunAnyGeneration && (
+                    <button
+                      type="button"
+                      onClick={handleRegenerateModel}
+                      className="border border-border px-3 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:bg-bg-hover"
+                    >
+                      Regenerate model
+                    </button>
+                  )}
                 </div>
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                   {productMediaItems.map((item, index) => (

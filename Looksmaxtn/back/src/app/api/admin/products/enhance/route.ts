@@ -73,6 +73,48 @@ Output:
 
 - Background color must remain exactly #EAE9E7 with no variation`;
 
+const ACCESSORY_MEDIA_ENHANCEMENT_PROMPT = `You are a professional e-commerce product retouching assistant.
+
+Task:
+
+* Enhance the provided product image for a premium catalog result
+* Preserve the item exactly as photographed while improving the presentation
+
+Strict Preservation Rules:
+
+* Keep the product details exactly the same
+* Preserve shape, proportions, color, material, texture, stitching, logos, hardware, and branding
+* Do NOT redesign, reshape, restyle, or replace any part of the item
+
+Enhancement Goals:
+
+* Clean up the image professionally
+* Improve clarity, sharpness, and lighting balance
+* Keep natural texture and fine details
+* Remove distractions only if they are part of the background
+* Do NOT over-smooth or make the product look artificial
+
+Background:
+
+* Replace the background with a clean solid color #EAE9E7
+* Keep the background flat, smooth, and uniform
+* No gradients, no texture, no props, no text
+
+Composition:
+
+* Keep the full product visible
+* Center the item cleanly
+* Maintain a natural catalog composition
+
+Output:
+
+* High-resolution image
+* Product-only catalog result
+* Background color must remain exactly #EAE9E7 with no variation`;
+
+const ALL_VIEWS = ["front", "back", "left", "right"] as const;
+type EnhancementView = typeof ALL_VIEWS[number];
+
 async function fileToBase64(file: File) {
   const bytes = await file.arrayBuffer();
   return Buffer.from(bytes).toString("base64");
@@ -138,8 +180,77 @@ export async function POST(req: NextRequest) {
     }
 
     const formData = await req.formData();
-    const frontFile = formData.get("front");
-    const backFile = formData.get("back");
+    const mode = String(formData.get("mode") || "garment");
+    const filesByView = Object.fromEntries(
+      ALL_VIEWS.map((view) => [view, formData.get(view)])
+    ) as Record<EnhancementView, FormDataEntryValue | null>;
+    const uploadedViews = ALL_VIEWS.filter(
+      (view) => filesByView[view] instanceof File && (filesByView[view] as File).size > 0
+    );
+
+    if (mode === "accessory") {
+      if (uploadedViews.length === 0) {
+        return NextResponse.json({ error: "At least one image is required." }, { status: 400 });
+      }
+
+      const sourceImages = {
+        front: "",
+        back: "",
+        left: "",
+        right: "",
+      };
+      const base64ByView = await Promise.all(
+        uploadedViews.map(async (view) => {
+          const file = filesByView[view] as File;
+          sourceImages[view] = await saveProductMediaSourceImage(file, view);
+          return [view, await fileToBase64(file)] as const;
+        })
+      );
+
+      const job = await ProductMediaEnhancementJob.create({
+        status: "processing",
+        sourceImages,
+        images: {
+          front: "",
+          back: "",
+          left: "",
+          right: "",
+        },
+      });
+
+      const webhookBaseUrl = getWebhookBaseUrl(req);
+      const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
+      const triggers = base64ByView.map(([view, imageBase64]) =>
+        fetch(`${normalizedBaseUrl}/api/proxy`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            job_id: job._id.toString(),
+            webhook_url: `${webhookBaseUrl}/api/admin/products/enhance/webhook?view=${view}`,
+            prompt: ACCESSORY_MEDIA_ENHANCEMENT_PROMPT,
+            images: [imageBase64],
+          }),
+        })
+      );
+
+      const responses = await Promise.all(triggers);
+      if (responses.some((response) => !response.ok)) {
+        job.status = "failed";
+        job.errorMessage = "Failed to reach generation service.";
+        await job.save();
+        return NextResponse.json({ error: "Generation service unreachable.", job_id: job._id }, { status: 502 });
+      }
+
+      return NextResponse.json({
+        job_id: job._id,
+        status: "processing",
+        sourceImages: job.sourceImages,
+        images: job.images,
+      });
+    }
+
+    const frontFile = filesByView.front;
+    const backFile = filesByView.back;
 
     if (!(frontFile instanceof File) || frontFile.size === 0) {
       return NextResponse.json({ error: "Front image is required." }, { status: 400 });

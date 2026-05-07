@@ -331,7 +331,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (contentType.includes("application/json")) {
       const body = await req.json();
       if (session.role === "admin") {
-        const allowedAdminKeys = new Set(["approvalStatus", "isActive"]);
+        const allowedAdminKeys = new Set(["approvalStatus", "isActive", "tag"]);
         const bodyKeys = Object.keys(body || {});
         const hasRestrictedKeys = bodyKeys.some((key) => !allowedAdminKeys.has(key));
         if (hasRestrictedKeys) {
@@ -344,6 +344,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
       if (typeof body.isActive === "boolean") {
         update.isActive = body.isActive;
+      }
+
+      if (session.role === "admin" && typeof body.tag === "string") {
+        update.tag = String(body.tag || "").trim();
       }
 
       if (typeof body.reference === "string") {

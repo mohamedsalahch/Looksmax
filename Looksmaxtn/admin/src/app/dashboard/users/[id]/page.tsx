@@ -86,17 +86,17 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
   const statusColor = (status: string) => {
     switch (status) {
       case "canceled":
-        return "text-danger bg-danger/10";
+        return "text-rose-900 bg-rose-100";
       case "returned":
-        return "text-warning bg-warning/10";
+        return "text-orange-900 bg-orange-100";
       case "delivered":
-        return "bg-bg-secondary text-text-secondary";
+        return "text-emerald-900 bg-emerald-100";
       case "shipping":
-        return "text-info bg-info/10";
+        return "text-violet-900 bg-violet-100";
       case "confirmed":
-        return "text-accent bg-accent/10";
+        return "text-sky-900 bg-sky-100";
       default:
-        return "text-warning bg-warning/10";
+        return "text-amber-900 bg-amber-100";
     }
   };
 

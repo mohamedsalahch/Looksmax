@@ -11,6 +11,7 @@ import {
 } from "@/lib/generationPalette";
 import ColorPicker from "@/components/ColorPicker";
 import {
+  getCategoryAncestors,
   getCategoryGender,
   getCategoryZone,
   getCompanionZonesForCategory,
@@ -288,6 +289,32 @@ const emptyOriginPictureFiles: OriginPictureFiles = {
   right: null,
 };
 
+const FOUR_IMAGE_VIEWS: OriginPictureKey[] = ["front", "back", "left", "right"];
+const ACCESSORY_VIEW_LABELS: Record<OriginPictureKey, string> = {
+  front: "Image 1",
+  back: "Image 2",
+  left: "Image 3",
+  right: "Image 4",
+};
+const FOOTWEAR_VIEW_VERIFICATION_COPY =
+  "Footwear verification: upload four different shoe angles: front, back, left side, and right side. Each slot is sent separately to the generator.";
+
+function hasAccessoryWorkflowCategory(categories: Category[], slug: string, zone: string) {
+  if (!slug) return false;
+  if (zone === "handbag" || zone === "headwear") return true;
+  const chain = getCategoryAncestors(categories, slug);
+  return chain.some((category) => /accessor/i.test(category.slug) || /accessor/i.test(category.name));
+}
+
+function buildColorwayVariantKey(size: string, color: string) {
+  const trimmedSize = size.trim();
+  const trimmedColor = color.trim();
+  if (trimmedSize && trimmedColor) return `${trimmedSize} / ${trimmedColor}`;
+  if (trimmedColor) return trimmedColor;
+  if (trimmedSize) return trimmedSize;
+  return "__default__";
+}
+
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
     <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-text-secondary mb-1.5">
@@ -401,7 +428,18 @@ async function productImageToFile(image: ProductImage, label: keyof GenerationIn
 }
 
 async function imageUrlToFile(url: string, label: string) {
-  const blob = await fetch(url, { cache: "reload" }).then((response) => response.blob());
+  const isDirectFetchable =
+    url.startsWith("blob:") ||
+    url.startsWith("data:") ||
+    url.startsWith("/") ||
+    (!url.startsWith("http://") && !url.startsWith("https://"));
+  const fetchUrl = isDirectFetchable ? url : `/api/media-fetch?url=${encodeURIComponent(url)}`;
+  const blob = await fetch(fetchUrl, { cache: "no-store" }).then(async (response) => {
+    if (!response.ok) {
+      throw new Error(`Media fetch failed with status ${response.status}`);
+    }
+    return response.blob();
+  });
   const extension = blob.type.split("/")[1] || "png";
   return new File([blob], `${label}-${Date.now()}.${extension}`, {
     type: blob.type || "image/png",
@@ -567,7 +605,6 @@ function ColorwayGenerationCard({
   onUpdate,
   onGenerate,
   canGenerate,
-  onReset,
 }: {
   colorway: Colorway;
   index: number;
@@ -576,7 +613,6 @@ function ColorwayGenerationCard({
   onUpdate: (patch: Partial<Colorway>) => void;
   onGenerate: () => void;
   canGenerate: boolean;
-  onReset: () => void;
 }) {
   const [zoomedUrl, setZoomedUrl] = useState<string | null>(null);
   const hasColor = Boolean(colorway.hex.trim());
@@ -590,7 +626,7 @@ function ColorwayGenerationCard({
           style={hasColor ? { backgroundColor: colorway.hex } : undefined}
         />
         <span className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">
-          Colorway {index + 1}
+          Product {index + 1}
         </span>
         <span className="ml-auto text-[9px] font-mono text-text-secondary/60">{hasColor ? colorway.hex : "No color"}</span>
       </div>
@@ -598,6 +634,7 @@ function ColorwayGenerationCard({
       {/* Companion zones */}
       {companionZones.length > 0 && (
         <div className="space-y-3">
+          <p className="text-[9px] uppercase tracking-wider text-text-secondary">Model Generation</p>
           {companionZones.includes("top") && (
             <div className="space-y-2">
               <p className="text-[9px] uppercase tracking-wider text-text-secondary">Top</p>
@@ -687,14 +724,17 @@ function ColorwayGenerationCard({
           </div>
         )}
         <div className="flex items-center justify-end gap-2">
-          {colorway.generateStatus === "completed" && (
+          {colorway.generateStatus === "completed" && canGenerate && (
             <button
               type="button"
-              onClick={onReset}
+              onClick={onGenerate}
               className="text-[8px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary"
             >
-              Reset
+              Regenerate
             </button>
+          )}
+          {colorway.generateStatus === "processing" && (
+            <span className="text-[8px] uppercase tracking-wider text-text-secondary">Generating...</span>
           )}
           <button
             type="button"
@@ -706,7 +746,7 @@ function ColorwayGenerationCard({
               <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />
             )}
             {colorway.generateStatus === "completed"
-              ? "Generated ✓"
+              ? "Generated"
               : colorway.generateStatus === "processing"
               ? "Generating..."
               : "Generate"}
@@ -751,6 +791,9 @@ function ColorwayCard({
   companionTypeOptions,
   canGenerate,
   requiredViews,
+  viewLabels,
+  enhanceRequiresAllViews = true,
+  hideSizeInput = false,
   onRemove,
   onUpdate,
   onEnhance,
@@ -758,7 +801,6 @@ function ColorwayCard({
   onAddSize,
   onRemoveSize,
   onUpdateSize,
-  onReset,
 }: {
   colorway: Colorway;
   index: number;
@@ -770,6 +812,9 @@ function ColorwayCard({
   companionTypeOptions?: { top: { slug: string; name: string }[]; bottom: { slug: string; name: string }[]; footwear: { slug: string; name: string }[] };
   canGenerate?: boolean;
   requiredViews?: ColorwayView[];
+  viewLabels?: Partial<Record<ColorwayView, string>>;
+  enhanceRequiresAllViews?: boolean;
+  hideSizeInput?: boolean;
   onRemove: () => void;
   onUpdate: (patch: Partial<Colorway>) => void;
   onEnhance: () => void;
@@ -777,7 +822,6 @@ function ColorwayCard({
   onAddSize: () => void;
   onRemoveSize: (sizeId: string) => void;
   onUpdateSize: (sizeId: string, patch: Partial<SizeRow>) => void;
-  onReset: () => void;
 }) {
   const views: ColorwayView[] = requiredViews && requiredViews.length > 0 ? requiredViews : ["front", "back"];
   const colorInputRef = useRef<HTMLInputElement>(null);
@@ -788,12 +832,56 @@ function ColorwayCard({
     `${view}File` as "frontFile" | "backFile" | "leftFile" | "rightFile";
   const previewKeyFor = (view: ColorwayView): "frontPreview" | "backPreview" | "leftPreview" | "rightPreview" =>
     `${view}Preview` as "frontPreview" | "backPreview" | "leftPreview" | "rightPreview";
+  const enhancedUrlKeyFor = (
+    view: ColorwayView
+  ): "enhancedFrontUrl" | "enhancedBackUrl" | "enhancedLeftUrl" | "enhancedRightUrl" =>
+    `enhanced${view.charAt(0).toUpperCase()}${view.slice(1)}Url` as
+      | "enhancedFrontUrl"
+      | "enhancedBackUrl"
+      | "enhancedLeftUrl"
+      | "enhancedRightUrl";
+  const enhancedFileKeyFor = (
+    view: ColorwayView
+  ): "enhancedFrontFile" | "enhancedBackFile" | "enhancedLeftFile" | "enhancedRightFile" =>
+    `enhanced${view.charAt(0).toUpperCase()}${view.slice(1)}File` as
+      | "enhancedFrontFile"
+      | "enhancedBackFile"
+      | "enhancedLeftFile"
+      | "enhancedRightFile";
+
+  const uploadedViews = views.filter(
+    (view) => Boolean(colorway[fileKeyFor(view)] || colorway[previewKeyFor(view)])
+  );
+  const hasEnhancedResults =
+    uploadedViews.length > 0 &&
+    uploadedViews.every((view) => Boolean(colorway[enhancedUrlKeyFor(view)] || colorway[enhancedFileKeyFor(view)]));
+  const isShowingEnhanced = hasEnhancedResults && colorway.enhanceStatus === "completed";
+  const isUsingOriginal = colorway.enhanceStatus === "original";
+
+  const getDisplayedPreview = (view: ColorwayView) =>
+    isShowingEnhanced
+      ? colorway[enhancedUrlKeyFor(view)] || colorway[previewKeyFor(view)]
+      : colorway[previewKeyFor(view)];
 
   const handleViewFile = (view: ColorwayView, file: File | null) => {
     const generating = colorway.generateStatus === "processing";
     const fileKey = fileKeyFor(view);
     const previewKey = previewKeyFor(view);
-    const enhanceReset = generating ? {} : { enhanceStatus: "idle" as const, enhanceJobId: "" };
+    const enhanceReset = generating
+      ? {}
+      : {
+          enhanceStatus: "idle" as const,
+          enhanceJobId: "",
+          enhanceError: "",
+          enhancedFrontUrl: "",
+          enhancedBackUrl: "",
+          enhancedLeftUrl: "",
+          enhancedRightUrl: "",
+          enhancedFrontFile: null,
+          enhancedBackFile: null,
+          enhancedLeftFile: null,
+          enhancedRightFile: null,
+        };
     if (!file) {
       onUpdate({ [fileKey]: null, [previewKey]: "", ...enhanceReset } as Partial<Colorway>);
       return;
@@ -801,9 +889,7 @@ function ColorwayCard({
     onUpdate({ [fileKey]: file, [previewKey]: URL.createObjectURL(file), ...enhanceReset } as Partial<Colorway>);
   };
 
-  const canEnhance = views.every(
-    (view) => Boolean(colorway[fileKeyFor(view)]) || Boolean(colorway[previewKeyFor(view)])
-  );
+  const canEnhance = enhanceRequiresAllViews ? uploadedViews.length === views.length : uploadedViews.length > 0;
 
   const handlePickColor = async () => {
     const EyeDropperCtor = (window as Window & {
@@ -839,7 +925,7 @@ function ColorwayCard({
             </button>
           )}
           <span className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">
-            Colorway {index + 1}
+            Product {index + 1}
           </span>
         </div>
         <div className="flex items-center gap-1.5">
@@ -885,13 +971,18 @@ function ColorwayCard({
       </div>
 
       {/* Upload slots */}
+      {views.length === 4 && !viewLabels && (
+        <div className="rounded border border-accent/30 bg-accent/5 px-3 py-2 text-[10px] leading-relaxed text-text-secondary">
+          {FOOTWEAR_VIEW_VERIFICATION_COPY}
+        </div>
+      )}
       <div className={`grid gap-2 ${views.length === 4 ? "grid-cols-2" : "grid-cols-2"}`}>
         {views.map((slot) => {
           const inputId = `cw-${slot}-${colorway.id}`;
-          const preview = colorway[previewKeyFor(slot)];
+          const preview = getDisplayedPreview(slot);
           return (
             <div key={slot} className="space-y-1">
-              <p className="text-[9px] uppercase tracking-wider text-text-secondary">{slot}</p>
+              <p className="text-[9px] uppercase tracking-wider text-text-secondary">{viewLabels?.[slot] || slot}</p>
               <input
                 id={inputId}
                 type="file"
@@ -960,23 +1051,25 @@ function ColorwayCard({
 
       {/* Sizes */}
       <div className="space-y-1.5">
-        <p className="text-[9px] uppercase tracking-wider text-text-secondary">Sizes</p>
+        <p className="text-[9px] uppercase tracking-wider text-text-secondary">{hideSizeInput ? "Stock" : "Sizes"}</p>
         {colorway.sizes.map((sizeRow) => (
           <div key={sizeRow.id} className="flex items-end gap-2">
-            <input
-              type="text"
-              value={sizeRow.size}
-              onChange={(e) => onUpdateSize(sizeRow.id, { size: e.target.value })}
-              placeholder="Size"
-              className="min-w-0 flex-1 border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
-            />
+            {!hideSizeInput && (
+              <input
+                type="text"
+                value={sizeRow.size}
+                onChange={(e) => onUpdateSize(sizeRow.id, { size: e.target.value })}
+                placeholder="Size"
+                className="min-w-0 flex-1 border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
+              />
+            )}
             <input
               type="number"
               min="0"
               value={sizeRow.stock}
               onChange={(e) => onUpdateSize(sizeRow.id, { stock: e.target.value })}
               placeholder="Qty"
-              className="w-12 flex-none border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
+              className={`${hideSizeInput ? "flex-1" : "w-12"} flex-none border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors`}
             />
             <button
               type="button"
@@ -988,13 +1081,15 @@ function ColorwayCard({
             </button>
           </div>
         ))}
-        <button
-          type="button"
-          onClick={onAddSize}
-          className="text-[9px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary"
-        >
-          + Add size
-        </button>
+        {!hideSizeInput && (
+          <button
+            type="button"
+            onClick={onAddSize}
+            className="text-[9px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary"
+          >
+            + Add size
+          </button>
+        )}
         {isThrift && colorway.sizes.map((sizeRow) => (
           <div key={sizeRow.id} className="space-y-0.5 pt-1">
             <div className="flex items-center justify-between">
@@ -1023,16 +1118,7 @@ function ColorwayCard({
           </div>
         )}
         <div className="flex items-center justify-end gap-2">
-          {(colorway.enhanceStatus === "completed" || colorway.enhanceStatus === "original") && (
-            <button
-              type="button"
-              onClick={onReset}
-              className="text-[8px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary"
-            >
-              Reset
-            </button>
-          )}
-          {colorway.enhanceStatus === "idle" && canEnhance && (
+          {!hasEnhancedResults && canEnhance && !isUsingOriginal && (
             <button
               type="button"
               onClick={() => onUpdate({ enhanceStatus: "original" })}
@@ -1041,17 +1127,48 @@ function ColorwayCard({
               Use original
             </button>
           )}
+          {hasEnhancedResults && colorway.enhanceStatus === "completed" && canEnhance && (
+            <button
+              type="button"
+              onClick={() => onUpdate({ enhanceStatus: "original" })}
+              className="text-[8px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary"
+            >
+              Use original
+            </button>
+          )}
+          {hasEnhancedResults && canEnhance && colorway.enhanceStatus !== "processing" && (
+            <button
+              type="button"
+              onClick={onEnhance}
+              className="text-[8px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary"
+            >
+              Re-enhance
+            </button>
+          )}
+          {hasEnhancedResults && colorway.enhanceStatus === "processing" && (
+            <span className="text-[8px] uppercase tracking-wider text-text-secondary">Enhancing...</span>
+          )}
           <button
             type="button"
-            onClick={colorway.enhanceStatus !== "completed" ? onEnhance : undefined}
-            disabled={!canEnhance || colorway.enhanceStatus === "processing" || colorway.enhanceStatus === "completed"}
+            onClick={
+              colorway.enhanceStatus === "processing"
+                ? undefined
+                : hasEnhancedResults
+                ? isUsingOriginal
+                  ? () => onUpdate({ enhanceStatus: "completed" })
+                  : undefined
+                : onEnhance
+            }
+            disabled={!canEnhance || colorway.enhanceStatus === "processing" || (hasEnhancedResults && !isUsingOriginal)}
             className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity"
           >
             {colorway.enhanceStatus === "processing" && (
               <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />
             )}
-            {colorway.enhanceStatus === "completed"
-              ? "Enhanced ✓"
+            {hasEnhancedResults
+              ? isUsingOriginal
+                ? "Use enhanced"
+                : "Enhanced"
               : colorway.enhanceStatus === "processing"
               ? "Enhancing..."
               : "Enhance"}
@@ -1062,7 +1179,7 @@ function ColorwayCard({
       {showGenerationPanel && (colorway.enhanceStatus === "completed" || colorway.enhanceStatus === "original" || colorway.generateStatus !== "idle") && (
         <div className="space-y-3 border-t border-border pt-3">
           <div className="space-y-1.5">
-            <p className="text-[9px] uppercase tracking-wider text-text-secondary">Zones</p>
+            <p className="text-[9px] uppercase tracking-wider text-text-secondary">Model Generation</p>
             {companionZones && companionZones.length > 0 ? (
               <div className="space-y-3">
                 {companionZones.includes("top") && (
@@ -1147,9 +1264,21 @@ function ColorwayCard({
           )}
 
           <div className="flex items-center justify-end gap-2">
+            {colorway.generateStatus === "completed" && canGenerate && (
+              <button
+                type="button"
+                onClick={onGenerate}
+                className="text-[8px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary"
+              >
+                Regenerate
+              </button>
+            )}
+            {colorway.generateStatus === "processing" && (
+              <span className="text-[8px] uppercase tracking-wider text-text-secondary">Generating...</span>
+            )}
             <button
               type="button"
-              onClick={canGenerate ? onGenerate : undefined}
+              onClick={canGenerate && colorway.generateStatus !== "completed" ? onGenerate : undefined}
               disabled={!canGenerate || colorway.generateStatus === "processing" || colorway.generateStatus === "completed"}
               className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity"
             >
@@ -1157,7 +1286,7 @@ function ColorwayCard({
                 <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />
               )}
               {colorway.generateStatus === "completed"
-                ? "Generated ✓"
+                ? "Generated"
                 : colorway.generateStatus === "processing"
                 ? "Generating..."
                 : "Generate"}
@@ -1292,6 +1421,14 @@ export default function NewProductPage() {
     () => getZoneRequirements(selectedCategoryZone),
     [selectedCategoryZone]
   );
+  const usesAccessoryImageWorkflow = useMemo(
+    () => hasAccessoryWorkflowCategory(categories, selectedCategorySlug, selectedCategoryZone),
+    [categories, selectedCategorySlug, selectedCategoryZone]
+  );
+  const isSizelessCategory = usesAccessoryImageWorkflow;
+  const requiresFourImageInputs = selectedCategoryZone === "footwear" || usesAccessoryImageWorkflow;
+  const needsModelSelection = generationRequirements.needsModel;
+  const canRunAnyGeneration = needsModelSelection;
   const companionZones = useMemo(
     () => getCompanionZonesForCategory(selectedCategoryZone),
     [selectedCategoryZone]
@@ -1339,14 +1476,29 @@ export default function NewProductPage() {
     [models, selectedModelGender]
   );
   const selectedModel = filteredModels.find((model) => model._id === selectedModelId);
+  useEffect(() => {
+    if (!isStoreOwner || !selectedCategorySlug || form.productType !== "fashion" || !needsModelSelection) return;
+
+    const firstModel = filteredModels[0];
+    if (!firstModel) {
+      if (selectedModelId) setSelectedModelId("");
+      return;
+    }
+
+    if (!filteredModels.some((model) => model._id === selectedModelId)) {
+      setSelectedModelId(firstModel._id);
+    }
+  }, [filteredModels, form.productType, isStoreOwner, needsModelSelection, selectedCategorySlug, selectedModelId]);
   const requiredOriginPictureKeys = useMemo(
     () =>
-      selectedCategoryZone === "footwear"
-        ? (["front", "back", "left", "right"] as OriginPictureKey[])
+      requiresFourImageInputs
+        ? FOUR_IMAGE_VIEWS
         : (["front", "back"] as OriginPictureKey[]),
-    [selectedCategoryZone]
+    [requiresFourImageInputs]
   );
-  const hasRequiredOriginPictures = requiredOriginPictureKeys.every((key) => Boolean(generationInputs[key].file));
+  const hasRequiredOriginPictures = usesAccessoryImageWorkflow
+    ? requiredOriginPictureKeys.some((key) => Boolean(generationInputs[key].file || generationInputs[key].previewUrl || form.originPictures[key]))
+    : requiredOriginPictureKeys.every((key) => Boolean(generationInputs[key].file || generationInputs[key].previewUrl || form.originPictures[key]));
   const activeVariantRows = useMemo(
     () =>
       variantRows.filter(
@@ -1376,12 +1528,15 @@ export default function NewProductPage() {
     if (colorways.length === 0) return false;
 
     return colorways.every((cw) =>
-      Boolean(cw.frontFile || cw.frontPreview) &&
-      Boolean(cw.backFile || cw.backPreview) &&
-      cw.sizes.some((sizeRow) => sizeRow.size.trim() && sizeRow.stock.trim()) &&
-      (cw.hex.trim() ? cw.generateStatus !== "idle" : colorways.length === 1)
+      (usesAccessoryImageWorkflow
+        ? FOUR_IMAGE_VIEWS.some((view) => Boolean(cw[`${view}File` as keyof Colorway] || cw[`${view}Preview` as keyof Colorway]))
+        : Boolean(cw.frontFile || cw.frontPreview) &&
+          Boolean(cw.backFile || cw.backPreview) &&
+          (selectedCategoryZone !== "footwear" || (Boolean(cw.leftFile || cw.leftPreview) && Boolean(cw.rightFile || cw.rightPreview)))) &&
+      cw.sizes.some((sizeRow) => (isSizelessCategory ? sizeRow.stock.trim() : sizeRow.size.trim() && sizeRow.stock.trim())) &&
+      (!needsModelSelection || (cw.hex.trim() ? cw.generateStatus !== "idle" : colorways.length === 1))
     );
-  }, [colorways, isStoreOwner, selectedCategorySlug]);
+  }, [colorways, isSizelessCategory, isStoreOwner, needsModelSelection, selectedCategorySlug, selectedCategoryZone, usesAccessoryImageWorkflow]);
   const storeOwnerBasicsReady = useMemo(() => {
     if (!isStoreOwner) return true;
     if (!form.name.trim()) return false;
@@ -1397,14 +1552,15 @@ export default function NewProductPage() {
     () => (colorways.some((cw) => !cw.hex.trim()) ? "Add color to the previous colorway" : "Add colorway"),
     [colorways]
   );
-  const shouldShowModelPictures = Boolean(selectedCategorySlug);
+  const shouldShowModelPictures = Boolean(selectedCategorySlug) && canRunAnyGeneration;
   const storeOwnerGenerationReady = useMemo(() => {
     if (!isStoreOwner) return true;
     if (!selectedCategorySlug) return false;
     if (colorways.length === 0) return false;
+    if (!needsModelSelection) return true;
 
     return colorways.every((cw) => cw.generateStatus === "completed");
-  }, [colorways, isStoreOwner, selectedCategorySlug]);
+  }, [colorways, isStoreOwner, needsModelSelection, selectedCategorySlug]);
   const hasRequiredEnhanceInputs = Boolean(selectedParentSlug) && form.productType === "fashion";
   const canSelectOriginPictures = Boolean(selectedCategorySlug);
   const enhanceButtonLabel =
@@ -1430,8 +1586,21 @@ export default function NewProductPage() {
       ...(generationInputs.back.previewUrl
         ? [{ label: "Enhanced back", url: generationInputs.back.previewUrl }]
         : []),
+      ...(generationInputs.left.previewUrl
+        ? [{ label: usesAccessoryImageWorkflow ? "Enhanced image 3" : "Enhanced left", url: generationInputs.left.previewUrl }]
+        : []),
+      ...(generationInputs.right.previewUrl
+        ? [{ label: usesAccessoryImageWorkflow ? "Enhanced image 4" : "Enhanced right", url: generationInputs.right.previewUrl }]
+        : []),
     ],
-    [generatedModelMedia, generationInputs.front.previewUrl, generationInputs.back.previewUrl]
+    [
+      generatedModelMedia,
+      generationInputs.front.previewUrl,
+      generationInputs.back.previewUrl,
+      generationInputs.left.previewUrl,
+      generationInputs.right.previewUrl,
+      usesAccessoryImageWorkflow,
+    ]
   );
 
   const scrollToElement = (element: HTMLElement | null | undefined) => {
@@ -1447,34 +1616,6 @@ export default function NewProductPage() {
 
   const updateColorway = (id: string, patch: Partial<Colorway>) => {
     setColorways((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
-  };
-
-  const resetColorway = (id: string) => {
-    updateColorway(id, {
-      frontFile: null,
-      frontPreview: "",
-      backFile: null,
-      backPreview: "",
-      leftFile: null,
-      leftPreview: "",
-      rightFile: null,
-      rightPreview: "",
-      enhanceStatus: "idle",
-      enhanceJobId: "",
-      enhanceError: "",
-      enhancedFrontUrl: "",
-      enhancedBackUrl: "",
-      enhancedLeftUrl: "",
-      enhancedRightUrl: "",
-      enhancedFrontFile: null,
-      enhancedBackFile: null,
-      enhancedLeftFile: null,
-      enhancedRightFile: null,
-      generateStatus: "idle",
-      generateJobId: "",
-      generateError: "",
-      generatedImages: [],
-    });
   };
 
   const addColorway = () =>
@@ -1528,9 +1669,17 @@ export default function NewProductPage() {
     const cw = colorways.find((c) => c.id === colorwayId);
     if (!cw) return;
     const isShoes = selectedCategoryZone === "footwear";
+    const uploadedViews = FOUR_IMAGE_VIEWS.filter((view) => Boolean(cw[`${view}File` as keyof Colorway]));
     const frontSrc = cw.frontFile;
     const backSrc = cw.backFile;
-    if (!frontSrc || !backSrc) return;
+    if (usesAccessoryImageWorkflow && uploadedViews.length === 0) {
+      updateColorway(colorwayId, {
+        enhanceStatus: "failed",
+        enhanceError: "Please upload at least one image first.",
+      });
+      return;
+    }
+    if (!usesAccessoryImageWorkflow && (!frontSrc || !backSrc)) return;
     if (isShoes && (!cw.leftFile || !cw.rightFile)) {
       updateColorway(colorwayId, {
         enhanceStatus: "failed",
@@ -1544,8 +1693,8 @@ export default function NewProductPage() {
     try {
       if (isShoes) {
         const [front, back, left, right] = await Promise.all([
-          compressImageFile(frontSrc),
-          compressImageFile(backSrc),
+          compressImageFile(frontSrc!),
+          compressImageFile(backSrc!),
           compressImageFile(cw.leftFile!),
           compressImageFile(cw.rightFile!),
         ]);
@@ -1567,10 +1716,33 @@ export default function NewProductPage() {
           enhanceJobId: data.job_id || "",
           enhanceStatus: data.status || "processing",
         });
+      } else if (usesAccessoryImageWorkflow) {
+        const compressedEntries = await Promise.all(
+          uploadedViews.map(async (view) => [
+            view,
+            await compressImageFile(cw[`${view}File` as keyof Colorway] as File),
+          ] as const)
+        );
+        const body = new FormData();
+        body.append("mode", "accessory");
+        compressedEntries.forEach(([view, file]) => body.append(view, file));
+        const res = await fetch("/api/products/enhance", withAuthRequest({ method: "POST", body }));
+        const data = await res.json();
+        if (!res.ok) {
+          updateColorway(colorwayId, {
+            enhanceStatus: "failed",
+            enhanceError: data.error || "Unable to start enhancement.",
+          });
+          return;
+        }
+        updateColorway(colorwayId, {
+          enhanceJobId: data.job_id || "",
+          enhanceStatus: data.status || "processing",
+        });
       } else {
         const [front, back] = await Promise.all([
-          compressImageFile(frontSrc),
-          compressImageFile(backSrc),
+          compressImageFile(frontSrc!),
+          compressImageFile(backSrc!),
         ]);
         const body = new FormData();
         body.append("front", front);
@@ -1634,10 +1806,6 @@ export default function NewProductPage() {
                   enhancedBackFile: backFile,
                   enhancedLeftFile: leftFile,
                   enhancedRightFile: rightFile,
-                  ...(frontUrl ? { frontPreview: frontUrl } : {}),
-                  ...(backUrl ? { backPreview: backUrl } : {}),
-                  ...(leftUrl ? { leftPreview: leftUrl } : {}),
-                  ...(rightUrl ? { rightPreview: rightUrl } : {}),
                 });
               });
             } else if (data.status === "failed") {
@@ -1663,6 +1831,7 @@ export default function NewProductPage() {
   }, [colorways]);
 
   const canGenerateColorway = (cw: Colorway) => {
+    if (!needsModelSelection) return false;
     if (!selectedModelId) return false;
     const hasFront = Boolean(cw.enhancedFrontFile || cw.enhancedFrontUrl || cw.frontPreview);
     const hasBack = Boolean(cw.enhancedBackFile || cw.enhancedBackUrl || cw.backPreview);
@@ -1677,9 +1846,9 @@ export default function NewProductPage() {
 
   const handleGenerateColorway = async (colorwayId: string) => {
     const cw = colorways.find((c) => c.id === colorwayId);
-    if (!cw || !selectedModelId) return;
-    const frontSrc = cw.enhancedFrontFile || cw.frontFile;
-    const backSrc = cw.enhancedBackFile || cw.backFile;
+    if (!cw || !selectedModelId || !needsModelSelection) return;
+    const frontSrc = getColorwayViewInputFile(cw, "front");
+    const backSrc = getColorwayViewInputFile(cw, "back");
     if (!frontSrc || !backSrc) return;
 
     updateColorway(colorwayId, { generateStatus: "processing", generateError: "", generateJobId: "" });
@@ -1972,7 +2141,6 @@ export default function NewProductPage() {
       if (current.fashionSubtype === generationRequirements.fashionSubtype) return current;
       return { ...current, fashionSubtype: generationRequirements.fashionSubtype as FashionSubtype };
     });
-    setSelectedModelId("");
     setCompanionTopType("");
     setCompanionBottomType("");
     setFootwearType("");
@@ -2172,7 +2340,13 @@ export default function NewProductPage() {
 
     const isShoes = form.fashionSubtype === "shoes";
 
-    if (!generationInputs.front.file || !generationInputs.back.file) {
+    const uploadedViews = requiredOriginPictureKeys.filter((key) => Boolean(generationInputs[key].file));
+    if (usesAccessoryImageWorkflow && uploadedViews.length === 0) {
+      setProductMediaError("Please upload at least one image first.");
+      return;
+    }
+
+    if (!usesAccessoryImageWorkflow && (!generationInputs.front.file || !generationInputs.back.file)) {
       setProductMediaError(isShoes ? "Please upload front, back, left, and right images first." : "Please upload front and back images first.");
       return;
     }
@@ -2188,8 +2362,8 @@ export default function NewProductPage() {
     try {
       if (isShoes) {
         const [frontFile, backFile, leftFile, rightFile] = await Promise.all([
-          compressImageFile(generationInputs.front.file),
-          compressImageFile(generationInputs.back.file),
+          compressImageFile(generationInputs.front.file!),
+          compressImageFile(generationInputs.back.file!),
           compressImageFile(generationInputs.left.file!),
           compressImageFile(generationInputs.right.file!),
         ]);
@@ -2211,10 +2385,29 @@ export default function NewProductPage() {
 
         setProductMediaJobId(data.job_id || "");
         setProductMediaStatus(data.status || "processing");
+      } else if (usesAccessoryImageWorkflow) {
+        const compressedEntries = await Promise.all(
+          uploadedViews.map(async (view) => [view, await compressImageFile(generationInputs[view].file!)] as const)
+        );
+        const body = new FormData();
+        body.append("mode", "accessory");
+        compressedEntries.forEach(([view, file]) => body.append(view, file));
+
+        const res = await fetch("/api/products/enhance", withAuthRequest({ method: "POST", body }));
+        const data = await res.json();
+
+        if (!res.ok) {
+          setProductMediaStatus("failed");
+          setProductMediaError(data.error || "Unable to start product media enhancement.");
+          return;
+        }
+
+        setProductMediaJobId(data.job_id || "");
+        setProductMediaStatus(data.status || "processing");
       } else {
         const [frontFile, backFile] = await Promise.all([
-          compressImageFile(generationInputs.front.file),
-          compressImageFile(generationInputs.back.file),
+          compressImageFile(generationInputs.front.file!),
+          compressImageFile(generationInputs.back.file!),
         ]);
 
         const body = new FormData();
@@ -2237,6 +2430,23 @@ export default function NewProductPage() {
       setProductMediaStatus("failed");
       setProductMediaError("Network error");
     }
+  };
+
+  const getColorwayViewInputFile = (
+    colorway: Colorway,
+    side: ColorwayView
+  ): File | null => {
+    const enhancedFileKey = `enhanced${side.charAt(0).toUpperCase()}${side.slice(1)}File` as
+      | "enhancedFrontFile"
+      | "enhancedBackFile"
+      | "enhancedLeftFile"
+      | "enhancedRightFile";
+    const fileKey = `${side}File` as "frontFile" | "backFile" | "leftFile" | "rightFile";
+    if (colorway.enhanceStatus === "original") {
+      return colorway[fileKey];
+    }
+
+    return colorway[enhancedFileKey] || colorway[fileKey];
   };
 
   useEffect(() => {
@@ -2355,12 +2565,12 @@ export default function NewProductPage() {
       return;
     }
 
-    if (form.fashionSubtype === "clothes" && !selectedModelId) {
+    if (needsModelSelection && form.fashionSubtype === "clothes" && !selectedModelId) {
       setError("Please select a model first.", "model");
       return;
     }
 
-    if (form.fashionSubtype === "clothes") {
+    if (needsModelSelection && form.fashionSubtype === "clothes") {
       if (companionZones.includes("top") && (!companionTopType || !secondaryTopColor)) {
         setError("Please select the top type and color.", "model");
         return;
@@ -2378,12 +2588,16 @@ export default function NewProductPage() {
     }
 
     if (
-      !generationInputs.front.file ||
-      !generationInputs.back.file ||
-      (form.fashionSubtype === "shoes" && (!generationInputs.left.file || !generationInputs.right.file))
+      (usesAccessoryImageWorkflow && !requiredOriginPictureKeys.some((key) => Boolean(generationInputs[key].file))) ||
+      (!usesAccessoryImageWorkflow &&
+        (!generationInputs.front.file ||
+          !generationInputs.back.file ||
+          (form.fashionSubtype === "shoes" && (!generationInputs.left.file || !generationInputs.right.file))))
     ) {
       setError(
-        form.fashionSubtype === "shoes"
+        usesAccessoryImageWorkflow
+          ? "Please upload at least one image."
+          : form.fashionSubtype === "shoes"
           ? "Please upload front, back, left, and right product images before generating."
           : "Please upload front and back product images before generating.",
         "media"
@@ -2428,8 +2642,8 @@ export default function NewProductPage() {
         }
       }
       const [frontFile, backFile, leftFile, rightFile] = await Promise.all([
-        compressImageFile(generationInputs.front.file),
-        compressImageFile(generationInputs.back.file),
+        compressImageFile(generationInputs.front.file!),
+        compressImageFile(generationInputs.back.file!),
         generationInputs.left.file ? compressImageFile(generationInputs.left.file) : Promise.resolve(null),
         generationInputs.right.file ? compressImageFile(generationInputs.right.file) : Promise.resolve(null),
       ]);
@@ -2455,7 +2669,7 @@ export default function NewProductPage() {
 
       // 2. Poll for status
       let isCompleted = false;
-      let finalImages: any = null;
+      let finalImages: Record<string, string> | null = null;
 
       while (!isCompleted) {
         await waitFor(5000, controller.signal);
@@ -2482,7 +2696,7 @@ export default function NewProductPage() {
       
       const generatedImages = await Promise.all(
         viewList.map(async (view, index) => {
-          const base64 = finalImages[view];
+          const base64 = finalImages?.[view];
           if (!base64) return null;
           const file = await base64ToFile(base64, index);
           return {
@@ -2494,7 +2708,8 @@ export default function NewProductPage() {
         })
       );
 
-      const nextGeneratedImages = generatedImages.filter((img): img is any => !!img);
+      type GeneratedProductImage = NonNullable<(typeof generatedImages)[number]>;
+      const nextGeneratedImages = generatedImages.filter((img): img is GeneratedProductImage => img !== null);
       setImages((current) => [...current, ...nextGeneratedImages]);
       setGeneratedModelMedia(nextGeneratedImages);
       setShowProductMediaSection(true);
@@ -2533,7 +2748,7 @@ export default function NewProductPage() {
         setLoading(false);
         return;
       }
-      if (!selectedModelId) {
+      if (needsModelSelection && !selectedModelId) {
         setError("Please select a model first.", "model");
         scrollToElement(modelPicturesSectionRef.current);
         setLoading(false);
@@ -2545,35 +2760,52 @@ export default function NewProductPage() {
         setLoading(false);
         return;
       }
-      const pendingGeneration = colorways.find((cw) => cw.hex.trim() && cw.generateStatus === "idle");
-      if (pendingGeneration) {
-        setError("Please complete model generation for each colorway before creating the product.", "colorways");
-        scrollToColorwayCard(pendingGeneration.id);
-        setLoading(false);
-        return;
-      }
-      const incompleteGeneration = colorways.find((cw) => cw.generateStatus !== "completed");
-      if (incompleteGeneration) {
-        setError("Please complete model generation for each colorway before creating the product.", "colorways");
-        scrollToColorwayCard(incompleteGeneration.id);
-        setLoading(false);
-        return;
+      if (needsModelSelection) {
+        const pendingGeneration = colorways.find((cw) => cw.hex.trim() && cw.generateStatus === "idle");
+        if (pendingGeneration) {
+          setError("Please complete model generation for each colorway before creating the product.", "colorways");
+          scrollToColorwayCard(pendingGeneration.id);
+          setLoading(false);
+          return;
+        }
+        const incompleteGeneration = colorways.find((cw) => cw.generateStatus !== "completed");
+        if (incompleteGeneration) {
+          setError("Please complete model generation for each colorway before creating the product.", "colorways");
+          scrollToColorwayCard(incompleteGeneration.id);
+          setLoading(false);
+          return;
+        }
       }
       for (const cw of colorways) {
-        if (!cw.frontFile && !cw.frontPreview) {
-          setError("Please upload a front image for each colorway.", "colorways");
-          scrollToColorwayCard(cw.id);
-          setLoading(false);
-          return;
+        if (usesAccessoryImageWorkflow) {
+          if (!FOUR_IMAGE_VIEWS.some((view) => Boolean(cw[`${view}File` as keyof Colorway] || cw[`${view}Preview` as keyof Colorway]))) {
+            setError("Please upload at least one image for each product.", "colorways");
+            scrollToColorwayCard(cw.id);
+            setLoading(false);
+            return;
+          }
+        } else {
+          if (!cw.frontFile && !cw.frontPreview) {
+            setError("Please upload a front image for each colorway.", "colorways");
+            scrollToColorwayCard(cw.id);
+            setLoading(false);
+            return;
+          }
+          if (!cw.backFile && !cw.backPreview) {
+            setError("Please upload a back image for each colorway.", "colorways");
+            scrollToColorwayCard(cw.id);
+            setLoading(false);
+            return;
+          }
+          if (selectedCategoryZone === "footwear" && (!(cw.leftFile || cw.leftPreview) || !(cw.rightFile || cw.rightPreview))) {
+            setError("Please upload front, back, left, and right images for each colorway.", "colorways");
+            scrollToColorwayCard(cw.id);
+            setLoading(false);
+            return;
+          }
         }
-        if (!cw.backFile && !cw.backPreview) {
-          setError("Please upload a back image for each colorway.", "colorways");
-          scrollToColorwayCard(cw.id);
-          setLoading(false);
-          return;
-        }
-        if (cw.sizes.filter((s) => s.size.trim() && s.stock.trim()).length === 0) {
-          setError("Please add at least one size and stock for each colorway.", "colorways");
+        if (cw.sizes.filter((s) => (isSizelessCategory ? s.stock.trim() : s.size.trim() && s.stock.trim())).length === 0) {
+          setError(isSizelessCategory ? "Please add stock for each product." : "Please add at least one size and stock for each colorway.", "colorways");
           scrollToColorwayCard(cw.id);
           setLoading(false);
           return;
@@ -2590,11 +2822,11 @@ export default function NewProductPage() {
         type VariantEntry = { key: string; size: string; color: string; stock: number; conditionScore: number };
         const allVariants: VariantEntry[] = [];
         for (const cw of colorways) {
-          for (const s of cw.sizes.filter((s) => s.size.trim() && s.stock.trim())) {
-            const size = s.size.trim();
+          for (const s of cw.sizes.filter((s) => (isSizelessCategory ? s.stock.trim() : s.size.trim() && s.stock.trim()))) {
+            const size = isSizelessCategory ? "" : s.size.trim();
             const color = cw.hex.trim();
             allVariants.push({
-              key: color ? `${size} / ${color}` : size,
+              key: buildColorwayVariantKey(size, color),
               size,
               color,
               stock: Math.max(0, Number(s.stock || 0)),
@@ -2636,7 +2868,7 @@ export default function NewProductPage() {
         body.append("sizeStock", JSON.stringify(sizeStockPayload));
         body.append("variants", JSON.stringify(variantsPayload));
         body.append("mainImageIndex", "0");
-        if (selectedModelId) body.append("modelId", selectedModelId);
+        if (needsModelSelection && selectedModelId) body.append("modelId", selectedModelId);
         const companionSettingsPayload: Record<string, object> = {};
         for (const cw of colorways) {
           companionSettingsPayload[cw.hex] = {
@@ -2660,10 +2892,10 @@ export default function NewProductPage() {
           for (const gi of cw.generatedImages) {
             if (gi.file) { indices.push(imageFiles.length); imageFiles.push(gi.file); }
           }
-          const front = cw.enhancedFrontFile || cw.frontFile;
-          const back = cw.enhancedBackFile || cw.backFile;
-          if (front) { indices.push(imageFiles.length); imageFiles.push(front); }
-          if (back) { indices.push(imageFiles.length); imageFiles.push(back); }
+          for (const view of requiredOriginPictureKeys) {
+            const imageFile = getColorwayViewInputFile(cw, view);
+            if (imageFile) { indices.push(imageFiles.length); imageFiles.push(imageFile); }
+          }
           if (indices.length > 0) colorImagesPayload[colorKey] = indices;
         }
         const compressedImages = await Promise.all(imageFiles.map((f) => compressImageFile(f)));
@@ -2671,10 +2903,14 @@ export default function NewProductPage() {
         body.append("colorImages", JSON.stringify(colorImagesPayload));
 
         const firstCw = colorways[0];
-        const frontOrigin = firstCw.enhancedFrontFile || firstCw.frontFile;
-        const backOrigin = firstCw.enhancedBackFile || firstCw.backFile;
+        const frontOrigin = firstCw.frontFile;
+        const backOrigin = firstCw.backFile;
+        const leftOrigin = firstCw.leftFile;
+        const rightOrigin = firstCw.rightFile;
         if (frontOrigin) body.append("originPictureFrontFile", await compressImageFile(frontOrigin));
         if (backOrigin) body.append("originPictureBackFile", await compressImageFile(backOrigin));
+        if (leftOrigin) body.append("originPictureLeftFile", await compressImageFile(leftOrigin));
+        if (rightOrigin) body.append("originPictureRightFile", await compressImageFile(rightOrigin));
 
       const res = await fetch("/api/products", withAuthRequest({ method: "POST", body }));
       if (!res.ok) {
@@ -2721,13 +2957,13 @@ export default function NewProductPage() {
     }
 
     if (form.productType === "fashion") {
-      if (!generationInputs.front.file && !generationInputs.front.previewUrl) {
+      if (!hasRequiredOriginPictures) {
         setError("Please enhance the product images before saving.", "media");
         scrollToElement(productMediaSectionRef.current);
         setLoading(false);
         return;
       }
-      if (generatedModelMedia.length === 0) {
+      if (needsModelSelection && generatedModelMedia.length === 0) {
         setError("Please generate at least one model picture before saving.", "model");
         scrollToElement(modelPicturesSectionRef.current) || scrollToElement(productMediaSectionRef.current);
         setLoading(false);
@@ -3046,33 +3282,42 @@ export default function NewProductPage() {
                 {/* Shared model selector */}
                 <div className="space-y-2">
                   <div className="flex gap-3 overflow-x-auto pb-2">
-                    {filteredModels.map((model) => {
-                      const active = selectedModelId === model._id;
-                      return (
-                        <button
-                          key={model._id}
-                          type="button"
-                          onClick={() => setSelectedModelId(model._id)}
-                          className={`flex-none w-[288px] overflow-hidden rounded border text-left transition-colors ${active ? "border-accent" : "border-border hover:border-accent"}`}
-                        >
-                          <div className="aspect-[4/5] bg-bg-secondary">
-                            <img
-                              src={model.frontImage || model.images?.[0] || ""}
-                              alt={model.name}
-                              className="h-full w-full object-cover"
-                            />
-                          </div>
-                          <div className="p-1.5">
-                            <p className="truncate text-[9px] font-medium">{model.name}</p>
-                          </div>
-                        </button>
-                      );
-                    })}
+                        {filteredModels.map((model) => {
+                          const active = selectedModelId === model._id;
+                          return (
+                            <button
+                              key={model._id}
+                              type="button"
+                              onClick={() => setSelectedModelId(model._id)}
+                              className={`flex-none w-[288px] overflow-hidden rounded border text-left transition-colors ${
+                                active
+                                  ? "border-accent bg-accent/5 ring-1 ring-accent/40"
+                                  : "border-border hover:border-accent"
+                              }`}
+                            >
+                              <div className="aspect-[4/5] bg-bg-secondary">
+                                <img
+                                  src={model.frontImage || model.images?.[0] || ""}
+                                  alt={model.name}
+                                  className="h-full w-full object-cover"
+                                />
+                              </div>
+                              <div className="flex items-center justify-between gap-2 p-1.5">
+                                <p className="truncate text-[9px] font-medium">{model.name}</p>
+                                {active && (
+                                  <span className="flex-none text-[8px] uppercase tracking-wider text-accent">
+                                    Selected
+                                  </span>
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })}
                   </div>
                 </div>
 
                 {/* Per-colorway generation cards — only shown once a model is picked */}
-                {selectedModelId && !isStoreOwner && (
+                {selectedModelId && !isStoreOwner && needsModelSelection && (
                   <div className="mt-4 flex flex-col sm:flex-row sm:items-start gap-3 sm:overflow-x-auto pb-2">
                     {colorways.map((cw, cwIndex) => (
                       <ColorwayGenerationCard
@@ -3087,7 +3332,6 @@ export default function NewProductPage() {
                           if (!canGenerateColorway(cw)) return;
                           void handleGenerateColorway(cw.id);
                         }}
-                        onReset={() => resetColorway(cw.id)}
                       />
                     ))}
                   </div>
@@ -3112,11 +3356,14 @@ export default function NewProductPage() {
                     canRemove={colorways.length > 1}
                     isThrift={isStoreOwner}
                     conditionLocked={Boolean(cw.hex.trim())}
-                    requiredViews={selectedCategoryZone === "footwear" ? ["front", "back", "left", "right"] : ["front", "back"]}
+                    requiredViews={requiresFourImageInputs ? ["front", "back", "left", "right"] : ["front", "back"]}
+                    viewLabels={usesAccessoryImageWorkflow ? ACCESSORY_VIEW_LABELS : undefined}
+                    enhanceRequiresAllViews={!usesAccessoryImageWorkflow}
+                    hideSizeInput={isSizelessCategory}
                     onRemove={() => removeColorway(cw.id)}
                   onUpdate={(patch) => updateColorway(cw.id, patch)}
                   onEnhance={() => void handleEnhanceColorway(cw.id)}
-                  showGenerationPanel={isStoreOwner}
+                  showGenerationPanel={isStoreOwner && needsModelSelection}
                   companionZones={companionZones}
                   companionTypeOptions={companionTypeOptions}
                   canGenerate={canGenerateColorway(cw)}
@@ -3124,7 +3371,6 @@ export default function NewProductPage() {
                   onAddSize={() => addSizeRow(cw.id)}
                   onRemoveSize={(sizeId) => removeSizeRow(cw.id, sizeId)}
                   onUpdateSize={(sizeId, patch) => updateSizeRow(cw.id, sizeId, patch)}
-                  onReset={() => resetColorway(cw.id)}
                 />
                 ))}
                 <button
@@ -3710,13 +3956,19 @@ export default function NewProductPage() {
               </div>
             )}
 
+            {form.fashionSubtype === "shoes" && (
+              <div className="mt-4 rounded border border-accent/30 bg-accent/5 px-4 py-3 text-xs leading-relaxed text-text-secondary">
+                {FOOTWEAR_VIEW_VERIFICATION_COPY}
+              </div>
+            )}
+
             <div className={`mt-4 grid justify-items-center gap-4 ${requiredOriginPictureKeys.length === 4 ? "md:grid-cols-2 xl:grid-cols-4" : "md:grid-cols-2"}`}>
               {requiredOriginPictureKeys.map((key) => {
                 const preview = generationInputs[key].previewUrl || form.originPictures[key];
                 return (
                   <div key={key} className="mx-auto w-full max-w-[260px] justify-self-center space-y-3 rounded border border-border bg-bg-secondary p-3">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-[10px] text-text-secondary uppercase tracking-wider">{key} view</p>
+                      <p className="text-[10px] text-text-secondary uppercase tracking-wider">{usesAccessoryImageWorkflow ? ACCESSORY_VIEW_LABELS[key] : `${key} view`}</p>
                       {preview && (
                         <button
                           type="button"
@@ -3738,7 +3990,7 @@ export default function NewProductPage() {
                         </button>
                       ) : (
                         <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[10px] text-text-secondary uppercase tracking-wider">
-                          <span>Upload {key}</span>
+                          <span>{usesAccessoryImageWorkflow ? `Upload ${ACCESSORY_VIEW_LABELS[key]}` : `Upload ${key}`}</span>
                           <span className="text-[8px] tracking-normal normal-case text-text-secondary/80">
                             One image only
                           </span>
@@ -3806,7 +4058,7 @@ export default function NewProductPage() {
               </div>
             )}
 
-            {!showProductMediaSection && selectedCategoryZone !== "other" && hasRequiredOriginPictures && productMediaStatus === "completed" && (
+            {!showProductMediaSection && canRunAnyGeneration && selectedCategoryZone !== "other" && hasRequiredOriginPictures && productMediaStatus === "completed" && (
               <div className="mt-6 space-y-5 border-t border-border pt-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
@@ -3822,7 +4074,7 @@ export default function NewProductPage() {
                   </span>
                 </div>
 
-                {generationRequirements.needsModel ? (
+                {needsModelSelection ? (
                   <div className="space-y-5">
                     <div>
                       <p className="text-[10px] uppercase tracking-wider text-text-secondary">
@@ -3837,7 +4089,9 @@ export default function NewProductPage() {
                               type="button"
                               onClick={() => setSelectedModelId(model._id)}
                               className={`flex-none w-[288px] overflow-hidden rounded border text-left transition-colors ${
-                                active ? "border-accent" : "border-border hover:border-accent"
+                                active
+                                  ? "border-accent bg-accent/5 ring-1 ring-accent/40"
+                                  : "border-border hover:border-accent"
                               }`}
                             >
                               <div className="aspect-[4/5] bg-bg-secondary">
@@ -3847,11 +4101,18 @@ export default function NewProductPage() {
                                   className="h-full w-full object-cover"
                                 />
                               </div>
-                              <div className="space-y-1 p-2">
+                              <div className="flex items-center justify-between gap-2 p-2">
                                 <p className="text-xs font-medium">{model.name}</p>
-                                <p className="text-[10px] uppercase tracking-wider text-text-secondary">
-                                  Front view
-                                </p>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-[10px] uppercase tracking-wider text-text-secondary">
+                                    Front view
+                                  </p>
+                                  {active && (
+                                    <span className="flex-none text-[8px] uppercase tracking-wider text-accent">
+                                      Selected
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </button>
                           );
@@ -3901,13 +4162,15 @@ export default function NewProductPage() {
                       Product Media
                     </h3>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleRegenerateModel}
-                    className="border border-border px-3 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:bg-bg-hover"
-                  >
-                    Regenerate model
-                  </button>
+                  {canRunAnyGeneration && (
+                    <button
+                      type="button"
+                      onClick={handleRegenerateModel}
+                      className="border border-border px-3 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:bg-bg-hover"
+                    >
+                      Regenerate model
+                    </button>
+                  )}
                 </div>
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                   {productMediaItems.map((item, index) => (

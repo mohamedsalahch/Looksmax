@@ -3,32 +3,24 @@ import path from "path";
 import crypto from "crypto";
 import { getUploadCategoryDir } from "@/store/lib/uploadStorage";
 import { uploadToR2, deleteFromR2, extractKeyFromPublicUrl } from "@/lib/r2";
+import { readValidatedUploadFile, validateUploadBuffer } from "@/lib/uploadValidation";
 
 const R2_PREFIX = "body-profiles";
 
-function getContentType(filename: string) {
-  const ext = filename.split(".").pop()?.toLowerCase() || "";
-  if (ext === "png") return "image/png";
-  if (ext === "webp") return "image/webp";
-  if (ext === "gif") return "image/gif";
-  return "image/jpeg";
-}
-
 export async function saveBodyProfileImage(file: File) {
-  const extension = file.name.split(".").pop() || "jpg";
-  const filename = `${Date.now()}-${crypto.randomUUID()}.${extension}`;
+  const { buffer, contentType, extension } = await readValidatedUploadFile(file);
+  const filename = `${Date.now()}-${crypto.randomUUID()}${extension}`;
   const key = `${R2_PREFIX}/${filename}`;
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  return await uploadToR2(key, buffer, getContentType(filename));
+  return await uploadToR2(key, buffer, contentType);
 }
 
 export async function saveBodyProfileImageBuffer(
   buffer: Buffer,
   filename: string
 ) {
+  const upload = validateUploadBuffer(buffer, { filename });
   const key = `${R2_PREFIX}/${filename}`;
-  return await uploadToR2(key, buffer, getContentType(filename));
+  return await uploadToR2(key, upload.buffer, upload.contentType);
 }
 
 export async function deleteBodyProfileImage(imagePath: string) {

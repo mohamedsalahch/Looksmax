@@ -2,10 +2,6 @@ import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "looksmax-secret-key-change-in-production"
-);
-
 const COOKIE_NAME = "looksmax-token";
 const TOKEN_TTL_SECONDS = 60 * 30;
 
@@ -30,16 +26,28 @@ export async function createToken(payload: JWTPayload): Promise<string> {
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("30m")
-    .sign(JWT_SECRET);
+    .sign(getJwtSecret());
 }
 
 export async function verifyToken(token: string): Promise<JWTPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJwtSecret());
     return payload as unknown as JWTPayload;
   } catch {
     return null;
   }
+}
+
+function getJwtSecret() {
+  const secret = process.env.JWT_SECRET?.trim();
+  if (!secret) throw new Error("JWT_SECRET is required");
+  if (
+    process.env.NODE_ENV === "production" &&
+    secret.toLowerCase().includes("change-in-production")
+  ) {
+    throw new Error("JWT_SECRET must be rotated before production");
+  }
+  return new TextEncoder().encode(secret);
 }
 
 function shouldUseSecureCookies() {

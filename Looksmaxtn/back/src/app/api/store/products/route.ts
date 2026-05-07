@@ -160,10 +160,10 @@ export async function GET(req: NextRequest) {
     );
 
     const searchMatchedProducts = search
-      ? filterAndRankProducts(visibleProducts as any[], search)
+      ? filterAndRankProducts(visibleProducts, search)
       : visibleProducts;
 
-    const filteredProducts = (searchMatchedProducts as any[]).filter((product) => {
+    const filteredProducts = searchMatchedProducts.filter((product) => {
       if (product.isActive === false) return false;
       if (product.approvalStatus && product.approvalStatus !== "approved") return false;
       const stock = Math.max(product.stock ?? 0, 0);

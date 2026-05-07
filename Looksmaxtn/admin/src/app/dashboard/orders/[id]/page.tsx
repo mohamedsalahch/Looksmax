@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AuditMetaCard from "@/components/AuditMetaCard";
 import { withAuthRequest } from "@/lib/authClient";
+import knownColors from "@/lib/colors.json";
 
 interface AuditActor {
   id: string;
@@ -35,6 +36,63 @@ const ORDER_TRANSITIONS: Record<string, string[]> = {
   canceled: [],
   returned: [],
 };
+
+const COLOR_NAME_BY_HEX = new Map(
+  (knownColors as { name: string; hex: string }[]).map((color) => [
+    color.hex.trim().toUpperCase(),
+    color.name,
+  ]),
+);
+
+function normalizeHexColor(value: string) {
+  const trimmed = value.trim();
+  if (/^#[0-9A-Fa-f]{6}$/.test(trimmed)) return trimmed.toUpperCase();
+  if (/^[0-9A-Fa-f]{6}$/.test(trimmed)) return `#${trimmed.toUpperCase()}`;
+  return "";
+}
+
+function getCustomColorName(hex: string) {
+  const normalized = hex.toUpperCase();
+  const red = parseInt(normalized.slice(1, 3), 16) / 255;
+  const green = parseInt(normalized.slice(3, 5), 16) / 255;
+  const blue = parseInt(normalized.slice(5, 7), 16) / 255;
+  const max = Math.max(red, green, blue);
+  const min = Math.min(red, green, blue);
+  const delta = max - min;
+
+  if (delta < 0.08) {
+    if (max < 0.18) return "Black";
+    if (max > 0.9) return "White";
+    return "Gray";
+  }
+
+  let hue = 0;
+  if (max === red) hue = ((green - blue) / delta) % 6;
+  else if (max === green) hue = (blue - red) / delta + 2;
+  else hue = (red - green) / delta + 4;
+  hue = Math.round(hue * 60);
+  if (hue < 0) hue += 360;
+
+  if (hue < 20 || hue >= 345) return "Red";
+  if (hue < 45) return "Orange";
+  if (hue < 70) return "Yellow";
+  if (hue < 165) return "Green";
+  if (hue < 195) return "Cyan";
+  if (hue < 255) return "Blue";
+  if (hue < 290) return "Purple";
+  return "Pink";
+}
+
+function formatOrderColor(color: string) {
+  const normalized = normalizeHexColor(color);
+  if (!normalized) return color.trim();
+  return COLOR_NAME_BY_HEX.get(normalized) || getCustomColorName(normalized);
+}
+
+function formatOrderVariant(size: string, color: string) {
+  const parts = [size?.trim(), color?.trim() ? formatOrderColor(color) : ""].filter(Boolean);
+  return parts.join(" · ") || "N/A";
+}
 
 export default function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -91,12 +149,12 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
 
   const statusColor = (s: string) => {
     switch (s) {
-      case "processing": return "text-amber-300 bg-amber-500/10";
-      case "confirmed": return "text-sky-300 bg-sky-500/10";
-      case "shipping": return "text-violet-300 bg-violet-500/10";
-      case "delivered": return "bg-bg-secondary text-text-secondary";
-      case "returned": return "text-orange-300 bg-orange-500/10";
-      case "canceled": return "text-rose-300 bg-rose-500/10";
+      case "processing": return "text-amber-900 bg-amber-100";
+      case "confirmed": return "text-sky-900 bg-sky-100";
+      case "shipping": return "text-violet-900 bg-violet-100";
+      case "delivered": return "text-emerald-900 bg-emerald-100";
+      case "returned": return "text-orange-900 bg-orange-100";
+      case "canceled": return "text-rose-900 bg-rose-100";
       default: return "text-text-secondary bg-bg-secondary";
     }
   };
@@ -135,7 +193,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           <button
             type="button"
             onClick={printOrder}
-            className="border border-border px-4 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
+            className="bg-text-primary px-4 py-2 text-[10px] uppercase tracking-wider text-bg-primary transition-colors hover:bg-accent"
           >
             Print Order
           </button>
@@ -180,7 +238,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             <thead>
               <tr className="text-[10px] uppercase tracking-wider">
                 <th className="px-3 py-2 border-b border-black">Produit</th>
-                <th className="px-3 py-2 border-b border-black">Taille</th>
+                <th className="px-3 py-2 border-b border-black">Variant</th>
                 <th className="px-3 py-2 border-b border-black">Qté</th>
                 <th className="px-3 py-2 border-b border-black text-right">Prix (TND)</th>
               </tr>
@@ -189,7 +247,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               {order.items.map((item, index) => (
                 <tr key={`${item.productId}-${item.size || ""}-${item.color || ""}-${index}`}>
                   <td className="px-3 py-2 border-b border-black text-xs">{item.name}</td>
-                  <td className="px-3 py-2 border-b border-black text-xs">{item.size}</td>
+                  <td className="px-3 py-2 border-b border-black text-xs">{formatOrderVariant(item.size, item.color)}</td>
                   <td className="px-3 py-2 border-b border-black text-xs">{item.quantity}</td>
                   <td className="px-3 py-2 border-b border-black text-xs text-right">{(item.price * item.quantity).toFixed(2)} TND</td>
                 </tr>
@@ -271,7 +329,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         <table className="w-full text-left">
           <thead className="bg-bg-secondary">
             <tr className="text-[10px] text-text-secondary uppercase tracking-wider">
-              <th className="px-4 py-3">Product</th><th className="px-4 py-3">Product ID</th><th className="px-4 py-3">Size</th><th className="px-4 py-3">Qty</th><th className="px-4 py-3 text-right">Price</th>
+              <th className="px-4 py-3">Product</th><th className="px-4 py-3">Product ID</th><th className="px-4 py-3">Variant</th><th className="px-4 py-3">Qty</th><th className="px-4 py-3 text-right">Price</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -293,7 +351,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                     {item.productId}
                   </Link>
                 </td>
-                <td className="px-4 py-3 text-xs text-text-secondary">{item.size}</td>
+                <td className="px-4 py-3 text-xs text-text-secondary">{formatOrderVariant(item.size, item.color)}</td>
                 <td className="px-4 py-3 text-xs">{item.quantity}</td>
                 <td className="px-4 py-3 text-xs text-right font-medium">{(item.price * item.quantity).toFixed(2)} TND</td>
               </tr>

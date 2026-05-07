@@ -21,6 +21,12 @@ import crypto from "crypto";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+class OrderRequestError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+  }
+}
+
 function calculateShippingFee(subtotal: number, settings?: { shippingCost?: number; freeShippingThreshold?: number } | null) {
   const shippingCost = Math.max(0, Number(settings?.shippingCost || 0));
   const freeShippingThreshold = Math.max(0, Number(settings?.freeShippingThreshold || 0));
@@ -70,6 +76,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const stockAdjustments: Array<{ productId: string; quantity: number; size: string }> = [];
+  const pendingStockAdjustments: Array<{ productId: string; quantity: number; size: string; name: string }> = [];
   let couponClaimed: { couponId: string; usageIncremented: boolean } | null = null;
 
   try {
@@ -158,24 +165,6 @@ export async function POST(req: NextRequest) {
           );
         }
 
-        const sizeStockKey = `sizeStock.${itemSize}.stock`;
-        const updatedProduct = await Product.findOneAndUpdate(
-          {
-            _id: product._id,
-            isActive: { $ne: false },
-            $or: [{ approvalStatus: "approved" }, { approvalStatus: { $exists: false } }],
-            [sizeStockKey]: { $gte: quantityToDeduct },
-          },
-          { $inc: { [sizeStockKey]: -quantityToDeduct, stock: -quantityToDeduct } },
-          { returnDocument: "after" }
-        ).lean();
-
-        if (!updatedProduct) {
-          return NextResponse.json(
-            { error: `${product.name} (size ${itemSize}) is already sold. Please remove it from your cart.` },
-            { status: 409 }
-          );
-        }
       } else {
         if ((product.stock ?? 0) < quantityToDeduct) {
           return NextResponse.json(
@@ -184,26 +173,14 @@ export async function POST(req: NextRequest) {
           );
         }
 
-        const updatedProduct = await Product.findOneAndUpdate(
-          {
-            _id: product._id,
-            isActive: { $ne: false },
-            $or: [{ approvalStatus: "approved" }, { approvalStatus: { $exists: false } }],
-            stock: { $gte: quantityToDeduct },
-          },
-          { $inc: { stock: -quantityToDeduct } },
-          { returnDocument: "after" }
-        ).lean();
-
-        if (!updatedProduct) {
-          return NextResponse.json(
-            { error: `${product.name} is already sold. Please remove it from your cart.` },
-            { status: 409 }
-          );
-        }
       }
 
-      stockAdjustments.push({ productId: productId, quantity: quantityToDeduct, size: itemSize });
+      pendingStockAdjustments.push({
+        productId,
+        quantity: quantityToDeduct,
+        size: itemSize,
+        name: product.name,
+      });
       seenVariantKeys.add(variantKey);
 
       const itemTotal = product.price * item.quantity;
@@ -261,6 +238,53 @@ export async function POST(req: NextRequest) {
     const shippingSettings = await ShippingSettings.findOne({ key: "shipping" }).lean();
     const shippingFee = calculateShippingFee(subtotalPrice, shippingSettings);
     const totalPrice = Math.max(0, subtotalPrice - couponDiscountAmount + shippingFee);
+
+    for (const adjustment of pendingStockAdjustments) {
+      if (adjustment.size) {
+        const sizeStockKey = `sizeStock.${adjustment.size}.stock`;
+        const updatedProduct = await Product.findOneAndUpdate(
+          {
+            _id: adjustment.productId,
+            isActive: { $ne: false },
+            $or: [{ approvalStatus: "approved" }, { approvalStatus: { $exists: false } }],
+            [sizeStockKey]: { $gte: adjustment.quantity },
+          },
+          { $inc: { [sizeStockKey]: -adjustment.quantity, stock: -adjustment.quantity } },
+          { returnDocument: "after" }
+        ).lean();
+
+        if (!updatedProduct) {
+          throw new OrderRequestError(
+            `${adjustment.name} (size ${adjustment.size}) is already sold. Please remove it from your cart.`,
+            409
+          );
+        }
+      } else {
+        const updatedProduct = await Product.findOneAndUpdate(
+          {
+            _id: adjustment.productId,
+            isActive: { $ne: false },
+            $or: [{ approvalStatus: "approved" }, { approvalStatus: { $exists: false } }],
+            stock: { $gte: adjustment.quantity },
+          },
+          { $inc: { stock: -adjustment.quantity } },
+          { returnDocument: "after" }
+        ).lean();
+
+        if (!updatedProduct) {
+          throw new OrderRequestError(
+            `${adjustment.name} is already sold. Please remove it from your cart.`,
+            409
+          );
+        }
+      }
+
+      stockAdjustments.push({
+        productId: adjustment.productId,
+        quantity: adjustment.quantity,
+        size: adjustment.size,
+      });
+    }
 
     const guestAccessToken = session ? "" : crypto.randomBytes(24).toString("hex");
 
@@ -374,6 +398,7 @@ export async function POST(req: NextRequest) {
     }
     console.error("Create order error:", error);
     const message = error instanceof Error ? error.message : "Internal server error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const status = error instanceof OrderRequestError ? error.status : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }

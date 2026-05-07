@@ -142,7 +142,8 @@ export default function ProductCard({
   const conditionPercent = hasCondition ? getConditionPercent(normalizedConditionScore) : 0;
   const conditionLabel = hasCondition ? getConditionLabel(normalizedConditionScore, conditionStatus ?? undefined) : "";
   const conditionColor = hasCondition ? getConditionColor(normalizedConditionScore) : "transparent";
-  const showNewBadge = !isPerfume && hasCondition && normalizedConditionScore >= 10;
+  const hasExplicitNewTag = tag?.trim().toUpperCase() === "NEW";
+  const showNewBadge = !hasExplicitNewTag && !isPerfume && hasCondition && normalizedConditionScore >= 10;
   const displayedSizes = useMemo(
     () => (!isPerfume
       ? (activeColorHex

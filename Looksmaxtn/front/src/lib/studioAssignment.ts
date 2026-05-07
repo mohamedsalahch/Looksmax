@@ -30,7 +30,7 @@ const EVENT_NAME = "looksmax:studio-assignment-change";
 const ZONE_KEYWORDS: Record<StudioZoneId, string[]> = {
   headwear: ["headwear", "hat", "hats", "cap", "caps", "beanie", "beanies"],
   outerwear: ["outerwear", "jacket", "jackets", "coat", "coats", "blazer", "blazers", "veste", "vestes"],
-  dress: ["dress", "dresses", "robe", "robes", "gown", "gowns"],
+  dress: ["dress", "dresses", "robe", "robes", "gown", "gowns", "set", "sets", "coord", "coords", "co ord", "two piece", "two pieces", "matching set"],
   top: ["top", "tops", "shirt", "shirts", "pull", "pulls", "hoodie", "hoodies", "sweater", "sweaters", "tee", "t-shirt", "tshirts", "polo", "polos"],
   bottom: ["bottom", "bottoms", "pant", "pants", "jean", "jeans", "trouser", "trousers", "short", "shorts"],
   footwear: ["shoe", "shoes", "sneaker", "sneakers", "footwear", "boot", "boots", "loafer", "loafers"],

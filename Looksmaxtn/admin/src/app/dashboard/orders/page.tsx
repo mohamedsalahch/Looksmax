@@ -159,12 +159,12 @@ export default function OrdersPage() {
 
   const statusColor = (s: string) => {
     switch (s) {
-      case "processing": return "text-amber-300 bg-amber-500/10";
-      case "confirmed": return "text-sky-300 bg-sky-500/10";
-      case "shipping": return "text-violet-300 bg-violet-500/10";
-      case "delivered": return "bg-bg-secondary text-text-secondary";
-      case "returned": return "text-orange-300 bg-orange-500/10";
-      case "canceled": return "text-rose-300 bg-rose-500/10";
+      case "processing": return "text-amber-900 bg-amber-100";
+      case "confirmed": return "text-sky-900 bg-sky-100";
+      case "shipping": return "text-violet-900 bg-violet-100";
+      case "delivered": return "text-emerald-900 bg-emerald-100";
+      case "returned": return "text-orange-900 bg-orange-100";
+      case "canceled": return "text-rose-900 bg-rose-100";
       default: return "text-text-secondary bg-bg-secondary";
     }
   };

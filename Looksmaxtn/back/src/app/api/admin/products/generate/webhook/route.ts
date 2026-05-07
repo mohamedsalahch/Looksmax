@@ -1,17 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
 import ProductGenerationJob from "@/admin/models/ProductGenerationJob";
+import { requireWebhookSecret } from "@/lib/webhookAuth";
 
 export async function POST(req: NextRequest) {
   try {
-    const configuredSecret = process.env.OUTFIT_WEBHOOK_SECRET || "";
-    const requestSecret = req.headers.get("x-webhook-secret") || "";
+    const unauthorized = requireWebhookSecret(req);
+    if (unauthorized) return unauthorized;
 
-    if (configuredSecret && requestSecret !== configuredSecret) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const body = (await req.json()) as Record<string, any>;
+    const body = (await req.json()) as Record<string, unknown>;
     const jobId = body.job_id || body.jobId;
 
     if (!jobId) {
@@ -33,8 +30,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    const imageBase64 = body.image || body.base64;
-    const view = body.view; // "front", "back", "left", "right"
+    const imageBase64 =
+      typeof body.image === "string"
+        ? body.image
+        : typeof body.base64 === "string"
+          ? body.base64
+          : "";
+    const view = typeof body.view === "string" ? body.view : ""; // "front", "back", "left", "right"
 
     if (imageBase64 && view) {
       // Store the image in the correct slot

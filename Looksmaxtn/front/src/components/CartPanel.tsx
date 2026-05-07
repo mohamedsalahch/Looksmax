@@ -8,6 +8,7 @@ import { formatRemainingTime } from "@/lib/reservations";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { getCartItemProductId } from "@/lib/cartItem";
 import { getEnhancedFrontDisplayImage } from "@/lib/colorwayImage";
+import { queueStudioAssignment } from "@/lib/studioAssignment";
 
 function formatCartSizeLabel(size?: string) {
   if (!size) return "";
@@ -286,7 +287,6 @@ export default function CartPanel() {
                 const firstTryOnItem = items.find((item) => item.productType !== "perfume");
                 if (!firstTryOnItem) return;
 
-                const { queueStudioAssignment } = require("@/lib/studioAssignment");
                 queueStudioAssignment({
                   id: firstTryOnItem.id,
                   name: firstTryOnItem.name,

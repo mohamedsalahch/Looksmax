@@ -4,10 +4,7 @@ import mongoose from "mongoose";
 import { cookies, headers } from "next/headers";
 import dbConnect from "@/store/lib/mongodb";
 import User from "@/store/models/User";
-
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "looksmax-secret-key-change-in-production"
-);
+import { getRequiredJwtSecret } from "@/lib/env";
 
 const COOKIE_NAME = "looksmax-token";
 const TOKEN_TTL_SECONDS = 60 * 30;
@@ -41,12 +38,12 @@ export async function createToken(payload: JWTPayload): Promise<string> {
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("30m")
-    .sign(JWT_SECRET);
+    .sign(getRequiredJwtSecret());
 }
 
 export async function verifyToken(token: string): Promise<JWTPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getRequiredJwtSecret());
     return payload as unknown as JWTPayload;
   } catch {
     return null;

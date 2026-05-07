@@ -5,7 +5,11 @@ export const DEFAULT_CATEGORY_TREE = [
   { name: "Garments", slug: "garments", order: 1, isActive: true, parentSlug: "men" },
   { name: "Fragrances", slug: "fragrances", order: 2, isActive: true, parentSlug: "men" },
   { name: "Shoes", slug: "shoes", order: 3, isActive: true, parentSlug: "men" },
+  { name: "Set", slug: "set", order: 1, isActive: true, parentSlug: "garments" },
   { name: "Garments", slug: "women-garments", order: 1, isActive: true, parentSlug: "women" },
   { name: "Fragrances", slug: "women-fragrances", order: 2, isActive: true, parentSlug: "women" },
   { name: "Shoes", slug: "women-shoes", order: 3, isActive: true, parentSlug: "women" },
+  { name: "Set", slug: "women-set", order: 1, isActive: true, parentSlug: "women-garments" },
+  { name: "Garments", slug: "children-garments", order: 1, isActive: true, parentSlug: "children" },
+  { name: "Set", slug: "children-set", order: 1, isActive: true, parentSlug: "children-garments" },
 ];

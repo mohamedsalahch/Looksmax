@@ -2,13 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
 const COOKIE_NAME = "looksmax-admin-token";
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "looksmax-secret-key-change-in-production"
-);
+
+function getJwtSecret() {
+  const secret = process.env.JWT_SECRET?.trim();
+  if (!secret) throw new Error("JWT_SECRET is required");
+  if (
+    process.env.NODE_ENV === "production" &&
+    secret.toLowerCase().includes("change-in-production")
+  ) {
+    throw new Error("JWT_SECRET must be rotated before production");
+  }
+  return new TextEncoder().encode(secret);
+}
 
 async function getAdminTokenRole(token: string) {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJwtSecret());
     return typeof payload?.role === "string" ? payload.role : null;
   } catch {
     return null;

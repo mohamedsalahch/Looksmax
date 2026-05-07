@@ -25,6 +25,9 @@ export async function POST(req: NextRequest) {
 
     const user = await User.findOne({ email });
     if (!user) return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    if (user.isBlocked) {
+      return NextResponse.json({ error: "This account has been blocked." }, { status: 403 });
+    }
     if (!canAccessAdminDashboard(user.role)) {
       return NextResponse.json({ error: "Access denied." }, { status: 403 });
     }
@@ -32,7 +35,14 @@ export async function POST(req: NextRequest) {
     const valid = await comparePassword(password, user.password);
     if (!valid) return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
 
-    const token = await createToken({ userId: user._id.toString(), role: user.role });
+    await User.collection.updateOne({ _id: user._id }, { $inc: { sessionVersion: 1 } });
+    const updatedUser = await User.collection.findOne(
+      { _id: user._id },
+      { projection: { sessionVersion: 1 } }
+    );
+    const sessionVersion = Number(updatedUser?.sessionVersion ?? 0);
+
+    const token = await createToken({ userId: user._id.toString(), role: user.role, sessionVersion });
     const cookieOpts = getTokenCookieOptions();
     const res = NextResponse.json({
       token,

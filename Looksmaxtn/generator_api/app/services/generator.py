@@ -168,17 +168,29 @@ class ImageGenerator:
         Returns:
             Base64 encoded generated image
         """
-        prompt = SHOES_PROMPT_TEMPLATE
+        view_order = ["front", "back", "left", "right"]
+        normalized_view = view_name.lower()
+        if normalized_view not in view_order:
+            raise HTTPException(status_code=400, detail=f"Invalid shoe view: {view_name}")
+
+        missing_views = [view for view in view_order if not product_images.get(view)]
+        if missing_views:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Missing shoe reference images: {', '.join(missing_views)}",
+            )
+
+        prompt = SHOES_PROMPT_TEMPLATE.replace("{VIEW}", normalized_view.upper())
 
         logger.info(
             f"generate_shoes_view({view_name}): input count={len(product_images)}, "
             f"sizes={[(k, len(v or '')) for k, v in product_images.items()]}"
         )
 
-        parts = [
-            types.Part(text=prompt),
-            *[b64_to_part(img) for img in product_images.values()],
-        ]
+        parts = [types.Part(text=prompt)]
+        for reference_view in view_order:
+            parts.append(types.Part(text=f"{reference_view.upper()} VIEW REFERENCE IMAGE:"))
+            parts.append(b64_to_part(product_images[reference_view]))
 
         try:
             response = await self.client.aio.models.generate_content(

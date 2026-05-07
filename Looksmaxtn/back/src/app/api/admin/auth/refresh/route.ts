@@ -11,12 +11,16 @@ export async function POST() {
     }
 
     await dbConnect();
-    const user = await User.findById(session.userId).select("name storeName storeType storeApprovalStatus email role").lean();
-    if (!user || !canAccessAdminDashboard(user.role)) {
+    const user = await User.findById(session.userId).select("name storeName storeType storeApprovalStatus email role isBlocked sessionVersion").lean();
+    if (!user || user.isBlocked || !canAccessAdminDashboard(user.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const token = await createToken({ userId: session.userId, role: user.role });
+    const token = await createToken({
+      userId: session.userId,
+      role: user.role,
+      sessionVersion: Number(user.sessionVersion ?? 0),
+    });
     const cookieOpts = getTokenCookieOptions();
     const res = NextResponse.json({
       token,

@@ -74,11 +74,13 @@ export default function ProductsPage() {
   const [approvalFilter, setApprovalFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [togglingVisibilityId, setTogglingVisibilityId] = useState("");
+  const [deletingProductId, setDeletingProductId] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [userRole, setUserRole] = useState("");
   const deferredSearch = useDeferredValue(search);
-  const canManageProducts = userRole === "store_owner";
+  const canAddProducts = userRole === "store_owner";
+  const canDeleteProducts = userRole === "store_owner" || userRole === "admin";
   const canToggleVisibility = userRole === "store_owner" || userRole === "admin";
 
   const fetchProducts = () => {
@@ -128,6 +130,29 @@ export default function ProductsPage() {
       // Leave current state unchanged on network failure.
     } finally {
       setTogglingVisibilityId("");
+    }
+  };
+
+  const handleDeleteProduct = async (product: Product) => {
+    if (!confirm(`Delete product "${product.name}"?`)) return;
+
+    setDeletingProductId(product._id);
+    try {
+      const response = await fetch(
+        `/api/products/${product._id}`,
+        withAuthRequest({ method: "DELETE" })
+      );
+      const data = await response.json();
+      if (!response.ok || data.error) {
+        alert(data.error || "Failed to delete product");
+        return;
+      }
+
+      setProducts((current) => current.filter((entry) => entry._id !== product._id));
+    } catch {
+      alert("Failed to delete product");
+    } finally {
+      setDeletingProductId("");
     }
   };
 
@@ -254,7 +279,7 @@ export default function ProductsPage() {
     <div>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-xl font-semibold tracking-wide">Products</h1>
-        {canManageProducts ? (
+        {canAddProducts ? (
           <Link href="/dashboard/products/new" className="inline-flex w-full justify-center bg-text-primary text-bg-primary px-4 py-2 text-xs font-semibold tracking-wide uppercase hover:bg-accent transition-colors sm:w-auto">
             + Add Product
           </Link>
@@ -356,7 +381,7 @@ export default function ProductsPage() {
                     Tag {renderSortIndicator("tag")}
                   </button>
                 </th>
-                <th className="px-4 py-3 text-right">Actions</th>
+                <th className="px-4 py-3 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -445,16 +470,18 @@ export default function ProductsPage() {
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      {canManageProducts ? (
-                        <>
-                          <Link
-                            href={`/dashboard/products/${p._id}/edit`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="inline-flex items-center justify-center border border-accent bg-accent px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-bg-primary transition-colors hover:bg-accent rounded-none"
-                          >
-                            Edit
-                          </Link>
-                        </>
+                      {canDeleteProducts ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleDeleteProduct(p);
+                          }}
+                          disabled={deletingProductId === p._id}
+                          className="text-[10px] font-medium uppercase tracking-[0.2em] text-danger transition-colors hover:text-danger/80 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {deletingProductId === p._id ? "Deleting..." : "Delete"}
+                        </button>
                       ) : (
                         <span className="text-[10px] uppercase tracking-wider text-text-secondary">
                           View only

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
 import ProductMediaEnhancementJob from "@/admin/models/ProductMediaEnhancementJob";
 import { saveProductMediaResultBase64 } from "@/admin/lib/productMediaUploads";
+import { requireWebhookSecret } from "@/lib/webhookAuth";
 
 type WebhookBody = {
   job_id?: string;
@@ -17,12 +18,8 @@ type ShoesView = typeof VALID_VIEWS[number];
 
 export async function POST(req: NextRequest) {
   try {
-    const configuredSecret = process.env.OUTFIT_WEBHOOK_SECRET || "";
-    const requestSecret = req.headers.get("x-webhook-secret") || "";
-
-    if (configuredSecret && requestSecret !== configuredSecret) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const unauthorized = requireWebhookSecret(req);
+    if (unauthorized) return unauthorized;
 
     const body = (await req.json()) as WebhookBody;
     const jobId = body.job_id || body.jobId;

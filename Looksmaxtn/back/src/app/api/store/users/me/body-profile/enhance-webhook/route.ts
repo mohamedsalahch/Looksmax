@@ -4,16 +4,12 @@ import {
   saveEnhancedBodyProfileImage,
 } from "@/store/lib/bodyProfileEnhancement";
 import { deleteBodyProfileImage } from "@/store/lib/bodyProfileUploads";
+import { requireWebhookSecret } from "@/lib/webhookAuth";
 
 export async function POST(req: NextRequest) {
   try {
-    const configuredSecret = process.env.OUTFIT_WEBHOOK_SECRET || "";
-    const requestSecret =
-      req.headers.get("x-webhook-secret") || req.nextUrl.searchParams.get("secret") || "";
-
-    if (configuredSecret && requestSecret !== configuredSecret) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const unauthorized = requireWebhookSecret(req, { allowQuerySecret: true });
+    if (unauthorized) return unauthorized;
 
     const body = (await req.json()) as Record<string, unknown>;
     const userId = req.nextUrl.searchParams.get("userId") || "";

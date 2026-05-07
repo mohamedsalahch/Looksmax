@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const jiti = require("jiti")(__filename);
@@ -28,6 +29,13 @@ test("inferStudioAssignmentZone maps bottoms", () => {
 test("inferStudioAssignmentZone maps dresses", () => {
   assert.equal(
     inferStudioAssignmentZone({ name: "Silk Dress", categories: ["Dresses"] }),
+    "dress"
+  );
+});
+
+test("inferStudioAssignmentZone maps sets as full-body garments", () => {
+  assert.equal(
+    inferStudioAssignmentZone({ name: "Linen Set", categories: ["set-men"] }),
     "dress"
   );
 });

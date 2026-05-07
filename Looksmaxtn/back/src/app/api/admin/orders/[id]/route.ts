@@ -33,6 +33,17 @@ type LeanOrder = {
   [key: string]: unknown;
 };
 
+function getOrderProductIds(items: LeanOrderItem[] = []) {
+  return items.map((item) => item.product.toString()).filter(Boolean);
+}
+
+function getOrderUserId(user: unknown) {
+  if (!user) return "";
+  return typeof user === "object" && user !== null
+    ? String((user as { toString?: () => string }).toString?.() || user)
+    : String(user);
+}
+
 function serializeOrder(order: LeanOrder) {
   return {
     ...order,
@@ -77,7 +88,7 @@ async function storeOwnerCanAccessOrder(session: { userId: string; role: string 
   if (session.role === "admin") return true;
   if (session.role !== "store_owner") return false;
 
-  const orderProductIds = (order.items || []).map((item) => item.product.toString());
+  const orderProductIds = getOrderProductIds(order.items || []);
   if (orderProductIds.length === 0) return false;
 
   const ownedProductCount = await Product.countDocuments({
@@ -90,7 +101,7 @@ async function storeOwnerCanAccessOrder(session: { userId: string; role: string 
 async function filterStoreOwnerOrderItems(session: { userId: string; role: string }, order: LeanOrder) {
   if (session.role === "admin") return order;
 
-  const orderProductIds = order.items.map((item) => item.product.toString());
+  const orderProductIds = getOrderProductIds(order.items);
   const ownedProductIds = await Product.find({
     _id: { $in: orderProductIds },
     "createdBy.id": session.userId,
@@ -131,6 +142,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const existingOrder = await Order.findById(id).lean();
     if (!existingOrder) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const existingLeanOrder = existingOrder as unknown as LeanOrder;
 
     if (FINAL_ORDER_STATUSES.includes(existingOrder.orderStatus as (typeof FINAL_ORDER_STATUSES)[number])) {
       return NextResponse.json({ error: "This order can no longer be updated." }, { status: 409 });
@@ -144,13 +156,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     if (["canceled", "returned"].includes(orderStatus || "") && existingOrder.orderStatus !== orderStatus) {
-      const productIds = existingOrder.items.map((item: LeanOrderItem) => item.product);
+      const productIds = getOrderProductIds(existingLeanOrder.items);
       const products = await Product.find({ _id: { $in: productIds } })
         .select("_id stock productType")
         .lean();
       const productMap = new Map(products.map((product) => [product._id.toString(), product]));
 
-      for (const item of existingOrder.items as LeanOrderItem[]) {
+      for (const item of existingLeanOrder.items) {
         const product = productMap.get(item.product.toString());
         if (!product) {
           return NextResponse.json({ error: "Product not found" }, { status: 404 });
@@ -165,15 +177,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
             (update.$inc as Record<string, number>)[sizeStockKey] = quantityToRestore;
           }
           await Product.updateOne(
-            { _id: item.product },
+            { _id: item.product.toString() },
             update
           );
         }
       }
 
-      const orderUserId = typeof existingOrder.user === "object" && existingOrder.user !== null
-        ? String(existingOrder.user.toString?.() || existingOrder.user)
-        : String(existingOrder.user);
+      const orderUserId = getOrderUserId(existingOrder.user);
 
       if (orderUserId) {
         await ProductReservation.deleteMany({
@@ -184,7 +194,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     if (orderStatus === "delivered" && existingOrder.orderStatus !== "delivered") {
-      const productIds = existingOrder.items.map((item: LeanOrderItem) => item.product);
+      const productIds = getOrderProductIds(existingLeanOrder.items);
       if (productIds.length > 0) {
         await Product.updateMany(
           { _id: { $in: productIds } },
@@ -206,7 +216,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       .lean();
     if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    broadcastAdminEvent({ type: "order:upsert", order: getAdminOrderEventPayload(order) });
+    broadcastAdminEvent({ type: "order:upsert", order: getAdminOrderEventPayload(order as unknown as Record<string, unknown>) });
 
     if (orderStatus) {
       try {
@@ -241,7 +251,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
-    return NextResponse.json({ order: serializeOrder(order) });
+    return NextResponse.json({ order: serializeOrder(order as unknown as LeanOrder) });
   } catch (error) { console.error(error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }
 
@@ -258,6 +268,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     if (!existingOrder) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
+    const existingLeanOrder = existingOrder as unknown as LeanOrder;
 
     if (["delivered", "returned"].includes(existingOrder.orderStatus)) {
       return NextResponse.json(
@@ -267,13 +278,13 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     }
 
     if (existingOrder.orderStatus !== "canceled") {
-      const productIds = existingOrder.items.map((item: LeanOrderItem) => item.product);
+      const productIds = getOrderProductIds(existingLeanOrder.items);
       const products = await Product.find({ _id: { $in: productIds } })
         .select("_id stock productType")
         .lean();
       const productMap = new Map(products.map((product) => [product._id.toString(), product]));
 
-      for (const item of existingOrder.items as LeanOrderItem[]) {
+      for (const item of existingLeanOrder.items) {
         const product = productMap.get(item.product.toString());
         if (!product) {
           continue;
@@ -288,16 +299,13 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
             (update.$inc as Record<string, number>)[sizeStockKey] = quantityToRestore;
           }
           await Product.updateOne(
-            { _id: item.product },
+            { _id: item.product.toString() },
             update
           );
         }
       }
 
-      const orderUserId =
-        typeof existingOrder.user === "object" && existingOrder.user !== null
-          ? String(existingOrder.user.toString?.() || existingOrder.user)
-          : String(existingOrder.user);
+      const orderUserId = getOrderUserId(existingOrder.user);
 
       if (orderUserId) {
         await ProductReservation.deleteMany({
@@ -307,7 +315,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       }
     }
 
-    const productIds = existingOrder.items.map((item: LeanOrderItem) => item.product);
+    const productIds = getOrderProductIds(existingLeanOrder.items);
     if (productIds.length > 0) {
       await ProductReservation.deleteMany({
         product: { $in: productIds },

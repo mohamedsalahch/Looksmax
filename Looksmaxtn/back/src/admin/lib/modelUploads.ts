@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { getUploadCategoryDir } from "@/admin/lib/uploadStorage";
 import { uploadToR2, deleteFromR2, extractKeyFromPublicUrl } from "@/lib/r2";
 import { loadImageAsBase64 } from "@/lib/imageSource";
+import { readValidatedUploadFile } from "@/lib/uploadValidation";
 
 const R2_PREFIX = "models";
 const LEGACY_PREFIX = "/uploads/models";
@@ -17,28 +18,12 @@ function sanitizeBaseName(filename: string) {
     .slice(0, 60) || "image";
 }
 
-function extensionFromType(type: string, fallbackName: string) {
-  if (type === "image/jpeg") return ".jpg";
-  if (type === "image/png") return ".png";
-  if (type === "image/webp") return ".webp";
-  return path.extname(fallbackName) || ".jpg";
-}
-
-function contentTypeFromExtension(ext: string) {
-  const e = ext.toLowerCase();
-  if (e === ".png") return "image/png";
-  if (e === ".webp") return "image/webp";
-  return "image/jpeg";
-}
-
 export async function saveModelImage(file: File) {
-  const bytes = await file.arrayBuffer();
-  const buffer = Buffer.from(bytes);
+  const { buffer, contentType, extension } = await readValidatedUploadFile(file);
   const safeName = sanitizeBaseName(file.name);
-  const ext = extensionFromType(file.type, file.name);
-  const filename = `${Date.now()}-${randomUUID()}-${safeName}${ext}`;
+  const filename = `${Date.now()}-${randomUUID()}-${safeName}${extension}`;
   const key = `${R2_PREFIX}/${filename}`;
-  return await uploadToR2(key, buffer, contentTypeFromExtension(ext));
+  return await uploadToR2(key, buffer, contentType);
 }
 
 export async function deleteModelImage(imagePath: string) {

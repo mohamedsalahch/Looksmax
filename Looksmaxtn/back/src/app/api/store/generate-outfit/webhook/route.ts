@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/store/lib/mongodb";
 import OutfitGenerationJob from "@/store/models/OutfitGenerationJob";
+import { requireWebhookSecret } from "@/lib/webhookAuth";
 
 function normalizeWebhookImage(data: Record<string, unknown>) {
   const imageCandidates = [
@@ -31,13 +32,8 @@ function normalizeWebhookImage(data: Record<string, unknown>) {
 
 export async function POST(req: NextRequest) {
   try {
-    const configuredSecret = process.env.OUTFIT_WEBHOOK_SECRET || "";
-    const requestSecret =
-      req.headers.get("x-webhook-secret") || req.nextUrl.searchParams.get("secret") || "";
-
-    if (configuredSecret && requestSecret !== configuredSecret) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const unauthorized = requireWebhookSecret(req, { allowQuerySecret: true });
+    if (unauthorized) return unauthorized;
 
     const body = (await req.json()) as Record<string, unknown>;
     const jobId =

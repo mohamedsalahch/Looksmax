@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { broadcastAdminEvent } from "@/admin/lib/adminEvents";
+import { requireWebhookSecret } from "@/lib/webhookAuth";
 
 export async function POST(req: NextRequest) {
   try {
-    const configuredSecret = process.env.OUTFIT_WEBHOOK_SECRET || "";
-    const requestSecret = req.headers.get("x-webhook-secret") || "";
-
-    if (configuredSecret && requestSecret !== configuredSecret) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const unauthorized = requireWebhookSecret(req);
+    if (unauthorized) return unauthorized;
 
     const event = await req.json();
     if (!event || typeof event.type !== "string") {

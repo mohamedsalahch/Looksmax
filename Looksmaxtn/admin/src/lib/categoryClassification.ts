@@ -1,4 +1,4 @@
-export type CategoryGender = "men" | "women" | "unisex";
+export type CategoryGender = "men" | "women" | "children" | "unisex";
 export type CategoryZone =
   | "top"
   | "bottom"
@@ -38,6 +38,15 @@ function isFootwearSlug(slug: string): boolean {
   );
 }
 
+function hasSlugSegment(slug: string, values: string[]) {
+  const segments = slug.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  return values.some((value) => segments.includes(value));
+}
+
+function isSetSlug(slug: string): boolean {
+  return hasSlugSegment(slug, ["set", "sets", "coord", "coords"]);
+}
+
 export function getCategoryAncestors<T extends ClassifiableCategory>(
   categories: T[],
   slug: string
@@ -61,8 +70,10 @@ export function getCategoryGender<T extends ClassifiableCategory>(
   const root = chain[chain.length - 1];
   if (root?.slug === "men") return "men";
   if (root?.slug === "women") return "women";
+  if (root?.slug === "children") return "children";
   if (slug.endsWith("-men")) return "men";
   if (slug.endsWith("-women")) return "women";
+  if (slug.endsWith("-children")) return "children";
   return "unisex";
 }
 
@@ -74,6 +85,7 @@ export function getCategoryZone<T extends ClassifiableCategory>(
   const chain = getCategoryAncestors(categories, slug);
   for (const ancestor of chain) {
     if (isFootwearSlug(ancestor.slug)) return "footwear";
+    if (isSetSlug(ancestor.slug)) return "dress";
     for (const [zone, prefix] of Object.entries(ZONE_PREFIXES)) {
       if (ancestor.slug.startsWith(prefix)) return zone as CategoryZone;
     }

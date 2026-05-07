@@ -1,9 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   output: "standalone",
+  turbopack: {
+    root: process.cwd(),
+  },
   experimental: {
     proxyClientMaxBodySize: "100mb",
   },

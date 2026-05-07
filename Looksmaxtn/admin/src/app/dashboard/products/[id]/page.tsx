@@ -108,6 +108,8 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
   const [isZoomOpen, setIsZoomOpen] = useState(false);
   const [userRole, setUserRole] = useState("");
   const [updatingApproval, setUpdatingApproval] = useState(false);
+  const [tagDraft, setTagDraft] = useState("");
+  const [updatingTag, setUpdatingTag] = useState(false);
 
   useEffect(() => {
     fetch("/api/auth/me", withAuthRequest())
@@ -120,6 +122,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
       .then((data) => {
         const nextProduct = data.product || null;
         setProduct(nextProduct);
+        setTagDraft(String(nextProduct?.tag || ""));
         const nextImages = nextProduct?.images || [];
         const mainIndex = nextImages.findIndex((image: ProductImage) => image.isMain);
         setSelectedImageIndex(mainIndex >= 0 ? mainIndex : 0);
@@ -149,6 +152,32 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
       // Leave the current state unchanged if the update fails.
     } finally {
       setUpdatingApproval(false);
+    }
+  };
+
+  const handleTagSave = async () => {
+    if (!product || updatingTag || userRole !== "admin") return;
+    const nextTag = tagDraft.trim();
+    if (nextTag === String(product.tag || "")) return;
+
+    setUpdatingTag(true);
+    try {
+      const response = await fetch(
+        `/api/products/${product._id}`,
+        withAuthRequest({
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tag: nextTag }),
+        })
+      );
+      const data = await response.json();
+      if (!response.ok || !data.product) return;
+      setProduct((current) => (current ? { ...current, tag: String(data.product.tag || "") } : current));
+      setTagDraft(String(data.product.tag || ""));
+    } catch {
+      // Leave the current state unchanged if the update fails.
+    } finally {
+      setUpdatingTag(false);
     }
   };
 
@@ -288,6 +317,29 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
               </span>
             </div>
           </div>
+
+          {canModerateProduct && (
+            <div className="space-y-2">
+              <p className="label-meta">Tag</p>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                <input
+                  type="text"
+                  value={tagDraft}
+                  onChange={(e) => setTagDraft(e.target.value)}
+                  placeholder="No tag"
+                  className="min-w-0 flex-1 border-0 border-b border-border bg-transparent px-1 py-2 text-sm text-text-primary placeholder:text-text-secondary/70 focus:border-text-primary focus:outline-none transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleTagSave()}
+                  disabled={updatingTag || tagDraft.trim() === String(product.tag || "")}
+                  className="btn-secondary disabled:opacity-40"
+                >
+                  {updatingTag ? "Saving..." : "Save Tag"}
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="h-px bg-border" />
 

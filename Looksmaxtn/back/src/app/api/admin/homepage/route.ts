@@ -8,37 +8,48 @@ import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 import { getSystemAuditActor } from "@/admin/lib/audit";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
 
-function normalizeHomePageContent(content: any) {
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function normalizeHomePageContent(content: unknown) {
+  const record = asRecord(content);
+  const hero = asRecord(record.hero);
+  const brandStory = asRecord(record.brandStory);
+  const lookbook = asRecord(record.lookbook);
+  const editorial = asRecord(record.editorial);
+  const featured = asRecord(record.featured);
+
   return {
-    ...content,
+    ...record,
     hero: {
-      image: String(content?.hero?.image || ""),
-      eyebrow: String(content?.hero?.eyebrow || ""),
-      title: String(content?.hero?.title || ""),
-      subtitle: String(content?.hero?.subtitle || ""),
-      link: String(content?.hero?.link || ""),
+      image: String(hero.image || ""),
+      eyebrow: String(hero.eyebrow || ""),
+      title: String(hero.title || ""),
+      subtitle: String(hero.subtitle || ""),
+      link: String(hero.link || ""),
     },
     brandStory: {
-      eyebrow: String(content?.brandStory?.eyebrow || ""),
-      title: String(content?.brandStory?.title || ""),
-      paragraphOne: String(content?.brandStory?.paragraphOne || ""),
-      paragraphTwo: String(content?.brandStory?.paragraphTwo || ""),
-      stats: Array.isArray(content?.brandStory?.stats) ? content.brandStory.stats : [],
+      eyebrow: String(brandStory.eyebrow || ""),
+      title: String(brandStory.title || ""),
+      paragraphOne: String(brandStory.paragraphOne || ""),
+      paragraphTwo: String(brandStory.paragraphTwo || ""),
+      stats: Array.isArray(brandStory.stats) ? brandStory.stats : [],
     },
     lookbook: {
-      caption: String(content?.lookbook?.caption || ""),
-      images: Array.isArray(content?.lookbook?.images) ? content.lookbook.images : [],
-      categorySlugs: Array.isArray(content?.lookbook?.categorySlugs)
-        ? content.lookbook.categorySlugs
+      caption: String(lookbook.caption || ""),
+      images: Array.isArray(lookbook.images) ? lookbook.images : [],
+      categorySlugs: Array.isArray(lookbook.categorySlugs)
+        ? lookbook.categorySlugs
         : [],
     },
     editorial: {
-      image: String(content?.editorial?.image || ""),
-      eyebrow: String(content?.editorial?.eyebrow || ""),
-      label: String(content?.editorial?.label || ""),
+      image: String(editorial.image || ""),
+      eyebrow: String(editorial.eyebrow || ""),
+      label: String(editorial.label || ""),
     },
     featured: {
-      title: String(content?.featured?.title || ""),
+      title: String(featured.title || ""),
     },
   };
 }

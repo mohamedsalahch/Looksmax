@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { getRequiredSecret } from "@/lib/env";
 
 type TurnstileResponse = {
   success?: boolean;
@@ -37,8 +38,13 @@ export async function verifyTurnstileToken(
     return { ok: true };
   }
 
-  const secret = process.env.TURNSTILE_SECRET_KEY || "";
-  if (!secret) return { ok: true };
+  let secret: string;
+  try {
+    secret = getRequiredSecret("TURNSTILE_SECRET_KEY");
+  } catch (error) {
+    console.error("[turnstile] Missing or unsafe TURNSTILE_SECRET_KEY:", error);
+    return { ok: false, error: "Security check is not configured." };
+  }
 
   if (!token) {
     return { ok: false, error: "Please complete the security check." };
