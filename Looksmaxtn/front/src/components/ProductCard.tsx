@@ -10,7 +10,7 @@ import { subscribeToAvailabilityStream } from "@/lib/availabilityStream";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { getConditionColor, getConditionLabel, getConditionPercent } from "@/lib/productCondition";
 import { queueStudioAssignment } from "@/lib/studioAssignment";
-import { getColorwayEnhancedFrontImage, getColorwayMainImage } from "@/lib/colorwayImage";
+import { getColorwayEnhancedFrontImage, getColorwayEnhancedLeftImage, getColorwayMainImage } from "@/lib/colorwayImage";
 
 type ProductType = "fashion" | "perfume" | "clothing" | "shoes";
 
@@ -45,6 +45,7 @@ interface ProductCardProps {
   storeType?: "thrift" | "retail" | null;
   colorImages?: Record<string, number[]> | null;
   images?: { url: string; isMain: boolean }[];
+  preferCollectionLeftImage?: boolean;
 }
 
 const CLONE_PREVIEW_WIDTH = 184;
@@ -88,6 +89,7 @@ export default function ProductCard({
   storeType,
   colorImages,
   images = [],
+  preferCollectionLeftImage = false,
 }: ProductCardProps) {
   const { addItem } = useCart();
   const router = useRouter();
@@ -124,7 +126,10 @@ export default function ProductCard({
   const [activeColorHex, setActiveColorHex] = useState<string | null>(colorwayHexes[0] || null);
   const selectedCartImage = getColorwayMainImage(activeColorHex, { image, images, colorImages }, image);
   const selectedStoreImage = getColorwayEnhancedFrontImage(activeColorHex, { image, images, colorImages }, image);
-  const displayImage = selectedCartImage || image;
+  const selectedCollectionImage = preferCollectionLeftImage && fashionSubtype === "shoes"
+    ? getColorwayEnhancedLeftImage(activeColorHex, { image, images, colorImages }, image)
+    : "";
+  const displayImage = selectedCollectionImage || selectedCartImage || image;
   const normalizedConditionScore = conditionScore ?? 0;
 
   const handleColorwayClick = (e: React.MouseEvent, hex: string) => {

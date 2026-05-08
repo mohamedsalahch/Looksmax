@@ -945,6 +945,17 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
+
+        <div className="border-t border-border/60 p-2 md:hidden">
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex w-full items-center gap-3 px-3 py-2.5 text-xs font-semibold uppercase tracking-[0.18em] text-danger transition-colors hover:bg-bg-hover hover:text-danger/80 cursor-pointer"
+          >
+            <span className="text-sm">↩</span>
+            <span>Logout</span>
+          </button>
+        </div>
       </aside>
 
       <main className="flex-1 overflow-y-auto print:overflow-visible print:w-full print:bg-white">
@@ -1138,13 +1149,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               </div>
             )}
 
-            <p className="min-w-0 text-[10px] uppercase tracking-[0.16em] text-text-secondary truncate text-right">
+            <p className="hidden min-w-0 text-[10px] uppercase tracking-[0.16em] text-text-secondary truncate text-right md:block">
               {user.email}
             </p>
 
             <button
               onClick={handleLogout}
-              className="px-0 py-0 text-[10px] font-semibold uppercase tracking-[0.18em] text-danger transition-colors hover:text-danger/80 cursor-pointer"
+              className="hidden px-0 py-0 text-[10px] font-semibold uppercase tracking-[0.18em] text-danger transition-colors hover:text-danger/80 cursor-pointer md:block"
             >
               Logout
             </button>

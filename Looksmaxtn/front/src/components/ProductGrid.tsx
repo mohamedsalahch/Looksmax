@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import ProductCard from "./ProductCard";
 import { getStoredReservationKey } from "@/lib/reservations";
+import { getColorwayEnhancedLeftImage } from "@/lib/colorwayImage";
 
 interface ProductImage {
   url: string;
@@ -54,6 +55,20 @@ function getMainImage(images?: ProductImage[]): string | undefined {
   if (!images || images.length === 0) return undefined;
   const main = images.find((i) => i.isMain);
   return main?.url || images[0]?.url;
+}
+
+function getCollectionCardImage(product: Product): string | undefined {
+  if (product.fashionSubtype === "shoes") {
+    const enhancedLeft = getColorwayEnhancedLeftImage(null, {
+      images: product.images,
+      colorImages: product.colorImages,
+    });
+    if (enhancedLeft) {
+      return enhancedLeft;
+    }
+  }
+
+  return getMainImage(product.images);
 }
 
 function formatCategoryLabel(value: string) {
@@ -527,7 +542,7 @@ export default function ProductGrid({
                   blockedByOrder={product.blockedByOrder}
                   tag={product.tag}
                   sizes={product.sizes}
-                  image={getMainImage(product.images)}
+                  image={getCollectionCardImage(product)}
                   conditionScore={product.conditionScore}
                   conditionStatus={product.conditionStatus}
                   productType={product.productType}
@@ -538,6 +553,7 @@ export default function ProductGrid({
                   storeType={product.storeType}
                   colorImages={product.colorImages}
                   images={product.images}
+                  preferCollectionLeftImage
                 />
               ))}
             </div>

@@ -7,7 +7,7 @@ function getBackendBaseUrl(req: NextRequest) {
   const localHostnames = new Set(["localhost", "127.0.0.1"]);
 
   if (localHostnames.has(req.nextUrl.hostname)) {
-    return "http://127.0.0.1:3002";
+    return "http://localhost:3002";
   }
 
   return (

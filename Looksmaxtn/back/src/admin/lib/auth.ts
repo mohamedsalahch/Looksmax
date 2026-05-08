@@ -55,7 +55,10 @@ export async function getSession(): Promise<JWTPayload | null> {
   const headersStore = await headers();
   const bearerToken = getBearerTokenFromHeader(headersStore.get("authorization"));
   const tokenFromHeader = bearerToken ? await verifyToken(bearerToken) : null;
-  if (tokenFromHeader) return validateAdminSession(tokenFromHeader);
+  if (tokenFromHeader) {
+    const validatedHeaderSession = await validateAdminSession(tokenFromHeader);
+    if (validatedHeaderSession) return validatedHeaderSession;
+  }
 
   const cookieStore = await cookies();
   const token = cookieStore.get(COOKIE_NAME)?.value;

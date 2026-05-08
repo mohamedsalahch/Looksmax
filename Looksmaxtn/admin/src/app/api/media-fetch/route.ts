@@ -23,7 +23,7 @@ function getAllowedOrigins() {
     [
       "https://looksmaxtn.com",
       "https://www.looksmaxtn.com",
-      "https://admin.looksmaxtn.com",
+      "https://store.looksmaxtn.com",
       "https://cdn.looksmaxtn.com",
       process.env.REMOTE_UPLOADS_BASE_URL,
       process.env.NEXT_PUBLIC_FRONT_URL,

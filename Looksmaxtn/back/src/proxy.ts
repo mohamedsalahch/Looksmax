@@ -17,7 +17,7 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "http://127.0.0.1:3001",
   "https://looksmaxtn.com",
   "https://www.looksmaxtn.com",
-  "https://admin.looksmaxtn.com",
+  "https://store.looksmaxtn.com",
 ];
 
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
@@ -142,6 +142,7 @@ function canAccessAdminPath(role: string | null, pathname: string) {
     pathname === "/api/admin/auth/me" ||
     pathname === "/api/admin/auth/refresh" ||
     pathname === "/api/admin/auth/logout" ||
+    pathname === "/api/admin/jobs/events" ||
     pathname === "/api/admin/users/me/store" ||
     pathname === "/api/admin/users/me/store-credits" ||
     pathname === "/api/admin/stats" ||
