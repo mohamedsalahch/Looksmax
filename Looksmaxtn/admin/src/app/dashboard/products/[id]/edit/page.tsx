@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useRef, useState, use } from "react";
 import { useRouter } from "next/navigation";
@@ -181,7 +181,7 @@ View & Layout:
 
 Fabric Preparation:
 
-* Ironing clothes removes wrinkles â€” remove all wrinkles and creases
+* Ironing clothes removes wrinkles — remove all wrinkles and creases
 * Make the garment look freshly ironed or professionally steamed
 * Keep natural fabric texture (do NOT over-smooth or make it look artificial)
 
@@ -680,14 +680,14 @@ function ColorwayGenerationCard({
           )}
           <button type="button" onClick={canGenerate && colorway.generateStatus !== "completed" ? onGenerate : undefined} disabled={!canGenerate || colorway.generateStatus === "processing" || colorway.generateStatus === "completed"} className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity">
             {colorway.generateStatus === "processing" && <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />}
-            {colorway.generateStatus === "completed" ? "Generated âœ“" : colorway.generateStatus === "processing" ? "Generating..." : "Generate"}
+            {colorway.generateStatus === "completed" ? "Generated ✓" : colorway.generateStatus === "processing" ? "Generating..." : "Generate"}
           </button>
         </div>
       </div>
       {zoomedUrl && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setZoomedUrl(null)}>
           <div className="relative max-h-[92vh] w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
-            <button type="button" onClick={() => setZoomedUrl(null)} className="absolute right-0 top-0 z-10 h-9 w-9 border border-white/30 bg-black/60 text-xl leading-none text-white hover:bg-black transition-colors">Ã—</button>
+            <button type="button" onClick={() => setZoomedUrl(null)} className="absolute right-0 top-0 z-10 h-9 w-9 border border-white/30 bg-black/60 text-xl leading-none text-white hover:bg-black transition-colors">×</button>
             <div className="flex max-h-[92vh] items-center justify-center bg-bg-card p-4">
               <img src={zoomedUrl} alt="Generated model" className="max-h-[86vh] max-w-full object-contain" />
             </div>
@@ -751,7 +751,7 @@ function ColorwayCard({
     <div data-colorway-id={colorway.id} className="flex-none w-[270px] rounded-2xl border border-border bg-bg-card p-4 space-y-4">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
-          {canRemove && <button type="button" onClick={onRemove} title="Remove colorway" className="text-sm leading-none text-text-secondary hover:text-danger transition-colors">Ã—</button>}
+          {canRemove && <button type="button" onClick={onRemove} title="Remove colorway" className="text-sm leading-none text-text-secondary hover:text-danger transition-colors">×</button>}
           <span className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">Colorway {index + 1}</span>
         </div>
         <div className="flex items-center gap-1.5">
@@ -808,7 +808,7 @@ function ColorwayCard({
       {zoomedPreview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setZoomedPreview(null)}>
           <div className="relative max-h-[92vh] w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
-            <button type="button" onClick={() => setZoomedPreview(null)} aria-label="Close preview" className="absolute right-0 top-0 z-10 h-9 w-9 border border-white/30 bg-black/60 text-xl leading-none text-white hover:bg-black transition-colors">Ã—</button>
+            <button type="button" onClick={() => setZoomedPreview(null)} aria-label="Close preview" className="absolute right-0 top-0 z-10 h-9 w-9 border border-white/30 bg-black/60 text-xl leading-none text-white hover:bg-black transition-colors">×</button>
             <div className="flex max-h-[92vh] items-center justify-center bg-bg-card p-4">
               <img src={zoomedPreview} alt="Image preview" className="max-h-[86vh] max-w-full object-contain" />
             </div>
@@ -822,13 +822,13 @@ function ColorwayCard({
             <div className="flex items-center gap-1">
               <input type="text" value={sizeRow.size} onChange={(e) => onUpdateSize(sizeRow.id, { size: e.target.value })} placeholder="Size" className="min-w-0 flex-1 bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-text-primary transition-colors" />
               <input type="number" min="0" value={sizeRow.stock} onChange={(e) => onUpdateSize(sizeRow.id, { stock: e.target.value })} placeholder="Qty" className="w-14 flex-none bg-bg-secondary border border-border px-2 py-1.5 text-xs focus:border-text-primary transition-colors" />
-              <button type="button" onClick={() => onRemoveSize(sizeRow.id)} disabled={colorway.sizes.length === 1} className="flex-none text-sm leading-none text-text-secondary hover:text-danger transition-colors disabled:opacity-30">Ã—</button>
+              <button type="button" onClick={() => onRemoveSize(sizeRow.id)} disabled={colorway.sizes.length === 1} className="flex-none text-sm leading-none text-text-secondary hover:text-danger transition-colors disabled:opacity-30">×</button>
             </div>
             {isThrift && (
               <div className="space-y-0.5 px-0.5">
                 <div className="flex items-center justify-between">
                   <span className="text-[8px] uppercase tracking-wider text-text-secondary">Condition</span>
-                  <span className="text-[8px] text-text-secondary">{sizeRow.conditionScore}/10 Â· {getConditionStatusFromScore(Number(sizeRow.conditionScore)).toUpperCase()}</span>
+                  <span className="text-[8px] text-text-secondary">{sizeRow.conditionScore}/10 · {getConditionStatusFromScore(Number(sizeRow.conditionScore)).toUpperCase()}</span>
                 </div>
                 <input type="range" min="1" max="10" step="1" value={sizeRow.conditionScore} onChange={(e) => onUpdateSize(sizeRow.id, { conditionScore: e.target.value })} className="w-full accent-accent cursor-pointer" />
               </div>
@@ -858,7 +858,7 @@ function ColorwayCard({
           )}
           <button type="button" onClick={colorway.enhanceStatus !== "completed" ? onEnhance : undefined} disabled={!canEnhance || colorway.enhanceStatus === "processing" || colorway.enhanceStatus === "completed"} className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity">
             {colorway.enhanceStatus === "processing" && <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />}
-            {colorway.enhanceStatus === "completed" ? "Enhanced âœ“" : colorway.enhanceStatus === "processing" ? "Enhancing..." : "Enhance"}
+            {colorway.enhanceStatus === "completed" ? "Enhanced ✓" : colorway.enhanceStatus === "processing" ? "Enhancing..." : "Enhance"}
           </button>
         </div>
       </div>
@@ -948,7 +948,7 @@ function ColorwayCard({
           <div className="flex items-center justify-end gap-2">
             <button type="button" onClick={canGenerate ? onGenerate : undefined} disabled={!canGenerate || colorway.generateStatus === "processing" || colorway.generateStatus === "completed"} className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity">
               {colorway.generateStatus === "processing" && <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />}
-              {colorway.generateStatus === "completed" ? "Generated âœ“" : colorway.generateStatus === "processing" ? "Generating..." : "Generate"}
+              {colorway.generateStatus === "completed" ? "Generated ✓" : colorway.generateStatus === "processing" ? "Generating..." : "Generate"}
             </button>
           </div>
         </div>
@@ -3597,7 +3597,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                           className="shrink-0 border border-border px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-text-secondary transition-colors hover:border-accent hover:text-accent"
                           aria-label={`Remove variant ${index + 1}`}
                         >
-                          Ã—
+                          ×
                         </button>
                       </div>
                     ))}
@@ -3620,7 +3620,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 aria-label="Close image preview"
                 className="absolute right-0 top-0 z-10 h-9 w-9 border border-white/30 bg-black/60 text-xl leading-none text-white transition-colors hover:bg-black"
               >
-                Ã—
+                ×
               </button>
               <div className="flex max-h-[92vh] items-center justify-center bg-bg-card p-4">
                 <img
@@ -3818,7 +3818,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                       aria-label="Cancel enhancement"
                       className="inline-flex h-9 w-9 items-center justify-center border border-border text-xs text-text-secondary hover:bg-bg-hover"
                     >
-                      Ã—
+                      ×
                     </button>
                   )}
                   <button
@@ -3915,7 +3915,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                       aria-label="Cancel generation"
                       className="inline-flex h-9 w-9 items-center justify-center border border-border text-xs text-text-secondary hover:bg-bg-hover"
                     >
-                      Ã—
+                      ×
                     </button>
                   )}
                   <button

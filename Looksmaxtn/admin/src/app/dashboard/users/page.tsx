@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -161,8 +161,8 @@ export default function UsersPage() {
   };
 
   const renderSortIndicator = (key: SortKey) => {
-    if (sortKey !== key) return <span className="text-[9px] text-text-secondary/60">â†•</span>;
-    return <span className="text-[9px] text-accent">{sortDirection === "asc" ? "â†‘" : "â†“"}</span>;
+    if (sortKey !== key) return <span className="text-[9px] text-text-secondary/60">↕</span>;
+    return <span className="text-[9px] text-accent">{sortDirection === "asc" ? "↑" : "↓"}</span>;
   };
 
   const normalizedSearch = deferredSearch.trim();
@@ -296,11 +296,11 @@ export default function UsersPage() {
                   </td>
                   <td className="px-4 py-3 text-xs text-text-secondary">
                     {u.role === "store_owner"
-                      ? `${u.storeName || "â€”"}${u.storeType ? ` Â· ${u.storeType}` : ""}`
-                      : "â€”"}
+                      ? `${u.storeName || "—"}${u.storeType ? ` · ${u.storeType}` : ""}`
+                      : "—"}
                   </td>
                   <td className="px-4 py-3 text-xs text-text-secondary">
-                    {u.address?.city ? `${u.address.city}, ${u.address.state}` : "â€”"}
+                    {u.address?.city ? `${u.address.city}, ${u.address.state}` : "—"}
                   </td>
                   <td className="px-4 py-3 text-xs text-text-secondary">
                     {new Date(u.createdAt).toLocaleDateString()}

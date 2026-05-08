@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import AuditMetaCard from "@/components/AuditMetaCard";
 import Link from "next/link";
@@ -94,7 +94,7 @@ export default function ModelViewPage({ params }: { params: Promise<{ id: string
           href="/dashboard/models"
           className="text-xs text-text-secondary hover:text-text-primary transition-colors mb-2 inline-block"
         >
-          â† Back
+          ← Back
         </Link>
         <div className="flex items-start justify-between gap-4">
           <div>

@@ -284,6 +284,74 @@ export function buildOpenApiSpec(baseUrl: string) {
           },
         },
       },
+      "/api/admin/users/me/store-credits": {
+        get: {
+          tags: ["Admin Operations"],
+          summary: "Get the current store owner's generation credits",
+          security: adminSecurity,
+          responses: {
+            "200": {
+              description: "Credit balance",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      allowed: { type: "integer", example: 50 },
+                      used: { type: "integer", example: 12 },
+                      remaining: { type: "integer", example: 38 },
+                    },
+                  },
+                },
+              },
+            },
+            "401": { description: "Unauthorized" },
+            "403": { description: "Caller is not a store owner" },
+            "404": { description: "User not found" },
+          },
+        },
+        post: {
+          tags: ["Admin Operations"],
+          summary: "Top up the current store owner's generation credits",
+          security: adminSecurity,
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["amount", "code"],
+                  properties: {
+                    amount: { type: "integer", minimum: 1, example: 10 },
+                    code: { type: "string", description: "Top-up code provided out-of-band" },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "Updated credit balance",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      allowed: { type: "integer" },
+                      used: { type: "integer" },
+                      remaining: { type: "integer" },
+                    },
+                  },
+                },
+              },
+            },
+            "400": { description: "Invalid amount" },
+            "401": { description: "Unauthorized" },
+            "403": { description: "Invalid code or caller is not a store owner" },
+            "404": { description: "User not found" },
+          },
+        },
+      },
       "/api/admin/stats": {
         get: {
           tags: ["Admin Operations"],

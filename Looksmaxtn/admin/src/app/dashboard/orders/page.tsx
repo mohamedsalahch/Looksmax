@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useDeferredValue, useEffect, useMemo, useState, type MouseEvent } from "react";
 import Link from "next/link";
@@ -132,8 +132,8 @@ export default function OrdersPage() {
   };
 
   const renderSortIndicator = (key: SortKey) => {
-    if (sortKey !== key) return <span className="text-[9px] text-text-secondary/60">â†•</span>;
-    return <span className="text-[9px] text-accent">{sortDirection === "asc" ? "â†‘" : "â†“"}</span>;
+    if (sortKey !== key) return <span className="text-[9px] text-text-secondary/60">↕</span>;
+    return <span className="text-[9px] text-accent">{sortDirection === "asc" ? "↑" : "↓"}</span>;
   };
 
   const handleDeleteOrder = async (orderId: string, event: MouseEvent<HTMLButtonElement>) => {

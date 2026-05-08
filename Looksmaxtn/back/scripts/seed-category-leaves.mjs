@@ -1,8 +1,29 @@
 // Usage:
-//   node scripts/seed-categories-full.mjs
-//   node scripts/seed-categories-full.mjs --apply
+//   node scripts/seed-category-leaves.mjs
+//   node scripts/seed-category-leaves.mjs --apply
 
-import "dotenv/config";
+import path from "path";
+import { existsSync } from "fs";
+import { fileURLToPath } from "url";
+
+try {
+  const dotenv = await import("dotenv");
+  const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+  const backDir = path.resolve(scriptDir, "..");
+  const envNames =
+    process.env.NODE_ENV === "development"
+      ? [".env", ".env.production"]
+      : [".env.production", ".env"];
+
+  for (const envName of envNames) {
+    const envPath = path.join(backDir, envName);
+    if (!existsSync(envPath)) continue;
+    dotenv.config({ path: envPath });
+    break;
+  }
+} catch {
+  // Docker runtime provides env vars directly and may not ship dotenv.
+}
 import mongoose from "mongoose";
 
 const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI;
@@ -47,21 +68,24 @@ const PARENT_CATEGORIES = [
   { name: "Outerwear", slug: "outerwear-men", parentSlug: "garments-men", order: 1, isActive: true },
   { name: "Tops", slug: "top-men", parentSlug: "garments-men", order: 2, isActive: true },
   { name: "Bottoms", slug: "bottom-men", parentSlug: "garments-men", order: 3, isActive: true },
-  { name: "Footwear", slug: "footwear-men", parentSlug: "garments-men", order: 4, isActive: true },
+  { name: "Set", slug: "set-men", parentSlug: "garments-men", order: 4, isActive: true },
+  { name: "Footwear", slug: "footwear-men", parentSlug: "garments-men", order: 5, isActive: true },
 
   // Women garments
   { name: "Dresses", slug: "dress-women", parentSlug: "garments-women", order: 0, isActive: true },
-  { name: "Outerwear", slug: "outerwear-women", parentSlug: "garments-women", order: 1, isActive: true },
-  { name: "Tops", slug: "top-women", parentSlug: "garments-women", order: 2, isActive: true },
-  { name: "Handbags", slug: "handbag-women", parentSlug: "garments-women", order: 3, isActive: true },
-  { name: "Bottoms", slug: "bottom-women", parentSlug: "garments-women", order: 4, isActive: true },
-  { name: "Footwear", slug: "footwear-women", parentSlug: "garments-women", order: 5, isActive: true },
+  { name: "Set", slug: "set-women", parentSlug: "garments-women", order: 1, isActive: true },
+  { name: "Outerwear", slug: "outerwear-women", parentSlug: "garments-women", order: 2, isActive: true },
+  { name: "Tops", slug: "top-women", parentSlug: "garments-women", order: 3, isActive: true },
+  { name: "Handbags", slug: "handbag-women", parentSlug: "garments-women", order: 4, isActive: true },
+  { name: "Bottoms", slug: "bottom-women", parentSlug: "garments-women", order: 5, isActive: true },
+  { name: "Footwear", slug: "footwear-women", parentSlug: "garments-women", order: 6, isActive: true },
 
   // Children garments
   { name: "Outerwear", slug: "outerwear-children", parentSlug: "garments-children", order: 0, isActive: true },
   { name: "Tops", slug: "top-children", parentSlug: "garments-children", order: 1, isActive: true },
   { name: "Bottoms", slug: "bottom-children", parentSlug: "garments-children", order: 2, isActive: true },
-  { name: "Footwear", slug: "footwear-children", parentSlug: "garments-children", order: 3, isActive: true },
+  { name: "Set", slug: "set-children", parentSlug: "garments-children", order: 3, isActive: true },
+  { name: "Footwear", slug: "footwear-children", parentSlug: "garments-children", order: 4, isActive: true },
 ];
 
 const GROUPS = [
