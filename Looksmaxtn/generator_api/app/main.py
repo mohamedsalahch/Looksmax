@@ -21,42 +21,21 @@ load_service_env()
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-from google import genai
 
 from app.api import clothes, enhance, outfit, proxy, shoes, validation
-from app.services.generator import GeminiImageGenerator, ImageGenerator
-from app.services.openai_generator import OpenAIImageGenerator
+from app.services.generator import ImageGenerator
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Provider selection: "gemini" (default) or "openai".
-PROVIDER = os.getenv("IMAGE_PROVIDER", "gemini").strip().lower()
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "").strip()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
-OPENAI_IMAGE_MODEL = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-2").strip()
+# API Key
+API_KEY = os.getenv("GOOGLE_API_KEY", "").strip()
 
-generator: ImageGenerator | None = None
-if PROVIDER == "openai":
-    if OPENAI_API_KEY:
-        generator = OpenAIImageGenerator(api_key=OPENAI_API_KEY, model=OPENAI_IMAGE_MODEL)
-        logger.info(f"Using OpenAI image generator (model={OPENAI_IMAGE_MODEL}).")
-    else:
-        logger.warning("IMAGE_PROVIDER=openai but OPENAI_API_KEY is not configured. Generation endpoints will fail.")
-elif PROVIDER == "gemini":
-    if GOOGLE_API_KEY:
-        generator = GeminiImageGenerator(api_key=GOOGLE_API_KEY)
-        logger.info("Using Gemini image generator.")
-    else:
-        logger.warning("GOOGLE_API_KEY is not configured. Generation endpoints will fail.")
-else:
-    logger.warning(f"Unknown IMAGE_PROVIDER={PROVIDER!r}; expected 'gemini' or 'openai'. Generation disabled.")
-
-# Validation endpoints always use Gemini regardless of the chosen provider.
-validation_client = genai.Client(api_key=GOOGLE_API_KEY) if GOOGLE_API_KEY else None
-if validation_client is None:
-    logger.warning("GOOGLE_API_KEY is not configured. Validation endpoints will return an initialization error.")
+# Initialize image generator only when credentials are configured.
+generator = ImageGenerator(api_key=API_KEY) if API_KEY else None
+if generator is None:
+    logger.warning("GOOGLE_API_KEY is not configured. Generation endpoints will return an initialization error.")
 
 # Create FastAPI app
 app = FastAPI(
@@ -72,7 +51,7 @@ shoes.set_generator(generator)
 enhance.set_generator(generator)
 outfit.set_generator(generator)
 proxy.set_generator(generator)
-validation.set_validation_client(validation_client)
+validation.set_generator(generator)
 
 
 # Include routers

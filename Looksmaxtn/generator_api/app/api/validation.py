@@ -6,21 +6,19 @@ import re
 import asyncio
 
 from fastapi import APIRouter, HTTPException
-from google import genai
 from google.genai import types
 
 from app.models.requests import CompareFrontBackRequest
 from app.models.requests import ValidatePhotoRequest
 from app.models.responses import CompareFrontBackResponse
 from app.models.responses import ValidatePhotoResponse
+from app.services.generator import ImageGenerator
 from app.utils.image import b64_to_part
 
 router = APIRouter(prefix="/api", tags=["validation"])
 logger = logging.getLogger(__name__)
 
-# Validation always uses Gemini regardless of the configured image-generation provider,
-# since these are text-classification tasks tuned for Gemini.
-_validation_client: genai.Client | None = None
+_generator: ImageGenerator | None = None
 _VALIDATION_MODEL = "gemini-3-flash-preview"
 
 VALIDATION_PROMPT = """Analyze the image to determine if the primary subject is suitable for a virtual clothing overlay.
@@ -48,10 +46,10 @@ Rules:
 """
 
 
-def set_validation_client(client: genai.Client | None) -> None:
-    """Set the Gemini client used for validation calls."""
-    global _validation_client
-    _validation_client = client
+def set_generator(generator: ImageGenerator | None) -> None:
+    """Set the global image generator instance."""
+    global _generator
+    _generator = generator
 
 
 def _parse_validation_response(text: str) -> dict:
@@ -63,8 +61,8 @@ def _parse_validation_response(text: str) -> dict:
 
 
 async def _classify_product_view(image_base64: str, label: str) -> dict:
-    if _validation_client is None:
-        raise HTTPException(status_code=500, detail="Validation client not initialized")
+    if _generator is None:
+        raise HTTPException(status_code=500, detail="Generator not initialized")
 
     parts = [
         types.Part(text=COMPARE_FRONT_BACK_PROMPT),
@@ -72,7 +70,7 @@ async def _classify_product_view(image_base64: str, label: str) -> dict:
         b64_to_part(image_base64),
     ]
 
-    response = await _validation_client.aio.models.generate_content(
+    response = await _generator.client.aio.models.generate_content(
         model=_VALIDATION_MODEL,
         contents=[types.Content(parts=parts)],
     )
@@ -93,8 +91,8 @@ async def _classify_product_view(image_base64: str, label: str) -> dict:
 @router.post("/compare-front-back", response_model=CompareFrontBackResponse)
 async def compare_front_back(request: CompareFrontBackRequest):
     """Compare front and back product photos and confirm they are different."""
-    if _validation_client is None:
-        raise HTTPException(status_code=500, detail="Validation client not initialized")
+    if _generator is None:
+        raise HTTPException(status_code=500, detail="Generator not initialized")
 
     if not request.front or not request.front.strip() or not request.back or not request.back.strip():
         raise HTTPException(status_code=400, detail="front and back images are required and cannot be empty")
@@ -129,8 +127,8 @@ async def compare_front_back(request: CompareFrontBackRequest):
 @router.post("/validate-photo", response_model=ValidatePhotoResponse)
 async def validate_photo(request: ValidatePhotoRequest):
     """Validate that an uploaded photo is a clear full-body standing photo of a person."""
-    if _validation_client is None:
-        raise HTTPException(status_code=500, detail="Validation client not initialized")
+    if _generator is None:
+        raise HTTPException(status_code=500, detail="Generator not initialized")
 
     if not request.image or not request.image.strip():
         raise HTTPException(status_code=400, detail="image is required and cannot be empty")
@@ -141,7 +139,7 @@ async def validate_photo(request: ValidatePhotoRequest):
     ]
 
     try:
-        response = await _validation_client.aio.models.generate_content(
+        response = await _generator.client.aio.models.generate_content(
             model=_VALIDATION_MODEL,
             contents=[types.Content(parts=parts)],
         )

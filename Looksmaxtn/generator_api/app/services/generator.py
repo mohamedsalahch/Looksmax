@@ -1,8 +1,7 @@
-"""Image generation service interfaces and Google Gemini implementation."""
+"""Image generation service using Google Gemini AI."""
 
 import base64
 import logging
-from abc import ABC, abstractmethod
 
 from fastapi import HTTPException
 from google import genai
@@ -23,50 +22,7 @@ from app.utils.image import b64_to_part
 logger = logging.getLogger(__name__)
 
 
-class ImageGenerator(ABC):
-    """Abstract base class for image generation backends."""
-
-    @abstractmethod
-    async def generate_clothes_view(
-        self,
-        view_name: str,
-        model_front: str,
-        model_back: str,
-        product_front: str,
-        product_back: str,
-        garment_zone: str = "top",
-        secondary_colors: SecondaryColors | None = None,
-    ) -> str: ...
-
-    @abstractmethod
-    async def generate_shoes_view(self, view_name: str, product_images: dict[str, str]) -> str: ...
-
-    @abstractmethod
-    async def enhance_garment_view(self, view_name: str, image_b64: str) -> str: ...
-
-    @abstractmethod
-    async def enhance_accessory_view(self, view_name: str, image_b64: str) -> str: ...
-
-    @abstractmethod
-    async def generate_front_view(
-        self,
-        person_image: str,
-        body_zones: BodyZones,
-        height: str,
-        weight: str,
-        top_size: str,
-        bottom_size: str,
-        shoe_size: str,
-    ) -> str: ...
-
-    @abstractmethod
-    async def generate_back_view(self, front_image: str, body_zones: BodyZones) -> str: ...
-
-    @abstractmethod
-    async def generate_from_prompt(self, prompt: str, images: list[str]) -> str: ...
-
-
-class GeminiImageGenerator(ImageGenerator):
+class ImageGenerator:
     """Service for generating images using Google Gemini AI."""
 
     def __init__(self, api_key: str):
