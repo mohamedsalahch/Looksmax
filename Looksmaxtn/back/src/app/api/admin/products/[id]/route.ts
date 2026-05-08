@@ -744,9 +744,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const session = await getSession();
     if (!session || !canAccessAdminResource(session.role, "products")) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    if (session.role === "admin") {
-      return NextResponse.json({ error: "Admins cannot delete products." }, { status: 403 });
-    }
     await dbConnect();
     const { id } = await params;
     const product = await Product.findById(id).lean();
