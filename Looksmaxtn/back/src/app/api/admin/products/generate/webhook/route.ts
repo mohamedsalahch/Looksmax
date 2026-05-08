@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
 import ProductGenerationJob from "@/admin/models/ProductGenerationJob";
+import { saveProductGenerationResultBase64 } from "@/admin/lib/productGenerationUploads";
 import { requireWebhookSecret } from "@/lib/webhookAuth";
 import { publishJobEvent } from "@/admin/lib/jobEvents";
 
@@ -49,11 +50,21 @@ export async function POST(req: NextRequest) {
     const view = typeof body.view === "string" ? body.view : ""; // "front", "back", "left", "right"
 
     if (imageBase64 && view) {
+      if (!["front", "back", "left", "right"].includes(view)) {
+        return NextResponse.json({ error: "Invalid view" }, { status: 400 });
+      }
+
+      const savedPath = await saveProductGenerationResultBase64(
+        imageBase64,
+        view as "front" | "back" | "left" | "right"
+      );
+
       // Store the image in the correct slot
-      if (view === "front") job.images.front = imageBase64;
-      if (view === "back") job.images.back = imageBase64;
-      if (view === "left") job.images.left = imageBase64;
-      if (view === "right") job.images.right = imageBase64;
+      if (view === "front") job.images.front = savedPath;
+      if (view === "back") job.images.back = savedPath;
+      if (view === "left") job.images.left = savedPath;
+      if (view === "right") job.images.right = savedPath;
+      job.markModified("images");
 
       // Check if job is completed
       const isClothes = job.fashionSubtype === "clothes";

@@ -399,6 +399,23 @@ async function imageUrlToFile(url: string, label: string) {
   });
 }
 
+function isImageUrl(value: string) {
+  return (
+    value.startsWith("/") ||
+    value.startsWith("blob:") ||
+    value.startsWith("http://") ||
+    value.startsWith("https://")
+  );
+}
+
+async function generatedResultToFile(value: string, index: number) {
+  if (isImageUrl(value)) {
+    return imageUrlToFile(value, `generated-${index}`);
+  }
+
+  return base64ToFile(value, index);
+}
+
 async function originPictureToFile(url: string, label: OriginPictureKey) {
   const blob = await fetch(url).then((response) => response.blob());
   const extension = blob.type.split("/")[1] || "png";
@@ -1228,9 +1245,9 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   ) => {
     const results = await Promise.all(
       viewList.map(async (view, i) => {
-        const base64 = images?.[view];
-        if (!base64) return null;
-        const file = await base64ToFile(base64, i);
+        const image = images?.[view];
+        if (!image) return null;
+        const file = await generatedResultToFile(image, i);
         return { url: URL.createObjectURL(file), file };
       })
     );
@@ -2795,9 +2812,9 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 
       const generatedImages = await Promise.all(
         viewList.map(async (view, index) => {
-          const base64 = finalImages?.[view];
-          if (!base64) return null;
-          const file = await base64ToFile(base64, index);
+          const image = finalImages?.[view];
+          if (!image) return null;
+          const file = await generatedResultToFile(image, index);
           return {
             id: generateId(),
             url: URL.createObjectURL(file),
