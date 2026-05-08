@@ -2,10 +2,22 @@
 
 import logging
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+
+def load_service_env() -> None:
+    """Load env files relative to the generator_api service root."""
+    service_root = Path(__file__).resolve().parents[1]
+    load_dotenv(service_root / ".env")
+
+    environment = os.getenv("ENVIRONMENT", os.getenv("NODE_ENV", "")).strip().lower()
+    if environment == "production":
+        load_dotenv(service_root / ".env.production")
+
+
+load_service_env()
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse

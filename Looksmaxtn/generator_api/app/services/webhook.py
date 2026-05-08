@@ -24,6 +24,8 @@ async def send_webhook(webhook_url: str, job_id: str, view: str, image: str) -> 
     headers = {}
     if secret:
         headers["x-webhook-secret"] = secret
+    else:
+        logger.warning("OUTFIT_WEBHOOK_SECRET is empty; sending unauthenticated webhook for job %s", job_id)
 
     payload = WebhookPayload(
         job_id=job_id,
@@ -51,6 +53,8 @@ async def send_error_webhook(webhook_url: str, job_id: str, error_message: str) 
     headers = {}
     if secret:
         headers["x-webhook-secret"] = secret
+    else:
+        logger.warning("OUTFIT_WEBHOOK_SECRET is empty; sending unauthenticated error webhook for job %s", job_id)
 
     async with httpx.AsyncClient() as client:
         try:
