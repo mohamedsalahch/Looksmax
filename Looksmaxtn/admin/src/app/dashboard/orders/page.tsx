@@ -33,7 +33,7 @@ export default function OrdersPage() {
   const deferredSearch = useDeferredValue(search);
 
   useEffect(() => {
-    fetch("/api/auth/me", withAuthRequest()).then((r) => r.json()).then((d) => setUserRole(d.user?.role || "")).catch(() => {});
+    fetch("/api/admin/auth/me", withAuthRequest()).then((r) => r.json()).then((d) => setUserRole(d.user?.role || "")).catch(() => {});
     fetch("/api/orders", withAuthRequest()).then((r) => r.json()).then((d) => setOrders(d.orders || [])).catch(() => {}).finally(() => setLoading(false));
   }, []);
 

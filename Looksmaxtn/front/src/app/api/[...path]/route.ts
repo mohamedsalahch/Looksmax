@@ -1,22 +1,16 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-function getBackendBaseUrl(req: NextRequest) {
-  const localHostnames = new Set(["localhost", "127.0.0.1"]);
-
-  if (localHostnames.has(req.nextUrl.hostname)) {
-    return "http://127.0.0.1:3002";
-  }
-
+function getBackendBaseUrl() {
   return (
     process.env.BACKEND_PROXY_URL ||
     process.env.NEXT_PUBLIC_BACKEND_URL ||
-    "http://back:3002"
+    (process.env.NODE_ENV === "production" ? "http://back:3002" : "http://127.0.0.1:3002")
   ).replace(/\/$/, "");
 }
 
 function buildTargetUrl(req: NextRequest, path: string[]) {
-  const target = new URL(`${getBackendBaseUrl(req)}/api/store/${path.join("/")}`);
+  const target = new URL(`${getBackendBaseUrl()}/api/store/${path.join("/")}`);
   target.search = req.nextUrl.search;
   return target;
 }

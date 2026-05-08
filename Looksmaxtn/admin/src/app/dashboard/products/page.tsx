@@ -99,7 +99,7 @@ export default function ProductsPage() {
   };
 
   useEffect(() => {
-    fetch("/api/auth/me", withAuthRequest()).then((r) => r.json()).then((d) => setUserRole(d.user?.role || "")).catch(() => {});
+    fetch("/api/admin/auth/me", withAuthRequest()).then((r) => r.json()).then((d) => setUserRole(d.user?.role || "")).catch(() => {});
     fetchProducts();
     fetchCategories();
   }, []);

@@ -17,7 +17,7 @@ function getBackendBaseUrl() {
   return (
     process.env.BACKEND_PROXY_URL ||
     process.env.NEXT_PUBLIC_BACKEND_URL ||
-    "http://127.0.0.1:3002"
+    (process.env.NODE_ENV === "production" ? "http://back:3002" : "http://127.0.0.1:3002")
   ).replace(/\/$/, "");
 }
 

@@ -411,6 +411,12 @@ function waitFor(ms: number, signal?: AbortSignal) {
   });
 }
 
+type AsyncJobStatusResponse = {
+  status?: ProductMediaStatus;
+  images?: Record<string, string>;
+  error?: string;
+};
+
 function getCustomColorName(hex: string) {
   const normalized = hex.toUpperCase();
   const red = parseInt(normalized.slice(1, 3), 16) / 255;
@@ -1312,7 +1318,7 @@ export default function NewProductPage() {
       .then((r) => r.json())
       .then((d) => setModels(d.models || []));
 
-    fetch("/api/auth/me", withAuthRequest())
+    fetch("/api/admin/auth/me", withAuthRequest())
       .then((r) => r.json())
       .then((d) => {
         const role = d.user?.role || "";
@@ -1555,6 +1561,85 @@ export default function NewProductPage() {
     setColorways((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   };
 
+  const applyColorwayEnhancementFailure = (colorwayId: string, error: string) => {
+    updateColorway(colorwayId, {
+      enhanceStatus: "failed",
+      enhanceError: error,
+      enhanceJobId: "",
+    });
+  };
+
+  const applyColorwayEnhancementCompletion = async (
+    colorwayId: string,
+    images: Record<string, string> | undefined
+  ) => {
+    const frontUrl = images?.front || "";
+    const backUrl = images?.back || "";
+    const leftUrl = images?.left || "";
+    const rightUrl = images?.right || "";
+    const [frontFile, backFile, leftFile, rightFile] = await Promise.all([
+      frontUrl ? imageUrlToFile(frontUrl, "front-enhanced") : Promise.resolve(null),
+      backUrl ? imageUrlToFile(backUrl, "back-enhanced") : Promise.resolve(null),
+      leftUrl ? imageUrlToFile(leftUrl, "left-enhanced") : Promise.resolve(null),
+      rightUrl ? imageUrlToFile(rightUrl, "right-enhanced") : Promise.resolve(null),
+    ]);
+
+    updateColorway(colorwayId, {
+      enhanceStatus: "completed",
+      enhanceJobId: "",
+      enhanceError: "",
+      enhancedFrontUrl: frontUrl,
+      enhancedBackUrl: backUrl,
+      enhancedLeftUrl: leftUrl,
+      enhancedRightUrl: rightUrl,
+      enhancedFrontFile: frontFile,
+      enhancedBackFile: backFile,
+      enhancedLeftFile: leftFile,
+      enhancedRightFile: rightFile,
+    });
+  };
+
+  const applyColorwayGenerationFailure = (colorwayId: string, error: string) => {
+    updateColorway(colorwayId, {
+      generateStatus: "failed",
+      generateError: error,
+      generateJobId: "",
+    });
+  };
+
+  const applyColorwayGenerationCompletion = async (
+    colorwayId: string,
+    viewList: string[],
+    images: Record<string, string> | undefined
+  ) => {
+    const results = await Promise.all(
+      viewList.map(async (view, i) => {
+        const base64 = images?.[view];
+        if (!base64) return null;
+        const file = await base64ToFile(base64, i);
+        return { url: URL.createObjectURL(file), file };
+      })
+    );
+
+    updateColorway(colorwayId, {
+      generateStatus: "completed",
+      generateJobId: "",
+      generateError: "",
+      generatedImages: results.filter((r): r is { url: string; file: File } => r !== null),
+    });
+  };
+
+  const fetchColorwayEnhancementStatus = async (jobId: string, isShoes: boolean, signal: AbortSignal) => {
+    const endpoint = isShoes ? `/api/products/enhance-shoes?job_id=${jobId}` : `/api/products/enhance?job_id=${jobId}`;
+    const response = await fetch(endpoint, withAuthRequest({ signal, cache: "no-store" }));
+    return (await response.json().catch(() => ({}))) as AsyncJobStatusResponse;
+  };
+
+  const fetchColorwayGenerationStatus = async (jobId: string, signal: AbortSignal) => {
+    const response = await fetch(`/api/products/generate?job_id=${jobId}`, withAuthRequest({ signal, cache: "no-store" }));
+    return (await response.json().catch(() => ({}))) as AsyncJobStatusResponse;
+  };
+
   const addColorway = () =>
     setColorways((prev) => [...prev, createEmptyColorway(prev[prev.length - 1]?.hex.trim() || "")]);
   const handleAddColorway = () => {
@@ -1706,48 +1791,44 @@ export default function NewProductPage() {
   useEffect(() => {
     const processing = colorways.filter((c) => c.enhanceStatus === "processing" && c.enhanceJobId);
     if (processing.length === 0) return;
+    const controller = new AbortController();
+    const isShoes = selectedCategoryZone === "footwear";
 
     const unsubscribers = processing.map((cw) =>
       subscribeToJob(cw.enhanceJobId, (update) => {
         if (update.status === "failed") {
-          updateColorway(cw.id, {
-            enhanceStatus: "failed",
-            enhanceError: update.error || "Enhancement failed.",
-            enhanceJobId: "",
-          });
+          applyColorwayEnhancementFailure(cw.id, update.error || "Enhancement failed.");
           return;
         }
         if (update.status !== "completed") return;
-        const frontUrl: string = update.images?.front || "";
-        const backUrl: string = update.images?.back || "";
-        const leftUrl: string = update.images?.left || "";
-        const rightUrl: string = update.images?.right || "";
-        Promise.all([
-          frontUrl ? imageUrlToFile(frontUrl, "front-enhanced") : Promise.resolve(null),
-          backUrl ? imageUrlToFile(backUrl, "back-enhanced") : Promise.resolve(null),
-          leftUrl ? imageUrlToFile(leftUrl, "left-enhanced") : Promise.resolve(null),
-          rightUrl ? imageUrlToFile(rightUrl, "right-enhanced") : Promise.resolve(null),
-        ]).then(([frontFile, backFile, leftFile, rightFile]) => {
-          updateColorway(cw.id, {
-            enhanceStatus: "completed",
-            enhanceJobId: "",
-            enhanceError: "",
-            enhancedFrontUrl: frontUrl,
-            enhancedBackUrl: backUrl,
-            enhancedLeftUrl: leftUrl,
-            enhancedRightUrl: rightUrl,
-            enhancedFrontFile: frontFile,
-            enhancedBackFile: backFile,
-            enhancedLeftFile: leftFile,
-            enhancedRightFile: rightFile,
-          });
-        });
+        void applyColorwayEnhancementCompletion(cw.id, update.images);
       })
     );
 
-    return () => unsubscribers.forEach((fn) => fn());
+    void Promise.allSettled(
+      processing.map(async (cw) => {
+        while (!controller.signal.aborted) {
+          await waitFor(5000, controller.signal);
+          const status = await fetchColorwayEnhancementStatus(cw.enhanceJobId, isShoes, controller.signal);
+          if (status.status === "failed") {
+            applyColorwayEnhancementFailure(cw.id, status.error || "Enhancement failed.");
+            return;
+          }
+          if (status.status === "completed") {
+            await applyColorwayEnhancementCompletion(cw.id, status.images);
+            return;
+          }
+        }
+      })
+    );
+
+    return () => {
+      controller.abort();
+      unsubscribers.forEach((fn) => fn());
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [colorways]);
+  }, [colorways, selectedCategoryZone]);
+ 
 
   const canGenerateColorway = (cw: Colorway) => {
     if (!needsModelSelection) return false;
@@ -1829,40 +1910,46 @@ export default function NewProductPage() {
   useEffect(() => {
     const processing = colorways.filter((c) => c.generateStatus === "processing" && c.generateJobId);
     if (processing.length === 0) return;
+    const controller = new AbortController();
 
     const unsubscribers = processing.map((cw) =>
       subscribeToJob(cw.generateJobId, (update) => {
         if (update.status === "failed") {
-          updateColorway(cw.id, {
-            generateStatus: "failed",
-            generateError: update.error || "Generation failed.",
-            generateJobId: "",
-          });
+          applyColorwayGenerationFailure(cw.id, update.error || "Generation failed.");
           return;
         }
         if (update.status !== "completed") return;
         const viewList = form.fashionSubtype === "shoes"
           ? ["front", "back", "left", "right"]
           : ["front", "back"];
-        Promise.all(
-          viewList.map(async (view, i) => {
-            const base64 = update.images?.[view];
-            if (!base64) return null;
-            const file = await base64ToFile(base64, i);
-            return { url: URL.createObjectURL(file), file };
-          })
-        ).then((results) => {
-          updateColorway(cw.id, {
-            generateStatus: "completed",
-            generateJobId: "",
-            generateError: "",
-            generatedImages: results.filter((r): r is { url: string; file: File } => r !== null),
-          });
-        });
+        void applyColorwayGenerationCompletion(cw.id, viewList, update.images);
       })
     );
 
-    return () => unsubscribers.forEach((fn) => fn());
+    void Promise.allSettled(
+      processing.map(async (cw) => {
+        while (!controller.signal.aborted) {
+          await waitFor(5000, controller.signal);
+          const status = await fetchColorwayGenerationStatus(cw.generateJobId, controller.signal);
+          if (status.status === "failed") {
+            applyColorwayGenerationFailure(cw.id, status.error || "Generation failed.");
+            return;
+          }
+          if (status.status === "completed") {
+            const viewList = form.fashionSubtype === "shoes"
+              ? ["front", "back", "left", "right"]
+              : ["front", "back"];
+            await applyColorwayGenerationCompletion(cw.id, viewList, status.images);
+            return;
+          }
+        }
+      })
+    );
+
+    return () => {
+      controller.abort();
+      unsubscribers.forEach((fn) => fn());
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [colorways]);
 

@@ -240,7 +240,7 @@ export default function DashboardPage() {
           fetchJson<{ products?: DashboardProduct[] }>("/api/products"),
           fetchJson<{ orders?: DashboardOrder[] }>("/api/orders"),
           scope === "admin" ? fetchJson<{ stores?: StoreApplication[] }>("/api/store-applications") : Promise.resolve(null),
-          scope === "store" ? fetchJson<StoreCredits>("/api/users/me/store-credits") : Promise.resolve(null),
+          scope === "store" ? fetchJson<StoreCredits>("/api/admin/users/me/store-credits") : Promise.resolve(null),
         ]);
 
         if (!active) return;

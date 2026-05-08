@@ -21,7 +21,7 @@ export default function CreditsPage() {
   const [buySuccess, setBuySuccess] = useState("");
 
   const loadCredits = async () => {
-    const response = await fetch("/api/users/me/store-credits", withAuthRequest());
+    const response = await fetch("/api/admin/users/me/store-credits", withAuthRequest());
     const data = await response.json();
     if (!response.ok) {
       throw new Error(data.error || "Failed to load credits");
@@ -30,7 +30,7 @@ export default function CreditsPage() {
   };
 
   useEffect(() => {
-    fetch("/api/auth/me", withAuthRequest())
+    fetch("/api/admin/auth/me", withAuthRequest())
       .then((r) => r.json())
       .then((data) => {
         if (data.user?.role !== "store_owner") {
@@ -56,7 +56,7 @@ export default function CreditsPage() {
     setBuyLoading(true);
     try {
       const response = await fetch(
-        "/api/users/me/store-credits",
+        "/api/admin/users/me/store-credits",
         withAuthRequest({
           method: "POST",
           headers: { "Content-Type": "application/json" },

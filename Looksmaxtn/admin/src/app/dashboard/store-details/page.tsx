@@ -35,7 +35,7 @@ export default function StoreDetailsPage() {
     let cancelled = false;
     setLoading(true);
 
-    fetch("/api/users/me/store", withAuthRequest())
+    fetch("/api/admin/users/me/store", withAuthRequest())
       .then((res) => res.json())
       .then((data) => {
         if (cancelled) return;
@@ -70,7 +70,7 @@ export default function StoreDetailsPage() {
 
     try {
       const res = await fetch(
-        "/api/users/me/store",
+        "/api/admin/users/me/store",
         withAuthRequest({
           method: "PUT",
           headers: { "Content-Type": "application/json" },

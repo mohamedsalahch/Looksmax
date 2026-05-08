@@ -141,3 +141,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+export async function GET(req: NextRequest) {
+  try {
+    const jobId = req.nextUrl.searchParams.get("job_id");
+    if (!jobId) {
+      return NextResponse.json({ error: "Missing job_id" }, { status: 400 });
+    }
+
+    await dbConnect();
+    const job = await ProductMediaEnhancementJob.findById(jobId).lean();
+
+    if (!job) {
+      return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      job_id: job._id,
+      status: job.status,
+      images: job.images,
+      error: job.errorMessage,
+    });
+  } catch (error) {
+    logRequestError("admin.products.enhance-shoes.get", req, error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}

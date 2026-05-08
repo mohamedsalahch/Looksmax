@@ -362,7 +362,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
 
-    fetch("/api/auth/me", withAuthRequest())
+    fetch("/api/admin/auth/me", withAuthRequest())
       .then((r) => r.json())
       .then(async (data) => {
         if (!active) return;
@@ -879,7 +879,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     clearRefreshTimer();
     clearAuthToken();
     setUser(null);
-    await fetch("/api/auth/logout", withAuthRequest({ method: "POST" }));
+    await fetch("/api/admin/auth/logout", withAuthRequest({ method: "POST" }));
     router.replace("/");
     router.refresh();
   };

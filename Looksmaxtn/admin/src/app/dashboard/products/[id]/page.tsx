@@ -112,7 +112,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
   const [updatingTag, setUpdatingTag] = useState(false);
 
   useEffect(() => {
-    fetch("/api/auth/me", withAuthRequest())
+    fetch("/api/admin/auth/me", withAuthRequest())
       .then((r) => r.json())
       .then((d) => setUserRole(d.user?.role || ""))
       .catch(() => {});

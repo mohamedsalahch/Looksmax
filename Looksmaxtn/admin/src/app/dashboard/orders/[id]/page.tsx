@@ -104,7 +104,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const [userRole, setUserRole] = useState("");
 
   useEffect(() => {
-    fetch("/api/auth/me", withAuthRequest()).then((r) => r.json()).then((d) => setUserRole(d.user?.role || "")).catch(() => {});
+    fetch("/api/admin/auth/me", withAuthRequest()).then((r) => r.json()).then((d) => setUserRole(d.user?.role || "")).catch(() => {});
     fetch(`/api/orders/${id}`, withAuthRequest()).then((r) => r.json()).then((d) => setOrder(d.order)).catch(() => {}).finally(() => setLoading(false));
   }, [id]);
 

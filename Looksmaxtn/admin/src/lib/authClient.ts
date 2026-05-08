@@ -29,7 +29,7 @@ export function getTokenExpiryMs(token: string) {
 }
 
 export async function refreshAdminAuthToken() {
-  const response = await fetch("/api/auth/refresh", withAuthRequest({ method: "POST" }));
+  const response = await fetch("/api/admin/auth/refresh", withAuthRequest({ method: "POST" }));
   if (!response.ok) return null;
 
   const data = (await response.json()) as { token?: string | null };

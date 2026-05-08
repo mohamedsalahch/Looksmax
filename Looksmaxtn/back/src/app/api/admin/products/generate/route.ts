@@ -17,6 +17,12 @@ function normalizeType(type: string, fashionSubtype: string) {
   return fashionSubtype === "shoes" ? "shoes" : "clothes";
 }
 
+function getWebhookBaseUrl(req: NextRequest) {
+  const configured = process.env.OUTFIT_WEBHOOK_BASE_URL?.replace(/\/$/, "");
+  if (configured) return configured;
+  return req.nextUrl.origin.replace(/\/$/, "");
+}
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
@@ -29,7 +35,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "PRODUCT_GENERATION_URL_BASE is not configured." }, { status: 500 });
     }
 
-    const webhookBaseUrl = process.env.OUTFIT_WEBHOOK_BASE_URL || "http://localhost:3004";
+    const webhookBaseUrl = getWebhookBaseUrl(req);
     const webhookUrl = `${webhookBaseUrl}/api/admin/products/generate/webhook`;
 
     await dbConnect();

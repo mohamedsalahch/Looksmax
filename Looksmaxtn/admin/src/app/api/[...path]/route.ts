@@ -18,7 +18,8 @@ function getBackendBaseUrl(req: NextRequest) {
 }
 
 function buildTargetUrl(req: NextRequest, path: string[]) {
-  const target = new URL(`${getBackendBaseUrl(req)}/api/admin/${path.join("/")}`);
+  const backendPath = path[0] === "admin" ? path.join("/") : `admin/${path.join("/")}`;
+  const target = new URL(`${getBackendBaseUrl(req)}/api/${backendPath}`);
   target.search = req.nextUrl.search;
   return target;
 }
