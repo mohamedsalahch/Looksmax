@@ -919,6 +919,7 @@ export default function OutfitStudioPage() {
         !imageEnhancing
     );
     const genderCollectionSlug = user?.bodyProfile?.gender === "women" ? "women" : "men";
+    const suggestionsCollectionHref = isAuthenticated ? `/category/${genderCollectionSlug}` : "/category/all";
 
     useEffect(() => {
         const params = new URLSearchParams();
@@ -933,13 +934,10 @@ export default function OutfitStudioPage() {
     }, [activeCategory, searchTerm]);
 
     useEffect(() => {
-        if (!isAuthenticated) {
-            setSuggestedProducts([]);
-            return;
-        }
-
         const params = new URLSearchParams();
-        params.set("category", genderCollectionSlug);
+        if (isAuthenticated) {
+            params.set("category", genderCollectionSlug);
+        }
         params.set("limit", "8");
 
         fetch(`/api/products?${params}`, { cache: "no-store" })
@@ -1905,7 +1903,7 @@ export default function OutfitStudioPage() {
                                     }`}
                                 >
                                     {isGuestStudio
-                                        ? "Generate outfit"
+                                        ? "Sign in"
                                         : generatingOutfit
                                         ? "Generating..."
                                         : !profileReady
@@ -1916,13 +1914,15 @@ export default function OutfitStudioPage() {
                                             ? `Generate outfit - ${formatTndPrice(selectedOutfitTotalPrice)}`
                                             : "Select at least one item"}
                                 </button>
-                                <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-[#999]">
-                                    {outfitStudioStats.isAdmin
-                                        ? "Unlimited generations"
-                                        : remainingGenerationRequests > 0
-                                            ? `${remainingGenerationRequests} generation${remainingGenerationRequests === 1 ? "" : "s"} left`
-                                            : "No generations left"}
-                                </p>
+                                {isAuthenticated && (
+                                    <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-[#999]">
+                                        {outfitStudioStats.isAdmin
+                                            ? "Unlimited generations"
+                                            : remainingGenerationRequests > 0
+                                                ? `${remainingGenerationRequests} generation${remainingGenerationRequests === 1 ? "" : "s"} left`
+                                                : "No generations left"}
+                                    </p>
+                                )}
                             </div>
                         </div>
 
@@ -2072,21 +2072,12 @@ export default function OutfitStudioPage() {
                         <div>
                             <p className="text-[11px] uppercase tracking-[0.18em] text-[#666]">Suggestions</p>
                         </div>
-                        {isAuthenticated ? (
-                            <Link
-                                href={`/category/${genderCollectionSlug}`}
-                                className="text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-foreground hover:decoration-foreground"
-                            >
-                                See all
-                            </Link>
-                        ) : (
-                            <Link
-                                href={`/login?next=${encodeURIComponent("/studio")}`}
-                                className="text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-foreground hover:decoration-foreground"
-                            >
-                                Sign in to personalize
-                            </Link>
-                        )}
+                        <Link
+                            href={suggestionsCollectionHref}
+                            className="text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-foreground hover:decoration-foreground"
+                        >
+                            See all
+                        </Link>
                     </div>
 
                     <div className="mt-6 grid grid-cols-2 gap-x-3 gap-y-8 md:grid-cols-4 xl:grid-cols-5">
@@ -2119,9 +2110,7 @@ export default function OutfitStudioPage() {
                         ))}
                         {suggestedProducts.length === 0 && (
                             <div className="col-span-full bg-[#ede1ce] px-4 py-6 text-sm text-[#6B6055]">
-                                {isAuthenticated
-                                    ? "No suggestions available yet."
-                                    : "Sign in to unlock tailored suggestions for your profile."}
+                                No suggestions available yet.
                             </div>
                         )}
                     </div>
