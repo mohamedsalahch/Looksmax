@@ -5,10 +5,10 @@
   "scripts": {
     "dev": "next dev --port 3002",
     "build": "next build",
-    "start": "sh -c 'set -a && [ -f ./.env ] && . ./.env && set +a && node ../scripts/start-standalone.mjs back 3002'",
+    "start": "sh -c 'set -a && [ -f ./.env ] && . ./.env && set +a && node ../tools/start-standalone.mjs back 3002'",
     "lint": "eslint",
     "test:unit": "node --test \"tests/unit/*.test.cjs\"",
-    "seed:admin": "node scripts/create-admin.mjs"
+    "seed:admin": "node ../scripts/create-admin.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1038.0",

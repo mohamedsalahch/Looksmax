@@ -1,5 +1,29 @@
+import path from "path";
+import { existsSync } from "fs";
+import { createRequire } from "module";
+import { fileURLToPath } from "url";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+
+try {
+  const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+  const backDir = path.resolve(scriptDir, "..", "back");
+  const requireFromBack = createRequire(path.join(backDir, "package.json"));
+  const dotenv = requireFromBack("dotenv");
+  const envNames =
+    process.env.NODE_ENV === "development"
+      ? [".env", ".env.production"]
+      : [".env.production", ".env"];
+
+  for (const envName of envNames) {
+    const envPath = path.join(backDir, envName);
+    if (!existsSync(envPath)) continue;
+    dotenv.config({ path: envPath });
+    break;
+  }
+} catch {
+  // Production can provide env vars directly.
+}
 
 function parseArgs(argv) {
   const args = {};

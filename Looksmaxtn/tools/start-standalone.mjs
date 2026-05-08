@@ -5,7 +5,7 @@ import { spawn } from "child_process";
 const [, , appName, portArg] = process.argv;
 
 if (!appName || !portArg) {
-  console.error("Usage: node ../scripts/start-standalone.mjs <app-name> <port>");
+  console.error("Usage: node ../tools/start-standalone.mjs <app-name> <port>");
   process.exit(1);
 }
 

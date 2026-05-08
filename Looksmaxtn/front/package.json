@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --port 3000",
     "build": "next build",
-    "start": "sh -c 'set -a && [ -f ./.env ] && . ./.env && set +a && node ../scripts/start-standalone.mjs front 3000'",
+    "start": "sh -c 'set -a && [ -f ./.env ] && . ./.env && set +a && node ../tools/start-standalone.mjs front 3000'",
     "lint": "eslint",
     "test:unit": "node --test \"tests/unit/*.test.cjs\""
   },

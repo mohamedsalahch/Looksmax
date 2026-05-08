@@ -4,12 +4,14 @@
 
 import path from "path";
 import { existsSync } from "fs";
+import { createRequire } from "module";
 import { fileURLToPath } from "url";
 
 try {
-  const dotenv = await import("dotenv");
   const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-  const backDir = path.resolve(scriptDir, "..");
+  const backDir = path.resolve(scriptDir, "..", "back");
+  const requireFromBack = createRequire(path.join(backDir, "package.json"));
+  const dotenv = requireFromBack("dotenv");
   const envNames =
     process.env.NODE_ENV === "development"
       ? [".env", ".env.production"]
