@@ -1,8 +1,12 @@
 // Usage:
-//   node scripts/seed-categories-full.mjs
-//   node scripts/seed-categories-full.mjs --apply
+//   node scripts/seed-category-leaves.mjs
+//   node scripts/seed-category-leaves.mjs --apply
 
-import "dotenv/config";
+try {
+  await import("dotenv/config");
+} catch {
+  // Docker runtime provides env vars directly and may not ship dotenv.
+}
 import mongoose from "mongoose";
 
 const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI;

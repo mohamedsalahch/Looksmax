@@ -33,3 +33,9 @@ Runs on [http://localhost:3002](http://localhost:3002).
 - Public URL: `http://51.75.126.19:12002`
 - Internal generator URL: `http://generator_api:3003`
 - MongoDB URL: `mongodb://mongodb:27017/looksmax-production`
+
+## Seed Category Leaves In Docker
+
+```bash
+docker compose exec back node scripts/seed-category-leaves.mjs --apply
+```
