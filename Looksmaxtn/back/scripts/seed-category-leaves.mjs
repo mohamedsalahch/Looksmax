@@ -11,9 +11,9 @@ try {
   const scriptDir = path.dirname(fileURLToPath(import.meta.url));
   const backDir = path.resolve(scriptDir, "..");
   const envNames =
-    process.env.NODE_ENV === "production"
-      ? [".env.production", ".env"]
-      : [".env", ".env.production"];
+    process.env.NODE_ENV === "development"
+      ? [".env", ".env.production"]
+      : [".env.production", ".env"];
 
   for (const envName of envNames) {
     const envPath = path.join(backDir, envName);
