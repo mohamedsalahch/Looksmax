@@ -270,14 +270,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     }
     const existingLeanOrder = existingOrder as unknown as LeanOrder;
 
-    if (["delivered", "returned"].includes(existingOrder.orderStatus)) {
-      return NextResponse.json(
-        { error: "Delivered and returned orders cannot be deleted." },
-        { status: 409 }
-      );
-    }
-
-    if (existingOrder.orderStatus !== "canceled") {
+    if (!["canceled", "returned", "delivered"].includes(existingOrder.orderStatus)) {
       const productIds = getOrderProductIds(existingLeanOrder.items);
       const products = await Product.find({ _id: { $in: productIds } })
         .select("_id stock productType")
