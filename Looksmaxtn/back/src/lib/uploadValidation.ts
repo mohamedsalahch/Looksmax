@@ -177,9 +177,16 @@ export function validateBase64Upload(
   base64: string,
   options: UploadValidationOptions = {}
 ) {
-  const dataUrl = base64.startsWith("data:") ? base64 : `data:image/png;base64,${base64}`;
-  const [meta, payload] = dataUrl.split(",");
-  const declaredType = /data:(.*?);base64/i.exec(meta)?.[1] || options.declaredType;
+  let payload: string;
+  let declaredType: string | undefined;
+  if (base64.startsWith("data:")) {
+    const [meta, body] = base64.split(",");
+    declaredType = /data:(.*?);base64/i.exec(meta)?.[1] || options.declaredType;
+    payload = body;
+  } else {
+    declaredType = options.declaredType;
+    payload = base64;
+  }
   if (!payload) {
     throw new Error("Invalid base64 upload payload");
   }

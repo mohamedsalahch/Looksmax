@@ -131,9 +131,10 @@ async function proxy(req: NextRequest, context: { params: Promise<{ path: string
   });
 
   response.headers.forEach((value, key) => {
-    if (key.toLowerCase() !== "set-cookie") {
-      nextResponse.headers.set(key, value);
-    }
+    const name = key.toLowerCase();
+    if (name === "set-cookie") return;
+    if (name === "content-encoding" || name === "content-length") return;
+    nextResponse.headers.set(key, value);
   });
   applySetCookieHeader(response, nextResponse);
 
