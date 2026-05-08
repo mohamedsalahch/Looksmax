@@ -2,8 +2,25 @@
 //   node scripts/seed-category-leaves.mjs
 //   node scripts/seed-category-leaves.mjs --apply
 
+import path from "path";
+import { existsSync } from "fs";
+import { fileURLToPath } from "url";
+
 try {
-  await import("dotenv/config");
+  const dotenv = await import("dotenv");
+  const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+  const backDir = path.resolve(scriptDir, "..");
+  const envNames =
+    process.env.NODE_ENV === "production"
+      ? [".env.production", ".env"]
+      : [".env", ".env.production"];
+
+  for (const envName of envNames) {
+    const envPath = path.join(backDir, envName);
+    if (!existsSync(envPath)) continue;
+    dotenv.config({ path: envPath });
+    break;
+  }
 } catch {
   // Docker runtime provides env vars directly and may not ship dotenv.
 }
