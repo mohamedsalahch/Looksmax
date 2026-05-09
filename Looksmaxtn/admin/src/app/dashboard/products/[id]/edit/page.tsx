@@ -204,6 +204,7 @@ const emptyOriginPictureFiles: OriginPictureFiles = {
 };
 
 const FOUR_IMAGE_VIEWS: OriginPictureKey[] = ["front", "back", "left", "right"];
+const STORE_OWNER_SERVICE_COMMISSION_RATE = 0.1;
 const ACCESSORY_VIEW_LABELS: Record<OriginPictureKey, string> = {
   front: "Image 1",
   back: "Image 2",
@@ -489,6 +490,18 @@ function getCustomColorName(hex: string) {
 function customPaletteColor(hex: string): PaletteColor {
   const normalized = hex.toUpperCase();
   return { name: getCustomColorName(normalized), hex: normalized };
+}
+
+function getStoreOwnerCustomerPrice(price: string) {
+  const value = Number(price);
+  if (!Number.isFinite(value) || value <= 0) return "";
+  return (value * (1 + STORE_OWNER_SERVICE_COMMISSION_RATE)).toFixed(2);
+}
+
+function getStoreOwnerBasePrice(price: unknown) {
+  const value = Number(price);
+  if (!Number.isFinite(value) || value <= 0) return "";
+  return (value / (1 + STORE_OWNER_SERVICE_COMMISSION_RATE)).toFixed(2);
 }
 
 async function pickScreenColor() {
@@ -1145,6 +1158,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const isStoreOwner = userRole === "store_owner";
   const isRetailStoreOwner = isStoreOwner && userStoreType === "retail";
   const isThriftStoreOwner = isStoreOwner && userStoreType === "thrift";
+  const storeOwnerCustomerPrice = getStoreOwnerCustomerPrice(form.price);
+  const submittedPrice = isStoreOwner && storeOwnerCustomerPrice ? storeOwnerCustomerPrice : form.price;
   const sizeList = useMemo(
     () =>
       form.productType !== "perfume"
@@ -1586,24 +1601,31 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       .then((r) => r.json())
       .then((d) => setModels(d.models || []));
 
-    fetch("/api/admin/auth/me", withAuthRequest())
+    const authRequest = fetch("/api/admin/auth/me", withAuthRequest())
       .then((r) => r.json())
       .then((d) => {
         const role = d.user?.role || "";
         setUserRole(role);
         setUserStoreName(d.user?.storeName || "");
         setUserStoreType(d.user?.storeType || "");
-        if (role === "store_owner") return;
+        if (role === "store_owner") return role;
 
         fetch("/api/generated-images", withAuthRequest())
           .then((r) => r.json())
           .then((data) => setGeneratedImages(data.generatedImages || []));
-      })
-      .catch(() => {});
 
-    fetch(`/api/products/${id}`, withAuthRequest())
-      .then((r) => r.json())
-      .then((d) => {
+        return role;
+      })
+      .catch(() => "");
+
+    authRequest
+      .then((role) =>
+        fetch(`/api/products/${id}`, withAuthRequest())
+          .then((r) => r.json())
+          .then((d) => ({ role, productResponse: d }))
+      )
+      .then(({ role, productResponse }) => {
+        const d = productResponse;
         if (!d.product) return;
 
         const p = d.product;
@@ -1631,7 +1653,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         const nextSoldQuantityBySize = buildSoldQuantityRecord(nextSizes, sizeStockEntriesForDisplay);
         const loadedFormData = {
           name: p.name,
-          price: p.price.toString(),
+          price: role === "store_owner" ? getStoreOwnerBasePrice(p.price) : p.price.toString(),
           description: p.description || "",
           brand: p.brand || "",
           reference: p.reference || "",
@@ -2908,7 +2930,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         }));
         const body = new FormData();
         body.append("name", form.name);
-        body.append("price", form.price);
+        body.append("price", submittedPrice);
         body.append("brand", form.brand);
         body.append("reference", form.reference);
         body.append("description", "");
@@ -3113,7 +3135,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 
       const body = new FormData();
       body.append("name", form.name);
-      body.append("price", form.price);
+      body.append("price", submittedPrice);
       body.append("brand", brandToSend);
       body.append("reference", form.reference);
       body.append("description", form.description);
@@ -3315,6 +3337,14 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               <div>
                 <FieldLabel>Price (TND)</FieldLabel>
                 <input type="number" step="0.01" required value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="input-line" placeholder="0.00" />
+                {storeOwnerCustomerPrice && (
+                  <div className="mt-2 border border-border bg-bg-secondary px-3 py-2 text-[11px] text-text-secondary">
+                    <div className="flex items-center justify-between gap-3">
+                      <span>Customer price with 10% service commission</span>
+                      <span className="font-semibold text-text-primary">{storeOwnerCustomerPrice} TND</span>
+                    </div>
+                  </div>
+                )}
                 <FieldError message={fieldErrors.price} />
               </div>
               <div className={isThriftStoreOwner ? "" : "sm:col-span-2 xl:col-span-3"}>

@@ -227,6 +227,7 @@ const emptyOriginPictureFiles: OriginPictureFiles = {
 };
 
 const FOUR_IMAGE_VIEWS: OriginPictureKey[] = ["front", "back", "left", "right"];
+const STORE_OWNER_SERVICE_COMMISSION_RATE = 0.1;
 const ACCESSORY_VIEW_LABELS: Record<OriginPictureKey, string> = {
   front: "Image 1",
   back: "Image 2",
@@ -473,6 +474,12 @@ function getCustomColorName(hex: string) {
 function customPaletteColor(hex: string): PaletteColor {
   const normalized = hex.toUpperCase();
   return { name: getCustomColorName(normalized), hex: normalized };
+}
+
+function getStoreOwnerCustomerPrice(price: string) {
+  const value = Number(price);
+  if (!Number.isFinite(value) || value <= 0) return "";
+  return (value * (1 + STORE_OWNER_SERVICE_COMMISSION_RATE)).toFixed(2);
 }
 
 async function pickScreenColor() {
@@ -1322,6 +1329,8 @@ export default function NewProductPage() {
   const isStoreOwner = userRole === "store_owner";
   const isRetailStoreOwner = isStoreOwner && userStoreType === "retail";
   const isThriftStoreOwner = isStoreOwner && userStoreType === "thrift";
+  const storeOwnerCustomerPrice = getStoreOwnerCustomerPrice(form.price);
+  const submittedPrice = isStoreOwner && storeOwnerCustomerPrice ? storeOwnerCustomerPrice : form.price;
 
   useEffect(() => {
     fetch("/api/categories", withAuthRequest())
@@ -2841,7 +2850,7 @@ export default function NewProductPage() {
 
         const body = new FormData();
         body.append("name", form.name);
-        body.append("price", form.price);
+        body.append("price", submittedPrice);
         body.append("brand", form.brand);
         body.append("reference", form.reference);
         body.append("description", "");
@@ -3002,7 +3011,7 @@ export default function NewProductPage() {
 
       const body = new FormData();
       body.append("name", form.name);
-      body.append("price", form.price);
+      body.append("price", submittedPrice);
       body.append("brand", brandToSend);
       body.append("reference", form.reference);
       body.append("description", form.description);
@@ -3207,6 +3216,14 @@ export default function NewProductPage() {
                   className="input-line"
                   placeholder="0.00"
                 />
+                {storeOwnerCustomerPrice && (
+                  <div className="mt-2 border border-border bg-bg-secondary px-3 py-2 text-[11px] text-text-secondary">
+                    <div className="flex items-center justify-between gap-3">
+                      <span>Customer price with 10% service commission</span>
+                      <span className="font-semibold text-text-primary">{storeOwnerCustomerPrice} TND</span>
+                    </div>
+                  </div>
+                )}
                 <FieldError message={fieldErrors.price} />
               </div>
               <div className={isThriftStoreOwner ? "" : "sm:col-span-2 xl:col-span-3"}>
