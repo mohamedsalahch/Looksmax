@@ -18,24 +18,24 @@ export async function POST(req: NextRequest) {
     }
 
     await dbConnect();
-    const job = await ProductGenerationJob.findById(jobId);
-
-    if (!job) {
-      return NextResponse.json({ error: "Job not found" }, { status: 404 });
-    }
 
     if (body.error) {
       console.error(`[product-webhook] Generation service error for job ${jobId}: ${body.error}`);
-      job.status = "failed";
-      job.error = "Generation failed.";
-      await job.save();
-      if (job.createdBy) {
-        publishJobEvent(job.createdBy.toString(), {
+      const failed = await ProductGenerationJob.findOneAndUpdate(
+        { _id: jobId, status: { $ne: "failed" } },
+        { $set: { status: "failed", error: "Generation failed." } },
+        { new: true }
+      );
+      if (!failed) {
+        return NextResponse.json({ ok: true });
+      }
+      if (failed.createdBy) {
+        publishJobEvent(failed.createdBy.toString(), {
           type: "job:update",
           kind: "generate",
-          jobId: String(job._id),
+          jobId: String(failed._id),
           status: "failed",
-          error: job.error,
+          error: failed.error,
         });
       }
       return NextResponse.json({ ok: true });
@@ -47,46 +47,51 @@ export async function POST(req: NextRequest) {
         : typeof body.base64 === "string"
           ? body.base64
           : "";
-    const view = typeof body.view === "string" ? body.view : ""; // "front", "back", "left", "right"
+    const view = typeof body.view === "string" ? body.view : "";
 
-    if (imageBase64 && view) {
-      if (!["front", "back", "left", "right"].includes(view)) {
-        return NextResponse.json({ error: "Invalid view" }, { status: 400 });
-      }
-
-      const savedPath = await saveProductGenerationResultBase64(
-        imageBase64,
-        view as "front" | "back" | "left" | "right"
-      );
-
-      // Store the image in the correct slot
-      if (view === "front") job.images.front = savedPath;
-      if (view === "back") job.images.back = savedPath;
-      if (view === "left") job.images.left = savedPath;
-      if (view === "right") job.images.right = savedPath;
-      job.markModified("images");
-
-      // Check if job is completed
-      const isClothes = job.fashionSubtype === "clothes";
-      const isShoes = job.fashionSubtype === "shoes";
-
-      if (isClothes && job.images.front && job.images.back) {
-        job.status = "completed";
-      } else if (isShoes && job.images.front && job.images.back && job.images.left && job.images.right) {
-        job.status = "completed";
-      }
+    if (!imageBase64 || !view) {
+      return NextResponse.json({ ok: true });
+    }
+    if (!["front", "back", "left", "right"].includes(view)) {
+      return NextResponse.json({ error: "Invalid view" }, { status: 400 });
     }
 
-    await job.save();
+    const savedPath = await saveProductGenerationResultBase64(
+      imageBase64,
+      view as "front" | "back" | "left" | "right"
+    );
 
-    if (job.status === "completed" && job.createdBy) {
-      publishJobEvent(job.createdBy.toString(), {
-        type: "job:update",
-        kind: "generate",
-        jobId: String(job._id),
-        status: "completed",
-        images: { ...(job.images as Record<string, string>) },
-      });
+    const updated = await ProductGenerationJob.findByIdAndUpdate(
+      jobId,
+      { $set: { [`images.${view}`]: savedPath } },
+      { new: true }
+    );
+    if (!updated) {
+      return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
+
+    const isClothes = updated.fashionSubtype === "clothes";
+    const isShoes = updated.fashionSubtype === "shoes";
+    const imgs = updated.images as Record<string, string>;
+    const isComplete =
+      (isClothes && imgs.front && imgs.back) ||
+      (isShoes && imgs.front && imgs.back && imgs.left && imgs.right);
+
+    if (isComplete) {
+      const completed = await ProductGenerationJob.findOneAndUpdate(
+        { _id: jobId, status: { $ne: "completed" } },
+        { $set: { status: "completed" } },
+        { new: true }
+      );
+      if (completed && completed.createdBy) {
+        publishJobEvent(completed.createdBy.toString(), {
+          type: "job:update",
+          kind: "generate",
+          jobId: String(completed._id),
+          status: "completed",
+          images: { ...(completed.images as Record<string, string>) },
+        });
+      }
     }
 
     return NextResponse.json({ ok: true });

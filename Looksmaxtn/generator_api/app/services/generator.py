@@ -1,7 +1,9 @@
 """Image generation service using Google Gemini AI."""
 
+import asyncio
 import base64
 import logging
+import os
 
 from fastapi import HTTPException
 from google import genai
@@ -37,6 +39,11 @@ class ImageGenerator:
             response_modalities=["IMAGE"],
             image_config=types.ImageConfig(aspect_ratio="9:16"),
         )
+        self._gemini_sem = asyncio.Semaphore(int(os.getenv("GEMINI_MAX_CONCURRENCY", "8")))
+
+    async def _gemini_generate(self, **kwargs):
+        async with self._gemini_sem:
+            return await self.client.aio.models.generate_content(**kwargs)
 
     async def generate_clothes_view(
         self,
@@ -140,7 +147,7 @@ class ImageGenerator:
         ]
 
         try:
-            response = await self.client.aio.models.generate_content(
+            response = await self._gemini_generate(
                 model=self.model,
                 contents=[types.Content(parts=parts)],
                 config=self.default_config
@@ -195,7 +202,7 @@ class ImageGenerator:
             parts.append(b64_to_part(product_images[reference_view]))
 
         try:
-            response = await self.client.aio.models.generate_content(
+            response = await self._gemini_generate(
                 model=self.model,
                 contents=[types.Content(parts=parts)],
                 config=self.default_config
@@ -234,7 +241,7 @@ class ImageGenerator:
         ]
 
         try:
-            response = await self.client.aio.models.generate_content(
+            response = await self._gemini_generate(
                 model=self.model,
                 contents=[types.Content(parts=parts)],
                 config=self.default_config,
@@ -271,7 +278,7 @@ class ImageGenerator:
         ]
 
         try:
-            response = await self.client.aio.models.generate_content(
+            response = await self._gemini_generate(
                 model=self.model,
                 contents=[types.Content(parts=parts)],
                 config=self.default_config,
@@ -350,7 +357,7 @@ class ImageGenerator:
         logger.info(f"generate_front_view: sending {len(parts)} parts to Gemini (1 prompt + {len(parts)-1} images)")
 
         try:
-            response = await self.client.aio.models.generate_content(
+            response = await self._gemini_generate(
                 model=self.model,
                 contents=[types.Content(parts=parts)],
                 config=self.default_config,
@@ -403,7 +410,7 @@ class ImageGenerator:
         logger.info(f"generate_back_view: sending {len(parts)} parts to Gemini (1 prompt + {len(parts)-1} images)")
 
         try:
-            response = await self.client.aio.models.generate_content(
+            response = await self._gemini_generate(
                 model=self.model,
                 contents=[types.Content(parts=parts)],
                 config=self.default_config,
@@ -446,7 +453,7 @@ class ImageGenerator:
         parts = [types.Part(text=prompt_with_format)]
         parts.extend(b64_to_part(img) for img in images)
 
-        response = await self.client.aio.models.generate_content(
+        response = await self._gemini_generate(
             model=self.model,
             contents=[types.Content(parts=parts)],
             config=self.default_config

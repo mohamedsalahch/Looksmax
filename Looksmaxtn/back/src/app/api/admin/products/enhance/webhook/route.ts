@@ -41,23 +41,21 @@ export async function POST(req: NextRequest) {
     }
 
     await dbConnect();
-    const job = await ProductMediaEnhancementJob.findById(jobId);
-    if (!job) {
-      return NextResponse.json({ error: "Job not found" }, { status: 404 });
-    }
 
     if (body.error) {
       console.error(`[product-media-webhook] Generation service error for job ${jobId}: ${body.error}`);
-      job.status = "failed";
-      job.errorMessage = "Product media enhancement failed.";
-      await job.save();
-      if (job.createdBy) {
-        publishJobEvent(job.createdBy.toString(), {
+      const failed = await ProductMediaEnhancementJob.findOneAndUpdate(
+        { _id: jobId, status: { $ne: "failed" } },
+        { $set: { status: "failed", errorMessage: "Product media enhancement failed." } },
+        { new: true }
+      );
+      if (failed && failed.createdBy) {
+        publishJobEvent(failed.createdBy.toString(), {
           type: "job:update",
           kind: "enhance",
-          jobId: String(job._id),
+          jobId: String(failed._id),
           status: "failed",
-          error: job.errorMessage,
+          error: failed.errorMessage,
         });
       }
       return NextResponse.json({ ok: true });
@@ -73,26 +71,35 @@ export async function POST(req: NextRequest) {
     }
 
     const savedPath = await saveProductMediaResultBase64(imageBase64, view);
-    job.images[view] = savedPath;
-    job.markModified("images");
 
-    const wasCompleted = hasAllEnhancedResults(
-      job as unknown as { sourceImages: Record<EnhancementView, string>; images: Record<EnhancementView, string> }
+    const updated = await ProductMediaEnhancementJob.findByIdAndUpdate(
+      jobId,
+      { $set: { [`images.${view}`]: savedPath } },
+      { new: true }
     );
-    if (wasCompleted) {
-      job.status = "completed";
+    if (!updated) {
+      return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 
-    await job.save();
+    const isComplete = hasAllEnhancedResults(
+      updated as unknown as { sourceImages: Record<EnhancementView, string>; images: Record<EnhancementView, string> }
+    );
 
-    if (wasCompleted && job.createdBy) {
-      publishJobEvent(job.createdBy.toString(), {
-        type: "job:update",
-        kind: "enhance",
-        jobId: String(job._id),
-        status: "completed",
-        images: { ...(job.images as Record<string, string>) },
-      });
+    if (isComplete) {
+      const completed = await ProductMediaEnhancementJob.findOneAndUpdate(
+        { _id: jobId, status: { $ne: "completed" } },
+        { $set: { status: "completed" } },
+        { new: true }
+      );
+      if (completed && completed.createdBy) {
+        publishJobEvent(completed.createdBy.toString(), {
+          type: "job:update",
+          kind: "enhance",
+          jobId: String(completed._id),
+          status: "completed",
+          images: { ...(completed.images as Record<string, string>) },
+        });
+      }
     }
 
     return NextResponse.json({ ok: true });

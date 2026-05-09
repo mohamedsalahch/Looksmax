@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 
@@ -25,31 +26,20 @@ async def process_clothes_generation(job_id: str, webhook_url: str, request: Clo
     if _generator is None:
         return
 
+    async def run_view(view: str):
+        out = await _generator.generate_clothes_view(
+            view,
+            request.model_pictures.front,
+            request.model_pictures.back,
+            request.product_pictures.front,
+            request.product_pictures.back,
+            request.garment_zone,
+            request.secondary_colors,
+        )
+        await send_webhook(webhook_url, job_id, view, out)
+
     try:
-        # Front view
-        front_b64 = await _generator.generate_clothes_view(
-            "front",
-            request.model_pictures.front,
-            request.model_pictures.back,
-            request.product_pictures.front,
-            request.product_pictures.back,
-            request.garment_zone,
-            request.secondary_colors,
-        )
-        await send_webhook(webhook_url, job_id, "front", front_b64)
-
-        # Back view
-        back_b64 = await _generator.generate_clothes_view(
-            "back",
-            request.model_pictures.front,
-            request.model_pictures.back,
-            request.product_pictures.front,
-            request.product_pictures.back,
-            request.garment_zone,
-            request.secondary_colors,
-        )
-        await send_webhook(webhook_url, job_id, "back", back_b64)
-
+        await asyncio.gather(run_view("front"), run_view("back"))
     except Exception as e:
         logger.error(f"Job {job_id}: Clothes error: {str(e)}")
         await send_error_webhook(webhook_url, job_id, f"Clothes generation failed: {str(e)}")
@@ -75,24 +65,25 @@ async def generate_clothes_images(request: ClothesRequest, background_tasks: Bac
 
     # SYNC MODE
     try:
-        front_b64 = await _generator.generate_clothes_view(
-            "front",
-            request.model_pictures.front,
-            request.model_pictures.back,
-            request.product_pictures.front,
-            request.product_pictures.back,
-            request.garment_zone,
-            request.secondary_colors,
-        )
-
-        back_b64 = await _generator.generate_clothes_view(
-            "back",
-            request.model_pictures.front,
-            request.model_pictures.back,
-            request.product_pictures.front,
-            request.product_pictures.back,
-            request.garment_zone,
-            request.secondary_colors,
+        front_b64, back_b64 = await asyncio.gather(
+            _generator.generate_clothes_view(
+                "front",
+                request.model_pictures.front,
+                request.model_pictures.back,
+                request.product_pictures.front,
+                request.product_pictures.back,
+                request.garment_zone,
+                request.secondary_colors,
+            ),
+            _generator.generate_clothes_view(
+                "back",
+                request.model_pictures.front,
+                request.model_pictures.back,
+                request.product_pictures.front,
+                request.product_pictures.back,
+                request.garment_zone,
+                request.secondary_colors,
+            ),
         )
 
         return GenerationResponse(images=[
