@@ -1,24 +1,31 @@
-﻿"use client";
+"use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { withAuthRequest } from "@/lib/authClient";
+
+interface CreditTransaction {
+  _id: string;
+  type: string;
+  amount: number;
+  balanceBefore: number;
+  balanceAfter: number;
+  reason: string;
+  createdAt: string;
+  createdBy?: { name?: string; email?: string } | null;
+}
 
 interface Credits {
   allowed: number;
   used: number;
   remaining: number;
+  transactions?: CreditTransaction[];
 }
 
 export default function CreditsPage() {
   const router = useRouter();
   const [credits, setCredits] = useState<Credits | null>(null);
   const [loading, setLoading] = useState(true);
-  const [buyAmount, setBuyAmount] = useState(10);
-  const [buyCode, setBuyCode] = useState("");
-  const [buyLoading, setBuyLoading] = useState(false);
-  const [buyError, setBuyError] = useState("");
-  const [buySuccess, setBuySuccess] = useState("");
 
   const loadCredits = async () => {
     const response = await fetch("/api/admin/users/me/store-credits", withAuthRequest());
@@ -43,42 +50,8 @@ export default function CreditsPage() {
       .finally(() => setLoading(false));
   }, [router]);
 
-  const handleBuyCredits = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setBuyError("");
-    setBuySuccess("");
-
-    if (!Number.isInteger(buyAmount) || buyAmount <= 0) {
-      setBuyError("Enter a valid credit amount.");
-      return;
-    }
-
-    setBuyLoading(true);
-    try {
-      const response = await fetch(
-        "/api/admin/users/me/store-credits",
-        withAuthRequest({
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ amount: buyAmount, code: buyCode }),
-        })
-      );
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Unable to buy credits");
-      }
-
-      setCredits(data);
-      setBuySuccess(`Added ${buyAmount} credits.`);
-      setBuyCode("");
-    } catch (error) {
-      setBuyError(error instanceof Error ? error.message : "Unable to buy credits");
-    } finally {
-      setBuyLoading(false);
-    }
-  };
-
   const usedPct = credits ? Math.min(100, Math.round((credits.used / credits.allowed) * 100)) : 0;
+  const transactions = credits?.transactions || [];
 
   return (
     <div className="space-y-6 max-w-xl">
@@ -139,48 +112,40 @@ export default function CreditsPage() {
             <p>- Credits are added by the admin. Contact support to request more.</p>
           </div>
 
-          <form className="bg-bg-card border border-border rounded p-4 space-y-4" onSubmit={handleBuyCredits}>
+          <div className="bg-bg-card border border-border rounded p-4 space-y-4">
             <div>
-              <p className="font-medium text-text-primary text-[10px] uppercase tracking-wider mb-2">Buy Credits</p>
+              <p className="font-medium text-text-primary text-[10px] uppercase tracking-wider mb-2">Balance History</p>
               <p className="text-xs text-text-secondary">
-                Enter the purchase code to unlock additional credits for your store.
+                Credits added by the admin and credits consumed by generation are listed here.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label className="space-y-1">
-                <span className="block text-[10px] uppercase tracking-wider text-text-secondary">Amount</span>
-                <input
-                  type="number"
-                  min={1}
-                  value={buyAmount}
-                  onChange={(event) => setBuyAmount(Number(event.target.value))}
-                  className="input-line"
-                />
-              </label>
-              <label className="space-y-1">
-                <span className="block text-[10px] uppercase tracking-wider text-text-secondary">Code</span>
-                <input
-                  type="password"
-                  value={buyCode}
-                  onChange={(event) => setBuyCode(event.target.value)}
-                  placeholder="Enter code"
-                  className="input-line"
-                />
-              </label>
-            </div>
-
-            {buyError && <p className="text-xs text-danger">{buyError}</p>}
-            {buySuccess && <p className="text-xs text-success">{buySuccess}</p>}
-
-            <button
-              type="submit"
-              disabled={buyLoading}
-              className="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {buyLoading ? "Processing..." : "Buy Credits"}
-            </button>
-          </form>
+            {transactions.length === 0 ? (
+              <p className="text-xs text-text-secondary">No credit history yet.</p>
+            ) : (
+              <div className="divide-y divide-border">
+                {transactions.map((transaction) => (
+                  <div key={transaction._id} className="flex items-start justify-between gap-4 py-3 text-xs">
+                    <div>
+                      <p className="font-medium text-text-primary">{transaction.reason || "Credit update"}</p>
+                      <p className="mt-1 text-[10px] uppercase tracking-wider text-text-secondary">
+                        {new Date(transaction.createdAt).toLocaleString()}
+                        {transaction.createdBy?.name ? ` · ${transaction.createdBy.name}` : ""}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className={transaction.amount < 0 ? "text-danger" : "text-success"}>
+                        {transaction.amount > 0 ? "+" : ""}{transaction.amount}
+                      </p>
+                      <p className="mt-1 text-[10px] text-text-secondary">
+                        {transaction.balanceBefore} → {transaction.balanceAfter}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </>
       )}
     </div>

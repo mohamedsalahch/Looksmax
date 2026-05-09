@@ -110,6 +110,9 @@ export async function GET() {
     const ownerStatsByEmail = new Map(
       owners.map((u) => [u.email, u.storeOwnerStats])
     );
+    const ownerIdByEmail = new Map(
+      owners.map((u) => [u.email, u._id.toString()])
+    );
 
     const normalizedStores = stores.map((store) => ({
       ...normalizeStoreApplication(store),
@@ -119,6 +122,7 @@ export async function GET() {
             used: ownerStatsByEmail.get(store.email)?.triesUsed ?? 0,
           }
         : null,
+      storeOwnerId: ownerIdByEmail.get(store.email) || "",
     }));
 
     return NextResponse.json({ stores: normalizedStores });
@@ -204,6 +208,7 @@ export async function PUT(req: NextRequest) {
       await sendStoreApplicationStatusEmail({
         to: store.email,
         name: store.name,
+        email: store.email,
         status: nextStatus,
         password: generatedPassword,
         adminUrl: (process.env.ADMIN_BASE_URL || "http://localhost:3001/").replace(/\/?$/, "/"),

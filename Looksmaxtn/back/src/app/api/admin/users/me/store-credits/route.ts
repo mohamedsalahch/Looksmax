@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
 import User from "@/admin/models/User";
 import { getSession } from "@/admin/lib/auth";
-
-const BUY_CODE = "l00ksmax";
+import { getStoreCreditTransactions } from "@/admin/lib/storeCredits";
 
 export async function GET() {
   try {
@@ -26,11 +24,13 @@ export async function GET() {
 
     const allowed = user.storeOwnerStats?.triesAllowed ?? 50;
     const used = user.storeOwnerStats?.triesUsed ?? 0;
+    const transactions = await getStoreCreditTransactions(session.userId);
 
     return NextResponse.json({
       allowed,
       used,
       remaining: Math.max(0, allowed - used),
+      transactions,
     });
   } catch (error) {
     console.error("[store-credits] GET error", error);
@@ -38,7 +38,7 @@ export async function GET() {
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST() {
   try {
     const session = await getSession();
     if (!session) {
@@ -56,30 +56,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    const body = await req.json().catch(() => null);
-    const amount = Number(body?.amount);
-    const code = String(body?.code || "").trim();
-
-    if (!Number.isInteger(amount) || amount <= 0) {
-      return NextResponse.json({ error: "Enter a valid credit amount" }, { status: 400 });
-    }
-
-    if (code !== BUY_CODE) {
-      return NextResponse.json({ error: "Invalid code" }, { status: 403 });
-    }
-
-    user.storeOwnerStats = user.storeOwnerStats || { triesAllowed: 50, triesUsed: 0 };
-    user.storeOwnerStats.triesAllowed += amount;
-    await user.save();
-
-    const allowed = user.storeOwnerStats.triesAllowed;
-    const used = user.storeOwnerStats.triesUsed || 0;
-
-    return NextResponse.json({
-      allowed,
-      used,
-      remaining: Math.max(0, allowed - used),
-    });
+    return NextResponse.json(
+      { error: "Credits are managed by the admin. Contact support to request more." },
+      { status: 403 }
+    );
   } catch (error) {
     console.error("[store-credits] POST error", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

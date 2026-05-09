@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 import dbConnect from "@/admin/lib/mongodb";
 import ProductMediaEnhancementJob from "@/admin/models/ProductMediaEnhancementJob";
-import User from "@/admin/models/User";
 import {
   saveProductMediaSourceImage,
 } from "@/admin/lib/productMediaUploads";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
 import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
+import { consumeStoreCredit } from "@/admin/lib/storeCredits";
 
 const ALL_VIEWS = ["front", "back", "left", "right"] as const;
 type EnhancementView = typeof ALL_VIEWS[number];
@@ -63,18 +63,14 @@ export async function POST(req: NextRequest) {
     await dbConnect();
 
     if (session.role === "store_owner") {
-      const requestingUser = await User.findById(new mongoose.Types.ObjectId(session.userId))
-        .select("storeOwnerStats")
-        .lean();
-      const triesAllowed = requestingUser?.storeOwnerStats?.triesAllowed ?? 50;
-      const triesUsed = requestingUser?.storeOwnerStats?.triesUsed ?? 0;
-      if (triesUsed >= triesAllowed) {
+      try {
+        await consumeStoreCredit({
+          storeOwnerId: new mongoose.Types.ObjectId(session.userId),
+          reason: "Product image enhancement",
+        });
+      } catch {
         return NextResponse.json({ error: "Enhancement try limit reached. Contact admin for more tries." }, { status: 403 });
       }
-      await User.updateOne(
-        { _id: new mongoose.Types.ObjectId(session.userId) },
-        { $inc: { "storeOwnerStats.triesUsed": 1 } }
-      );
     }
 
     const formData = await req.formData();

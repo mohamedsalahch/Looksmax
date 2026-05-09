@@ -30,6 +30,9 @@ type LeanOrderItem = {
 type LeanOrder = {
   _id: { toString(): string };
   items: LeanOrderItem[];
+  user?: { name?: string; email?: string } | string | null;
+  guestEmail?: string;
+  shippingAddress?: { fullName?: string } | null;
   [key: string]: unknown;
 };
 
@@ -45,9 +48,21 @@ function getOrderUserId(user: unknown) {
 }
 
 function serializeOrder(order: LeanOrder) {
+  const user =
+    typeof order.user === "object" && order.user !== null
+      ? order.user
+      : null;
+  const customerName = user?.name || order.shippingAddress?.fullName || "Guest customer";
+  const customerEmail = user?.email || order.guestEmail || "";
+
   return {
     ...order,
     _id: order._id.toString(),
+    user: {
+      name: customerName,
+      email: customerEmail,
+      isGuest: !user,
+    },
     items: order.items.map((item) => ({
       ...item,
       productId: item.product.toString(),
@@ -61,6 +76,10 @@ function getAdminOrderEventPayload(order: Record<string, unknown>) {
     typeof order.user === "object" && order.user !== null
       ? (order.user as { name?: string; email?: string })
       : null;
+  const shippingAddress =
+    typeof order.shippingAddress === "object" && order.shippingAddress !== null
+      ? (order.shippingAddress as { fullName?: string })
+      : null;
   const items = Array.isArray(order.items) ? order.items : [];
 
   return {
@@ -70,7 +89,11 @@ function getAdminOrderEventPayload(order: Record<string, unknown>) {
       order.createdAt instanceof Date
         ? order.createdAt.toISOString()
         : String(order.createdAt || new Date().toISOString()),
-    user,
+    user: {
+      name: user?.name || shippingAddress?.fullName || "Guest customer",
+      email: user?.email || String(order.guestEmail || ""),
+      isGuest: !user,
+    },
     totalPrice: Number(order.totalPrice || 0),
     isArchived: Boolean(order.isArchived),
     items: items.map((item) => {

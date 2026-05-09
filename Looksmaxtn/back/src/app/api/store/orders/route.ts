@@ -9,7 +9,7 @@ import ShippingSettings from "@/store/models/ShippingSettings";
 import { getSession } from "@/store/lib/auth";
 import { getAuditActorFromSession } from "@/store/lib/auditRoute";
 import { broadcastAdminEvent } from "@/admin/lib/adminEvents";
-import { sendOrderStatusEmail } from "@/store/lib/mailer";
+import { sendOrderStatusEmail, sendStoreOwnerOrderCreatedEmail } from "@/store/lib/mailer";
 import { isStoreOwnerApproved } from "@/store/lib/storeApproval";
 import {
   buildCouponValidationResult,
@@ -77,6 +77,14 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const stockAdjustments: Array<{ productId: string; quantity: number; size: string }> = [];
   const pendingStockAdjustments: Array<{ productId: string; quantity: number; size: string; name: string }> = [];
+  const storeOwnerOrderItems = new Map<
+    string,
+    {
+      owner: { email: string; name: string; storeName: string };
+      items: Array<{ name: string; quantity: number; size: string; color: string; price: number }>;
+      totalPrice: number;
+    }
+  >();
   let couponClaimed: { couponId: string; usageIncremented: boolean } | null = null;
 
   try {
@@ -120,7 +128,7 @@ export async function POST(req: NextRequest) {
         );
       }
       const productOwner = product.createdBy?.id
-        ? await User.findById(product.createdBy.id).select("role storeApprovalStatus").lean()
+        ? await User.findById(product.createdBy.id).select("name email storeName role storeApprovalStatus").lean()
         : null;
       if (!isStoreOwnerApproved(productOwner)) {
         return NextResponse.json(
@@ -185,6 +193,28 @@ export async function POST(req: NextRequest) {
 
       const itemTotal = product.price * item.quantity;
       subtotalPrice += itemTotal;
+
+      if (productOwner?.email && product.createdBy?.id) {
+        const ownerId = String(product.createdBy.id);
+        const existingOwnerEntry = storeOwnerOrderItems.get(ownerId) || {
+          owner: {
+            email: String(productOwner.email || ""),
+            name: String(productOwner.storeName || productOwner.name || "Store owner"),
+            storeName: String(productOwner.storeName || ""),
+          },
+          items: [],
+          totalPrice: 0,
+        };
+        existingOwnerEntry.items.push({
+          name: product.name,
+          price: product.price,
+          size: item.size || "",
+          color: item.color || "",
+          quantity: item.quantity,
+        });
+        existingOwnerEntry.totalPrice += itemTotal;
+        storeOwnerOrderItems.set(ownerId, existingOwnerEntry);
+      }
 
       orderItems.push({
         product: product._id,
@@ -333,6 +363,32 @@ export async function POST(req: NextRequest) {
       }
     } catch (emailError) {
       console.error("Order confirmation email error:", emailError);
+    }
+
+    try {
+      if (storeOwnerOrderItems.size > 0) {
+        const adminBaseUrl = (process.env.ADMIN_BASE_URL || "http://localhost:3001").replace(/\/$/, "");
+        const orderNumber = order._id.toString().slice(-8).toUpperCase();
+        await Promise.all(
+          Array.from(storeOwnerOrderItems.values())
+            .filter((entry) => entry.owner.email && entry.items.length > 0)
+            .map((entry) =>
+              sendStoreOwnerOrderCreatedEmail({
+                to: entry.owner.email,
+                name: entry.owner.name,
+                orderNumber,
+                orderUrl: `${adminBaseUrl}/dashboard/orders/${order._id.toString()}`,
+                customerName: shippingAddress.fullName || "Customer",
+                customerPhone: shippingAddress.phone || "",
+                shippingCity: shippingAddress.city || "",
+                items: entry.items,
+                totalPrice: entry.totalPrice,
+              })
+            )
+        );
+      }
+    } catch (storeOwnerEmailError) {
+      console.error("Store owner order email error:", storeOwnerEmailError);
     }
 
     try {

@@ -4,6 +4,32 @@ import Order from "@/admin/models/Order";
 import Product from "@/admin/models/Product";
 import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
 
+type LeanOrder = {
+  user?: { name?: string; email?: string } | null;
+  guestEmail?: string;
+  shippingAddress?: { fullName?: string } | null;
+  items: Array<{ product: { toString(): string } | string; [key: string]: unknown }>;
+  [key: string]: unknown;
+};
+
+function serializeOrder(order: LeanOrder, ownerProductIdSet?: Set<string> | null) {
+  const user = order.user || null;
+  const customerName = user?.name || order.shippingAddress?.fullName || "Guest customer";
+  const customerEmail = user?.email || order.guestEmail || "";
+
+  return {
+    ...order,
+    user: {
+      name: customerName,
+      email: customerEmail,
+      isGuest: !user,
+    },
+    items: ownerProductIdSet
+      ? order.items.filter((item) => ownerProductIdSet.has(item.product.toString()))
+      : order.items,
+  };
+}
+
 export async function GET() {
   try {
     const session = await getSession();
@@ -21,12 +47,7 @@ export async function GET() {
     }
     const orders = await Order.find(filter).populate("user", "name email").sort({ createdAt: -1 }).lean();
     return NextResponse.json({
-      orders: ownerProductIdSet
-        ? orders.map((order) => ({
-            ...order,
-            items: order.items.filter((item) => ownerProductIdSet.has(item.product.toString())),
-          }))
-        : orders,
+      orders: orders.map((order) => serializeOrder(order as unknown as LeanOrder, ownerProductIdSet)),
     });
   } catch (error) { console.error(error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }

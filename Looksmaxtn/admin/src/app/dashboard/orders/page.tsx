@@ -9,6 +9,8 @@ interface Order {
   _id: string; totalPrice: number; orderStatus: string;
   isArchived?: boolean;
   createdAt: string; user?: { name: string; email: string };
+  guestEmail?: string;
+  shippingAddress?: { fullName?: string };
   items: { product?: string; name: string; quantity: number }[];
 }
 
@@ -18,6 +20,14 @@ type AdminOrderRealtimeEvent =
 
 type SortKey = "order" | "customer" | "items" | "total" | "status" | "archive" | "date";
 type SortDirection = "asc" | "desc";
+
+function getOrderCustomerName(order: Order) {
+  return order.user?.name || order.shippingAddress?.fullName || "Guest customer";
+}
+
+function getOrderCustomerEmail(order: Order) {
+  return order.user?.email || order.guestEmail || "";
+}
 
 export default function OrdersPage() {
   const router = useRouter();
@@ -74,8 +84,8 @@ export default function OrdersPage() {
         normalizedSearch.length === 0 ||
         [
           o._id,
-          o.user?.name || "",
-          o.user?.email || "",
+          getOrderCustomerName(o),
+          getOrderCustomerEmail(o),
           ...o.items.map((item) => item.name),
           ...o.items.map((item) => item.product || ""),
         ].some((value) => String(value || "").toLowerCase().includes(normalizedSearch));
@@ -92,7 +102,7 @@ export default function OrdersPage() {
         case "order":
           return order._id;
         case "customer":
-          return order.user?.name || order.user?.email || "";
+          return getOrderCustomerName(order) || getOrderCustomerEmail(order);
         case "items":
           return order.items.length;
         case "total":
@@ -276,8 +286,8 @@ export default function OrdersPage() {
                     </Link>
                   </td>
                   <td className="px-4 py-3">
-                    <p className="text-xs font-medium">{o.user?.name || "Unknown"}</p>
-                    <p className="text-[10px] text-text-secondary">{o.user?.email || ""}</p>
+                    <p className="text-xs font-medium">{getOrderCustomerName(o)}</p>
+                    <p className="text-[10px] text-text-secondary">{getOrderCustomerEmail(o)}</p>
                   </td>
                   <td className="px-4 py-3 text-xs text-text-secondary">{o.items.length} items</td>
                   <td className="px-4 py-3 text-xs font-medium">{o.totalPrice.toFixed(2)} TND</td>

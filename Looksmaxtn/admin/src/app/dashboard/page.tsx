@@ -39,6 +39,8 @@ interface DashboardOrder {
   createdAt: string;
   totalPrice?: number;
   user?: { name: string; email: string } | null;
+  guestEmail?: string;
+  shippingAddress?: { fullName?: string };
   items?: { product?: string; name: string; quantity: number }[];
 }
 
@@ -95,6 +97,10 @@ function getApprovalBadge(status?: ApprovalStatus) {
     default:
       return { label: "Approved", className: "bg-bg-secondary text-text-secondary" };
   }
+}
+
+function getOrderCustomerLabel(order: DashboardOrder) {
+  return order.user?.name || order.shippingAddress?.fullName || order.user?.email || order.guestEmail || "Customer order";
 }
 
 function getOrderBadge(status: OrderStatus) {
@@ -429,7 +435,7 @@ export default function DashboardPage() {
                     key={order._id}
                     href={`/dashboard/orders/${order._id}`}
                     title={`Order #${order._id.slice(-8).toUpperCase()}`}
-                    subtitle={order.user?.name || order.user?.email || "Customer order"}
+                    subtitle={getOrderCustomerLabel(order)}
                     badgeLabel={badge.label}
                     badgeClassName={badge.className}
                     metaLeft={formatDateTime(order.createdAt)}
@@ -506,7 +512,7 @@ export default function DashboardPage() {
                     key={order._id}
                     href={`/dashboard/orders/${order._id}`}
                     title={`Order #${order._id.slice(-8).toUpperCase()}`}
-                    subtitle={order.user?.name || order.user?.email || "Customer order"}
+                    subtitle={getOrderCustomerLabel(order)}
                     badgeLabel={badge.label}
                     badgeClassName={badge.className}
                     metaLeft={formatDateTime(order.createdAt)}

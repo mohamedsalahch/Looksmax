@@ -1972,18 +1972,19 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               ? "Back generated model"
               : `Generated view ${index + 1}`,
         url: image.url,
+        kind: "generated" as const,
       })),
       ...(generationInputs.front.previewUrl
-        ? [{ label: "Enhanced front", url: generationInputs.front.previewUrl }]
+        ? [{ label: "Enhanced front", url: generationInputs.front.previewUrl, kind: "enhanced" as const }]
         : []),
       ...(generationInputs.back.previewUrl
-        ? [{ label: "Enhanced back", url: generationInputs.back.previewUrl }]
+        ? [{ label: "Enhanced back", url: generationInputs.back.previewUrl, kind: "enhanced" as const }]
         : []),
       ...(generationInputs.left.previewUrl
-        ? [{ label: usesAccessoryImageWorkflow ? "Enhanced image 3" : "Enhanced left", url: generationInputs.left.previewUrl }]
+        ? [{ label: usesAccessoryImageWorkflow ? "Enhanced image 3" : "Enhanced left", url: generationInputs.left.previewUrl, kind: "enhanced" as const }]
         : []),
       ...(generationInputs.right.previewUrl
-        ? [{ label: usesAccessoryImageWorkflow ? "Enhanced image 4" : "Enhanced right", url: generationInputs.right.previewUrl }]
+        ? [{ label: usesAccessoryImageWorkflow ? "Enhanced image 4" : "Enhanced right", url: generationInputs.right.previewUrl, kind: "enhanced" as const }]
         : []),
     ],
     [
@@ -2557,9 +2558,23 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     setGenerating(false);
   };
 
-  const handleRegenerateModel = () => {
-    setShowProductMediaSection(false);
+  const clearGeneratedModelMedia = (hideProductMedia = false) => {
+    const generatedIds = new Set(generatedModelMedia.map((image) => image.id).filter(Boolean));
+    const generatedUrls = new Set(generatedModelMedia.map((image) => image.url));
+    const hasEnhancedMedia = requiredOriginPictureKeys.some((key) => Boolean(generationInputs[key].previewUrl));
+
+    setImages((current) =>
+      current.filter((image) => {
+        const imageId = image.id || "";
+        return !generatedIds.has(imageId) && !generatedUrls.has(image.url);
+      })
+    );
     setGeneratedModelMedia([]);
+    setShowProductMediaSection(hideProductMedia ? false : hasEnhancedMedia);
+  };
+
+  const handleRegenerateModel = () => {
+    clearGeneratedModelMedia(true);
   };
 
   const clearProductMediaEnhancement = () => {
@@ -4302,20 +4317,53 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                       Product Media
                     </h3>
                   </div>
-                  {canRunAnyGeneration && (
-                    <button
-                      type="button"
-                      onClick={handleRegenerateModel}
-                      className="border border-border px-3 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:bg-bg-hover"
-                    >
-                      Regenerate model
-                    </button>
+                  {(generatedModelMedia.length > 0 || canRunAnyGeneration) && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {generatedModelMedia.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => clearGeneratedModelMedia()}
+                          className="border border-border px-3 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:bg-bg-hover"
+                        >
+                          Clear model
+                        </button>
+                      )}
+                      {canRunAnyGeneration && (
+                        <button
+                          type="button"
+                          onClick={handleRegenerateModel}
+                          className="border border-border px-3 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:bg-bg-hover"
+                        >
+                          Regenerate model
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                   {productMediaItems.map((item, index) => (
                     <div key={`${item.label}-${index}`} className="mx-auto w-full max-w-[220px] space-y-2">
-                      <p className="text-[10px] uppercase tracking-wider text-text-secondary">{item.label}</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[10px] uppercase tracking-wider text-text-secondary">{item.label}</p>
+                        {item.kind === "generated" && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={handleRegenerateModel}
+                              className="text-[10px] uppercase tracking-wider text-text-secondary hover:text-text-primary"
+                            >
+                              Regenerate
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => clearGeneratedModelMedia()}
+                              className="text-[10px] uppercase tracking-wider text-danger"
+                            >
+                              Clear
+                            </button>
+                          </div>
+                        )}
+                      </div>
                       <button
                         type="button"
                         onClick={() => setZoomedImage({ id: item.label, url: item.url, file: null, existing: false, kind: "source" })}

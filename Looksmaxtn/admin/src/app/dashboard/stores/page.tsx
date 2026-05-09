@@ -8,6 +8,7 @@ type StoreStatus = "pending" | "approved" | "rejected";
 
 interface StoreApplication {
   _id: string;
+  storeOwnerId?: string;
   name: string;
   storeName: string;
   email: string;
@@ -21,6 +22,24 @@ interface StoreApplication {
   reviewedAt?: string | null;
   createdAt: string;
   credits?: { allowed: number; used: number } | null;
+}
+
+interface CreditTransaction {
+  _id: string;
+  type: string;
+  amount: number;
+  balanceBefore: number;
+  balanceAfter: number;
+  reason: string;
+  createdAt: string;
+  createdBy?: { name?: string; email?: string } | null;
+}
+
+interface CreditDetails {
+  allowed: number;
+  used: number;
+  remaining: number;
+  transactions: CreditTransaction[];
 }
 
 const categoryLabels: Record<StoreApplication["category"], string> = {
@@ -45,6 +64,10 @@ export default function StoresPage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<StoreStatus | "all">("all");
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [creditDetailsByOwner, setCreditDetailsByOwner] = useState<Record<string, CreditDetails>>({});
+  const [creditAmountByOwner, setCreditAmountByOwner] = useState<Record<string, string>>({});
+  const [creditReasonByOwner, setCreditReasonByOwner] = useState<Record<string, string>>({});
+  const [creditBusyOwnerId, setCreditBusyOwnerId] = useState("");
 
   const formatCategories = (store: StoreApplication) => {
     const values = Array.from(new Set([...(store.categories || []), store.category].filter(Boolean)));
@@ -57,6 +80,17 @@ export default function StoresPage() {
     if (value === "thrift") return "Thrift Store";
     if (value === "retail") return "Retail Store";
     return value;
+  };
+
+  const loadCreditDetails = async (storeOwnerId: string) => {
+    if (!storeOwnerId || creditDetailsByOwner[storeOwnerId]) return;
+    try {
+      const response = await fetch(`/api/admin/store-credits/${storeOwnerId}`, withAuthRequest());
+      const data = await response.json();
+      if (response.ok) {
+        setCreditDetailsByOwner((current) => ({ ...current, [storeOwnerId]: data }));
+      }
+    } catch {}
   };
 
   useEffect(() => {
@@ -145,6 +179,56 @@ export default function StoresPage() {
     }
   };
 
+  const adjustCredits = async (store: StoreApplication, action: "add" | "deduct") => {
+    if (!store.storeOwnerId) {
+      setNotice({ type: "error", text: "This store does not have an owner account yet." });
+      return;
+    }
+
+    const rawAmount = Number(creditAmountByOwner[store.storeOwnerId] || 0);
+    if (!Number.isInteger(rawAmount) || rawAmount <= 0) {
+      setNotice({ type: "error", text: "Enter a whole credit amount greater than 0." });
+      return;
+    }
+
+    const amount = action === "deduct" ? -rawAmount : rawAmount;
+    const reason = creditReasonByOwner[store.storeOwnerId]?.trim() || (action === "deduct" ? "Admin deduction" : "Admin credit grant");
+    setCreditBusyOwnerId(store.storeOwnerId);
+    setNotice(null);
+
+    try {
+      const response = await fetch(
+        `/api/admin/store-credits/${store.storeOwnerId}`,
+        withAuthRequest({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount, reason }),
+        })
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        setNotice({ type: "error", text: data.error || "Unable to adjust credits." });
+        return;
+      }
+
+      setCreditDetailsByOwner((current) => ({ ...current, [store.storeOwnerId!]: data }));
+      setStores((current) =>
+        current.map((item) =>
+          item._id === store._id
+            ? { ...item, credits: { allowed: data.allowed, used: data.used } }
+            : item
+        )
+      );
+      setCreditAmountByOwner((current) => ({ ...current, [store.storeOwnerId!]: "" }));
+      setCreditReasonByOwner((current) => ({ ...current, [store.storeOwnerId!]: "" }));
+      setNotice({ type: "success", text: `Updated ${store.storeName || store.name} balance.` });
+    } catch {
+      setNotice({ type: "error", text: "Network error. Please try again." });
+    } finally {
+      setCreditBusyOwnerId("");
+    }
+  };
+
   const counts = useMemo(
     () => ({
       total: stores.length,
@@ -228,7 +312,13 @@ export default function StoresPage() {
               <button
                 type="button"
                 className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left cursor-pointer"
-                onClick={() => setExpanded(expanded === store._id ? null : store._id)}
+                onClick={() => {
+                  const nextExpanded = expanded === store._id ? null : store._id;
+                  setExpanded(nextExpanded);
+                  if (nextExpanded && store.storeOwnerId) {
+                    void loadCreditDetails(store.storeOwnerId);
+                  }
+                }}
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -329,6 +419,77 @@ export default function StoresPage() {
                           <span className="font-medium">{Math.max(0, store.credits.allowed - store.credits.used)}</span>
                         </p>
                       </div>
+                      {store.storeOwnerId && (
+                        <div className="mt-4 space-y-4">
+                          <div className="grid gap-3 md:grid-cols-[120px_1fr_auto_auto]">
+                            <input
+                              type="number"
+                              step={1}
+                              value={creditAmountByOwner[store.storeOwnerId] || ""}
+                              onChange={(event) =>
+                                setCreditAmountByOwner((current) => ({
+                                  ...current,
+                                  [store.storeOwnerId!]: event.target.value,
+                                }))
+                              }
+                              placeholder="+10 or -5"
+                              className="input-line"
+                            />
+                            <input
+                              type="text"
+                              value={creditReasonByOwner[store.storeOwnerId] || ""}
+                              onChange={(event) =>
+                                setCreditReasonByOwner((current) => ({
+                                  ...current,
+                                  [store.storeOwnerId!]: event.target.value,
+                                }))
+                              }
+                              placeholder="Reason shown in history"
+                              className="input-line"
+                            />
+                            <button
+                              type="button"
+                              disabled={creditBusyOwnerId === store.storeOwnerId}
+                              onClick={() => adjustCredits(store, "add")}
+                              className="border border-border px-3 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:bg-bg-hover disabled:opacity-50"
+                            >
+                              Add
+                            </button>
+                            <button
+                              type="button"
+                              disabled={creditBusyOwnerId === store.storeOwnerId}
+                              onClick={() => adjustCredits(store, "deduct")}
+                              className="border border-border px-3 py-2 text-[10px] uppercase tracking-wider text-danger hover:bg-bg-hover disabled:opacity-50"
+                            >
+                              Deduct
+                            </button>
+                          </div>
+
+                          {(creditDetailsByOwner[store.storeOwnerId]?.transactions || []).length > 0 && (
+                            <div className="max-h-64 divide-y divide-border overflow-auto border border-border bg-bg-primary px-3">
+                              {creditDetailsByOwner[store.storeOwnerId].transactions.map((transaction) => (
+                                <div key={transaction._id} className="flex items-start justify-between gap-4 py-3 text-xs">
+                                  <div>
+                                    <p className="text-text-primary">{transaction.reason || "Credit update"}</p>
+                                    <p className="mt-1 text-[10px] uppercase tracking-wider text-text-secondary">
+                                      {new Date(transaction.createdAt).toLocaleString()}
+                                      {transaction.createdBy?.name ? ` · ${transaction.createdBy.name}` : ""}
+                                    </p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className={transaction.amount < 0 ? "text-danger" : "text-success"}>
+                                      {transaction.amount > 0 ? "+" : ""}{transaction.amount}
+                                    </p>
+                                    <p className="mt-1 text-[10px] text-text-secondary">
+                                      {transaction.balanceBefore} → {transaction.balanceAfter}
+                                    </p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 
