@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 
@@ -25,14 +26,15 @@ async def process_shoes_generation(job_id: str, webhook_url: str, request: Shoes
     if _generator is None:
         return
 
-    try:
-        product_images = request.product_pictures.model_dump()
-        views = ["front", "back", "left", "right"]
-        
-        for view in views:
-            image_b64 = await _generator.generate_shoes_view(view, product_images)
-            await send_webhook(webhook_url, job_id, view, image_b64)
+    product_images = request.product_pictures.model_dump()
+    views = ["front", "back", "left", "right"]
 
+    async def run_view(view: str):
+        image_b64 = await _generator.generate_shoes_view(view, product_images)
+        await send_webhook(webhook_url, job_id, view, image_b64)
+
+    try:
+        await asyncio.gather(*(run_view(v) for v in views))
     except Exception as e:
         logger.error(f"Job {job_id}: Shoes error: {str(e)}")
         await send_error_webhook(webhook_url, job_id, f"Shoes generation failed: {str(e)}")
@@ -60,10 +62,12 @@ async def generate_shoes_images(request: ShoesRequest, background_tasks: Backgro
     try:
         product_images = request.product_pictures.model_dump()
 
-        front_b64 = await _generator.generate_shoes_view("front", product_images)
-        back_b64 = await _generator.generate_shoes_view("back", product_images)
-        left_b64 = await _generator.generate_shoes_view("left", product_images)
-        right_b64 = await _generator.generate_shoes_view("right", product_images)
+        front_b64, back_b64, left_b64, right_b64 = await asyncio.gather(
+            _generator.generate_shoes_view("front", product_images),
+            _generator.generate_shoes_view("back", product_images),
+            _generator.generate_shoes_view("left", product_images),
+            _generator.generate_shoes_view("right", product_images),
+        )
 
         return GenerationResponse(images=[
             ImageResult(base64=front_b64),

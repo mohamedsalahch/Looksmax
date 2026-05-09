@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 
@@ -28,11 +29,14 @@ ACCESSORY_VIEWS = ["front", "back", "left", "right"]
 async def process_garment_enhancement(job_id: str, webhook_url: str, request: GarmentEnhanceRequest):
     if _generator is None:
         return
+    product_images = request.product_pictures.model_dump()
+
+    async def run_view(view: str):
+        image_b64 = await _generator.enhance_garment_view(view, product_images[view])
+        await send_webhook(webhook_url, job_id, view, image_b64)
+
     try:
-        product_images = request.product_pictures.model_dump()
-        for view in GARMENT_VIEWS:
-            image_b64 = await _generator.enhance_garment_view(view, product_images[view])
-            await send_webhook(webhook_url, job_id, view, image_b64)
+        await asyncio.gather(*(run_view(v) for v in GARMENT_VIEWS))
     except Exception as e:
         logger.error(f"Job {job_id}: Garment enhancement error: {str(e)}")
         await send_error_webhook(webhook_url, job_id, f"Garment enhancement failed: {str(e)}")
@@ -41,15 +45,18 @@ async def process_garment_enhancement(job_id: str, webhook_url: str, request: Ga
 async def process_accessory_enhancement(job_id: str, webhook_url: str, request: AccessoryEnhanceRequest):
     if _generator is None:
         return
+    product_images = request.product_pictures.model_dump()
+    provided_views = [view for view in ACCESSORY_VIEWS if product_images.get(view)]
+    if not provided_views:
+        await send_error_webhook(webhook_url, job_id, "No accessory images provided.")
+        return
+
+    async def run_view(view: str):
+        image_b64 = await _generator.enhance_accessory_view(view, product_images[view])
+        await send_webhook(webhook_url, job_id, view, image_b64)
+
     try:
-        product_images = request.product_pictures.model_dump()
-        provided_views = [view for view in ACCESSORY_VIEWS if product_images.get(view)]
-        if not provided_views:
-            await send_error_webhook(webhook_url, job_id, "No accessory images provided.")
-            return
-        for view in provided_views:
-            image_b64 = await _generator.enhance_accessory_view(view, product_images[view])
-            await send_webhook(webhook_url, job_id, view, image_b64)
+        await asyncio.gather(*(run_view(v) for v in provided_views))
     except Exception as e:
         logger.error(f"Job {job_id}: Accessory enhancement error: {str(e)}")
         await send_error_webhook(webhook_url, job_id, f"Accessory enhancement failed: {str(e)}")
@@ -72,11 +79,11 @@ async def enhance_garment_images(request: GarmentEnhanceRequest, background_task
 
     try:
         product_images = request.product_pictures.model_dump()
-        results = []
-        for view in GARMENT_VIEWS:
-            image_b64 = await _generator.enhance_garment_view(view, product_images[view])
-            results.append(ImageResult(base64=image_b64))
-        return GenerationResponse(images=results)
+        outputs = await asyncio.gather(*(
+            _generator.enhance_garment_view(view, product_images[view])
+            for view in GARMENT_VIEWS
+        ))
+        return GenerationResponse(images=[ImageResult(base64=b) for b in outputs])
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -101,11 +108,11 @@ async def enhance_accessory_images(request: AccessoryEnhanceRequest, background_
         provided_views = [view for view in ACCESSORY_VIEWS if product_images.get(view)]
         if not provided_views:
             raise HTTPException(status_code=400, detail="At least one accessory image is required.")
-        results = []
-        for view in provided_views:
-            image_b64 = await _generator.enhance_accessory_view(view, product_images[view])
-            results.append(ImageResult(base64=image_b64))
-        return GenerationResponse(images=results)
+        outputs = await asyncio.gather(*(
+            _generator.enhance_accessory_view(view, product_images[view])
+            for view in provided_views
+        ))
+        return GenerationResponse(images=[ImageResult(base64=b) for b in outputs])
     except HTTPException:
         raise
     except Exception as e:
