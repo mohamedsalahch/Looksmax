@@ -3,6 +3,7 @@ import dbConnect from "@/store/lib/mongodb";
 import StoreApplication, { StoreApplicationCategory } from "@/store/models/StoreApplication";
 import User from "@/store/models/User";
 import { broadcastAdminEvent } from "@/admin/lib/adminEvents";
+import { slugifyStoreName } from "@/lib/storeSlug";
 
 const VALID_CATEGORIES = new Set<StoreApplicationCategory>([
   "clothes",
@@ -53,6 +54,28 @@ function normalizeCategories(value: unknown): StoreApplicationCategory[] {
     .filter((entry): entry is StoreApplicationCategory => VALID_CATEGORIES.has(entry));
 }
 
+async function hasDuplicateStoreName(storeName: string) {
+  const storeSlug = slugifyStoreName(storeName);
+  if (!storeSlug) return false;
+
+  const [storeOwners, activeApplications] = await Promise.all([
+    User.find({
+      role: "store_owner",
+      storeApprovalStatus: { $in: ["pending", "approved"] },
+    })
+      .select("name storeName storeSlug")
+      .lean(),
+    StoreApplication.find({ status: { $in: ["pending", "approved"] } })
+      .select("name storeName")
+      .lean(),
+  ]);
+
+  return [...storeOwners, ...activeApplications].some((store) => {
+    const existingSlug = String("storeSlug" in store ? store.storeSlug || "" : "").trim();
+    return (existingSlug || slugifyStoreName(String(store.storeName || store.name || ""))) === storeSlug;
+  });
+}
+
 export async function POST(req: NextRequest) {
   try {
     await dbConnect();
@@ -75,6 +98,10 @@ export async function POST(req: NextRequest) {
 
     if (categories.some((category) => !VALID_CATEGORIES.has(category))) {
       return NextResponse.json({ error: "Select a valid category" }, { status: 400 });
+    }
+
+    if (await hasDuplicateStoreName(storeName)) {
+      return NextResponse.json({ error: "A store with this name already exists." }, { status: 409 });
     }
 
     const existingStoreApplication = await StoreApplication.findOne({

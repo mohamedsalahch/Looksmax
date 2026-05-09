@@ -16,6 +16,7 @@ export async function GET() {
     let productFilter: Record<string, unknown> = {};
     let orderFilter: Record<string, unknown> = {};
     let storeName = "";
+    let storeSlug = "";
     let ownerProductIdSet: Set<string> | null = null;
 
     if (session.role === "store_owner") {
@@ -23,8 +24,9 @@ export async function GET() {
       const productIds = await Product.find(productFilter).distinct("_id");
       ownerProductIdSet = new Set(productIds.map((productId) => productId.toString()));
       orderFilter = productIds.length > 0 ? { "items.product": { $in: productIds } } : { _id: { $in: [] } };
-      const currentUser = await User.findById(session.userId).select("storeName").lean();
+      const currentUser = await User.findById(session.userId).select("storeName storeSlug").lean();
       storeName = currentUser?.storeName || "";
+      storeSlug = currentUser?.storeSlug || "";
     }
 
     const [totalProducts, totalOrders, totalUsers, orders] = await Promise.all([
@@ -60,6 +62,7 @@ export async function GET() {
       latestOrderId,
       scope: session.role === "store_owner" ? "store" : "admin",
       storeName,
+      storeSlug,
     });
   } catch (error) { console.error(error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }

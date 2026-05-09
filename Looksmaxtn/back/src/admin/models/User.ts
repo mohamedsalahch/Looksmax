@@ -24,6 +24,7 @@ export interface IStoreOwnerStats {
 export interface IUser extends Document {
   name: string;
   storeName?: string;
+  storeSlug?: string;
   storeType?: "thrift" | "retail" | null;
   storeApprovalStatus?: "pending" | "approved" | "rejected" | null;
   storeOwnerStats?: IStoreOwnerStats;
@@ -79,6 +80,7 @@ const userSchema = new Schema<IUser>(
   {
     name: { type: String, required: true, trim: true },
     storeName: { type: String, default: "", trim: true },
+    storeSlug: { type: String, default: "", lowercase: true, trim: true, index: true },
     storeType: { type: String, enum: ["thrift", "retail", null], default: null },
     storeApprovalStatus: { type: String, enum: ["pending", "approved", "rejected", null], default: null },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },

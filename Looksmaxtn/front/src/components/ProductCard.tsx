@@ -51,15 +51,20 @@ interface ProductCardProps {
 const CLONE_PREVIEW_WIDTH = 184;
 const CLONE_PREVIEW_HEIGHT = 240;
 const CLONE_PREVIEW_OFFSET = 24;
+const DEFAULT_VARIANT_KEY = "__default__";
 
 function splitVariantLabel(value: string) {
+  if (value === DEFAULT_VARIANT_KEY) {
+    return { sizeLabel: "", colorHex: "" };
+  }
+
   const separatorIndex = value.lastIndexOf(" / ");
   if (separatorIndex === -1) {
-    return { sizeLabel: value.trim(), colorHex: "" };
+    return { sizeLabel: value.trim() === DEFAULT_VARIANT_KEY ? "" : value.trim(), colorHex: "" };
   }
 
   return {
-    sizeLabel: value.slice(0, separatorIndex).trim(),
+    sizeLabel: value.slice(0, separatorIndex).trim() === DEFAULT_VARIANT_KEY ? "" : value.slice(0, separatorIndex).trim(),
     colorHex: value.slice(separatorIndex + 3).trim(),
   };
 }
@@ -157,7 +162,7 @@ export default function ProductCard({
       : []),
     [activeColorHex, allSizes, isPerfume],
   );
-  const hasSizes = !isPerfume && displayedSizes.length > 0;
+  const hasSizes = !isPerfume && displayedSizes.some((sizeOption) => Boolean(splitVariantLabel(sizeOption).sizeLabel));
   const defaultSelectableSize = displayedSizes.find((sizeOption) => (sizeAvailabilityState?.[sizeOption]?.stock ?? 0) > 0) || displayedSizes[0] || "";
   const [selectedSize, setSelectedSize] = useState(defaultSelectableSize);
   const selectedSizeAvailability = !isPerfume && selectedSize ? sizeAvailabilityState?.[selectedSize] : null;
@@ -522,19 +527,13 @@ export default function ProductCard({
             }`}
           >
             <div className="bg-background flex items-center h-10 border-t border-border-color">
-              <div className="relative w-[38%] h-full" ref={dropdownRef}>
-                <div
-                  onClick={toggleDropdown}
-                  className={`w-full h-full flex items-center justify-between px-3 text-[10px] text-foreground font-medium uppercase tracking-wide border-r border-border-color transition-colors ${
-                    hasSizes ? "hover:bg-hover cursor-pointer" : "cursor-default"
-                  }`}
-                >
-                  <span>
-                    {hasSizes
-                      ? `Size ${splitVariantLabel(selectedSize || defaultSelectableSize).sizeLabel}`
-                      : "One size"}
-                  </span>
-                  {hasSizes && (
+              {hasSizes && (
+                <div className="relative w-[38%] h-full" ref={dropdownRef}>
+                  <div
+                    onClick={toggleDropdown}
+                    className="w-full h-full flex items-center justify-between px-3 text-[10px] text-foreground font-medium uppercase tracking-wide border-r border-border-color transition-colors hover:bg-hover cursor-pointer"
+                  >
+                    <span>Size {splitVariantLabel(selectedSize || defaultSelectableSize).sizeLabel}</span>
                     <svg
                       width="10"
                       height="10"
@@ -548,37 +547,38 @@ export default function ProductCard({
                     >
                       <path d="m6 9 6 6 6-6" />
                     </svg>
+                  </div>
+
+                  {isDropdownOpen && (
+                    <div
+                      className="absolute bottom-full left-0 w-[120%] bg-background border border-foreground z-40 flex flex-col mb-[-1px]"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                    >
+                      {displayedSizes.map((sizeOption) => {
+                        const { sizeLabel } = splitVariantLabel(sizeOption);
+                        if (!sizeLabel) return null;
+                        return (
+                        <div
+                          key={sizeOption}
+                          onClick={(e) => handleSizeSelect(e, sizeOption)}
+                          className="px-3 py-2.5 text-[10px] text-foreground font-medium hover:bg-surface transition-colors cursor-pointer flex items-center justify-between gap-2"
+                        >
+                          <span>{sizeLabel}</span>
+                          {(getSizeOptionState(sizeOption)?.stock ?? 0) === 0 ? (
+                            <span className="text-[9px] uppercase tracking-wide text-text-secondary">Sold out</span>
+                          ) : hasHydratedAvailability && getSizeOptionState(sizeOption)?.reservedElsewhere ? (
+                            <span className="text-[9px] uppercase tracking-wide text-text-secondary">Reserved elsewhere</span>
+                          ) : null}
+                        </div>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
-
-                {hasSizes && isDropdownOpen && (
-                  <div
-                    className="absolute bottom-full left-0 w-[120%] bg-background border border-foreground z-40 flex flex-col mb-[-1px]"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }}
-                  >
-                    {displayedSizes.map((sizeOption) => {
-                      const { sizeLabel } = splitVariantLabel(sizeOption);
-                      return (
-                      <div
-                        key={sizeOption}
-                        onClick={(e) => handleSizeSelect(e, sizeOption)}
-                        className="px-3 py-2.5 text-[10px] text-foreground font-medium hover:bg-surface transition-colors cursor-pointer flex items-center justify-between gap-2"
-                      >
-                        <span>{sizeLabel}</span>
-                        {(getSizeOptionState(sizeOption)?.stock ?? 0) === 0 ? (
-                          <span className="text-[9px] uppercase tracking-wide text-text-secondary">Sold out</span>
-                        ) : hasHydratedAvailability && getSizeOptionState(sizeOption)?.reservedElsewhere ? (
-                          <span className="text-[9px] uppercase tracking-wide text-text-secondary">Reserved elsewhere</span>
-                        ) : null}
-                      </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+              )}
 
               {isBlocked ? (
                 <button
@@ -593,7 +593,7 @@ export default function ProductCard({
                   <button
                     type="button"
                     onClick={handleQuickAdd}
-                    className={`w-[49.5%] h-full px-2 py-3 text-[10px] font-medium uppercase tracking-wide transition-all duration-300 ${
+                    className={`flex-1 h-full px-2 py-3 text-[10px] font-medium uppercase tracking-wide transition-all duration-300 ${
                       addedToCart
                         ? "bg-[#5C6A47] text-white"
                         : "bg-foreground text-background hover:bg-accent"
@@ -604,7 +604,7 @@ export default function ProductCard({
                   <button
                     type="button"
                     onClick={handleAddToTryOn}
-                    className="w-[49.5%] h-full text-[10px] uppercase font-bold tracking-widest border-l border-border-color transition-colors bg-background text-foreground hover:bg-hover"
+                    className="flex-1 h-full text-[10px] uppercase font-bold tracking-widest border-l border-border-color transition-colors bg-background text-foreground hover:bg-hover"
                   >
                     TRY
                   </button>

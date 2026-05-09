@@ -43,6 +43,7 @@ function calculateShippingFee(subtotal: number, settings: ShippingSettings) {
 
 function formatCheckoutSizeLabel(size?: string) {
   if (!size) return "One size";
+  if (size === "__default__") return "One size";
 
   const colorVariantMatch = size.match(/^(.*?)(?:\s*\/\s*#?[0-9a-fA-F]{3,8})$/);
   if (colorVariantMatch?.[1]) {

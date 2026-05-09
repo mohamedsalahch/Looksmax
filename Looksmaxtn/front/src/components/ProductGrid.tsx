@@ -78,6 +78,8 @@ function formatCategoryLabel(value: string) {
 }
 
 function formatSizeLabel(value: string) {
+  if (value === "__default__") return "One size";
+
   const colorwayMatch = value.match(/^(.*?)(?:\s*\/\s*#?[0-9a-fA-F]{3,8})$/);
   if (colorwayMatch?.[1]) {
     return colorwayMatch[1].trim();
@@ -101,11 +103,13 @@ function getUniqueSizeOptions(values: string[]) {
 
 export default function ProductGrid({
   category,
+  storeName = "",
   initialProducts = [],
   initialTotal = 0,
   initialFacets = null,
 }: {
   category?: string;
+  storeName?: string;
   initialProducts?: Product[];
   initialTotal?: number;
   initialFacets?: Facets | null;
@@ -117,7 +121,7 @@ export default function ProductGrid({
   const [queryInput, setQueryInput] = useState("");
   const [draftCategory, setDraftCategory] = useState("");
   const [draftBrand, setDraftBrand] = useState("");
-  const [draftStore, setDraftStore] = useState("");
+  const [draftStore, setDraftStore] = useState(storeName);
   const [draftSizes, setDraftSizes] = useState<string[]>([]);
   const [draftColor, setDraftColor] = useState("");
   const [priceMin, setPriceMin] = useState("");
@@ -125,7 +129,7 @@ export default function ProductGrid({
   const [appliedSearch, setAppliedSearch] = useState("");
   const [appliedCategory, setAppliedCategory] = useState("");
   const [appliedBrand, setAppliedBrand] = useState("");
-  const [appliedStore, setAppliedStore] = useState("");
+  const [appliedStore, setAppliedStore] = useState(storeName);
   const [appliedSizes, setAppliedSizes] = useState<string[]>([]);
   const [appliedColor, setAppliedColor] = useState("");
   const [appliedPriceMin, setAppliedPriceMin] = useState("");
@@ -137,7 +141,7 @@ export default function ProductGrid({
     appliedSearch ||
       appliedCategory ||
       appliedBrand ||
-      appliedStore ||
+      (!storeName && appliedStore) ||
       appliedSizes.length > 0 ||
       appliedColor ||
       appliedPriceMin ||
@@ -146,7 +150,7 @@ export default function ProductGrid({
   const hasDraftChanges =
     draftCategory !== appliedCategory ||
     draftBrand !== appliedBrand ||
-    draftStore !== appliedStore ||
+    (!storeName && draftStore !== appliedStore) ||
     draftColor !== appliedColor ||
     priceMin !== appliedPriceMin ||
     priceMax !== appliedPriceMax ||
@@ -182,7 +186,8 @@ export default function ProductGrid({
         params.set("category", appliedCategory);
       }
       if (appliedBrand) params.set("brand", appliedBrand);
-      if (appliedStore) params.set("store", appliedStore);
+      if (storeName) params.set("store", storeName);
+      else if (appliedStore) params.set("store", appliedStore);
       if (appliedSizes.length > 0) params.set("size", appliedSizes.join(","));
       if (appliedColor) params.set("color", appliedColor);
       if (appliedPriceMin) params.set("priceMin", appliedPriceMin);
@@ -221,13 +226,13 @@ export default function ProductGrid({
     return () => {
       cancelled = true;
     };
-  }, [category, appliedSearch, appliedCategory, appliedBrand, appliedStore, appliedSizes, appliedColor, appliedPriceMin, appliedPriceMax]);
+  }, [category, storeName, appliedSearch, appliedCategory, appliedBrand, appliedStore, appliedSizes, appliedColor, appliedPriceMin, appliedPriceMax]);
 
   const clearFilters = () => {
     setQueryInput("");
     setDraftCategory("");
     setDraftBrand("");
-    setDraftStore("");
+    setDraftStore(storeName);
     setDraftSizes([]);
     setDraftColor("");
     setPriceMin("");
@@ -235,7 +240,7 @@ export default function ProductGrid({
     setAppliedSearch("");
     setAppliedCategory("");
     setAppliedBrand("");
-    setAppliedStore("");
+    setAppliedStore(storeName);
     setAppliedSizes([]);
     setAppliedColor("");
     setAppliedPriceMin("");
@@ -251,7 +256,7 @@ export default function ProductGrid({
   const applyFilters = () => {
     setAppliedCategory(draftCategory);
     setAppliedBrand(draftBrand);
-    setAppliedStore(draftStore);
+    setAppliedStore(storeName || draftStore);
     setAppliedSizes(draftSizes);
     setAppliedColor(draftColor);
     setAppliedPriceMin(priceMin);
@@ -393,7 +398,7 @@ export default function ProductGrid({
               ))}
             </select>
 
-            {facets && facets.stores.length > 0 && (
+            {!storeName && facets && facets.stores.length > 0 && (
               <select
                 value={draftStore}
                 onChange={(event) => setDraftStore(event.target.value)}

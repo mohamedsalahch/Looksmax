@@ -33,6 +33,11 @@ interface TrackedOrder {
   }[];
 }
 
+function formatOrderSizeLabel(size?: string) {
+  if (!size || size === "__default__") return "";
+  return size;
+}
+
 const PIPELINE_STEPS = [
   { key: "processing", label: "Processing" },
   { key: "confirmed", label: "Confirmed" },
@@ -191,7 +196,7 @@ export default function TrackOrderPage({ params }: { params: Promise<{ id: strin
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{item.name}</p>
                   <p className="text-[10px] text-text-secondary mt-0.5">
-                    {item.size || ""}{item.size && item.color ? " · " : ""}{item.color || ""} · Qty: {item.quantity}
+                    {formatOrderSizeLabel(item.size)}{formatOrderSizeLabel(item.size) && item.color ? " · " : ""}{item.color || ""} · Qty: {item.quantity}
                   </p>
                 </div>
                 <p className="text-sm font-medium whitespace-nowrap">

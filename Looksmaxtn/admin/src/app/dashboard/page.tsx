@@ -17,6 +17,7 @@ interface DashboardStats {
   pendingOrders: number;
   scope?: DashboardScope;
   storeName?: string;
+  storeSlug?: string;
 }
 
 interface DashboardProduct {
@@ -61,6 +62,22 @@ interface StoreCredits {
 
 function formatMoney(value: number) {
   return `${value.toFixed(2)} TND`;
+}
+
+function slugifyStoreName(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function getPublicStoreUrl(storeName: string, storeSlug?: string) {
+  const slug = storeSlug || slugifyStoreName(storeName);
+  if (!slug) return "";
+  const baseUrl = (process.env.NEXT_PUBLIC_STOREFRONT_URL || "https://looksmaxtn.com").replace(/\/$/, "");
+  return `${baseUrl}/${slug}`;
 }
 
 function formatDateTime(value: string) {
@@ -207,6 +224,7 @@ export default function DashboardPage() {
   const [orders, setOrders] = useState<DashboardOrder[]>([]);
   const [stores, setStores] = useState<StoreApplication[]>([]);
   const [credits, setCredits] = useState<StoreCredits | null>(null);
+  const [storeUrlCopied, setStoreUrlCopied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -272,6 +290,18 @@ export default function DashboardPage() {
 
   const scope = stats.scope === "store" ? "store" : "admin";
   const isStoreDashboard = scope === "store";
+  const publicStoreUrl = isStoreDashboard && stats.storeName ? getPublicStoreUrl(stats.storeName, stats.storeSlug) : "";
+
+  const handleShareStore = async () => {
+    if (!publicStoreUrl) return;
+    try {
+      await navigator.clipboard.writeText(publicStoreUrl);
+      setStoreUrlCopied(true);
+      window.setTimeout(() => setStoreUrlCopied(false), 1600);
+    } catch {
+      window.prompt("Store URL", publicStoreUrl);
+    }
+  };
 
   const pendingProducts = products
     .filter((product) => product.approvalStatus === "pending")
@@ -327,7 +357,19 @@ export default function DashboardPage() {
           <span className="border border-border px-3 py-1 text-[10px] uppercase tracking-wider text-text-secondary">
             {isStoreDashboard ? "Revenue included" : "Revenue hidden"}
           </span>
+          {isStoreDashboard && publicStoreUrl && (
+            <button
+              type="button"
+              onClick={handleShareStore}
+              className="border border-text-primary bg-text-primary px-3 py-1 text-[10px] uppercase tracking-wider text-bg-primary transition-colors hover:bg-accent hover:border-accent"
+            >
+              {storeUrlCopied ? "Store link copied" : "Share store"}
+            </button>
+          )}
         </div>
+        {isStoreDashboard && publicStoreUrl && (
+          <p className="mt-2 text-xs text-text-secondary">{publicStoreUrl}</p>
+        )}
       </div>
 
       {/* ── Stats strip ── */}

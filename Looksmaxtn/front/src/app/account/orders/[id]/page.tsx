@@ -28,6 +28,11 @@ interface OrderDetail {
   }[];
 }
 
+function formatOrderSizeLabel(size?: string) {
+  if (!size || size === "__default__") return "";
+  return size;
+}
+
 export default function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [order, setOrder] = useState<OrderDetail | null>(null);
@@ -105,7 +110,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               <div className="flex-1">
                 <p className="text-xs font-medium">{item.name}</p>
                 <p className="text-[10px] text-text-secondary mt-0.5">
-                  {item.size && `Size: ${item.size}`}{item.color && ` · ${item.color}`} · Qty: {item.quantity}
+                  {formatOrderSizeLabel(item.size) && `Size: ${formatOrderSizeLabel(item.size)}`}{item.color && ` · ${item.color}`} · Qty: {item.quantity}
                 </p>
               </div>
               <p className="text-xs font-medium">{formatTndPrice(item.price * item.quantity)}</p>

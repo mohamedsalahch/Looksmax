@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
+import type { Types } from "mongoose";
 import dbConnect from "@/admin/lib/mongodb";
 import { getSession, hashPassword } from "@/admin/lib/auth";
 import User from "@/admin/models/User";
 import StoreApplication from "@/admin/models/StoreApplication";
 import { sendStoreApplicationStatusEmail } from "@/store/lib/mailer";
 import { broadcastAdminEvent } from "@/admin/lib/adminEvents";
+import { createUniqueStoreSlug, slugifyStoreName } from "@/lib/storeSlug";
 
 type ReviewStatus = "approved" | "rejected";
 
@@ -56,6 +58,38 @@ function normalizeStoreApplication(store: {
 
 function createStoreOwnerPassword() {
   return crypto.randomBytes(9).toString("base64url");
+}
+
+async function hasDuplicateStoreName(
+  storeName: string,
+  currentStoreId: Types.ObjectId,
+  email: string,
+  userId?: Types.ObjectId
+) {
+  const storeSlug = slugifyStoreName(storeName);
+  if (!storeSlug) return false;
+
+  const [storeOwners, activeApplications] = await Promise.all([
+    User.find({
+      ...(userId ? { _id: { $ne: userId } } : {}),
+      role: "store_owner",
+      storeApprovalStatus: { $in: ["pending", "approved"] },
+    })
+      .select("name storeName storeSlug")
+      .lean(),
+    StoreApplication.find({
+      _id: { $ne: currentStoreId },
+      email: { $ne: email },
+      status: { $in: ["pending", "approved"] },
+    })
+      .select("name storeName")
+      .lean(),
+  ]);
+
+  return [...storeOwners, ...activeApplications].some((store) => {
+    const existingSlug = String("storeSlug" in store ? store.storeSlug || "" : "").trim();
+    return (existingSlug || slugifyStoreName(String(store.storeName || store.name || ""))) === storeSlug;
+  });
 }
 
 export async function GET() {
@@ -128,10 +162,15 @@ export async function PUT(req: NextRequest) {
         );
       }
 
+      if (await hasDuplicateStoreName(storeName, store._id, store.email, existingUser?._id)) {
+        return NextResponse.json({ error: "A store with this name already exists." }, { status: 409 });
+      }
+
       const passwordHash = await hashPassword(generatedPassword);
       if (existingUser) {
         existingUser.name = store.name;
         existingUser.storeName = storeName;
+        existingUser.storeSlug = await createUniqueStoreSlug(User, storeName, existingUser._id);
         existingUser.storeType = store.storeType;
         existingUser.storeApprovalStatus = "approved";
         existingUser.password = passwordHash;
@@ -141,9 +180,11 @@ export async function PUT(req: NextRequest) {
         existingUser.sessionVersion = (existingUser.sessionVersion || 0) + 1;
         await existingUser.save();
       } else {
+        const storeSlug = await createUniqueStoreSlug(User, storeName);
         await User.create({
           name: store.name,
           storeName,
+          storeSlug,
           storeType: store.storeType,
           storeApprovalStatus: "approved",
           email: store.email,
@@ -219,6 +260,7 @@ export async function DELETE(req: NextRequest) {
       existingUser.role = "user";
       existingUser.storeApprovalStatus = "rejected";
       existingUser.storeName = "";
+      existingUser.storeSlug = "";
       existingUser.storeType = null;
       existingUser.sessionVersion = (existingUser.sessionVersion || 0) + 1;
       await existingUser.save();

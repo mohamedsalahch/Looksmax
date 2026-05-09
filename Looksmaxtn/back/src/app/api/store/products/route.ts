@@ -181,7 +181,9 @@ export async function GET(req: NextRequest) {
       return true;
     });
 
-    const facetsSource = searchMatchedProducts;
+    const facetsSource = store
+      ? searchMatchedProducts.filter((product) => product.storeName === store)
+      : searchMatchedProducts;
     const facets = includeFacets
       ? {
           categories: uniqueSortedValues(facetsSource.flatMap((product) => product.categories || [])),

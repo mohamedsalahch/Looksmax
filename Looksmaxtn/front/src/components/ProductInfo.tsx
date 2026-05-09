@@ -65,6 +65,15 @@ type ProductInfoProduct = {
   colorImages?: Record<string, number[]> | null;
 };
 
+const DEFAULT_VARIANT_KEY = "__default__";
+
+function formatVariantSizeLabel(sizeOption: string, isColorwayProduct: boolean, variantSize?: string) {
+  if (variantSize?.trim()) return variantSize.trim();
+  if (sizeOption === DEFAULT_VARIANT_KEY) return "";
+  const fallback = isColorwayProduct ? sizeOption.split(" / ")[0] : sizeOption;
+  return fallback === DEFAULT_VARIANT_KEY ? "" : fallback.trim();
+}
+
 export default function ProductInfo({ product }: { product: ProductInfoProduct }) {
   const [addedToCart, setAddedToCart] = useState(false);
   const [currentStock, setCurrentStock] = useState(() => product.stock);
@@ -139,6 +148,9 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
     if (!isColorwayProduct || !activeHex) return allSizes;
     return allSizes.filter((s) => (variantByKey.get(s)?.color || (s.endsWith(` / ${activeHex}`) ? activeHex : "")) === activeHex);
   }, [allSizes, isColorwayProduct, activeHex, variantByKey]);
+  const hasVisibleSizeOptions = availableSizes.some((sizeOption) =>
+    Boolean(formatVariantSizeLabel(sizeOption, isColorwayProduct, variantByKey.get(sizeOption)?.size))
+  );
 
   const initialSelectedSize = product.initialSelectedSize || availableSizes[0] || "";
   const defaultSelectedSize = initialSelectedSize || availableSizes[0] || "";
@@ -515,7 +527,7 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
         </div>
       )}
 
-      {!isPerfume && availableSizes.length > 0 && (
+      {!isPerfume && hasVisibleSizeOptions && (
         <div>
           <div className="flex items-center justify-between gap-3 mb-2">
             <p className="text-xs text-text-secondary uppercase tracking-wider">Sizes</p>
@@ -525,7 +537,8 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
               const sizeInfo = sizeAvailability?.[sizeOption];
               const sizeAvailable = sizeInfo ? sizeInfo.stock > 0 : currentStock > 0;
               const reservedElsewhereForSize = Boolean(sizeInfo?.reservedElsewhere);
-              const displayLabel = variantByKey.get(sizeOption)?.size || (isColorwayProduct ? sizeOption.split(" / ")[0] : sizeOption);
+              const displayLabel = formatVariantSizeLabel(sizeOption, isColorwayProduct, variantByKey.get(sizeOption)?.size);
+              if (!displayLabel) return null;
               return (
                 <button
                   key={sizeOption}
@@ -559,9 +572,17 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
           {isPerfume
             ? `${currentStock} bottle${currentStock !== 1 ? "s" : ""} available`
             : displaySelectedSize
-              ? displaySelectedSizeStock === 1
-                ? `Last one — ${variantByKey.get(displaySelectedSize)?.size || (isColorwayProduct ? displaySelectedSize.split(" / ")[0] : displaySelectedSize)}`
-                : `Selected size: ${variantByKey.get(displaySelectedSize)?.size || (isColorwayProduct ? displaySelectedSize.split(" / ")[0] : displaySelectedSize)}`
+              ? (() => {
+                  const selectedLabel = formatVariantSizeLabel(
+                    displaySelectedSize,
+                    isColorwayProduct,
+                    variantByKey.get(displaySelectedSize)?.size
+                  );
+                  if (!selectedLabel) return displaySelectedSizeStock === 1 ? "Last one" : "In stock";
+                  return displaySelectedSizeStock === 1
+                    ? `Last one — ${selectedLabel}`
+                    : `Selected size: ${selectedLabel}`;
+                })()
               : currentStock === 1
                 ? "Last one"
                 : "Size selected"}
