@@ -90,6 +90,7 @@ STRICT CONSTRAINTS:
 - Do NOT distort proportions
 - Face must remain clean and undistorted
 
+{ADDITIONAL_INSTRUCTIONS}
 --------------------------------
 FINAL REQUIREMENT:
 portrait orientation, exact 9:16 aspect ratio, full-body framing, model centered, feet visible, consistent margins, studio composition
@@ -184,6 +185,7 @@ STRICT CONSTRAINTS:
 - Do NOT distort proportions
 - Avoid hiding key garment areas
 
+{ADDITIONAL_INSTRUCTIONS}
 --------------------------------
 FINAL REQUIREMENT:
 portrait orientation, exact 9:16 aspect ratio, full-body framing, model centered, feet visible, consistent margins, studio composition

@@ -39,6 +39,7 @@ class SecondaryColors(BaseModel):
     bottom: ColorChoice | None = None
     shoes: ColorChoice | None = None
     garment: ColorChoice | None = None
+    additional_instructions: str = ""
 
 
 class ClothesRequest(BaseModel):

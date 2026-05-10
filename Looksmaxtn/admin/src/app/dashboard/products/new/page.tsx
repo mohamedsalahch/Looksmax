@@ -133,6 +133,7 @@ type Colorway = {
   companionTopColor: PaletteColor | null;
   companionBottomColor: PaletteColor | null;
   companionFootwearColor: PaletteColor | null;
+  additionalInstructions: string;
 };
 
 function normalizeVariantColors(value: string) {
@@ -209,6 +210,7 @@ function createEmptyColorway(hex = ""): Colorway {
     companionTopColor: null,
     companionBottomColor: null,
     companionFootwearColor: null,
+    additionalInstructions: "",
   };
 }
 
@@ -1198,6 +1200,35 @@ function ColorwayCard({
             ) : (
               <p className="text-[10px] text-text-secondary">No companion zones available for this category.</p>
             )}
+            {colorway.additionalInstructions ? (
+              <div className="space-y-1.5 pt-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-[9px] uppercase tracking-wider text-text-secondary">Additional instructions</p>
+                  <button
+                    type="button"
+                    onClick={() => onUpdate({ additionalInstructions: "" })}
+                    className="text-[8px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-danger hover:decoration-danger"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <textarea
+                  value={colorway.additionalInstructions}
+                  onChange={(e) => onUpdate({ additionalInstructions: e.target.value })}
+                  rows={3}
+                  placeholder="e.g. emphasize a relaxed pose, outdoor sunset lighting, etc."
+                  className="w-full border border-border bg-transparent px-2 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors resize-y"
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onUpdate({ additionalInstructions: " " })}
+                className="text-[9px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary"
+              >
+                + Add custom instructions
+              </button>
+            )}
           </div>
 
           {colorway.generatedImages.length > 0 && (
@@ -1870,6 +1901,9 @@ export default function NewProductPage() {
         if (companionZones.includes("footwear") && cw.companionFootwearColor) {
           body.append("shoesColorName", cw.companionFootwearColor.name);
           body.append("shoesColorHex", cw.companionFootwearColor.hex);
+        }
+        if (cw.additionalInstructions && cw.additionalInstructions.trim()) {
+          body.append("additionalInstructions", cw.additionalInstructions.trim());
         }
       }
 
