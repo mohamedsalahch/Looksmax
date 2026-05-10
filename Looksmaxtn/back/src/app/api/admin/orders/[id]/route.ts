@@ -221,7 +221,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       const productIds = getOrderProductIds(existingLeanOrder.items);
       if (productIds.length > 0) {
         await Product.updateMany(
-          { _id: { $in: productIds } },
+          { _id: { $in: productIds }, stock: { $lte: 0 } },
           { $set: { isActive: false } }
         );
       }

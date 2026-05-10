@@ -62,6 +62,10 @@ interface StoreCredits {
   remaining: number;
 }
 
+interface StoreBalance {
+  balance: number;
+}
+
 function formatMoney(value: number) {
   return `${value.toFixed(2)} TND`;
 }
@@ -230,6 +234,7 @@ export default function DashboardPage() {
   const [orders, setOrders] = useState<DashboardOrder[]>([]);
   const [stores, setStores] = useState<StoreApplication[]>([]);
   const [credits, setCredits] = useState<StoreCredits | null>(null);
+  const [balance, setBalance] = useState<StoreBalance | null>(null);
   const [storeUrlCopied, setStoreUrlCopied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -260,11 +265,12 @@ export default function DashboardPage() {
         setStats(nextStats);
 
         const scope: DashboardScope = nextStats.scope === "store" ? "store" : "admin";
-        const [productsData, ordersData, storesData, creditsData] = await Promise.all([
+        const [productsData, ordersData, storesData, creditsData, balanceData] = await Promise.all([
           fetchJson<{ products?: DashboardProduct[] }>("/api/products"),
           fetchJson<{ orders?: DashboardOrder[] }>("/api/orders"),
           scope === "admin" ? fetchJson<{ stores?: StoreApplication[] }>("/api/store-applications") : Promise.resolve(null),
           scope === "store" ? fetchJson<StoreCredits>("/api/admin/users/me/store-credits") : Promise.resolve(null),
+          scope === "store" ? fetchJson<StoreBalance>("/api/admin/users/me/balance") : Promise.resolve(null),
         ]);
 
         if (!active) return;
@@ -273,6 +279,7 @@ export default function DashboardPage() {
         setOrders(ordersData?.orders || []);
         setStores(storesData?.stores || []);
         setCredits(creditsData || null);
+        setBalance(balanceData || null);
       } catch (loadError) {
         if (!active) return;
         setError(loadError instanceof Error ? loadError.message : "Failed to load dashboard");
@@ -324,7 +331,7 @@ export default function DashboardPage() {
 
   const cards = isStoreDashboard
     ? [
-        { label: "Total Revenue", value: formatMoney(stats.totalRevenue), icon: "💰", tone: "text-text-secondary" },
+        { label: "Current Balance", value: formatMoney(balance?.balance || 0), icon: "💰", tone: "text-text-secondary" },
         { label: "Products", value: stats.totalProducts, icon: "📦", tone: "text-text-secondary" },
         { label: "Pending Products", value: pendingProducts.length, icon: "⏳", tone: "text-warning" },
         { label: "Orders", value: stats.totalOrders, icon: "🛒", tone: "text-text-secondary" },
@@ -353,7 +360,7 @@ export default function DashboardPage() {
         </h1>
         <p className="mt-3 max-w-xl text-sm leading-relaxed text-text-secondary">
           {isStoreDashboard
-            ? "Track revenue, products, orders, and pending reviews for your store."
+            ? "Track current balance, products, orders, and pending reviews for your store."
             : "Focus on operations first: products needing review, pending store applications, and orders waiting on action."}
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
@@ -361,7 +368,7 @@ export default function DashboardPage() {
             {isStoreDashboard ? "Store view" : "Admin view"}
           </span>
           <span className="border border-border px-3 py-1 text-[10px] uppercase tracking-wider text-text-secondary">
-            {isStoreDashboard ? "Revenue included" : "Revenue hidden"}
+            {isStoreDashboard ? "Balance included" : "Revenue hidden"}
           </span>
           {isStoreDashboard && publicStoreUrl && (
             <button
@@ -373,9 +380,6 @@ export default function DashboardPage() {
             </button>
           )}
         </div>
-        {isStoreDashboard && publicStoreUrl && (
-          <p className="mt-2 text-xs text-text-secondary">{publicStoreUrl}</p>
-        )}
       </div>
 
       {/* ── Stats strip ── */}

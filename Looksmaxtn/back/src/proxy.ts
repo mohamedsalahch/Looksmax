@@ -145,6 +145,8 @@ function canAccessAdminPath(role: string | null, pathname: string) {
     pathname === "/api/admin/jobs/events" ||
     pathname === "/api/admin/users/me/store" ||
     pathname === "/api/admin/users/me/store-credits" ||
+    pathname === "/api/admin/users/me/balance" ||
+    pathname === "/api/admin/users/me/withdrawals" ||
     pathname === "/api/admin/stats" ||
     pathname.startsWith("/api/admin/products") ||
     pathname.startsWith("/api/admin/orders") ||

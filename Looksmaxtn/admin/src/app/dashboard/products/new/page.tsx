@@ -476,10 +476,10 @@ function customPaletteColor(hex: string): PaletteColor {
   return { name: getCustomColorName(normalized), hex: normalized };
 }
 
-function getStoreOwnerCustomerPrice(price: string) {
+function getStoreOwnerPayoutPrice(price: string) {
   const value = Number(price);
   if (!Number.isFinite(value) || value <= 0) return "";
-  return (value * (1 + STORE_OWNER_SERVICE_COMMISSION_RATE)).toFixed(2);
+  return (value * (1 - STORE_OWNER_SERVICE_COMMISSION_RATE)).toFixed(2);
 }
 
 async function pickScreenColor() {
@@ -671,14 +671,25 @@ function ColorwayGenerationCard({
       {colorway.generatedImages.length > 0 && (
         <div className="grid grid-cols-2 gap-1.5">
           {colorway.generatedImages.map((img, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => setZoomedUrl(img.url)}
-              className="aspect-[4/5] overflow-hidden rounded border border-border bg-bg-secondary cursor-zoom-in"
-            >
-              <img src={img.url} alt={`Generated ${i + 1}`} className="h-full w-full object-cover" />
-            </button>
+            <div key={i} className="space-y-1">
+              <button
+                type="button"
+                onClick={() => setZoomedUrl(img.url)}
+                className="group relative aspect-[4/5] overflow-hidden rounded border border-border bg-bg-secondary cursor-zoom-in transition-colors hover:border-accent/60"
+              >
+                <img src={img.url} alt={`Generated ${i + 1}`} className="h-full w-full object-cover" />
+                <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 translate-y-1 rounded bg-black/60 px-2 py-1 text-[8px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
+                  Preview
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onUpdate({ generatedImages: [], generateStatus: "idle", generateError: "", generateJobId: "" })}
+                className="w-full border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-danger transition-colors hover:bg-danger/5"
+              >
+                Clear
+              </button>
+            </div>
           ))}
         </div>
       )}
@@ -699,9 +710,6 @@ function ColorwayGenerationCard({
             >
               Regenerate
             </button>
-          )}
-          {colorway.generateStatus === "processing" && (
-            <span className="text-[8px] uppercase tracking-wider text-text-secondary">Generating...</span>
           )}
           <button
             type="button"
@@ -968,10 +976,15 @@ function ColorwayCard({
                 }}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => { e.preventDefault(); handleViewFile(slot, e.dataTransfer.files?.[0] || null); }}
-                className={`aspect-[4/5] overflow-hidden rounded border border-dashed border-border bg-bg-secondary transition-colors flex items-center justify-center ${preview ? "cursor-zoom-in hover:border-accent/60" : "cursor-pointer hover:border-accent"}`}
+                className={`group relative aspect-[4/5] overflow-hidden rounded border border-dashed border-border bg-bg-secondary transition-colors flex items-center justify-center ${preview ? "cursor-zoom-in hover:border-accent/60" : "cursor-pointer hover:border-accent"}`}
               >
                 {preview ? (
-                  <img src={preview} alt={slot} className="h-full w-full object-cover" />
+                  <>
+                    <img src={preview} alt={slot} className="h-full w-full object-cover" />
+                    <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 translate-y-1 rounded bg-black/60 px-2 py-1 text-[8px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
+                      Preview
+                    </span>
+                  </>
                 ) : (
                   <span className="text-[8px] uppercase tracking-wider text-text-secondary/60">Upload</span>
                 )}
@@ -980,7 +993,7 @@ function ColorwayCard({
                 <button
                   type="button"
                   onClick={() => handleViewFile(slot, null)}
-                  className="text-[8px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary"
+                  className="w-full border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-danger transition-colors hover:bg-danger/5"
                 >
                   Clear
                 </button>
@@ -1085,7 +1098,7 @@ function ColorwayCard({
           </div>
         )}
         <div className="flex items-center justify-end gap-2">
-          {!hasEnhancedResults && canEnhance && !isUsingOriginal && (
+          {hasEnhancedResults && !isUsingOriginal && canEnhance && (
             <button
               type="button"
               onClick={() => onUpdate({ enhanceStatus: "original" })}
@@ -1094,13 +1107,13 @@ function ColorwayCard({
               Use original
             </button>
           )}
-          {hasEnhancedResults && colorway.enhanceStatus === "completed" && canEnhance && (
+          {hasEnhancedResults && isUsingOriginal && canEnhance && (
             <button
               type="button"
-              onClick={() => onUpdate({ enhanceStatus: "original" })}
+              onClick={() => onUpdate({ enhanceStatus: "completed" })}
               className="text-[8px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary"
             >
-              Use original
+              Use enhanced
             </button>
           )}
           {hasEnhancedResults && canEnhance && colorway.enhanceStatus !== "processing" && (
@@ -1112,21 +1125,10 @@ function ColorwayCard({
               Re-enhance
             </button>
           )}
-          {hasEnhancedResults && colorway.enhanceStatus === "processing" && (
-            <span className="text-[8px] uppercase tracking-wider text-text-secondary">Enhancing...</span>
-          )}
           <button
             type="button"
-            onClick={
-              colorway.enhanceStatus === "processing"
-                ? undefined
-                : hasEnhancedResults
-                ? isUsingOriginal
-                  ? () => onUpdate({ enhanceStatus: "completed" })
-                  : undefined
-                : onEnhance
-            }
-            disabled={!canEnhance || colorway.enhanceStatus === "processing" || (hasEnhancedResults && !isUsingOriginal)}
+            onClick={colorway.enhanceStatus === "processing" || hasEnhancedResults ? undefined : onEnhance}
+            disabled={!canEnhance || colorway.enhanceStatus === "processing" || hasEnhancedResults}
             className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity"
           >
             {colorway.enhanceStatus === "processing" && (
@@ -1134,7 +1136,7 @@ function ColorwayCard({
             )}
             {hasEnhancedResults
               ? isUsingOriginal
-                ? "Use enhanced"
+                ? "Original"
                 : "Enhanced"
               : colorway.enhanceStatus === "processing"
               ? "Enhancing..."
@@ -1218,14 +1220,25 @@ function ColorwayCard({
           {colorway.generatedImages.length > 0 && (
             <div className="grid grid-cols-2 gap-1.5">
               {colorway.generatedImages.map((img, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => setZoomedPreview(img.url)}
-                  className="aspect-[4/5] overflow-hidden rounded border border-border bg-bg-secondary cursor-zoom-in"
-                >
-                  <img src={img.url} alt={`Generated ${i + 1}`} className="h-full w-full object-cover" />
-                </button>
+                <div key={i} className="space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => setZoomedPreview(img.url)}
+                    className="group relative aspect-[4/5] overflow-hidden rounded border border-border bg-bg-secondary cursor-zoom-in transition-colors hover:border-accent/60"
+                  >
+                    <img src={img.url} alt={`Generated ${i + 1}`} className="h-full w-full object-cover" />
+                    <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 translate-y-1 rounded bg-black/60 px-2 py-1 text-[8px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
+                      Preview
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onUpdate({ generatedImages: [], generateStatus: "idle", generateError: "", generateJobId: "" })}
+                    className="w-full border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-danger transition-colors hover:bg-danger/5"
+                  >
+                    Clear
+                  </button>
+                </div>
               ))}
             </div>
           )}
@@ -1239,9 +1252,6 @@ function ColorwayCard({
               >
                 Regenerate
               </button>
-            )}
-            {colorway.generateStatus === "processing" && (
-              <span className="text-[8px] uppercase tracking-wider text-text-secondary">Generating...</span>
             )}
             <button
               type="button"
@@ -1329,8 +1339,7 @@ export default function NewProductPage() {
   const isStoreOwner = userRole === "store_owner";
   const isRetailStoreOwner = isStoreOwner && userStoreType === "retail";
   const isThriftStoreOwner = isStoreOwner && userStoreType === "thrift";
-  const storeOwnerCustomerPrice = getStoreOwnerCustomerPrice(form.price);
-  const submittedPrice = isStoreOwner && storeOwnerCustomerPrice ? storeOwnerCustomerPrice : form.price;
+  const storeOwnerPayoutPrice = getStoreOwnerPayoutPrice(form.price);
 
   useEffect(() => {
     fetch("/api/categories", withAuthRequest())
@@ -1551,16 +1560,16 @@ export default function NewProductPage() {
         kind: "generated" as const,
       })),
       ...(generationInputs.front.previewUrl
-        ? [{ label: "Enhanced front", url: generationInputs.front.previewUrl, kind: "enhanced" as const }]
+        ? [{ label: "Enhanced front", url: generationInputs.front.previewUrl, kind: "enhanced" as const, slot: "front" as const }]
         : []),
       ...(generationInputs.back.previewUrl
-        ? [{ label: "Enhanced back", url: generationInputs.back.previewUrl, kind: "enhanced" as const }]
+        ? [{ label: "Enhanced back", url: generationInputs.back.previewUrl, kind: "enhanced" as const, slot: "back" as const }]
         : []),
       ...(generationInputs.left.previewUrl
-        ? [{ label: usesAccessoryImageWorkflow ? "Enhanced image 3" : "Enhanced left", url: generationInputs.left.previewUrl, kind: "enhanced" as const }]
+        ? [{ label: usesAccessoryImageWorkflow ? "Enhanced image 3" : "Enhanced left", url: generationInputs.left.previewUrl, kind: "enhanced" as const, slot: "left" as const }]
         : []),
       ...(generationInputs.right.previewUrl
-        ? [{ label: usesAccessoryImageWorkflow ? "Enhanced image 4" : "Enhanced right", url: generationInputs.right.previewUrl, kind: "enhanced" as const }]
+        ? [{ label: usesAccessoryImageWorkflow ? "Enhanced image 4" : "Enhanced right", url: generationInputs.right.previewUrl, kind: "enhanced" as const, slot: "right" as const }]
         : []),
     ],
     [
@@ -2113,6 +2122,23 @@ export default function NewProductPage() {
     }
   };
 
+  const clearEnhancedProductMedia = (key: keyof GenerationInputs) => {
+    setGenerationInputs((current) => {
+      const next = {
+        ...current,
+        [key]: createEmptySlot(),
+      };
+      const hasRemainingEnhanced = requiredOriginPictureKeys.some(
+        (originKey) => originKey !== key && Boolean(next[originKey].previewUrl)
+      );
+      setShowProductMediaSection(generatedModelMedia.length > 0 || hasRemainingEnhanced);
+      return next;
+    });
+    setImages((current) => current.filter((image) => !(image.kind === "source" && image.slot === key)));
+    setProductMediaStatus("idle");
+    setProductMediaError("");
+  };
+
   const assignProductImageToGenerationSlot = async (key: keyof GenerationInputs, imageId: string) => {
     const image = images.find((entry) => entry.id === imageId);
     if (!image) return;
@@ -2342,10 +2368,6 @@ export default function NewProductPage() {
     setProductMediaStatus("idle");
     setProductMediaJobId("");
     setProductMediaError("");
-  };
-
-  const handleCancelEnhance = () => {
-    clearProductMediaEnhancement();
   };
 
   const handleEnhanceButtonClick = () => {
@@ -2862,7 +2884,7 @@ export default function NewProductPage() {
 
         const body = new FormData();
         body.append("name", form.name);
-        body.append("price", submittedPrice);
+        body.append("price", form.price);
         body.append("brand", form.brand);
         body.append("reference", form.reference);
         body.append("description", "");
@@ -3023,7 +3045,7 @@ export default function NewProductPage() {
 
       const body = new FormData();
       body.append("name", form.name);
-      body.append("price", submittedPrice);
+      body.append("price", form.price);
       body.append("brand", brandToSend);
       body.append("reference", form.reference);
       body.append("description", form.description);
@@ -3228,11 +3250,11 @@ export default function NewProductPage() {
                   className="input-line"
                   placeholder="0.00"
                 />
-                {storeOwnerCustomerPrice && (
+                {storeOwnerPayoutPrice && (
                   <div className="mt-2 border border-border bg-bg-secondary px-3 py-2 text-[11px] text-text-secondary">
                     <div className="flex items-center justify-between gap-3">
-                      <span>Customer price with 10% service commission</span>
-                      <span className="font-semibold text-text-primary">{storeOwnerCustomerPrice} TND</span>
+                      <span>You receive after commission</span>
+                      <span className="font-semibold text-text-primary">{storeOwnerPayoutPrice} TND</span>
                     </div>
                   </div>
                 )}
@@ -4045,16 +4067,6 @@ export default function NewProductPage() {
             {form.productType === "fashion" && productMediaStatus !== "completed" && (
               <div className="mt-4">
                 <div className="flex justify-end gap-2">
-                  {productMediaStatus === "processing" && (
-                    <button
-                      type="button"
-                      onClick={handleCancelEnhance}
-                      aria-label="Cancel enhancement"
-                      className="inline-flex h-9 w-9 items-center justify-center border border-border text-xs text-text-secondary hover:bg-bg-hover"
-                    >
-                      ×
-                    </button>
-                  )}
                   <button
                     type="button"
                     onClick={handleEnhanceButtonClick}
@@ -4185,19 +4197,30 @@ export default function NewProductPage() {
                       {generatedModelMedia.length > 0 && (
                         <button
                           type="button"
-                          onClick={() => clearGeneratedModelMedia()}
-                          className="border border-border px-3 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:bg-bg-hover"
+                          disabled
+                          className="border border-accent bg-accent/10 px-3 py-2 text-[10px] uppercase tracking-wider text-accent"
                         >
-                          Clear model
+                          Generated
                         </button>
                       )}
+                      {generatedModelMedia.length > 0 ? (
+                        <button
+                          type="button"
+                          onClick={handleRegenerateModel}
+                          className="border border-border px-3 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:bg-bg-hover"
+                        >
+                          Regenerate model
+                        </button>
+                      ) : (
                       <button
                         type="button"
-                        onClick={handleRegenerateModel}
+                        onClick={handleGenerate}
+                        disabled={generating || !canGenerate}
                         className="border border-border px-3 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:bg-bg-hover"
                       >
-                        Regenerate model
+                        {generating ? "Generating..." : "Generate model"}
                       </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -4206,32 +4229,30 @@ export default function NewProductPage() {
                     <div key={`${item.label}-${index}`} className="mx-auto w-full max-w-[220px] space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-[10px] uppercase tracking-wider text-text-secondary">{item.label}</p>
-                        {item.kind === "generated" && (
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={handleRegenerateModel}
-                              className="text-[10px] uppercase tracking-wider text-text-secondary hover:text-text-primary"
-                            >
-                              Regenerate
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => clearGeneratedModelMedia()}
-                              className="text-[10px] uppercase tracking-wider text-danger"
-                            >
-                              Clear
-                            </button>
-                          </div>
-                        )}
                       </div>
                       <button
                         type="button"
                         onClick={() => setZoomedImage({ id: item.label, url: item.url, file: null, kind: "source" })}
-                        className="flex aspect-[4/5] w-full items-center justify-center overflow-hidden rounded bg-bg-secondary p-2"
+                        className="group relative flex aspect-[4/5] w-full cursor-zoom-in items-center justify-center overflow-hidden rounded border border-transparent bg-bg-secondary p-2 transition-colors hover:border-accent/60"
                       >
                         <img src={item.url} alt={item.label} className="max-h-full max-w-full object-contain" />
+                        <span className="pointer-events-none absolute inset-x-2 bottom-2 translate-y-1 rounded bg-black/60 px-2 py-1 text-[9px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
+                          Preview
+                        </span>
                       </button>
+                      {(item.kind === "generated" || item.kind === "enhanced") && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            item.kind === "generated"
+                              ? clearGeneratedModelMedia()
+                              : clearEnhancedProductMedia(item.slot)
+                          }
+                          className="w-full border border-border px-3 py-2 text-[10px] uppercase tracking-wider text-danger transition-colors hover:bg-danger/5"
+                        >
+                          Clear
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
