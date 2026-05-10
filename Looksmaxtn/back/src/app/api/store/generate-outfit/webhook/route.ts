@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/store/lib/mongodb";
 import OutfitGenerationJob from "@/store/models/OutfitGenerationJob";
 import { requireWebhookSecret } from "@/lib/webhookAuth";
+import { publishStoreUserEvent } from "@/store/lib/storeUserEvents";
 
 function normalizeWebhookImage(data: Record<string, unknown>) {
   const imageCandidates = [
@@ -49,10 +50,19 @@ export async function POST(req: NextRequest) {
 
     if (typeof body.error === "string" && body.error) {
       console.error(`[outfit-webhook] Generation service error for job ${jobId}: ${body.error}`);
-      await OutfitGenerationJob.findByIdAndUpdate(jobId, {
-        status: "failed",
-        errorMessage: "Outfit generation failed.",
-      });
+      const failed = await OutfitGenerationJob.findByIdAndUpdate(
+        jobId,
+        { status: "failed", errorMessage: "Outfit generation failed." },
+        { new: true }
+      );
+      if (failed?.user) {
+        publishStoreUserEvent(String(failed.user), {
+          type: "outfit:update",
+          jobId,
+          status: "failed",
+          errorMessage: "Outfit generation failed.",
+        });
+      }
       return NextResponse.json({ ok: true });
     }
 
@@ -71,10 +81,19 @@ export async function POST(req: NextRequest) {
       back: view === "back" ? image : existingJob.images?.back || "",
     };
 
+    const nextStatus: "processing" | "completed" =
+      nextImages.front && nextImages.back ? "completed" : "processing";
     await OutfitGenerationJob.findByIdAndUpdate(jobId, {
-      status: nextImages.front && nextImages.back ? "completed" : "processing",
+      status: nextStatus,
       images: nextImages,
       errorMessage: "",
+    });
+
+    publishStoreUserEvent(String(existingJob.user), {
+      type: "outfit:update",
+      jobId,
+      status: nextStatus,
+      images: nextImages,
     });
 
     return NextResponse.json({ ok: true });

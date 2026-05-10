@@ -5,6 +5,7 @@ import {
 } from "@/store/lib/bodyProfileEnhancement";
 import { deleteBodyProfileImage } from "@/store/lib/bodyProfileUploads";
 import { requireWebhookSecret } from "@/lib/webhookAuth";
+import { publishStoreUserEvent } from "@/store/lib/storeUserEvents";
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,6 +24,11 @@ export async function POST(req: NextRequest) {
           await deleteBodyProfileImage(imagePath);
         }
         console.warn(`[enhance-webhook] Generation service reported error for user ${userId}: ${body.error}`);
+        publishStoreUserEvent(userId, {
+          type: "body-profile:update",
+          status: "failed",
+          errorMessage: "Photo enhancement failed. Please upload another photo.",
+        });
       }
       return NextResponse.json({ ok: true, error: true });
     }
@@ -41,6 +47,12 @@ export async function POST(req: NextRequest) {
     if (!enhancedImagePath) {
       return NextResponse.json({ ok: true, stale: true });
     }
+
+    publishStoreUserEvent(userId, {
+      type: "body-profile:update",
+      status: "completed",
+      enhancedImagePath,
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

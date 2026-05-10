@@ -14,6 +14,7 @@ import { shareOutfit } from "@/lib/share";
 import { upsertSavedOutfitSession } from "@/lib/savedOutfitsSession";
 import { readStudioSessionState, writeStudioSessionState, type StudioSessionZoneItem } from "@/lib/studioSession";
 import { getEnhancedFrontDisplayImage } from "@/lib/colorwayImage";
+import { subscribeToOutfitJob } from "@/lib/storeEvents";
 
 interface CategoryNode {
     _id: string;
@@ -1681,11 +1682,14 @@ export default function OutfitStudioPage() {
         };
 
         pollJob();
-        const interval = window.setInterval(pollJob, 2000);
+        const unsubscribe = subscribeToOutfitJob(generatedOutfitJobId, () => {
+            if (cancelled) return;
+            pollJob();
+        });
 
         return () => {
             cancelled = true;
-            window.clearInterval(interval);
+            unsubscribe();
             outfitGenerationPollAbortRef.current?.abort();
         };
     }, [generatedOutfitJobId, generatingOutfit]);

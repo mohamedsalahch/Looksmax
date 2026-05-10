@@ -6,7 +6,7 @@ import { getConditionStatusFromScore } from "@/lib/productCondition";
 import { generateId } from "@/lib/uuid";
 import { withAuthRequest } from "@/lib/authClient";
 import { compressImageFile } from "@/lib/imageCompression";
-import { subscribeToJob } from "@/lib/jobEvents";
+import { subscribeToJob, waitForJob } from "@/lib/jobEvents";
 import {
   SECONDARY_GARMENT_PALETTE,
   PaletteColor,
@@ -424,32 +424,6 @@ async function originPictureToFile(url: string, label: OriginPictureKey) {
     type: blob.type || "image/png",
   });
 }
-
-function waitFor(ms: number, signal?: AbortSignal) {
-  return new Promise<void>((resolve, reject) => {
-    const timeout = window.setTimeout(resolve, ms);
-
-    if (!signal) return;
-
-    const onAbort = () => {
-      window.clearTimeout(timeout);
-      reject(new DOMException("The operation was aborted.", "AbortError"));
-    };
-
-    if (signal.aborted) {
-      onAbort();
-      return;
-    }
-
-    signal.addEventListener("abort", onAbort, { once: true });
-  });
-}
-
-type AsyncJobStatusResponse = {
-  status?: ProductMediaStatus;
-  images?: Record<string, string>;
-  error?: string;
-};
 
 function getCustomColorName(hex: string) {
   const normalized = hex.toUpperCase();
@@ -1289,15 +1263,6 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       generatedImages: results.filter((r): r is { url: string; file: File } => r !== null),
     });
   };
-  const fetchColorwayEnhancementStatus = async (jobId: string, isShoes: boolean, signal: AbortSignal) => {
-    const endpoint = isShoes ? `/api/products/enhance-shoes?job_id=${jobId}` : `/api/products/enhance?job_id=${jobId}`;
-    const response = await fetch(endpoint, withAuthRequest({ signal, cache: "no-store" }));
-    return (await response.json().catch(() => ({}))) as AsyncJobStatusResponse;
-  };
-  const fetchColorwayGenerationStatus = async (jobId: string, signal: AbortSignal) => {
-    const response = await fetch(`/api/products/generate?job_id=${jobId}`, withAuthRequest({ signal, cache: "no-store" }));
-    return (await response.json().catch(() => ({}))) as AsyncJobStatusResponse;
-  };
   const handleEnhanceColorway = async (colorwayId: string) => {
     const cw = colorways.find((c) => c.id === colorwayId);
     if (!cw) return;
@@ -1372,8 +1337,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   useEffect(() => {
     const processing = colorways.filter((c) => c.enhanceStatus === "processing" && c.enhanceJobId);
     if (processing.length === 0) return;
-    const controller = new AbortController();
-    const isShoes = (form.fashionSubtype || savedFashionSubtype || "") === "shoes";
+
     const unsubscribers = processing.map((cw) =>
       subscribeToJob(cw.enhanceJobId, (update) => {
         if (update.status === "failed") {
@@ -1385,25 +1349,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       })
     );
 
-    void Promise.allSettled(
-      processing.map(async (cw) => {
-        while (!controller.signal.aborted) {
-          await waitFor(5000, controller.signal);
-          const status = await fetchColorwayEnhancementStatus(cw.enhanceJobId, isShoes, controller.signal);
-          if (status.status === "failed") {
-            applyColorwayEnhancementFailure(cw.id, status.error || "Enhancement failed.");
-            return;
-          }
-          if (status.status === "completed") {
-            await applyColorwayEnhancementCompletion(cw.id, status.images);
-            return;
-          }
-        }
-      })
-    );
-
     return () => {
-      controller.abort();
       unsubscribers.forEach((fn) => fn());
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1469,7 +1415,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   useEffect(() => {
     const processing = colorways.filter((c) => c.generateStatus === "processing" && c.generateJobId);
     if (processing.length === 0) return;
-    const controller = new AbortController();
+
     const unsubscribers = processing.map((cw) =>
       subscribeToJob(cw.generateJobId, (update) => {
         if (update.status === "failed") {
@@ -1483,27 +1429,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       })
     );
 
-    void Promise.allSettled(
-      processing.map(async (cw) => {
-        while (!controller.signal.aborted) {
-          await waitFor(5000, controller.signal);
-          const status = await fetchColorwayGenerationStatus(cw.generateJobId, controller.signal);
-          if (status.status === "failed") {
-            applyColorwayGenerationFailure(cw.id, status.error || "Generation failed.");
-            return;
-          }
-          if (status.status === "completed") {
-            const subtype = form.fashionSubtype || savedFashionSubtype || "clothes";
-            const viewList = subtype === "shoes" ? ["front", "back", "left", "right"] : ["front", "back"];
-            await applyColorwayGenerationCompletion(cw.id, viewList, status.images);
-            return;
-          }
-        }
-      })
-    );
-
     return () => {
-      controller.abort();
       unsubscribers.forEach((fn) => fn());
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2848,26 +2774,17 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 
       const jobId = triggerData.job_id;
 
-      // 2. Poll for status
-      let isCompleted = false;
+      // 2. Wait for completion via SSE, with one-shot backfill in case the
+      // webhook fired before the SSE connection was established.
       let finalImages: Record<string, string> | null = null;
-
-      while (!isCompleted) {
-        await waitFor(5000, controller.signal);
-
-        const statusRes = await fetch(`/api/products/generate?job_id=${jobId}`, withAuthRequest({
-          signal: controller.signal,
-        }));
-        const statusData = await statusRes.json();
-
-        if (statusData.status === "completed") {
-          isCompleted = true;
-          finalImages = statusData.images;
-        } else if (statusData.status === "failed") {
-          setError(statusData.error || "Generation failed.", "model");
-          setGenerating(false);
-          return;
-        }
+      try {
+        const result = await waitForJob(jobId, { signal: controller.signal });
+        finalImages = result.images || null;
+      } catch (err) {
+        if ((err as Error)?.name === "AbortError") return;
+        setError((err as Error)?.message || "Generation failed.", "model");
+        setGenerating(false);
+        return;
       }
 
       // 3. Process completed images
