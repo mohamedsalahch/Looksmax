@@ -2855,7 +2855,7 @@ export default function NewProductPage() {
         body.append("sizeStock", JSON.stringify(sizeStockPayload));
         body.append("variants", JSON.stringify(variantsPayload));
         body.append("mainImageIndex", "0");
-        if (needsModelSelection && selectedModelId) body.append("modelId", selectedModelId);
+        if (selectedModelId) body.append("modelId", selectedModelId);
         const companionSettingsPayload: Record<string, object> = {};
         for (const cw of colorways) {
           const colorKey = cw.hex.trim();

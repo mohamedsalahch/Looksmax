@@ -1736,7 +1736,11 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               const enhanceStatus: ColorwayEnhanceStatus = colorwayViews.every((view) =>
                 Boolean(savedViewUrls[view] || originPictureUrls[view])
               ) ? "completed" : "idle";
-              const cs = savedCompanion?.[hex];
+              const cs =
+                savedCompanion?.[hex] ||
+                savedCompanion?.[hex.toUpperCase()] ||
+                savedCompanion?.[hex.toLowerCase()] ||
+                savedCompanion?.[hex.trim()];
               return {
                 ...createEmptyColorway(),
                 hex,
@@ -1920,6 +1924,13 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     [models, selectedModelGender]
   );
   const selectedModel = filteredModels.find((model) => model._id === selectedModelId);
+
+  useEffect(() => {
+    if (!needsModelSelection) return;
+    if (selectedModelId && filteredModels.some((model) => model._id === selectedModelId)) return;
+    if (filteredModels.length === 0) return;
+    setSelectedModelId(filteredModels[0]._id);
+  }, [filteredModels, needsModelSelection, selectedModelId]);
   const requiredOriginPictureKeys = useMemo(
     () =>
       requiresFourImageInputs
@@ -2940,7 +2951,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         body.append("sizeStock", JSON.stringify(sizeStockPayload));
         body.append("variants", JSON.stringify(variantsPayload));
         body.append("mainImageIndex", "0");
-        if (needsModelSelection && selectedModelId) body.append("modelId", selectedModelId);
+        if (selectedModelId) body.append("modelId", selectedModelId);
         const companionSettingsPayload: Record<string, object> = {};
         for (const cw of colorways) {
           const colorKey = cw.hex.trim();
