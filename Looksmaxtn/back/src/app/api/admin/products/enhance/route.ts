@@ -24,22 +24,6 @@ function buildGeneratorEndpoint(baseUrl: string, path: string) {
     : `${normalizedBaseUrl}/api/${path}`;
 }
 
-async function compareFrontBackImages(baseUrl: string, frontBase64: string, backBase64: string) {
-  const compareUrl = buildGeneratorEndpoint(baseUrl, "compare-front-back");
-  const response = await fetch(compareUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      front: frontBase64,
-      back: backBase64,
-      front_label: "front",
-      back_label: "back",
-    }),
-  });
-  const data = await response.json().catch(() => ({}));
-  return { ok: response.ok, data };
-}
-
 function getWebhookBaseUrl(req: NextRequest) {
   const configured = process.env.OUTFIT_WEBHOOK_BASE_URL?.replace(/\/$/, "");
   if (configured) return configured;
@@ -172,30 +156,6 @@ export async function POST(req: NextRequest) {
       fileToBase64(frontFile),
       fileToBase64(backFile),
     ]);
-
-    let compare: Awaited<ReturnType<typeof compareFrontBackImages>>;
-    try {
-      compare = await compareFrontBackImages(baseUrl, frontBase64, backBase64);
-    } catch (fetchErr: unknown) {
-      const cause = fetchErr instanceof Error ? (fetchErr.cause ?? fetchErr) : fetchErr;
-      console.error("[enhance] fetch to generator failed:", cause);
-      logRequestError("admin.products.enhance.post", req, fetchErr);
-      return NextResponse.json(
-        { error: `Generation service unreachable. Make sure the generator API is running.` },
-        { status: 503 }
-      );
-    }
-    if (!compare.ok) {
-      const reason = compare.data?.detail || compare.data?.error || "Unable to compare product images.";
-      return NextResponse.json({ error: reason }, { status: compare.data?.status ? Number(compare.data.status) : 400 });
-    }
-
-    if (!compare.data?.valid) {
-      return NextResponse.json(
-        { error: compare.data?.reason || "Front and back images must be different." },
-        { status: 400 }
-      );
-    }
 
     const sourceImages = {
       front: await saveProductMediaSourceImage(frontFile, "front"),

@@ -1072,6 +1072,15 @@ function ColorwayCard({
           </div>
         )}
         <div className="flex items-center justify-end gap-2">
+          {!hasEnhancedResults && canEnhance && !isUsingOriginal && colorway.enhanceStatus !== "processing" && (
+            <button
+              type="button"
+              onClick={() => onUpdate({ enhanceStatus: "original" })}
+              className="text-[8px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary"
+            >
+              Use original
+            </button>
+          )}
           {hasEnhancedResults && !isUsingOriginal && canEnhance && (
             <button
               type="button"
