@@ -125,6 +125,7 @@ type Colorway = {
   companionTopColor: PaletteColor | null;
   companionBottomColor: PaletteColor | null;
   companionFootwearColor: PaletteColor | null;
+  additionalInstructions: string;
 };
 
 function createEmptyColorway(hex = ""): Colorway {
@@ -145,6 +146,7 @@ function createEmptyColorway(hex = ""): Colorway {
     generatedImages: [],
     companionTopType: "", companionBottomType: "", companionFootwearType: "",
     companionTopColor: null, companionBottomColor: null, companionFootwearColor: null,
+    additionalInstructions: "",
   };
 }
 
@@ -1024,6 +1026,35 @@ function ColorwayCard({
             ) : (
               <p className="text-[10px] text-text-secondary">No companion zones available for this category.</p>
             )}
+            {colorway.additionalInstructions ? (
+              <div className="space-y-1.5 pt-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-[9px] uppercase tracking-wider text-text-secondary">Additional instructions</p>
+                  <button
+                    type="button"
+                    onClick={() => onUpdate({ additionalInstructions: "" })}
+                    className="text-[8px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-danger hover:decoration-danger"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <textarea
+                  value={colorway.additionalInstructions}
+                  onChange={(e) => onUpdate({ additionalInstructions: e.target.value })}
+                  rows={3}
+                  placeholder="e.g. emphasize a relaxed pose, outdoor sunset lighting, etc."
+                  className="w-full border border-border bg-transparent px-2 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors resize-y"
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onUpdate({ additionalInstructions: " " })}
+                className="text-[9px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary"
+              >
+                + Add custom instructions
+              </button>
+            )}
           </div>
 
           {colorway.generatedImages.length > 0 && (
@@ -1403,6 +1434,9 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       if (companionZones.includes("top") && cw.companionTopColor) { body.append("topColorName", cw.companionTopColor.name); body.append("topColorHex", cw.companionTopColor.hex); }
       if (companionZones.includes("bottom") && cw.companionBottomColor) { body.append("bottomColorName", cw.companionBottomColor.name); body.append("bottomColorHex", cw.companionBottomColor.hex); }
       if (companionZones.includes("footwear") && cw.companionFootwearColor) { body.append("shoesColorName", cw.companionFootwearColor.name); body.append("shoesColorHex", cw.companionFootwearColor.hex); }
+      if (cw.additionalInstructions && cw.additionalInstructions.trim()) {
+        body.append("additionalInstructions", cw.additionalInstructions.trim());
+      }
       const [frontFile, backFile] = await Promise.all([compressImageFile(frontSrc), compressImageFile(backSrc)]);
       body.append("front", frontFile); body.append("back", backFile);
       const res = await fetch("/api/products/generate", withAuthRequest({ method: "POST", body }));
@@ -1667,6 +1701,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               topType?: string; topColor?: { name: string; hex: string } | null;
               bottomType?: string; bottomColor?: { name: string; hex: string } | null;
               footwearType?: string; footwearColor?: { name: string; hex: string } | null;
+              additionalInstructions?: string;
             };
             const savedCompanion = p.companionSettings as Record<string, SavedCompanionSettings> | null;
             const loadedColorways: Colorway[] = Array.from(colorwayMap.entries()).map(([hex, sizes]) => {
@@ -1722,6 +1757,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 companionBottomColor: cs?.bottomColor || null,
                 companionFootwearType: cs?.footwearType || "",
                 companionFootwearColor: cs?.footwearColor || null,
+                additionalInstructions: cs?.additionalInstructions || "",
               };
             });
             setColorways(loadedColorways);
@@ -2916,6 +2952,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
             bottomColor: cw.companionBottomColor,
             footwearType: cw.companionFootwearType,
             footwearColor: cw.companionFootwearColor,
+            additionalInstructions: (cw.additionalInstructions || "").trim(),
           };
         }
         body.append("companionSettings", JSON.stringify(companionSettingsPayload));

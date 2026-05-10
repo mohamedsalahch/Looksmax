@@ -55,6 +55,7 @@ export interface IProduct extends Document {
     bottomColor?: { name: string; hex: string } | null;
     footwearType?: string;
     footwearColor?: { name: string; hex: string } | null;
+    additionalInstructions?: string;
   }> | null;
   createdBy?: IAuditActor | null;
   updatedBy?: IAuditActor | null;
@@ -144,6 +145,7 @@ const productSchema = new Schema<IProduct>(
         bottomColor: { type: new Schema({ name: String, hex: String }, { _id: false }), default: null },
         footwearType: { type: String, default: "" },
         footwearColor: { type: new Schema({ name: String, hex: String }, { _id: false }), default: null },
+        additionalInstructions: { type: String, default: "" },
       }, { _id: false }),
       default: null,
     },

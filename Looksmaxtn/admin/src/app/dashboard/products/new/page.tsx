@@ -2858,13 +2858,16 @@ export default function NewProductPage() {
         if (needsModelSelection && selectedModelId) body.append("modelId", selectedModelId);
         const companionSettingsPayload: Record<string, object> = {};
         for (const cw of colorways) {
-          companionSettingsPayload[cw.hex] = {
+          const colorKey = cw.hex.trim();
+          if (!colorKey) continue;
+          companionSettingsPayload[colorKey] = {
             topType: cw.companionTopType,
             topColor: cw.companionTopColor,
             bottomType: cw.companionBottomType,
             bottomColor: cw.companionBottomColor,
             footwearType: cw.companionFootwearType,
             footwearColor: cw.companionFootwearColor,
+            additionalInstructions: (cw.additionalInstructions || "").trim(),
           };
         }
         body.append("companionSettings", JSON.stringify(companionSettingsPayload));

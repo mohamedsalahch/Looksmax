@@ -91,6 +91,7 @@ function parseCompanionSettings(raw: FormDataEntryValue | null) {
       topType?: string; topColor?: { name: string; hex: string } | null;
       bottomType?: string; bottomColor?: { name: string; hex: string } | null;
       footwearType?: string; footwearColor?: { name: string; hex: string } | null;
+      additionalInstructions?: string;
     }>;
     return new Map(Object.entries(parsed));
   } catch { return null; }
