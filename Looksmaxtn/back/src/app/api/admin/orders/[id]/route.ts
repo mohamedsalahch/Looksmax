@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
-import Order from "@/admin/models/Order";
+import Order, { type IOrderItem } from "@/admin/models/Order";
 import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
 import User from "@/store/models/User";
@@ -8,6 +8,7 @@ import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 import { broadcastAdminEvent } from "@/admin/lib/adminEvents";
 import { sendOrderStatusEmail } from "@/store/lib/mailer";
+import { creditOrderEarnings } from "@/admin/lib/storeBalance";
 
 const VALID_ORDER_STATUSES = ["processing", "confirmed", "canceled", "shipping", "delivered", "returned"] as const;
 const FINAL_ORDER_STATUSES = ["delivered", "canceled", "returned"] as const;
@@ -223,6 +224,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           { _id: { $in: productIds } },
           { $set: { isActive: false } }
         );
+      }
+
+      try {
+        await creditOrderEarnings({
+          orderId: existingOrder._id,
+          items: existingLeanOrder.items as unknown as IOrderItem[],
+          actor: auditActor,
+        });
+      } catch (earningsError) {
+        console.error("Failed to credit store-owner earnings:", earningsError);
       }
     }
 

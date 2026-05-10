@@ -28,6 +28,7 @@ export interface IUser extends Document {
   storeType?: "thrift" | "retail" | null;
   storeApprovalStatus?: "pending" | "approved" | "rejected" | null;
   storeOwnerStats?: IStoreOwnerStats;
+  balance?: number;
   email: string;
   password: string;
   role: "user" | "admin" | "store_owner";
@@ -98,6 +99,7 @@ const userSchema = new Schema<IUser>(
     address: { type: addressSchema, default: () => ({}) },
     bodyProfile: { type: bodyProfileSchema, default: () => ({}) },
     storeOwnerStats: { type: storeOwnerStatsSchema, default: () => ({ triesAllowed: 50, triesUsed: 0 }) },
+    balance: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

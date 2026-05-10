@@ -1,0 +1,326 @@
+import mongoose from "mongoose";
+import type { IAuditActor } from "@/admin/lib/audit";
+import StoreBalanceTransaction from "@/admin/models/StoreBalanceTransaction";
+import WithdrawalRequest from "@/admin/models/WithdrawalRequest";
+import User from "@/admin/models/User";
+import Product from "@/admin/models/Product";
+import type { IOrderItem } from "@/admin/models/Order";
+
+export const COMMISSION_RATE = 0.1;
+
+function round2(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+export function serializeBalanceTransaction(transaction: {
+  _id: unknown;
+  type: string;
+  amount: number;
+  balanceBefore: number;
+  balanceAfter: number;
+  reason?: string | null;
+  order?: unknown;
+  withdrawal?: unknown;
+  createdBy?: IAuditActor | null;
+  createdAt?: Date | string | null;
+}) {
+  return {
+    _id: String(transaction._id),
+    type: transaction.type,
+    amount: Number(transaction.amount || 0),
+    balanceBefore: Number(transaction.balanceBefore || 0),
+    balanceAfter: Number(transaction.balanceAfter || 0),
+    reason: String(transaction.reason || ""),
+    order: transaction.order ? String(transaction.order) : null,
+    withdrawal: transaction.withdrawal ? String(transaction.withdrawal) : null,
+    createdBy: transaction.createdBy || null,
+    createdAt:
+      transaction.createdAt instanceof Date
+        ? transaction.createdAt.toISOString()
+        : String(transaction.createdAt || ""),
+  };
+}
+
+export function serializeWithdrawal(request: {
+  _id: unknown;
+  storeOwner: unknown;
+  amount: number;
+  paymentMethod: string;
+  paymentDetails: string;
+  note?: string | null;
+  status: string;
+  reviewedBy?: IAuditActor | null;
+  reviewedAt?: Date | string | null;
+  reviewNote?: string | null;
+  createdAt?: Date | string | null;
+}) {
+  return {
+    _id: String(request._id),
+    storeOwner: String(request.storeOwner),
+    amount: Number(request.amount || 0),
+    paymentMethod: String(request.paymentMethod || "bank_transfer"),
+    paymentDetails: String(request.paymentDetails || ""),
+    note: String(request.note || ""),
+    status: String(request.status || "pending"),
+    reviewedBy: request.reviewedBy || null,
+    reviewedAt:
+      request.reviewedAt instanceof Date
+        ? request.reviewedAt.toISOString()
+        : request.reviewedAt
+        ? String(request.reviewedAt)
+        : null,
+    reviewNote: String(request.reviewNote || ""),
+    createdAt:
+      request.createdAt instanceof Date
+        ? request.createdAt.toISOString()
+        : String(request.createdAt || ""),
+  };
+}
+
+export async function getBalanceSummary(storeOwnerId: string | mongoose.Types.ObjectId) {
+  const user = await User.findById(storeOwnerId).select("balance role").lean();
+  if (!user) return null;
+
+  const balance = round2(Number(user.balance || 0));
+  const pendingAgg = await WithdrawalRequest.aggregate([
+    { $match: { storeOwner: new mongoose.Types.ObjectId(String(storeOwnerId)), status: "pending" } },
+    { $group: { _id: null, total: { $sum: "$amount" } } },
+  ]);
+  const pendingWithdrawals = round2(Number(pendingAgg[0]?.total || 0));
+
+  return {
+    balance,
+    pendingWithdrawals,
+    available: round2(Math.max(0, balance - pendingWithdrawals)),
+  };
+}
+
+export async function getBalanceTransactions(
+  storeOwnerId: string | mongoose.Types.ObjectId,
+  limit = 100
+) {
+  const transactions = await StoreBalanceTransaction.find({ storeOwner: storeOwnerId })
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .lean();
+  return transactions.map(serializeBalanceTransaction);
+}
+
+export async function getWithdrawalsForOwner(
+  storeOwnerId: string | mongoose.Types.ObjectId,
+  limit = 50
+) {
+  const requests = await WithdrawalRequest.find({ storeOwner: storeOwnerId })
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .lean();
+  return requests.map(serializeWithdrawal);
+}
+
+export async function creditOrderEarnings({
+  orderId,
+  items,
+  actor,
+}: {
+  orderId: string | mongoose.Types.ObjectId;
+  items: IOrderItem[];
+  actor?: IAuditActor | null;
+}) {
+  if (!items?.length) return [];
+
+  const productIds = items.map((item) => item.product);
+  const products = await Product.find({ _id: { $in: productIds } })
+    .select("_id createdBy")
+    .lean();
+
+  const productOwnerMap = new Map<string, string>();
+  for (const product of products) {
+    const ownerId = product.createdBy?.id;
+    if (ownerId) productOwnerMap.set(product._id.toString(), ownerId);
+  }
+
+  const earningsByOwner = new Map<string, number>();
+  for (const item of items) {
+    const ownerId = productOwnerMap.get(item.product.toString());
+    if (!ownerId) continue;
+    const gross = Number(item.price || 0) * Number(item.quantity || 0);
+    const net = gross * (1 - COMMISSION_RATE);
+    earningsByOwner.set(ownerId, (earningsByOwner.get(ownerId) || 0) + net);
+  }
+
+  const results: Array<{ ownerId: string; amount: number }> = [];
+  for (const [ownerId, rawAmount] of earningsByOwner.entries()) {
+    const amount = round2(rawAmount);
+    if (amount <= 0) continue;
+
+    const user = await User.findById(ownerId).select("balance role");
+    if (!user || user.role !== "store_owner") continue;
+
+    const before = round2(Number(user.balance || 0));
+    const after = round2(before + amount);
+    user.balance = after;
+    await user.save();
+
+    await StoreBalanceTransaction.create({
+      storeOwner: user._id,
+      type: "earning",
+      amount,
+      balanceBefore: before,
+      balanceAfter: after,
+      reason: `Order #${String(orderId).slice(-8).toUpperCase()} delivered`,
+      order: orderId,
+      createdBy: actor || null,
+    });
+
+    results.push({ ownerId, amount });
+  }
+
+  return results;
+}
+
+export async function createWithdrawalRequest({
+  storeOwnerId,
+  amount,
+  paymentMethod,
+  paymentDetails,
+  note,
+}: {
+  storeOwnerId: string | mongoose.Types.ObjectId;
+  amount: number;
+  paymentMethod: "bank_transfer" | "d17" | "other";
+  paymentDetails: string;
+  note?: string;
+}) {
+  const user = await User.findById(storeOwnerId).select("role balance");
+  if (!user || user.role !== "store_owner") {
+    throw new Error("Store owner not found");
+  }
+
+  const safeAmount = round2(Number(amount));
+  if (!Number.isFinite(safeAmount) || safeAmount <= 0) {
+    throw new Error("Enter an amount greater than 0");
+  }
+  if (!paymentDetails?.trim()) {
+    throw new Error("Payment details are required");
+  }
+
+  const summary = await getBalanceSummary(user._id as mongoose.Types.ObjectId);
+  if (!summary) throw new Error("Store owner not found");
+
+  if (safeAmount > summary.available) {
+    throw new Error(
+      `Requested amount exceeds available balance (${summary.available.toFixed(2)})`
+    );
+  }
+
+  const request = await WithdrawalRequest.create({
+    storeOwner: user._id,
+    amount: safeAmount,
+    paymentMethod,
+    paymentDetails: paymentDetails.trim(),
+    note: note?.trim() || "",
+    status: "pending",
+  });
+
+  const balance = round2(Number(user.balance || 0));
+  await StoreBalanceTransaction.create({
+    storeOwner: user._id,
+    type: "withdrawal_pending",
+    amount: 0,
+    balanceBefore: balance,
+    balanceAfter: balance,
+    reason: `Withdrawal request submitted (${safeAmount.toFixed(2)})`,
+    withdrawal: request._id,
+    createdBy: null,
+  });
+
+  return request;
+}
+
+export async function approveWithdrawal({
+  withdrawalId,
+  actor,
+  reviewNote,
+}: {
+  withdrawalId: string | mongoose.Types.ObjectId;
+  actor: IAuditActor;
+  reviewNote?: string;
+}) {
+  const request = await WithdrawalRequest.findById(withdrawalId);
+  if (!request) throw new Error("Withdrawal not found");
+  if (request.status !== "pending") {
+    throw new Error("This withdrawal has already been reviewed");
+  }
+
+  const user = await User.findById(request.storeOwner).select("balance role");
+  if (!user || user.role !== "store_owner") {
+    throw new Error("Store owner not found");
+  }
+
+  const before = round2(Number(user.balance || 0));
+  if (request.amount > before) {
+    throw new Error("Owner balance is no longer enough to cover this withdrawal");
+  }
+  const after = round2(before - request.amount);
+
+  user.balance = after;
+  await user.save();
+
+  request.status = "approved";
+  request.reviewedBy = actor;
+  request.reviewedAt = new Date();
+  if (reviewNote !== undefined) request.reviewNote = reviewNote.trim();
+  await request.save();
+
+  await StoreBalanceTransaction.create({
+    storeOwner: user._id,
+    type: "withdrawal_approved",
+    amount: -request.amount,
+    balanceBefore: before,
+    balanceAfter: after,
+    reason: `Withdrawal approved (${request.amount.toFixed(2)})`,
+    withdrawal: request._id,
+    createdBy: actor,
+  });
+
+  return request;
+}
+
+export async function rejectWithdrawal({
+  withdrawalId,
+  actor,
+  reviewNote,
+}: {
+  withdrawalId: string | mongoose.Types.ObjectId;
+  actor: IAuditActor;
+  reviewNote?: string;
+}) {
+  const request = await WithdrawalRequest.findById(withdrawalId);
+  if (!request) throw new Error("Withdrawal not found");
+  if (request.status !== "pending") {
+    throw new Error("This withdrawal has already been reviewed");
+  }
+
+  request.status = "rejected";
+  request.reviewedBy = actor;
+  request.reviewedAt = new Date();
+  if (reviewNote !== undefined) request.reviewNote = reviewNote.trim();
+  await request.save();
+
+  const user = await User.findById(request.storeOwner).select("balance");
+  const balance = round2(Number(user?.balance || 0));
+  await StoreBalanceTransaction.create({
+    storeOwner: request.storeOwner,
+    type: "withdrawal_rejected",
+    amount: 0,
+    balanceBefore: balance,
+    balanceAfter: balance,
+    reason: `Withdrawal rejected (${request.amount.toFixed(2)})${
+      reviewNote ? ` — ${reviewNote.trim()}` : ""
+    }`,
+    withdrawal: request._id,
+    createdBy: actor,
+  });
+
+  return request;
+}

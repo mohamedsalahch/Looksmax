@@ -127,6 +127,7 @@ const navItems = [
   { name: "Newsletter", href: "/dashboard/newsletter", icon: "📧" },
   { name: "Messages", href: "/dashboard/messages", icon: "💬" },
   { name: "Stores", href: "/dashboard/stores", icon: "🏬" },
+  { name: "Withdrawals", href: "/dashboard/withdrawals", icon: "💰" },
 ];
 
 const storeOwnerNavItems = [
@@ -135,6 +136,8 @@ const storeOwnerNavItems = [
   navItems[7],
   { name: "Store Details", href: "/dashboard/store-details", icon: "🏬" },
   { name: "Credits", href: "/dashboard/credits", icon: "💳" },
+  { name: "Balance", href: "/dashboard/balance", icon: "💰" },
+  { name: "Transactions", href: "/dashboard/transactions", icon: "📜" },
 ];
 
 const seenStoreIdsStorageKey = "looksmax-admin-seen-stores";

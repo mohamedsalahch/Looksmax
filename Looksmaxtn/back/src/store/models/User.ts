@@ -58,6 +58,7 @@ export interface IUser extends Document {
   bodyProfile?: IBodyProfile;
   outfitStudioStats?: IOutfitStudioStats;
   storeOwnerStats?: IStoreOwnerStats;
+  balance?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -133,6 +134,7 @@ const userSchema = new Schema<IUser>(
     bodyProfile: { type: bodyProfileSchema, default: () => ({}) },
     outfitStudioStats: { type: outfitStudioStatsSchema, default: () => ({ initialTries: 5, triesUsed: 0 }) },
     storeOwnerStats: { type: storeOwnerStatsSchema, default: () => ({ triesAllowed: 50, triesUsed: 0 }) },
+    balance: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
