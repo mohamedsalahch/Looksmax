@@ -257,8 +257,16 @@ export default function ProductsPage() {
     return items;
   }, [filteredProducts, sortDirection, sortKey]);
 
-  const getProductThumbnail = (product: Product) =>
-    product.originPictures?.front || product.images?.find((image) => image.isMain)?.url || product.images?.[0]?.url || "";
+  const getProductThumbnail = (product: Product) => {
+    const mainImage = product.images?.find((image) => image.isMain)?.url || product.images?.[0]?.url;
+    if (mainImage) return mainImage;
+
+    if (product.productType === "shoes") {
+      return product.originPictures?.left || product.originPictures?.front || "";
+    }
+
+    return product.originPictures?.front || "";
+  };
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
