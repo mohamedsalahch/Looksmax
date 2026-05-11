@@ -1736,11 +1736,18 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               const enhanceStatus: ColorwayEnhanceStatus = colorwayViews.every((view) =>
                 Boolean(savedViewUrls[view] || originPictureUrls[view])
               ) ? "completed" : "idle";
-              const cs =
-                savedCompanion?.[hex] ||
-                savedCompanion?.[hex.toUpperCase()] ||
-                savedCompanion?.[hex.toLowerCase()] ||
-                savedCompanion?.[hex.trim()];
+              const normalizedHex = hex.trim().toLowerCase();
+              const csEntry = savedCompanion
+                ? (savedCompanion[hex] ||
+                   savedCompanion[hex.toUpperCase()] ||
+                   savedCompanion[hex.toLowerCase()] ||
+                   savedCompanion[hex.trim()] ||
+                   (!hex.trim() ? savedCompanion["__default__"] : null) ||
+                   Object.entries(savedCompanion).find(
+                     ([key]) => key.trim().toLowerCase() === normalizedHex
+                   )?.[1])
+                : null;
+              const cs = csEntry || null;
               return {
                 ...createEmptyColorway(),
                 hex,
@@ -2954,8 +2961,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         if (selectedModelId) body.append("modelId", selectedModelId);
         const companionSettingsPayload: Record<string, object> = {};
         for (const cw of colorways) {
-          const colorKey = cw.hex.trim();
-          if (!colorKey) continue;
+          const colorKey = cw.hex.trim() || "__default__";
           companionSettingsPayload[colorKey] = {
             topType: cw.companionTopType,
             topColor: cw.companionTopColor,

@@ -2858,8 +2858,7 @@ export default function NewProductPage() {
         if (selectedModelId) body.append("modelId", selectedModelId);
         const companionSettingsPayload: Record<string, object> = {};
         for (const cw of colorways) {
-          const colorKey = cw.hex.trim();
-          if (!colorKey) continue;
+          const colorKey = cw.hex.trim() || "__default__";
           companionSettingsPayload[colorKey] = {
             topType: cw.companionTopType,
             topColor: cw.companionTopColor,
