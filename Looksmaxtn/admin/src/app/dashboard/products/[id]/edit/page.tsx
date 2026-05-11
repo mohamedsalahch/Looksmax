@@ -1183,6 +1183,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const previousFashionSubtypeRef = useRef<FashionSubtype | null>(null);
   const previousGenerationTargetRef = useRef<GenerationTarget | null>(null);
   const previousCategorySlugRef = useRef<string | null>(null);
+  const loadedModelIdRef = useRef("");
   const savedSnapshot = useRef<{
     form: typeof initialForm;
     images: ProductImage[];
@@ -1190,6 +1191,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     generationInputs: GenerationInputs;
     initialCategorySlugs: string[];
     showProductMediaSection: boolean;
+    selectedModelId: string;
   } | null>(null);
   const allowStockEditing = true;
   const isStoreOwner = userRole === "store_owner";
@@ -1584,6 +1586,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     previousFashionSubtypeRef.current = null;
     previousGenerationTargetRef.current = null;
     previousCategorySlugRef.current = null;
+    loadedModelIdRef.current = "";
 
     fetch("/api/categories", withAuthRequest())
       .then((r) => r.json())
@@ -1900,6 +1903,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         setShowProductMediaSection(hasPersistedProductMedia);
         setGenerationInputs(loadedGenerationInputs);
         const loadedModelId = String(p.modelId || "");
+        loadedModelIdRef.current = loadedModelId;
         if (loadedModelId) setSelectedModelId(loadedModelId);
         const globalCs = (p.companionSettings as Record<string, { topType?: string; topColor?: { name: string; hex: string } | null; bottomType?: string; bottomColor?: { name: string; hex: string } | null; footwearType?: string; footwearColor?: { name: string; hex: string } | null; }> | null)?.["__global__"];
         if (globalCs) {
@@ -1918,6 +1922,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           generationInputs: loadedGenerationInputs,
           initialCategorySlugs: loadedCategorySlugs,
           showProductMediaSection: hasPersistedProductMedia,
+          selectedModelId: loadedModelId,
         };
         hasHydratedProductRef.current = true;
       })
@@ -2701,6 +2706,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     setGenerationInputs(snap.generationInputs);
     setShowProductMediaSection(snap.showProductMediaSection);
     setInitialCategorySlugs([...snap.initialCategorySlugs]);
+    loadedModelIdRef.current = snap.selectedModelId;
+    setSelectedModelId(snap.selectedModelId);
     setError("");
   };
 
@@ -2999,7 +3006,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         setLoading(false);
         return;
       }
-      if (needsModelSelection && !selectedModelId) { setError("Please select a model first.", "model"); scrollToElement(modelPicturesSectionRef.current); setLoading(false); return; }
+      const modelIdForSubmit = selectedModelId || loadedModelIdRef.current;
+      if (needsModelSelection && !modelIdForSubmit) { setError("Please select a model first.", "model"); scrollToElement(modelPicturesSectionRef.current); setLoading(false); return; }
       for (const cw of colorways) {
         if (usesAccessoryImageWorkflow) {
           if (!FOUR_IMAGE_VIEWS.some((view) => Boolean(cw[`${view}File` as keyof Colorway] || cw[`${view}Preview` as keyof Colorway]))) { setError("Please upload at least one image for each product.", "colorways"); scrollToColorwayCard(cw.id); setLoading(false); return; }
@@ -3055,7 +3063,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         body.append("sizeStock", JSON.stringify(sizeStockPayload));
         body.append("variants", JSON.stringify(variantsPayload));
         body.append("mainImageIndex", "0");
-        if (selectedModelId) body.append("modelId", selectedModelId);
+        if (modelIdForSubmit) body.append("modelId", modelIdForSubmit);
         const companionSettingsPayload: Record<string, object> = {};
         for (const cw of colorways) {
           const colorKey = cw.hex.trim() || "__default__";
@@ -3349,7 +3357,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       body.append("existingImages", JSON.stringify(existingImages));
       body.append("imageOrder", JSON.stringify(imageOrder));
       body.append("mainImageKey", mainImageKey);
-      if (selectedModelId) body.append("modelId", selectedModelId);
+      const modelIdForSubmit = selectedModelId || loadedModelIdRef.current;
+      if (modelIdForSubmit) body.append("modelId", modelIdForSubmit);
       body.append("companionSettings", JSON.stringify({
         __global__: {
           topType: companionTopType, topColor: secondaryTopColor,
