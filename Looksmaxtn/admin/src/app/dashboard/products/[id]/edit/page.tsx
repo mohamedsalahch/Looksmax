@@ -559,6 +559,15 @@ function toggleColorToken(value: string, token: string) {
   return colors.join(", ");
 }
 
+function renderPreservedCompanionOption(
+  value: string,
+  options: { slug: string; name: string }[] | undefined
+) {
+  const normalized = value.trim();
+  if (!normalized || options?.some((option) => option.slug === normalized)) return null;
+  return <option value={normalized}>{normalized}</option>;
+}
+
 function ColorwayGenerationCard({
   colorway, index, companionZones, companionTypeOptions, onUpdate, onGenerate, canGenerate,
 }: {
@@ -624,6 +633,7 @@ function ColorwayGenerationCard({
               <p className="text-[9px] uppercase tracking-wider text-text-secondary">Top</p>
               <select value={colorway.companionTopType} onChange={(e) => onUpdate({ companionTopType: e.target.value })} className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors">
                 <option value="">Select type</option>
+                {renderPreservedCompanionOption(colorway.companionTopType, companionTypeOptions.top)}
                 {companionTypeOptions.top.map((cat) => <option key={cat.slug} value={cat.slug}>{cat.name}</option>)}
               </select>
               <CompanionColorPicker
@@ -638,6 +648,7 @@ function ColorwayGenerationCard({
               <p className="text-[9px] uppercase tracking-wider text-text-secondary">Bottom</p>
               <select value={colorway.companionBottomType} onChange={(e) => onUpdate({ companionBottomType: e.target.value })} className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors">
                 <option value="">Select type</option>
+                {renderPreservedCompanionOption(colorway.companionBottomType, companionTypeOptions.bottom)}
                 {companionTypeOptions.bottom.map((cat) => <option key={cat.slug} value={cat.slug}>{cat.name}</option>)}
               </select>
               <CompanionColorPicker
@@ -652,6 +663,7 @@ function ColorwayGenerationCard({
               <p className="text-[9px] uppercase tracking-wider text-text-secondary">Footwear</p>
               <select value={colorway.companionFootwearType} onChange={(e) => onUpdate({ companionFootwearType: e.target.value })} className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors">
                 <option value="">Select type</option>
+                {renderPreservedCompanionOption(colorway.companionFootwearType, companionTypeOptions.footwear)}
                 {companionTypeOptions.footwear.map((cat) => <option key={cat.slug} value={cat.slug}>{cat.name}</option>)}
               </select>
               <CompanionColorPicker
@@ -971,6 +983,7 @@ function ColorwayCard({
                       className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
                     >
                       <option value="">Select type</option>
+                      {renderPreservedCompanionOption(colorway.companionTopType, companionTypeOptions?.top)}
                       {companionTypeOptions?.top.map((cat) => (
                         <option key={cat.slug} value={cat.slug}>{cat.name}</option>
                       ))}
@@ -991,6 +1004,7 @@ function ColorwayCard({
                       className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
                     >
                       <option value="">Select type</option>
+                      {renderPreservedCompanionOption(colorway.companionBottomType, companionTypeOptions?.bottom)}
                       {companionTypeOptions?.bottom.map((cat) => (
                         <option key={cat.slug} value={cat.slug}>{cat.name}</option>
                       ))}
@@ -1011,6 +1025,7 @@ function ColorwayCard({
                       className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
                     >
                       <option value="">Select type</option>
+                      {renderPreservedCompanionOption(colorway.companionFootwearType, companionTypeOptions?.footwear)}
                       {companionTypeOptions?.footwear.map((cat) => (
                         <option key={cat.slug} value={cat.slug}>{cat.name}</option>
                       ))}
@@ -1675,13 +1690,77 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         if (p.sizeStock && typeof p.sizeStock === "object") {
           const isShoesProduct = p.fashionSubtype === "shoes";
           const sizeStockEntries = Object.entries(p.sizeStock as Record<string, { fullStock: number; stock: number; conditionScore: number | null }>);
+          type SavedVariant = {
+            key?: string;
+            size?: string;
+            color?: string;
+            fullStock?: number;
+            stock?: number;
+            conditionScore?: number | null;
+          };
+          type SavedCompanionSettings = {
+            topType?: string; topColor?: { name: string; hex: string } | null;
+            bottomType?: string; bottomColor?: { name: string; hex: string } | null;
+            footwearType?: string; footwearColor?: { name: string; hex: string } | null;
+            additionalInstructions?: string;
+          };
+          const savedVariants: SavedVariant[] = Array.isArray(p.variants) ? p.variants : [];
+          const savedCompanion = p.companionSettings as Record<string, SavedCompanionSettings> | null;
+          const isHexColor = (value: string) => /^#[0-9a-f]{3,8}$/i.test(value.trim());
+          const normalizeHexColor = (value: string) => value.trim().toUpperCase();
+          const getHexFromStockKey = (key: string) => {
+            const trimmed = key.trim();
+            if (isHexColor(trimmed)) return normalizeHexColor(trimmed);
+            const parts = trimmed.split(" / ");
+            const last = parts[parts.length - 1] || "";
+            return isHexColor(last) ? normalizeHexColor(last) : "";
+          };
+          const knownColorKeys = Array.from(
+            new Set([
+              ...savedVariants.map((variant) => String(variant.color || "")).filter(isHexColor).map(normalizeHexColor),
+              ...(Array.isArray(p.colors) ? p.colors.map((color: string) => String(color || "")).filter(isHexColor).map(normalizeHexColor) : []),
+              ...sizeStockEntries.map(([key]) => getHexFromStockKey(key)).filter(Boolean),
+              ...Object.keys((p.colorImages || {}) as Record<string, unknown>).filter(isHexColor).map(normalizeHexColor),
+              ...Object.keys(savedCompanion || {})
+                .filter((key) => key !== "__global__" && key !== "__default__" && isHexColor(key))
+                .map(normalizeHexColor),
+            ])
+          );
+          const onlyKnownColor = knownColorKeys.length === 1 ? knownColorKeys[0] : "";
           const colorwayMap = new Map<string, SizeRow[]>();
+
+          for (const variant of savedVariants) {
+            const variantColor = String(variant.color || "").trim();
+            const hex = isHexColor(variantColor) ? normalizeHexColor(variantColor) : onlyKnownColor;
+            const sizeName = String(variant.size || "").trim();
+            if (!hex && !sizeName) continue;
+            if (!colorwayMap.has(hex)) colorwayMap.set(hex, []);
+            colorwayMap.get(hex)!.push({
+              id: generateId(),
+              size: sizeName,
+              stock: String(variant.fullStock ?? variant.stock ?? 0),
+              conditionScore: String(variant.conditionScore ?? 9),
+            });
+          }
+
           for (const [key, entry] of sizeStockEntries) {
-            const isHexOnlyKey = key.startsWith("#");
+            const savedVariant = savedVariants.find((variant) => String(variant.key || "") === key);
+            const savedVariantColor = String(savedVariant?.color || "").trim();
+            const isHexOnlyKey = isHexColor(key);
             const parts = key.split(" / ");
-            const hasHex = isHexOnlyKey || (parts.length >= 2 && parts[parts.length - 1].startsWith("#"));
-            const hex = isHexOnlyKey ? key : hasHex ? parts[parts.length - 1] : "";
-            const sizeName = isHexOnlyKey ? "" : hasHex ? parts.slice(0, -1).join(" / ") : key === "__default__" ? "" : key;
+            const keyHex = getHexFromStockKey(key);
+            const hex = isHexColor(savedVariantColor)
+              ? normalizeHexColor(savedVariantColor)
+              : keyHex || onlyKnownColor;
+            const hasHex = Boolean(keyHex);
+            const sizeName = String(
+              savedVariant?.size ??
+                (isHexOnlyKey ? "" : hasHex ? parts.slice(0, -1).join(" / ") : key === "__default__" ? "" : key)
+            ).trim();
+            const duplicateVariantRow =
+              savedVariant &&
+              colorwayMap.get(hex)?.some((row) => row.size === sizeName);
+            if (duplicateVariantRow) continue;
             if (!colorwayMap.has(hex)) colorwayMap.set(hex, []);
             colorwayMap.get(hex)!.push({
               id: generateId(),
@@ -1690,6 +1769,13 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               conditionScore: String(entry.conditionScore ?? 9),
             });
           }
+
+          for (const colorKey of knownColorKeys) {
+            if (!colorwayMap.has(colorKey)) {
+              colorwayMap.set(colorKey, [{ id: generateId(), size: "", stock: "", conditionScore: "10" }]);
+            }
+          }
+
           if (colorwayMap.size > 0) {
             const productImages: { url: string }[] = p.images || [];
             const colorImagesMap = p.colorImages as Record<string, number[]> | null;
@@ -1699,15 +1785,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               left: p.originPictures?.left || "",
               right: p.originPictures?.right || "",
             };
-            type SavedCompanionSettings = {
-              topType?: string; topColor?: { name: string; hex: string } | null;
-              bottomType?: string; bottomColor?: { name: string; hex: string } | null;
-              footwearType?: string; footwearColor?: { name: string; hex: string } | null;
-              additionalInstructions?: string;
-            };
-            const savedCompanion = p.companionSettings as Record<string, SavedCompanionSettings> | null;
             const loadedColorways: Colorway[] = Array.from(colorwayMap.entries()).map(([hex, sizes]) => {
-              const indices = colorImagesMap?.[hex] || [];
+              const indices = colorImagesMap?.[hex] || colorImagesMap?.[hex.toLowerCase()] || [];
               const colorwayViews: ColorwayView[] = isShoesProduct ? FOUR_IMAGE_VIEWS : ["front", "back"];
               const originIndexStart = indices.length >= colorwayViews.length
                 ? indices.length - colorwayViews.length
@@ -2464,6 +2543,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
             className="w-full bg-bg-card border border-border px-3 py-2 text-sm"
           >
             <option value="">Select top type</option>
+            {renderPreservedCompanionOption(companionTopType, options)}
             {options.map((category) => (
               <option key={category.slug} value={category.slug}>
                 {category.name}
@@ -2504,10 +2584,11 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
             value={companionBottomType}
             onChange={(e) => setCompanionBottomType(e.target.value as CompanionBottomType)}
             className="w-full bg-bg-card border border-border px-3 py-2 text-sm"
-          >
-            <option value="">Select bottom type</option>
-            {options.map((category) => (
-              <option key={category.slug} value={category.slug}>
+            >
+              <option value="">Select bottom type</option>
+              {renderPreservedCompanionOption(companionBottomType, options)}
+              {options.map((category) => (
+                <option key={category.slug} value={category.slug}>
                 {category.name}
               </option>
             ))}
@@ -2547,6 +2628,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           className="w-full bg-bg-card border border-border px-3 py-2 text-sm"
         >
           <option value="">Select footwear type</option>
+          {renderPreservedCompanionOption(footwearType, options)}
           {options.map((category) => (
             <option key={category.slug} value={category.slug}>
               {category.name}

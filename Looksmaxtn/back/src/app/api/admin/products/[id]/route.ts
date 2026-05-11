@@ -621,6 +621,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       return Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length);
     })();
 
+    const submittedModelId = String(formData.get("modelId") || "").trim();
+    const existingModelId = String(existingProduct.modelId || "").trim();
+    const submittedCompanionSettings = parseCompanionSettings(formData.get("companionSettings"));
+    const existingCompanionSettings = existingProduct.companionSettings || null;
+
     const body = {
       name: String(formData.get("name") || ""),
       price: Number(formData.get("price") || 0),
@@ -651,8 +656,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         productType === "perfume"
           ? newCloneSourceImagePath || String(formData.get("cloneSourceImage") || "")
           : "",
-      modelId: String(formData.get("modelId") || ""),
-      companionSettings: parseCompanionSettings(formData.get("companionSettings")),
+      modelId: productType === "fashion" ? submittedModelId || existingModelId : "",
+      companionSettings:
+        productType === "fashion"
+          ? submittedCompanionSettings || existingCompanionSettings
+          : null,
       images,
       approvalStatus: session.role === "store_owner" ? "pending" : existingProduct.approvalStatus || "approved",
       updatedBy: auditActor,
