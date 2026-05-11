@@ -1167,6 +1167,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const previousProductTypeRef = useRef<ProductType | null>(null);
   const previousFashionSubtypeRef = useRef<FashionSubtype | null>(null);
   const previousGenerationTargetRef = useRef<GenerationTarget | null>(null);
+  const previousCategorySlugRef = useRef<string | null>(null);
   const savedSnapshot = useRef<{
     form: typeof initialForm;
     images: ProductImage[];
@@ -1567,6 +1568,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     previousProductTypeRef.current = null;
     previousFashionSubtypeRef.current = null;
     previousGenerationTargetRef.current = null;
+    previousCategorySlugRef.current = null;
 
     fetch("/api/categories", withAuthRequest())
       .then((r) => r.json())
@@ -1818,7 +1820,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         setGeneratedModelMedia(loadedProductMedia);
         setShowProductMediaSection(hasPersistedProductMedia);
         setGenerationInputs(loadedGenerationInputs);
-        if (p.modelId) setSelectedModelId(p.modelId);
+        const loadedModelId = String(p.modelId || "");
+        if (loadedModelId) setSelectedModelId(loadedModelId);
         const globalCs = (p.companionSettings as Record<string, { topType?: string; topColor?: { name: string; hex: string } | null; bottomType?: string; bottomColor?: { name: string; hex: string } | null; footwearType?: string; footwearColor?: { name: string; hex: string } | null; }> | null)?.["__global__"];
         if (globalCs) {
           if (globalCs.topType) setCompanionTopType(globalCs.topType as CompanionTopType);
@@ -1930,13 +1933,13 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           ),
     [models, selectedModelGender]
   );
-  const selectedModel = filteredModels.find((model) => model._id === selectedModelId);
+  const selectedModel = filteredModels.find((model) => String(model._id) === selectedModelId);
 
   useEffect(() => {
     if (!needsModelSelection) return;
-    if (selectedModelId && filteredModels.some((model) => model._id === selectedModelId)) return;
+    if (selectedModelId && filteredModels.some((model) => String(model._id) === selectedModelId)) return;
     if (filteredModels.length === 0) return;
-    setSelectedModelId(filteredModels[0]._id);
+    setSelectedModelId(String(filteredModels[0]._id));
   }, [filteredModels, needsModelSelection, selectedModelId]);
   const requiredOriginPictureKeys = useMemo(
     () =>
@@ -2357,19 +2360,31 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 
   useEffect(() => {
     if (!hasHydratedProductRef.current || !hasSyncedInitialCategoriesRef.current) return;
+    if (!selectedCategorySlug) return;
 
     const previousProductType = previousProductTypeRef.current;
     const previousFashionSubtype = previousFashionSubtypeRef.current;
     const previousGenerationTarget = previousGenerationTargetRef.current;
+    const previousCategorySlug = previousCategorySlugRef.current;
     previousProductTypeRef.current = form.productType;
     previousFashionSubtypeRef.current = generationRequirements.fashionSubtype;
     previousGenerationTargetRef.current = generationRequirements.generationTarget;
+    previousCategorySlugRef.current = selectedCategorySlug;
 
     const isFirstHydratedRun =
       previousProductType === null &&
       previousFashionSubtype === null &&
-      previousGenerationTarget === null;
+      previousGenerationTarget === null &&
+      previousCategorySlug === null;
     if (isFirstHydratedRun) {
+      setGenerationTarget(generationRequirements.generationTarget);
+      setForm((current) => {
+        if (form.productType !== "fashion") {
+          return current.fashionSubtype === "" ? current : { ...current, fashionSubtype: "" };
+        }
+        if (current.fashionSubtype === generationRequirements.fashionSubtype) return current;
+        return { ...current, fashionSubtype: generationRequirements.fashionSubtype as FashionSubtype };
+      });
       return;
     }
 
@@ -2424,7 +2439,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       setGeneratedModelMedia([]);
       setShowProductMediaSection(false);
     }
-  }, [form.productType, generationRequirements.fashionSubtype, generationRequirements.generationTarget]);
+  }, [form.productType, generationRequirements.fashionSubtype, generationRequirements.generationTarget, selectedCategorySlug]);
 
   const canGenerate =
     Boolean(form.fashionSubtype) &&
@@ -3421,9 +3436,9 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 <p className="text-[11px] text-text-secondary">Pick the model first, then enhance each colorway independently.</p>
                 <div className="flex gap-3 overflow-x-auto pb-2">
                   {filteredModels.map((model) => {
-                    const active = selectedModelId === model._id;
+                    const active = selectedModelId === String(model._id);
                     return (
-                      <button key={model._id} type="button" onClick={() => setSelectedModelId(model._id)} className={`flex-none w-[288px] overflow-hidden rounded border text-left transition-colors ${active ? "border-accent" : "border-border hover:border-accent"}`}>
+                      <button key={model._id} type="button" onClick={() => setSelectedModelId(String(model._id))} className={`flex-none w-[288px] overflow-hidden rounded border text-left transition-colors ${active ? "border-accent" : "border-border hover:border-accent"}`}>
                         <div className="aspect-[4/5] bg-bg-secondary"><img src={model.frontImage || model.images?.[0] || ""} alt={model.name} className="h-full w-full object-cover" /></div>
                         <div className="p-1.5"><p className="truncate text-[9px] font-medium">{model.name}</p></div>
                       </button>
@@ -4230,12 +4245,12 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                       </p>
                       <div className="mt-3 flex gap-3 overflow-x-auto pb-2">
                         {filteredModels.map((model) => {
-                          const active = selectedModelId === model._id;
+                          const active = selectedModelId === String(model._id);
                           return (
                             <button
                               key={model._id}
                               type="button"
-                              onClick={() => setSelectedModelId(model._id)}
+                              onClick={() => setSelectedModelId(String(model._id))}
                               className={`flex-none w-[288px] overflow-hidden rounded border text-left transition-colors ${
                                 active ? "border-accent" : "border-border hover:border-accent"
                               }`}

@@ -35,6 +35,14 @@ export interface IProduct extends Document {
   fullStock?: number;
   sizeStock?: Map<string, ISizeStockEntry> | null;
   colorImages?: Map<string, number[]> | null;
+  variants?: {
+    key: string;
+    size: string;
+    color?: string;
+    fullStock: number;
+    stock: number;
+    conditionScore?: number | null;
+  }[];
   images: IProductImage[];
   tag?: string;
   newTagDurationDays?: number;
@@ -111,6 +119,16 @@ const productSchema = new Schema<IProduct>(
       of: [Number],
       default: null,
     },
+    variants: [
+      new Schema({
+        key: { type: String, required: true, trim: true },
+        size: { type: String, required: true, trim: true },
+        color: { type: String, default: "", trim: true },
+        fullStock: { type: Number, default: 0, min: 0 },
+        stock: { type: Number, default: 0, min: 0 },
+        conditionScore: { type: Number, min: 0, max: 10, default: null },
+      }, { _id: false }),
+    ],
     images: [productImageSchema],
     tag: { type: String, default: "" },
     newTagDurationDays: { type: Number, default: 3, min: 1 },
