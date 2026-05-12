@@ -160,15 +160,23 @@ function getProductPayload(
   if (productType !== "perfume" && rawSizeStock && rawSizeStock !== "{}") {
     try {
       const parsed = JSON.parse(rawSizeStock) as Record<string, number | { fullStock?: number; stock?: number; conditionScore?: number }>;
+      const sizesCoveredByComposite = new Set<string>();
+      for (const key of Object.keys(parsed)) {
+        if (key.includes(" / ")) {
+          sizesCoveredByComposite.add(key.split(" / ")[0]);
+        }
+      }
       sizeStockMap = new Map(
-        Object.entries(parsed).map(([size, qty]) => {
-          const fullStock = typeof qty === "object" && qty !== null ? Number(qty.fullStock ?? qty.stock ?? 0) : Number(qty) || 0;
-          const stock = typeof qty === "object" && qty !== null ? Number(qty.stock ?? qty.fullStock ?? 0) : Number(qty) || 0;
-          const conditionScore = typeof qty === "object" && qty !== null && qty.conditionScore !== undefined
-            ? Math.max(0, Math.min(10, Number(qty.conditionScore) || 0))
-            : null;
-          return [size, { fullStock: Math.max(0, fullStock), stock: Math.max(0, stock), conditionScore }];
-        })
+        Object.entries(parsed)
+          .filter(([key]) => !sizesCoveredByComposite.has(key) || key.includes(" / "))
+          .map(([size, qty]) => {
+            const fullStock = typeof qty === "object" && qty !== null ? Number(qty.fullStock ?? qty.stock ?? 0) : Number(qty) || 0;
+            const stock = typeof qty === "object" && qty !== null ? Number(qty.stock ?? qty.fullStock ?? 0) : Number(qty) || 0;
+            const conditionScore = typeof qty === "object" && qty !== null && qty.conditionScore !== undefined
+              ? Math.max(0, Math.min(10, Number(qty.conditionScore) || 0))
+              : null;
+            return [size, { fullStock: Math.max(0, fullStock), stock: Math.max(0, stock), conditionScore }];
+          })
       );
     } catch {
       sizeStockMap = null;

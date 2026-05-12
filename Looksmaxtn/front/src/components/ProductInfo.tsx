@@ -101,8 +101,14 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
     [product.variants]
   );
 
-  // Detect colorway format: "SIZE / #HEX"
-  const isColorwayProduct = Boolean(product.variants?.some((variant) => variant.color)) || allSizes.some((s) => / \/ #[0-9a-fA-F]{3,8}$/.test(s));
+  // Detect colorway: variants with color, composite "SIZE / #HEX" keys, or a colorImages map
+  const colorImagesHexes = useMemo(
+    () => Object.keys(product.colorImages || {}).filter((hex) => hex.startsWith("#")),
+    [product.colorImages]
+  );
+  const isColorwayProduct = Boolean(product.variants?.some((variant) => variant.color))
+    || allSizes.some((s) => / \/ #[0-9a-fA-F]{3,8}$/.test(s))
+    || colorImagesHexes.length > 0;
   const uniqueColorHexes = useMemo(() => {
     if (!isColorwayProduct) return [];
     const seen = new Set<string>();
@@ -111,14 +117,27 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
       const hex = variantByKey.get(s)?.color || s.split(" / ")[1];
       if (hex && !seen.has(hex)) { seen.add(hex); result.push(hex); }
     }
+    for (const hex of colorImagesHexes) {
+      if (!seen.has(hex)) { seen.add(hex); result.push(hex); }
+    }
     return result;
-  }, [allSizes, isColorwayProduct, variantByKey]);
+  }, [allSizes, isColorwayProduct, variantByKey, colorImagesHexes]);
 
   const firstAvailableHex = useMemo(() => {
     if (!isColorwayProduct || uniqueColorHexes.length === 0) return null;
     for (const hex of uniqueColorHexes) {
-      const sizesForHex = allSizes.filter((s) => (variantByKey.get(s)?.color || (s.endsWith(` / ${hex}`) ? hex : "")) === hex);
-      if (sizesForHex.some((s) => (sizeAvailability?.[s]?.stock ?? 0) > 0)) return hex;
+      const sizesForHex = allSizes.filter((s) => {
+        const variantColor = variantByKey.get(s)?.color;
+        if (variantColor) return variantColor === hex;
+        if (s.endsWith(` / ${hex}`)) return true;
+        return !s.includes(" / #");
+      });
+      const hasStock = sizesForHex.some((s) => {
+        const compositeStock = sizeAvailability?.[`${s} / ${hex}`]?.stock ?? 0;
+        const bareStock = sizeAvailability?.[s]?.stock ?? 0;
+        return compositeStock > 0 || bareStock > 0;
+      });
+      if (hasStock) return hex;
     }
     return uniqueColorHexes[0];
   }, [uniqueColorHexes, allSizes, sizeAvailability, isColorwayProduct, variantByKey]);
@@ -146,7 +165,14 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
 
   const availableSizes = useMemo(() => {
     if (!isColorwayProduct || !activeHex) return allSizes;
-    return allSizes.filter((s) => (variantByKey.get(s)?.color || (s.endsWith(` / ${activeHex}`) ? activeHex : "")) === activeHex);
+    return allSizes.filter((s) => {
+      const variantColor = variantByKey.get(s)?.color;
+      if (variantColor) return variantColor === activeHex;
+      if (s.endsWith(` / ${activeHex}`)) return true;
+      // Bare-size product with separate color metadata (no composite in sizes).
+      // The size applies to every color, so include it for the active hex.
+      return !s.includes(" / #");
+    });
   }, [allSizes, isColorwayProduct, activeHex, variantByKey]);
   const hasVisibleSizeOptions = availableSizes.some((sizeOption) =>
     Boolean(formatVariantSizeLabel(sizeOption, isColorwayProduct, variantByKey.get(sizeOption)?.size))

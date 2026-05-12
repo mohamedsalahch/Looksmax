@@ -11,7 +11,8 @@ import {
   SECONDARY_GARMENT_PALETTE,
   PaletteColor,
 } from "@/lib/generationPalette";
-import ColorPicker from "@/components/ColorPicker";
+import ColorPicker, { type InspectorSource } from "@/components/ColorPicker";
+import ImageColorSampler, { type SamplerSource } from "@/components/ImageColorSampler";
 import {
   getCategoryAncestors,
   getCategoryGender,
@@ -729,8 +730,8 @@ function ColorwayCard({
   onAddSize: () => void; onRemoveSize: (sizeId: string) => void; onUpdateSize: (sizeId: string, patch: Partial<SizeRow>) => void;
 }) {
   const views: ColorwayView[] = requiredViews && requiredViews.length > 0 ? requiredViews : ["front", "back"];
-  const colorInputRef = useRef<HTMLInputElement>(null);
   const [zoomedPreview, setZoomedPreview] = useState<string | null>(null);
+  const [samplerOpen, setSamplerOpen] = useState(false);
   const hasColor = Boolean(colorway.hex.trim());
 
   const fileKeyFor = (view: ColorwayView): "frontFile" | "backFile" | "leftFile" | "rightFile" =>
@@ -770,13 +771,15 @@ function ColorwayCard({
 
   const canEnhance = enhanceRequiresAllViews ? uploadedViews.length === views.length : uploadedViews.length > 0;
 
-  const handlePickColor = async () => {
-    const EyeDropperCtor = (window as Window & { EyeDropper?: new () => { open: () => Promise<{ sRGBHex: string }> } }).EyeDropper;
-    if (EyeDropperCtor) {
-      try { const eyeDropper = new EyeDropperCtor(); const result = await eyeDropper.open(); onUpdate({ hex: result.sRGBHex.toUpperCase() }); return; } catch { }
-    }
-    colorInputRef.current?.click();
-  };
+  const samplerSources: SamplerSource[] = [];
+  views.forEach((view) => {
+    const enhancedUrl = colorway[enhancedUrlKeyFor(view)];
+    if (enhancedUrl) samplerSources.push({ url: enhancedUrl, label: `${view} (enhanced)` });
+    const preview = colorway[previewKeyFor(view)];
+    if (preview) samplerSources.push({ url: preview, label: view });
+  });
+
+  const handlePickColor = () => setSamplerOpen(true);
 
   const handleViewFile = (view: ColorwayView, file: File | null) => {
     const generating = colorway.generateStatus === "processing";
@@ -811,39 +814,35 @@ function ColorwayCard({
           {canRemove && <button type="button" onClick={onRemove} title="Remove colorway" className="text-sm leading-none text-text-secondary hover:text-danger transition-colors">×</button>}
           <span className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">Product {index + 1}</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => (canRemove ? onRemove() : onUpdate({ hex: "" }))}
-            aria-pressed={!hasColor}
-            title={canRemove ? "Remove colorway" : "No color"}
-            className={`relative h-5 w-5 flex-none rounded-full border-2 transition-all ${
-              !hasColor
-                ? "border-accent bg-accent/10"
-                : "border-border bg-transparent hover:border-accent/70"
-            }`}
-          >
-            <svg
-              viewBox="0 0 16 16"
-              aria-hidden="true"
-              className={`absolute inset-0 h-full w-full p-[2px] transition-colors ${
-                !hasColor ? "text-danger" : "text-danger/80"
-              }`}
+        <div className="flex items-center gap-2">
+          {hasColor ? (
+            <>
+              <button
+                type="button"
+                onClick={handlePickColor}
+                title="Change color"
+                className="h-5 w-5 flex-none rounded-full border-2 border-border transition-colors hover:border-accent"
+                style={{ backgroundColor: colorway.hex }}
+              />
+              <span className="text-[9px] font-mono text-text-secondary">{colorway.hex}</span>
+              <button
+                type="button"
+                onClick={() => onUpdate({ hex: "" })}
+                title="Clear color"
+                className="text-[10px] leading-none text-text-secondary transition-colors hover:text-danger"
+              >
+                ×
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={handlePickColor}
+              className="text-[9px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary"
             >
-              <line x1="3" y1="13" x2="13" y2="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            onClick={handlePickColor}
-            title="Pick color from uploaded image"
-            className={`h-5 w-5 flex-none border-2 transition-colors ${
-              hasColor ? "rounded-full border-border hover:border-accent" : "rounded border-dashed border-border bg-transparent"
-            }`}
-            style={hasColor ? { backgroundColor: colorway.hex } : undefined}
-          />
-          {hasColor && <span className="text-[9px] text-text-secondary font-mono">{colorway.hex}</span>}
-          <input ref={colorInputRef} type="color" value={colorway.hex} onChange={(e) => onUpdate({ hex: e.target.value.toUpperCase() })} className="sr-only" />
+              + Select color
+            </button>
+          )}
         </div>
       </div>
       {views.length === 4 && !viewLabels && (
@@ -1086,6 +1085,13 @@ function ColorwayCard({
           </div>
         </div>
       )}
+      <ImageColorSampler
+        open={samplerOpen}
+        onClose={() => setSamplerOpen(false)}
+        onPick={(hex) => onUpdate({ hex: hex.toUpperCase() })}
+        sources={samplerSources}
+        title={`Pick color — Product ${index + 1}`}
+      />
     </div>
   );
 }
@@ -1219,6 +1225,26 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     () => (colorways.some((cw) => !cw.hex.trim()) ? "Add color to the previous colorway" : "Add colorway"),
     [colorways]
   );
+  const variantInspectorSources = useMemo<InspectorSource[]>(() => {
+    const sources: InspectorSource[] = [];
+    colorways.forEach((cw, idx) => {
+      const base = `Product ${idx + 1}`;
+      const entries: Array<[string, string]> = [
+        [cw.enhancedFrontUrl, `${base} front (enhanced)`],
+        [cw.enhancedBackUrl, `${base} back (enhanced)`],
+        [cw.enhancedLeftUrl, `${base} left (enhanced)`],
+        [cw.enhancedRightUrl, `${base} right (enhanced)`],
+        [cw.frontPreview, `${base} front`],
+        [cw.backPreview, `${base} back`],
+        [cw.leftPreview, `${base} left`],
+        [cw.rightPreview, `${base} right`],
+      ];
+      for (const [url, label] of entries) {
+        if (url) sources.push({ url, label });
+      }
+    });
+    return sources;
+  }, [colorways]);
   const handleAddColorway = () => {
     const blankColorway = colorways.find((cw) => !cw.hex.trim());
     if (blankColorway) {
@@ -1673,8 +1699,21 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         if (p.sizeStock && typeof p.sizeStock === "object") {
           const isShoesProduct = p.fashionSubtype === "shoes";
           const sizeStockEntries = Object.entries(p.sizeStock as Record<string, { fullStock: number; stock: number; conditionScore: number | null }>);
+          // Sizes that appear in a composite "size / #hex" key are already
+          // represented in a hex'd colorway; drop the bare-size entries that
+          // would otherwise create a phantom empty-hex colorway (legacy bug).
+          const sizesCoveredByComposite = new Set<string>();
+          for (const [key] of sizeStockEntries) {
+            if (key.includes(" / ")) sizesCoveredByComposite.add(key.split(" / ")[0]);
+          }
+          const filteredSizeStockEntries = sizeStockEntries.filter(([key]) => {
+            const isComposite = key.includes(" / ");
+            const isHexOnly = key.startsWith("#");
+            if (isComposite || isHexOnly) return true;
+            return !sizesCoveredByComposite.has(key);
+          });
           const colorwayMap = new Map<string, SizeRow[]>();
-          for (const [key, entry] of sizeStockEntries) {
+          for (const [key, entry] of filteredSizeStockEntries) {
             const isHexOnlyKey = key.startsWith("#");
             const parts = key.split(" / ");
             const hasHex = isHexOnlyKey || (parts.length >= 2 && parts[parts.length - 1].startsWith("#"));
@@ -3829,11 +3868,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                       onChange={(color) =>
                         setVariantDraft((current) => ({ ...current, colors: color.name }))
                       }
-                      onPickInspector={async () => {
-                        const picked = await pickScreenColor();
-                        if (!picked) return;
-                        setVariantDraft((current) => ({ ...current, colors: picked.name }));
-                      }}
+                      inspectorSources={variantInspectorSources}
                     />
                   </div>
                   {!variantDraft.colors.trim() && (
@@ -3925,15 +3960,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                                 )
                               )
                             }
-                            onPickInspector={async () => {
-                              const picked = await pickScreenColor();
-                              if (!picked) return;
-                              setVariantRows((current) =>
-                                current.map((item) =>
-                                  item.id === row.id ? { ...item, colors: picked.name } : item
-                                )
-                              );
-                            }}
+                            inspectorSources={variantInspectorSources}
                           />
                         </div>
                         {!row.colors.trim() && (

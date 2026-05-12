@@ -19,27 +19,50 @@ export function buildSizeAvailability(
   const entries = getSizeStockEntries(sizeStock);
   if (entries.length === 0) return null;
 
-  return Object.fromEntries(
-    entries.map(([size, entry]) => {
-      const sizeReservations = reservations.filter((reservation) => (reservation.size || "") === size);
-      const reservedByOthers = sizeReservations
-        .filter((reservation) => reservation.reservationKey !== reservationKey)
-        .reduce((sum, reservation) => sum + Math.max(1, Number(reservation.quantity) || 1), 0);
-      const ownedQuantity = sizeReservations
-        .filter((reservation) => reservation.reservationKey === reservationKey)
-        .reduce((sum, reservation) => sum + Math.max(1, Number(reservation.quantity) || 1), 0);
-      const stock = Math.max(entry.stock ?? 0, 0);
+  const result: SizeAvailabilityMap = {};
+  // Aggregate bare-size totals for composite "size / #color" keys so that
+  // storefront lookups by bare size still see the real stock.
+  const bareAggregates = new Map<string, { stock: number; reservedByOthers: number; ownedQuantity: number }>();
 
-      return [
-        size,
-        {
-          stock,
-          available: stock > 0,
-          reservedElsewhere: stock > 0 && reservedByOthers > 0 && (reservedByOthers >= stock || reservedByOthers + ownedQuantity > stock),
-        },
-      ] as const;
-    })
-  );
+  for (const [size, entry] of entries) {
+    const sizeReservations = reservations.filter((reservation) => (reservation.size || "") === size);
+    const reservedByOthers = sizeReservations
+      .filter((reservation) => reservation.reservationKey !== reservationKey)
+      .reduce((sum, reservation) => sum + Math.max(1, Number(reservation.quantity) || 1), 0);
+    const ownedQuantity = sizeReservations
+      .filter((reservation) => reservation.reservationKey === reservationKey)
+      .reduce((sum, reservation) => sum + Math.max(1, Number(reservation.quantity) || 1), 0);
+    const stock = Math.max(entry.stock ?? 0, 0);
+
+    result[size] = {
+      stock,
+      available: stock > 0,
+      reservedElsewhere: stock > 0 && reservedByOthers > 0 && (reservedByOthers >= stock || reservedByOthers + ownedQuantity > stock),
+    };
+
+    if (size.includes(" / ")) {
+      const bareSize = size.split(" / ")[0];
+      const current = bareAggregates.get(bareSize) || { stock: 0, reservedByOthers: 0, ownedQuantity: 0 };
+      current.stock += stock;
+      current.reservedByOthers += reservedByOthers;
+      current.ownedQuantity += ownedQuantity;
+      bareAggregates.set(bareSize, current);
+    }
+  }
+
+  for (const [bareSize, totals] of bareAggregates) {
+    // Always overwrite — a bare entry alongside composite keys is a legacy
+    // phantom (stock=0) and should be replaced by the real aggregate.
+    result[bareSize] = {
+      stock: totals.stock,
+      available: totals.stock > 0,
+      reservedElsewhere:
+        totals.stock > 0 && totals.reservedByOthers > 0 &&
+        (totals.reservedByOthers >= totals.stock || totals.reservedByOthers + totals.ownedQuantity > totals.stock),
+    };
+  }
+
+  return result;
 }
 
 export function getDefaultSelectableSize(sizes: string[], sizeAvailability: SizeAvailabilityMap | null) {

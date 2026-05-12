@@ -187,9 +187,13 @@ function buildSizeStockSnapshot(params: {
 
   const snapshot: Record<string, { fullStock: number; stock: number; soldQuantity: number; conditionScore: number | null }> = {};
   const sizeStockEntries = new Map(getSizeStockEntries(sizeStock));
+  const sizesCoveredByComposite = new Set<string>();
+  for (const key of sizeStockEntries.keys()) {
+    if (key.includes(" / ")) sizesCoveredByComposite.add(key.split(" / ")[0]);
+  }
   const orderedSizes = Array.from(
     new Set([
-      ...sizes,
+      ...sizes.filter((size) => !sizesCoveredByComposite.has(size)),
       ...Array.from(sizeStockEntries.keys()),
     ])
   );
@@ -373,7 +377,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
       if (body.sizeStock && typeof body.sizeStock === "object") {
         const sizeStockMap = new Map<string, { fullStock: number; stock: number; conditionScore: number | null }>();
+        const bodySizeStockKeys = Object.keys(
+          body.sizeStock as Record<string, unknown>
+        );
+        const sizesCoveredByComposite = new Set<string>();
+        for (const key of bodySizeStockKeys) {
+          if (key.includes(" / ")) {
+            sizesCoveredByComposite.add(key.split(" / ")[0]);
+          }
+        }
         for (const size of declaredSizes) {
+          if (sizesCoveredByComposite.has(size)) continue;
           sizeStockMap.set(size, { fullStock: 0, stock: 0, conditionScore: null });
         }
 

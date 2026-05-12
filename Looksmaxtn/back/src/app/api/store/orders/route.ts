@@ -163,9 +163,18 @@ export async function POST(req: NextRequest) {
 
       const sizeStockEntries = getSizeStockEntries(product.sizeStock);
       const hasSizeStock = sizeStockEntries.length > 0;
+      const itemColor = item.color || "";
+      const compositeKey = itemColor ? `${itemSize} / ${itemColor}` : "";
 
+      let matchedSizeKey: string = itemSize;
       if (hasSizeStock && itemSize) {
-        const sizeEntry = sizeStockEntries.find(([size]) => size === itemSize)?.[1];
+        const compositeMatch = compositeKey
+          ? sizeStockEntries.find(([size]) => size === compositeKey)
+          : undefined;
+        const bareMatch = sizeStockEntries.find(([size]) => size === itemSize);
+        const matched = compositeMatch ?? bareMatch;
+        if (matched) matchedSizeKey = matched[0];
+        const sizeEntry = matched?.[1];
         if (!sizeEntry || Math.max(sizeEntry.stock ?? 0, 0) < quantityToDeduct) {
           return NextResponse.json(
             { error: `${product.name} (size ${itemSize}) is already sold. Please remove it from your cart.` },
@@ -186,7 +195,7 @@ export async function POST(req: NextRequest) {
       pendingStockAdjustments.push({
         productId,
         quantity: quantityToDeduct,
-        size: itemSize,
+        size: matchedSizeKey,
         name: product.name,
       });
       seenVariantKeys.add(variantKey);
