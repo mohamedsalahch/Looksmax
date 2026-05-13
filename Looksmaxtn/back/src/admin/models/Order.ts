@@ -3,6 +3,7 @@ import { type IAuditActor, auditActorSchema } from "@/admin/lib/audit";
 
 export interface IOrderItem {
   product: mongoose.Types.ObjectId;
+  variant: mongoose.Types.ObjectId | null;
   name: string;
   price: number;
   size: string;
@@ -43,6 +44,7 @@ export interface IOrder extends Document {
 const orderItemSchema = new Schema<IOrderItem>(
   {
     product: { type: Schema.Types.ObjectId, ref: "Product", required: true },
+    variant: { type: Schema.Types.ObjectId, default: null },
     name: { type: String, required: true },
     price: { type: Number, required: true },
     size: { type: String, default: "" },

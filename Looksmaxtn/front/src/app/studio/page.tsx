@@ -51,7 +51,15 @@ interface StudioProduct {
         left?: string;
         right?: string;
     };
-    colorImages?: Record<string, number[]> | null;
+    variants?: Array<{
+        _id: string;
+        size: string;
+        color: { name?: string; hex: string } | null;
+        stock?: number;
+        fullStock?: number;
+        conditionScore?: number | null;
+        images?: number[];
+    }> | null;
 }
 
 interface OutfitSlotItem {
@@ -67,7 +75,15 @@ interface OutfitSlotItem {
         left?: string;
         right?: string;
     };
-    colorImages?: Record<string, number[]> | null;
+    variants?: Array<{
+        _id: string;
+        size: string;
+        color: { name?: string; hex: string } | null;
+        stock?: number;
+        fullStock?: number;
+        conditionScore?: number | null;
+        images?: number[];
+    }> | null;
 }
 
 interface OutfitViewItem extends OutfitSlotItem {
@@ -2107,7 +2123,7 @@ export default function OutfitStudioPage() {
                                     productType={product.productType}
                                     fashionSubtype={product.fashionSubtype}
                                     originPictures={product.originPictures}
-                                    colorImages={product.colorImages}
+                                    variants={product.variants ?? undefined}
                                     images={product.images}
                                 />
                             </div>

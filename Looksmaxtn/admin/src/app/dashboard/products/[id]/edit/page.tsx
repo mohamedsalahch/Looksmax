@@ -159,11 +159,6 @@ type FashionVariantRow = {
   conditionScore: string;
 };
 
-function buildVariantKey(row: FashionVariantRow) {
-  const size = row.size.trim();
-  const color = row.colors.trim();
-  return color ? `${size} / ${color}` : size;
-}
 
 const initialForm = {
   name: "",
@@ -592,7 +587,7 @@ function ColorwayGenerationCard({
               <div className="space-y-1">
                 <button type="button" onClick={() => setZoomedUrl(enhancedFrontPreview)} className="group relative aspect-[4/5] overflow-hidden rounded border border-border bg-bg-secondary cursor-zoom-in transition-colors hover:border-accent/60">
                   <img src={enhancedFrontPreview} alt="Enhanced front" className="h-full w-full object-cover" />
-                  <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 translate-y-1 rounded bg-black/60 px-2 py-1 text-[8px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
+                  <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 translate-y-1 rounded bg-black/60 px-2 py-1 text-center text-[8px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
                     Preview
                   </span>
                 </button>
@@ -605,7 +600,7 @@ function ColorwayGenerationCard({
               <div className="space-y-1">
                 <button type="button" onClick={() => setZoomedUrl(enhancedBackPreview)} className="group relative aspect-[4/5] overflow-hidden rounded border border-border bg-bg-secondary cursor-zoom-in transition-colors hover:border-accent/60">
                   <img src={enhancedBackPreview} alt="Enhanced back" className="h-full w-full object-cover" />
-                  <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 translate-y-1 rounded bg-black/60 px-2 py-1 text-[8px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
+                  <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 translate-y-1 rounded bg-black/60 px-2 py-1 text-center text-[8px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
                     Preview
                   </span>
                 </button>
@@ -670,7 +665,7 @@ function ColorwayGenerationCard({
             <div key={i} className="space-y-1">
               <button type="button" onClick={() => setZoomedUrl(img.url)} className="group relative aspect-[4/5] overflow-hidden rounded border border-border bg-bg-secondary cursor-zoom-in transition-colors hover:border-accent/60">
                 <img src={img.url} alt={`Generated ${i + 1}`} className="h-full w-full object-cover" />
-                <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 translate-y-1 rounded bg-black/60 px-2 py-1 text-[8px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
+                <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 translate-y-1 rounded bg-black/60 px-2 py-1 text-center text-[8px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
                   Preview
                 </span>
               </button>
@@ -858,11 +853,11 @@ function ColorwayCard({
             <div key={slot} className="space-y-1">
               <p className="text-[9px] uppercase tracking-wider text-text-secondary">{viewLabels?.[slot] || slot}</p>
               <input id={inputId} type="file" accept="image/*" className="hidden" onChange={(e) => handleViewFile(slot, e.target.files?.[0] || null)} onClick={(e) => { e.currentTarget.value = ""; }} />
-              <div onClick={() => { if (preview) { setZoomedPreview(preview); } else { document.getElementById(inputId)?.click(); } }} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); handleViewFile(slot, e.dataTransfer.files?.[0] || null); }} className={`group relative aspect-[4/5] overflow-hidden rounded border border-dashed border-border bg-bg-secondary transition-colors flex items-center justify-center ${preview ? "cursor-zoom-in hover:border-accent/60" : "cursor-pointer hover:border-accent"}`}>
+              <div onClick={() => { if (preview) { setZoomedPreview(preview); } else { document.getElementById(inputId)?.click(); } }} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); handleViewFile(slot, e.dataTransfer.files?.[0] || null); }} className={`group relative aspect-[4/5] overflow-hidden rounded border bg-bg-secondary transition-colors flex items-center justify-center ${preview ? "border-border cursor-zoom-in hover:border-accent/60" : "border-dashed border-border cursor-pointer hover:border-accent"}`}>
                 {preview ? (
                   <>
                     <img src={preview} alt={slot} className="h-full w-full object-cover" />
-                    <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 translate-y-1 rounded bg-black/60 px-2 py-1 text-[8px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
+                    <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 translate-y-1 rounded bg-black/60 px-2 py-1 text-center text-[8px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
                       Preview
                     </span>
                   </>
@@ -1062,7 +1057,7 @@ function ColorwayCard({
                 <div key={i} className="space-y-1">
                   <button type="button" onClick={() => setZoomedPreview(img.url)} className="group relative aspect-[4/5] overflow-hidden rounded border border-border bg-bg-secondary cursor-zoom-in transition-colors hover:border-accent/60">
                     <img src={img.url} alt={`Generated ${i + 1}`} className="h-full w-full object-cover" />
-                    <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 translate-y-1 rounded bg-black/60 px-2 py-1 text-[8px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
+                    <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 translate-y-1 rounded bg-black/60 px-2 py-1 text-center text-[8px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
                       Preview
                     </span>
                   </button>
@@ -1117,6 +1112,12 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const [models, setModels] = useState<ModelAsset[]>([]);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImageAsset[]>([]);
   const [form, setForm] = useState(initialForm);
+  // Map of "size|hex" -> persisted variant _id, captured at hydration.
+  // Used on submit to preserve variant identity so reconcileVariants on the
+  // server can match against open-order soft-delete rules.
+  const savedVariantIdsRef = useRef<Map<string, string>>(new Map());
+  const variantKeyFor = (size: string, hex: string) =>
+    `${(size || "").trim()}|${(hex || "").trim().toLowerCase()}`;
   const [selectedParentSlug, setSelectedParentSlug] = useState("");
   const [selectedChildSlug, setSelectedChildSlug] = useState("");
   const [selectedGrandchildSlug, setSelectedGrandchildSlug] = useState("");
@@ -1183,6 +1184,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   } | null>(null);
   const allowStockEditing = true;
   const isStoreOwner = userRole === "store_owner";
+  const usesStoreOwnerEditFlow = isStoreOwner || userRole === "admin";
   const isRetailStoreOwner = isStoreOwner && userStoreType === "retail";
   const isThriftStoreOwner = isStoreOwner && userStoreType === "thrift";
   const storeOwnerPayoutPrice = getStoreOwnerPayoutPrice(form.price);
@@ -1220,9 +1222,9 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const updateColorway = (id: string, patch: Partial<Colorway>) =>
     setColorways((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   const addColorway = () =>
-    setColorways((prev) => [...prev, createEmptyColorway(prev[prev.length - 1]?.hex.trim() || "")]);
+    setColorways((prev) => [...prev, createEmptyColorway()]);
   const addColorwayLabel = useMemo(
-    () => (colorways.some((cw) => !cw.hex.trim()) ? "Add color to the previous colorway" : "Add colorway"),
+    () => (colorways.some((cw) => !cw.hex.trim()) ? "Select color first" : "Add colorway"),
     [colorways]
   );
   const variantInspectorSources = useMemo<InspectorSource[]>(() => {
@@ -1630,6 +1632,65 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         if (!d.product) return;
 
         const p = d.product;
+
+        // Bridge from new variants[] schema to the legacy composite-keyed
+        // sizeStock / colorImages shape the form internals still rely on.
+        // Also captures variant _ids by (size, hex) for use on submit.
+        type ApiVariant = {
+          _id: string;
+          size: string;
+          color: { name?: string; hex: string } | null;
+          fullStock: number;
+          stock: number;
+          conditionScore?: number | null;
+          soldQuantity?: number;
+          images?: number[];
+        };
+        const apiVariants: ApiVariant[] = Array.isArray(p.variants) ? p.variants : [];
+        if (apiVariants.length > 0) {
+          const compositeFor = (size: string, hex: string) => {
+            const s = (size || "").trim();
+            const h = (hex || "").trim().toLowerCase();
+            if (s && h) return `${s} / ${h}`;
+            if (h) return h;
+            return s;
+          };
+          const synthesizedSizeStock: Record<
+            string,
+            { fullStock: number; stock: number; soldQuantity: number; conditionScore: number | null }
+          > = {};
+          const synthesizedColorImages: Record<string, number[]> = {};
+          const idMap = new Map<string, string>();
+          for (const v of apiVariants) {
+            const hex = v.color?.hex?.toLowerCase() || "";
+            const compositeKey = compositeFor(v.size, hex);
+            synthesizedSizeStock[compositeKey] = {
+              fullStock: v.fullStock,
+              stock: v.stock,
+              soldQuantity: Math.max(0, v.soldQuantity || 0),
+              conditionScore: v.conditionScore ?? null,
+            };
+            if (hex && Array.isArray(v.images) && v.images.length > 0) {
+              synthesizedColorImages[hex] = v.images;
+            }
+            idMap.set(variantKeyFor(v.size, hex), v._id);
+          }
+          p.sizeStock = synthesizedSizeStock;
+          p.colorImages = synthesizedColorImages;
+          p.variants = apiVariants.map((v) => ({
+            key: compositeFor(v.size, v.color?.hex?.toLowerCase() || ""),
+            size: v.size,
+            color: v.color?.hex || "",
+            fullStock: v.fullStock,
+            stock: v.stock,
+            conditionScore: v.conditionScore,
+            _id: v._id,
+          }));
+          savedVariantIdsRef.current = idMap;
+        } else {
+          savedVariantIdsRef.current = new Map();
+        }
+
         const nextSizeStockEntries =
           p.sizeStock && typeof p.sizeStock === "object"
             ? (p.sizeStock as Record<string, { fullStock: number; stock: number; soldQuantity: number; conditionScore: number | null }>)
@@ -1936,7 +1997,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     [categories, selectedCategoryGender]
   );
   const categoryOptions = useMemo(() => {
-    const visible = isStoreOwner
+    const visible = usesStoreOwnerEditFlow
       ? categories.filter(
         (category) => !categories.some((other) => other.parentSlug === category.slug)
       )
@@ -1945,7 +2006,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       slug: category.slug,
       label: getCategoryPathLabel(categories, category),
     }));
-  }, [categories, isStoreOwner]);
+  }, [categories, usesStoreOwnerEditFlow]);
   const filteredCategoryOptions = useMemo(() => {
     const term = categorySearch.trim().toLowerCase();
     if (!term) return categoryOptions;
@@ -2100,6 +2161,16 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     setError("");
     setSavingSizeStockFor(size);
 
+    // size here is a composite key "size / hex" produced by hydration.
+    let sizePart = size;
+    let hexPart = "";
+    if (size.includes(" / ")) {
+      const parts = size.split(" / ");
+      sizePart = parts[0];
+      hexPart = parts[parts.length - 1].trim().toLowerCase();
+    }
+    const existingId = savedVariantIdsRef.current.get(variantKeyFor(sizePart, hexPart));
+
     try {
       const response = await fetch(
         `/api/products/${id}`,
@@ -2107,9 +2178,17 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            sizes: sizeList,
-            sizeStock: { [size]: amount },
             sizeStockMode: "restock",
+            variants: [
+              {
+                ...(existingId ? { _id: existingId } : {}),
+                size: sizePart,
+                color: hexPart ? { name: "", hex: hexPart } : null,
+                fullStock: amount,
+                conditionScore: sizeStockConditionBySize[size] ?? null,
+                images: [],
+              },
+            ],
           }),
         })
       );
@@ -2130,16 +2209,24 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 
   const handleRemoveExistingSize = async (size: string) => {
     const remainingSizes = sizeList.filter((item) => item !== size);
-    const remainingSizeStock = Object.fromEntries(
-      remainingSizes.map((item) => [
-        item,
-        {
-          fullStock: Math.max(0, Number(form.sizeStock[item] || 0)),
-          stock: Math.max(0, Number(form.sizeStock[item] || 0)),
-          conditionScore: sizeStockConditionBySize[item] ?? null,
-        },
-      ])
-    );
+    const remainingVariants = remainingSizes.map((item) => {
+      let sizePart = item;
+      let hexPart = "";
+      if (item.includes(" / ")) {
+        const parts = item.split(" / ");
+        sizePart = parts[0];
+        hexPart = parts[parts.length - 1].trim().toLowerCase();
+      }
+      const existingId = savedVariantIdsRef.current.get(variantKeyFor(sizePart, hexPart));
+      return {
+        ...(existingId ? { _id: existingId } : {}),
+        size: sizePart,
+        color: hexPart ? { name: "", hex: hexPart } : null,
+        fullStock: Math.max(0, Number(form.sizeStock[item] || 0)),
+        conditionScore: sizeStockConditionBySize[item] ?? null,
+        images: [],
+      };
+    });
 
     setError("");
     setSavingSizeStockFor(size);
@@ -2151,9 +2238,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            sizes: remainingSizes,
-            sizeStock: remainingSizeStock,
             sizeStockMode: "full",
+            variants: remainingVariants,
           }),
         })
       );
@@ -2923,7 +3009,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     setFieldErrors({});
     setLoading(true);
 
-    if (isStoreOwner) {
+    if (usesStoreOwnerEditFlow) {
       const nextFieldErrors: Record<string, string> = {};
       if (!form.name.trim()) nextFieldErrors.name = "Product name is required.";
       if (!form.price.trim()) nextFieldErrors.price = "Price is required.";
@@ -2970,17 +3056,6 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           }
         }
         const totalStock = allVariants.reduce((sum, v) => sum + v.stock, 0);
-        const uniqueColors = Array.from(new Set(colorways.map((c) => c.hex.trim()).filter(Boolean)));
-        const uniqueSizes = Array.from(new Set(allVariants.map((v) => v.size).filter(Boolean)));
-        const sizeStockPayload = Object.fromEntries(allVariants.map((v) => [v.key, { fullStock: v.stock, stock: v.stock, conditionScore: v.conditionScore }]));
-        const variantsPayload = allVariants.map((v) => ({
-          key: v.key,
-          size: v.size,
-          color: v.color,
-          fullStock: v.stock,
-          stock: v.stock,
-          conditionScore: v.conditionScore,
-        }));
         const body = new FormData();
         body.append("name", form.name);
         body.append("price", form.price);
@@ -2992,10 +3067,6 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         body.append("stock", String(totalStock));
         body.append("fullStock", String(totalStock));
         body.append("categories", JSON.stringify(productCategories));
-        body.append("sizes", JSON.stringify(uniqueSizes));
-        body.append("colors", JSON.stringify(uniqueColors));
-        body.append("sizeStock", JSON.stringify(sizeStockPayload));
-        body.append("variants", JSON.stringify(variantsPayload));
         body.append("mainImageIndex", "0");
         if (selectedModelId) body.append("modelId", selectedModelId);
         const companionSettingsPayload: Record<string, object> = {};
@@ -3054,7 +3125,20 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         }
         const compressedImages = await Promise.all(imageFiles.map((f) => compressImageFile(f)));
         compressedImages.forEach((f) => body.append("images", f));
-        body.append("colorImages", JSON.stringify(colorImagesPayload));
+
+        const variantsPayload = allVariants.map((v) => {
+          const hex = v.color.trim().toLowerCase();
+          const existingId = savedVariantIdsRef.current.get(variantKeyFor(v.size, hex));
+          return {
+            ...(existingId ? { _id: existingId } : {}),
+            size: v.size,
+            color: hex ? { name: "", hex } : null,
+            fullStock: v.stock,
+            conditionScore: v.conditionScore,
+            images: colorImagesPayload[v.color.trim()] || [],
+          };
+        });
+        body.append("variants", JSON.stringify(variantsPayload));
         body.append("existingImages", JSON.stringify(existingImagesPayload));
         body.append("imageOrder", JSON.stringify(imageOrder));
         const firstCw = colorways[0];
@@ -3198,55 +3282,57 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       body.append("fashionSubtype", form.fashionSubtype || savedFashionSubtype || "clothes");
       body.append("fullStock", form.stock);
       const existingSizes = sizeList;
-      const existingVariantKeys = existingSizes.map((size) => {
-        const color = String(form.colors || "").split(",").map((value) => value.trim()).filter(Boolean)[0] || "";
-        return color && !size.includes(" / ") ? `${size} / ${color}` : size;
-      });
-      const sizeStockPayload = Object.fromEntries(
-        [
-          ...existingSizes.map((size, index) => [
-            existingVariantKeys[index] || size,
-            {
-              fullStock: Math.max(0, Number(form.sizeStock[size] || 0)),
-              stock: Math.max(0, Number(form.sizeStock[size] || 0)),
-              conditionScore: null,
-            },
-          ]),
-          ...completeVariantRows.map((row) => [
-            buildVariantKey(row),
-            {
-              fullStock: Math.max(0, Number(row.stock || 0)),
-              stock: Math.max(0, Number(row.stock || 0)),
-              conditionScore: Math.max(0, Math.min(10, Number(row.conditionScore || 9) || 9)),
-            },
-          ]),
-        ]
-      );
-      if (Object.keys(sizeStockPayload).length > 0) {
-        body.append("sizeStock", JSON.stringify(sizeStockPayload));
-        body.append(
-          "variants",
-          JSON.stringify([
-            ...existingSizes.map((size, index) => ({
-              key: existingVariantKeys[index] || size,
-              size: size.includes(" / ") ? size.split(" / ")[0] : size,
-              color: (existingVariantKeys[index] || "").includes(" / ")
-                ? (existingVariantKeys[index] || "").split(" / ").pop() || ""
-                : "",
-              fullStock: Math.max(0, Number(form.sizeStock[size] || 0)),
-              stock: Math.max(0, Number(form.sizeStock[size] || 0)),
-              conditionScore: null,
-            })),
-            ...completeVariantRows.map((row) => ({
-              key: buildVariantKey(row),
-              size: row.size.trim(),
-              color: row.colors.trim(),
-              fullStock: Math.max(0, Number(row.stock || 0)),
-              stock: Math.max(0, Number(row.stock || 0)),
-              conditionScore: Math.max(0, Math.min(10, Number(row.conditionScore || 9) || 9)),
-            })),
-          ])
-        );
+      const fallbackColorHex = String(form.colors || "")
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean)[0] || "";
+
+      type OutgoingVariant = {
+        _id?: string;
+        size: string;
+        color: { name?: string; hex: string } | null;
+        fullStock: number;
+        conditionScore: number | null;
+        images: number[];
+      };
+
+      const outgoingVariants: OutgoingVariant[] = [];
+
+      for (const size of existingSizes) {
+        let sizePart = size;
+        let hexPart = fallbackColorHex.toLowerCase();
+        if (size.includes(" / ")) {
+          const parts = size.split(" / ");
+          sizePart = parts[0];
+          hexPart = parts[parts.length - 1].trim().toLowerCase();
+        }
+        const existingId = savedVariantIdsRef.current.get(variantKeyFor(sizePart, hexPart));
+        outgoingVariants.push({
+          ...(existingId ? { _id: existingId } : {}),
+          size: sizePart,
+          color: hexPart ? { name: "", hex: hexPart } : null,
+          fullStock: Math.max(0, Number(form.sizeStock[size] || 0)),
+          conditionScore: null,
+          images: [],
+        });
+      }
+
+      for (const row of completeVariantRows) {
+        const sizePart = row.size.trim();
+        const hexPart = row.colors.trim().toLowerCase();
+        const existingId = savedVariantIdsRef.current.get(variantKeyFor(sizePart, hexPart));
+        outgoingVariants.push({
+          ...(existingId ? { _id: existingId } : {}),
+          size: sizePart,
+          color: hexPart ? { name: "", hex: hexPart } : null,
+          fullStock: Math.max(0, Number(row.stock || 0)),
+          conditionScore: Math.max(0, Math.min(10, Number(row.conditionScore || 9) || 9)),
+          images: [],
+        });
+      }
+
+      if (outgoingVariants.length > 0) {
+        body.append("variants", JSON.stringify(outgoingVariants));
       }
       if (form.productType === "perfume") {
         body.append("conditionScore", form.conditionScore);
@@ -3326,23 +3412,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   };
 
   if (fetching) return <p className="text-xs text-text-secondary animate-pulse">Loading product...</p>;
-  if (userRole === "admin") {
-    return (
-      <div className="rounded-2xl border border-border bg-bg-card p-8 space-y-4 max-w-2xl">
-        <p className="text-xs uppercase tracking-[0.22em] text-text-secondary">Admin Access</p>
-        <h1 className="text-xl font-semibold tracking-wide">Products are read-only</h1>
-        <p className="text-sm text-text-secondary">
-          Admin accounts can review product details, approve or reject them, and manage visibility.
-          Only store owners can edit product data.
-        </p>
-        <button type="button" onClick={() => router.push("/dashboard/products")} className="bg-black text-white px-4 py-2 text-xs font-medium tracking-wide uppercase">
-          Back to Products
-        </button>
-      </div>
-    );
-  }
-
-  if (isStoreOwner) {
+  if (usesStoreOwnerEditFlow) {
     return (
       <div className="space-y-6">
         <div><h1 className="text-xl font-semibold tracking-wide">Edit Product</h1></div>
@@ -3376,7 +3446,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                   />
                 </div>
               )}
-              {isStoreOwner && (
+              {usesStoreOwnerEditFlow && (
                 <div>
                   <FieldLabel>Brand</FieldLabel>
                   <input type="text" value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} className="input-line" placeholder="e.g. Zara (optional)" />
@@ -3470,7 +3540,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                   })}
                 </div>
               </div>
-              {selectedModelId && !isStoreOwner && (
+              {selectedModelId && !usesStoreOwnerEditFlow && (
                 <div className="mt-4 flex flex-col sm:flex-row sm:items-start gap-3 sm:overflow-x-auto pb-2">
                   {colorways.map((cw, cwIndex) => (
                     <ColorwayGenerationCard
@@ -3499,8 +3569,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                   colorway={cw}
                   index={cwIndex}
                   canRemove={colorways.length > 1}
-                  isThrift={isStoreOwner}
-                  showGenerationPanel={isStoreOwner && needsModelSelection}
+                  isThrift={usesStoreOwnerEditFlow}
+                  showGenerationPanel={usesStoreOwnerEditFlow && needsModelSelection}
                   companionZones={companionZones}
                   companionTypeOptions={companionTypeOptions}
                   canGenerate={canGenerateColorway(cw)}
@@ -4377,7 +4447,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                         className="group relative flex aspect-[4/5] w-full cursor-zoom-in items-center justify-center overflow-hidden rounded border border-transparent bg-bg-secondary p-2 transition-colors hover:border-accent/60"
                       >
                         <img src={item.url} alt={item.label} className="max-h-full max-w-full object-contain" />
-                        <span className="pointer-events-none absolute inset-x-2 bottom-2 translate-y-1 rounded bg-black/60 px-2 py-1 text-[9px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
+                        <span className="pointer-events-none absolute inset-x-2 bottom-2 translate-y-1 rounded bg-black/60 px-2 py-1 text-center text-[9px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
                           Preview
                         </span>
                       </button>

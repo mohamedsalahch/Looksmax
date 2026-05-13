@@ -1,12 +1,13 @@
 "use client";
 
 import { getReservationKey } from "@/lib/reservations";
+import type { VariantAvailabilityMap } from "@/lib/variantAvailability";
 
 export type AvailabilityEvent = {
   productId: string;
   cartCount: number;
   stock: number;
-  sizeAvailability: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null;
+  variantAvailability: VariantAvailabilityMap | null;
   viewerBlocked: boolean;
 };
 

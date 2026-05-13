@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import Order from "@/store/models/Order";
 
 type SoldQuantityByProductId = Map<string, number>;
-type SoldQuantityByProductAndSize = Map<string, Map<string, number>>;
+type SoldQuantityByProductAndVariant = Map<string, Map<string, number>>;
 type ActiveOrderHoldInfo = {
   reservedElsewhere: boolean;
   ownedReservation: boolean;
@@ -49,7 +49,7 @@ export async function getSoldQuantityByProductIds(productIds: string[]) {
   }, new Map<string, number>());
 }
 
-export async function getSoldQuantityByProductAndSize(productIds: string[]) {
+export async function getSoldQuantityByProductAndVariant(productIds: string[]) {
   const validProductIds = productIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
   if (validProductIds.length === 0) {
     return new Map<string, Map<string, number>>();
@@ -58,7 +58,7 @@ export async function getSoldQuantityByProductAndSize(productIds: string[]) {
   const objectIds = validProductIds.map((id) => new mongoose.Types.ObjectId(id));
 
   const soldRows = await Order.aggregate<{
-    _id: { product: mongoose.Types.ObjectId; size: string };
+    _id: { product: mongoose.Types.ObjectId; variant: mongoose.Types.ObjectId | null };
     soldQuantity: number;
   }>([
     {
@@ -75,18 +75,18 @@ export async function getSoldQuantityByProductAndSize(productIds: string[]) {
     },
     {
       $group: {
-        _id: { product: "$items.product", size: "$items.size" },
+        _id: { product: "$items.product", variant: "$items.variant" },
         soldQuantity: { $sum: "$items.quantity" },
       },
     },
   ]);
 
-  return soldRows.reduce<SoldQuantityByProductAndSize>((map, row) => {
+  return soldRows.reduce<SoldQuantityByProductAndVariant>((map, row) => {
     const productId = row._id.product.toString();
-    const size = row._id.size || "";
+    const variantId = row._id.variant ? row._id.variant.toString() : "";
     if (!map.has(productId)) map.set(productId, new Map());
-    const sizeMap = map.get(productId)!;
-    sizeMap.set(size, (sizeMap.get(size) || 0) + (row.soldQuantity || 0));
+    const variantMap = map.get(productId)!;
+    variantMap.set(variantId, (variantMap.get(variantId) || 0) + (row.soldQuantity || 0));
     return map;
   }, new Map<string, Map<string, number>>());
 }

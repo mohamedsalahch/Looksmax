@@ -11,15 +11,7 @@ import { getEnhancedFrontDisplayImage } from "@/lib/colorwayImage";
 import { queueStudioAssignment } from "@/lib/studioAssignment";
 
 function formatCartSizeLabel(size?: string) {
-  if (!size) return "";
-  if (size === "__default__") return "";
-  const colorVariantMatch = size.match(/^(.*?)(?:\s*\/\s*#?[0-9a-fA-F]{3,8})$/);
-  if (colorVariantMatch?.[1]) {
-    return colorVariantMatch[1].trim();
-  }
-  const separatorIndex = size.lastIndexOf(" / ");
-  if (separatorIndex === -1) return size;
-  return size.slice(0, separatorIndex).trim();
+  return size?.trim() || "";
 }
 
 export default function CartPanel() {

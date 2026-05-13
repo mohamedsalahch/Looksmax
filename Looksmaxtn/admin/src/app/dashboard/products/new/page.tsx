@@ -144,11 +144,6 @@ function normalizeVariantColors(value: string) {
     .filter(Boolean);
 }
 
-function buildVariantKey(row: FashionVariantRow) {
-  const size = row.size.trim();
-  const color = row.colors.trim();
-  return color ? `${size} / ${color}` : size;
-}
 
 const initialForm = {
   name: "",
@@ -655,7 +650,7 @@ function ColorwayGenerationCard({
                 className="group relative aspect-[4/5] overflow-hidden rounded border border-border bg-bg-secondary cursor-zoom-in transition-colors hover:border-accent/60"
               >
                 <img src={img.url} alt={`Generated ${i + 1}`} className="h-full w-full object-cover" />
-                <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 translate-y-1 rounded bg-black/60 px-2 py-1 text-[8px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
+                <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 translate-y-1 rounded bg-black/60 px-2 py-1 text-center text-[8px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
                   Preview
                 </span>
               </button>
@@ -936,12 +931,12 @@ function ColorwayCard({
                 }}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => { e.preventDefault(); handleViewFile(slot, e.dataTransfer.files?.[0] || null); }}
-                className={`group relative aspect-[4/5] overflow-hidden rounded border border-dashed border-border bg-bg-secondary transition-colors flex items-center justify-center ${preview ? "cursor-zoom-in hover:border-accent/60" : "cursor-pointer hover:border-accent"}`}
+                className={`group relative aspect-[4/5] overflow-hidden rounded border bg-bg-secondary transition-colors flex items-center justify-center ${preview ? "border-border cursor-zoom-in hover:border-accent/60" : "border-dashed border-border cursor-pointer hover:border-accent"}`}
               >
                 {preview ? (
                   <>
                     <img src={preview} alt={slot} className="h-full w-full object-cover" />
-                    <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 translate-y-1 rounded bg-black/60 px-2 py-1 text-[8px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
+                    <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 translate-y-1 rounded bg-black/60 px-2 py-1 text-center text-[8px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
                       Preview
                     </span>
                   </>
@@ -1225,7 +1220,7 @@ function ColorwayCard({
                     className="group relative aspect-[4/5] overflow-hidden rounded border border-border bg-bg-secondary cursor-zoom-in transition-colors hover:border-accent/60"
                   >
                     <img src={img.url} alt={`Generated ${i + 1}`} className="h-full w-full object-cover" />
-                    <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 translate-y-1 rounded bg-black/60 px-2 py-1 text-[8px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
+                    <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 translate-y-1 rounded bg-black/60 px-2 py-1 text-center text-[8px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
                       Preview
                     </span>
                   </button>
@@ -1532,7 +1527,7 @@ export default function NewProductPage() {
     return colorways.every((cw) => cw.hex.trim());
   }, [colorways, isStoreOwner]);
   const addColorwayLabel = useMemo(
-    () => (colorways.some((cw) => !cw.hex.trim()) ? "Add color to the previous colorway" : "Add colorway"),
+    () => (colorways.some((cw) => !cw.hex.trim()) ? "Select color first" : "Add colorway"),
     [colorways]
   );
   const variantInspectorSources = useMemo<InspectorSource[]>(() => {
@@ -1691,7 +1686,7 @@ export default function NewProductPage() {
   };
 
   const addColorway = () =>
-    setColorways((prev) => [...prev, createEmptyColorway(prev[prev.length - 1]?.hex.trim() || "")]);
+    setColorways((prev) => [...prev, createEmptyColorway()]);
   const handleAddColorway = () => {
     if (isStoreOwner && !storeOwnerCanAddColorway) return;
     const blankColorway = colorways.find((cw) => !cw.hex.trim());
@@ -2834,19 +2829,33 @@ export default function NewProductPage() {
         }
 
         const totalStock = allVariants.reduce((sum, v) => sum + v.stock, 0);
-        const uniqueColors = Array.from(new Set(colorways.map((c) => c.hex.trim()).filter(Boolean)));
-        const uniqueSizes = Array.from(new Set(allVariants.map((v) => v.size).filter(Boolean)));
-        const sizeStockPayload = Object.fromEntries(
-          allVariants.map((v) => [v.key, { fullStock: v.stock, stock: v.stock, conditionScore: v.conditionScore }])
-        );
-        const variantsPayload = allVariants.map((v) => ({
-          key: v.key,
-          size: v.size,
-          color: v.color,
-          fullStock: v.stock,
-          stock: v.stock,
-          conditionScore: v.conditionScore,
-        }));
+
+        // Build per-color image-index map first, then attach indices to each variant.
+        const imageFiles: File[] = [];
+        const imagesByHex: Record<string, number[]> = {};
+        for (const cw of colorways) {
+          const hex = cw.hex.trim().toLowerCase();
+          const indices: number[] = [];
+          for (const gi of cw.generatedImages) {
+            if (gi.file) { indices.push(imageFiles.length); imageFiles.push(gi.file); }
+          }
+          for (const view of requiredOriginPictureKeys) {
+            const imageFile = getColorwayViewInputFile(cw, view);
+            if (imageFile) { indices.push(imageFiles.length); imageFiles.push(imageFile); }
+          }
+          if (indices.length > 0) imagesByHex[hex] = indices;
+        }
+
+        const variantsPayload = allVariants.map((v) => {
+          const hex = v.color.toLowerCase();
+          return {
+            size: v.size,
+            color: hex ? { name: "", hex } : null,
+            fullStock: v.stock,
+            conditionScore: v.conditionScore,
+            images: imagesByHex[hex] || [],
+          };
+        });
 
         const body = new FormData();
         body.append("name", form.name);
@@ -2861,15 +2870,12 @@ export default function NewProductPage() {
         body.append("stock", String(totalStock));
         body.append("fullStock", String(totalStock));
         body.append("categories", JSON.stringify(productCategories));
-        body.append("sizes", JSON.stringify(uniqueSizes));
-        body.append("colors", JSON.stringify(uniqueColors));
-        body.append("sizeStock", JSON.stringify(sizeStockPayload));
         body.append("variants", JSON.stringify(variantsPayload));
         body.append("mainImageIndex", "0");
         if (selectedModelId) body.append("modelId", selectedModelId);
         const companionSettingsPayload: Record<string, object> = {};
         for (const cw of colorways) {
-          const colorKey = cw.hex.trim() || "__default__";
+          const colorKey = cw.hex.trim() || "__global__";
           companionSettingsPayload[colorKey] = {
             topType: cw.companionTopType,
             topColor: cw.companionTopColor,
@@ -2882,25 +2888,8 @@ export default function NewProductPage() {
         }
         body.append("companionSettings", JSON.stringify(companionSettingsPayload));
 
-        // Generated model images come first, then enhanced/raw origin pictures
-        // Build colorImages mapping: hex → array of image indices
-        const imageFiles: File[] = [];
-        const colorImagesPayload: Record<string, number[]> = {};
-        for (const cw of colorways) {
-          const colorKey = cw.hex.trim();
-          const indices: number[] = [];
-          for (const gi of cw.generatedImages) {
-            if (gi.file) { indices.push(imageFiles.length); imageFiles.push(gi.file); }
-          }
-          for (const view of requiredOriginPictureKeys) {
-            const imageFile = getColorwayViewInputFile(cw, view);
-            if (imageFile) { indices.push(imageFiles.length); imageFiles.push(imageFile); }
-          }
-          if (indices.length > 0) colorImagesPayload[colorKey] = indices;
-        }
         const compressedImages = await Promise.all(imageFiles.map((f) => compressImageFile(f)));
         compressedImages.forEach((f) => body.append("images", f));
-        body.append("colorImages", JSON.stringify(colorImagesPayload));
 
         const firstCw = colorways[0];
         const frontOrigin = firstCw.frontFile;
@@ -3023,32 +3012,20 @@ export default function NewProductPage() {
       body.append("fashionSubtype", form.fashionSubtype);
       body.append("stock", form.productType === "fashion" ? String(computedFashionStock) : form.stock);
       body.append("fullStock", form.productType === "fashion" ? String(computedFashionStock) : form.stock);
-      const variantKeys = form.productType === "perfume"
-        ? []
-        : completeVariantRows.map((row) => buildVariantKey(row));
-      if (variantKeys.length > 0) {
-        const sizeStockPayload = Object.fromEntries(
-          completeVariantRows.map((row) => [
-            buildVariantKey(row),
-            {
-              fullStock: Math.max(0, Number(row.stock || 0)),
-              stock: Math.max(0, Number(row.stock || 0)),
-              conditionScore: Math.max(0, Math.min(10, Number(row.conditionScore || 9) || 9)),
-            },
-          ])
-        );
-        body.append("sizeStock", JSON.stringify(sizeStockPayload));
+      if (form.productType !== "perfume" && completeVariantRows.length > 0) {
         body.append(
           "variants",
           JSON.stringify(
-            completeVariantRows.map((row) => ({
-              key: buildVariantKey(row),
-              size: row.size.trim(),
-              color: row.colors.trim(),
-              fullStock: Math.max(0, Number(row.stock || 0)),
-              stock: Math.max(0, Number(row.stock || 0)),
-              conditionScore: Math.max(0, Math.min(10, Number(row.conditionScore || 9) || 9)),
-            }))
+            completeVariantRows.map((row) => {
+              const hex = row.colors.trim().toLowerCase();
+              return {
+                size: row.size.trim(),
+                color: hex ? { name: "", hex } : null,
+                fullStock: Math.max(0, Number(row.stock || 0)),
+                conditionScore: Math.max(0, Math.min(10, Number(row.conditionScore || 9) || 9)),
+                images: [],
+              };
+            })
           )
         );
       }
@@ -4192,7 +4169,7 @@ export default function NewProductPage() {
                         className="group relative flex aspect-[4/5] w-full cursor-zoom-in items-center justify-center overflow-hidden rounded border border-transparent bg-bg-secondary p-2 transition-colors hover:border-accent/60"
                       >
                         <img src={item.url} alt={item.label} className="max-h-full max-w-full object-contain" />
-                        <span className="pointer-events-none absolute inset-x-2 bottom-2 translate-y-1 rounded bg-black/60 px-2 py-1 text-[9px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
+                        <span className="pointer-events-none absolute inset-x-2 bottom-2 translate-y-1 rounded bg-black/60 px-2 py-1 text-center text-[9px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
                           Preview
                         </span>
                       </button>

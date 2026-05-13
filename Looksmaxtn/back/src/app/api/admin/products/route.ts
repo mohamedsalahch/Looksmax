@@ -7,36 +7,36 @@ import { getConditionStatusFromScore } from "@/admin/lib/productCondition";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 import { broadcastAdminEvent } from "@/admin/lib/adminEvents";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
-import { getSoldQuantityByProductAndSize, getSoldQuantityByProductIds } from "@/lib/productInventory";
+import { getSoldQuantityByProductIds } from "@/lib/productInventory";
+import {
+  averageVariantConditionScore,
+  deriveColors,
+  deriveSizes,
+  parseRequestedVariants,
+  singleDefaultVariant,
+  sumVariantFullStock,
+  sumVariantStock,
+  type RequestedVariant,
+} from "@/lib/productVariants";
 
-function getSizeStockEntries(
-  sizeStock: unknown
-): Array<[string, { fullStock?: number; stock?: number }]> {
-  if (sizeStock instanceof Map) {
-    return Array.from(sizeStock.entries());
-  }
-
-  if (!sizeStock || typeof sizeStock !== "object") return [];
-
-  return Object.entries(sizeStock as Record<string, { fullStock?: number; stock?: number }>);
-}
+type StoredVariantLean = {
+  _id: { toString(): string };
+  size: string;
+  color: { name?: string; hex: string } | null;
+  fullStock: number;
+  stock: number;
+  conditionScore: number | null;
+  images: number[];
+};
 
 function getAvailabilityStatus(params: {
   productType?: string;
-  stock: number;
-  sizeStock?: unknown;
+  variants: ReadonlyArray<{ stock: number }>;
 }) {
-  const { productType, stock, sizeStock } = params;
-  const sizeStockEntries = getSizeStockEntries(sizeStock);
-  const hasSelectableSize = sizeStockEntries.length > 0
-    ? sizeStockEntries.some(([, entry]) => Math.max(entry.stock ?? 0, 0) > 0)
-    : stock > 0;
-  const effectiveStock = sizeStockEntries.length > 0
-    ? sizeStockEntries.reduce((sum, [, entry]) => sum + Math.max(entry.stock ?? 0, 0), 0)
-    : stock;
-
-  if (!hasSelectableSize) return "out-of-stock";
-  if (productType === "perfume" && effectiveStock <= 3) return "low-stock";
+  const { productType, variants } = params;
+  const totalStock = sumVariantStock(variants);
+  if (totalStock <= 0) return "out-of-stock";
+  if (productType === "perfume" && totalStock <= 3) return "low-stock";
   return productType === "perfume" ? "in-stock" : "available";
 }
 
@@ -69,174 +69,50 @@ function normalizeOriginPictures(
   };
 }
 
-function getInventorySnapshot(
-  product: { stock?: number; fullStock?: number; sizeStock?: unknown },
-  soldQuantity: number
-) {
-  const sizeStockEntries = getSizeStockEntries(product.sizeStock);
-  const hasSizeStock = sizeStockEntries.length > 0;
-  const availableStock = hasSizeStock
-    ? sizeStockEntries.reduce((sum, [, entry]) => sum + Math.max(entry.stock ?? 0, 0), 0)
-    : Math.max(product.stock ?? 0, 0);
-  const fullStock = hasSizeStock
-    ? sizeStockEntries.reduce((sum, [, entry]) => sum + Math.max(entry.fullStock ?? entry.stock ?? 0, 0), 0)
-    : typeof product.fullStock === "number"
-      ? Math.max(product.fullStock, 0)
-      : Math.max(availableStock + soldQuantity, 0);
-
-  return { availableStock, fullStock, soldQuantity };
-}
-
 function parseCompanionSettings(raw: FormDataEntryValue | null) {
   const str = String(raw || "").trim();
   if (!str || str === "{}") return null;
   try {
     const parsed = JSON.parse(str) as Record<string, {
-      topType?: string; topColor?: { name: string; hex: string } | null;
-      bottomType?: string; bottomColor?: { name: string; hex: string } | null;
-      footwearType?: string; footwearColor?: { name: string; hex: string } | null;
+      topType?: string; topColor?: { name?: string; hex: string } | null;
+      bottomType?: string; bottomColor?: { name?: string; hex: string } | null;
+      footwearType?: string; footwearColor?: { name?: string; hex: string } | null;
       additionalInstructions?: string;
     }>;
     return parsed;
   } catch { return null; }
 }
 
-function parseProductVariants(raw: FormDataEntryValue | null) {
-  const str = String(raw || "").trim();
-  if (!str || str === "[]") return [];
-  try {
-    const parsed = JSON.parse(str) as Array<{
-      key?: string;
-      size?: string;
-      color?: string;
-      fullStock?: number;
-      stock?: number;
-      conditionScore?: number | null;
-    }>;
-    return parsed
-      .map((variant) => {
-        const key = String(variant.key || "").trim();
-        const size = String(variant.size || "").trim();
-        const color = String(variant.color || "").trim();
-        if (!key || !size) return null;
-        return {
-          key,
-          size,
-          color,
-          fullStock: Math.max(0, Number(variant.fullStock ?? variant.stock ?? 0) || 0),
-          stock: Math.max(0, Number(variant.stock ?? variant.fullStock ?? 0) || 0),
-          conditionScore:
-            variant.conditionScore == null
-              ? null
-              : Math.max(0, Math.min(10, Number(variant.conditionScore) || 0)),
-        };
-      })
-      .filter((variant): variant is NonNullable<typeof variant> => variant !== null);
-  } catch {
-    return [];
+function getRequestedVariants(
+  formData: FormData,
+  options: { productType: string; fullStock: number; explicitConditionScore: number | null }
+): RequestedVariant[] {
+  if (options.productType === "perfume") {
+    return [singleDefaultVariant({
+      fullStock: options.fullStock,
+      conditionScore: options.explicitConditionScore,
+    })];
   }
+
+  const parsed = parseRequestedVariants(formData.get("variants"));
+  if (parsed.length > 0) return parsed;
+
+  return [singleDefaultVariant({
+    fullStock: options.fullStock,
+    conditionScore: null,
+  })];
 }
 
-function getProductPayload(
-  formData: FormData,
-  imagePaths: string[],
-  mainImageIndex: number,
-  cloneSourceImagePath = "",
-  originPictures?: Partial<Record<"front" | "back" | "left" | "right", string>>
-) {
-  const productType = normalizeProductType(String(formData.get("productType") || "fashion"));
-  const fashionSubtype =
-    productType === "fashion" ? String(formData.get("fashionSubtype") || "clothes") : null;
-  const rawStockValue = String(formData.get("fullStock") ?? formData.get("stock") ?? "").trim();
-  const rawStock = rawStockValue.length > 0 ? Number(rawStockValue) : NaN;
-  const explicitConditionScore =
-    productType === "perfume" ? Number(formData.get("conditionScore") || 9) : null;
-  const sizes = productType === "perfume" ? [] : parseStringArray(formData.get("sizes"));
-  const colors = productType === "perfume" ? [] : parseStringArray(formData.get("colors"));
-  const variants = productType === "perfume" ? [] : parseProductVariants(formData.get("variants"));
-
-  const rawSizeStock = String(formData.get("sizeStock") || "").trim();
-  let sizeStockMap: Map<string, { fullStock: number; stock: number; conditionScore: number | null }> | null = null;
-  if (productType !== "perfume" && rawSizeStock && rawSizeStock !== "{}") {
-    try {
-      const parsed = JSON.parse(rawSizeStock) as Record<string, number | { fullStock?: number; stock?: number; conditionScore?: number }>;
-      const sizesCoveredByComposite = new Set<string>();
-      for (const key of Object.keys(parsed)) {
-        if (key.includes(" / ")) {
-          sizesCoveredByComposite.add(key.split(" / ")[0]);
-        }
-      }
-      sizeStockMap = new Map(
-        Object.entries(parsed)
-          .filter(([key]) => !sizesCoveredByComposite.has(key) || key.includes(" / "))
-          .map(([size, qty]) => {
-            const fullStock = typeof qty === "object" && qty !== null ? Number(qty.fullStock ?? qty.stock ?? 0) : Number(qty) || 0;
-            const stock = typeof qty === "object" && qty !== null ? Number(qty.stock ?? qty.fullStock ?? 0) : Number(qty) || 0;
-            const conditionScore = typeof qty === "object" && qty !== null && qty.conditionScore !== undefined
-              ? Math.max(0, Math.min(10, Number(qty.conditionScore) || 0))
-              : null;
-            return [size, { fullStock: Math.max(0, fullStock), stock: Math.max(0, stock), conditionScore }];
-          })
-      );
-    } catch {
-      sizeStockMap = null;
-    }
-  }
-
-  // Derive product-level conditionScore from per-size values when not set explicitly
-  const conditionScore = (() => {
-    if (explicitConditionScore !== null) return explicitConditionScore;
-    if (!sizeStockMap) return null;
-    const scores = Array.from(sizeStockMap.values())
-      .map((e) => e.conditionScore)
-      .filter((s): s is number => s !== null);
-    if (scores.length === 0) return null;
-    return Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length);
-  })();
-
-  const rawColorImages = String(formData.get("colorImages") || "").trim();
-  let colorImagesMap: Map<string, number[]> | null = null;
-  if (productType !== "perfume" && rawColorImages && rawColorImages !== "{}") {
-    try {
-      const parsed = JSON.parse(rawColorImages) as Record<string, number[]>;
-      colorImagesMap = new Map(Object.entries(parsed));
-    } catch {
-      colorImagesMap = null;
-    }
-  }
-
-  return {
-    name: String(formData.get("name") || ""),
-    price: Number(formData.get("price") || 0),
-    isActive: String(formData.get("isActive") || "true") === "true",
-    categories: parseStringArray(formData.get("categories")),
-    description: String(formData.get("description") || ""),
-    brand: String(formData.get("brand") || ""),
-    reference: normalizeReference(formData.get("reference")),
-    stock: Number.isNaN(rawStock) ? 0 : Math.max(0, rawStock),
-    sizeStock: sizeStockMap,
-    colorImages: colorImagesMap,
-    tag: String(formData.get("tag") || ""),
-    newTagDurationDays: Math.max(1, Math.floor(Number(formData.get("newTagDurationDays") || 3)) || 3),
-    productType,
-    fashionSubtype,
-    conditionStatus:
-      conditionScore === null ? null : getConditionStatusFromScore(conditionScore),
-    conditionScore,
-    originPictures: normalizeOriginPictures(productType, fashionSubtype, originPictures),
-    sizes,
-    colors,
-    variants,
-    cloneSourceName: productType === "perfume" ? String(formData.get("cloneSourceName") || "") : "",
-    cloneSourceImage:
-      productType === "perfume" ? cloneSourceImagePath || String(formData.get("cloneSourceImage") || "") : "",
-    modelId: String(formData.get("modelId") || ""),
-    companionSettings: parseCompanionSettings(formData.get("companionSettings")),
-    images: imagePaths.map((url, index) => ({
-      url,
-      isMain: index === Math.min(mainImageIndex, imagePaths.length - 1),
-    })),
-  };
+function serializeStoredVariants(variants: ReadonlyArray<StoredVariantLean>) {
+  return variants.map((v) => ({
+    _id: v._id.toString(),
+    size: v.size,
+    color: v.color,
+    fullStock: v.fullStock,
+    stock: v.stock,
+    conditionScore: v.conditionScore,
+    images: v.images,
+  }));
 }
 
 async function ensureUniqueProductReference(params: {
@@ -361,39 +237,27 @@ export async function GET(req: NextRequest) {
     const products = await Product.find(filter).sort({ createdAt: -1 }).lean();
     const productIds = products.map((product) => product._id.toString());
     const soldQuantityMap = await getSoldQuantityByProductIds(productIds);
-    const soldBySizeMap = await getSoldQuantityByProductAndSize(productIds);
 
     return NextResponse.json({
       products: products.map((product) => {
         const productId = product._id.toString();
         const soldQuantity = soldQuantityMap.get(productId) || 0;
-        const soldBySize = soldBySizeMap.get(productId) || new Map<string, number>();
-        const inventory = getInventorySnapshot(product, soldQuantity);
-
-        let sizeStockData: Record<string, { fullStock: number; stock: number; soldQuantity: number }> | null = null;
-        if (product.sizeStock && product.sizeStock instanceof Map && product.sizeStock.size > 0) {
-          sizeStockData = {};
-          for (const [size, entry] of product.sizeStock) {
-            const sizeSold = soldBySize.get(size) || 0;
-            sizeStockData[size] = {
-              fullStock: entry.fullStock,
-              stock: entry.stock,
-              soldQuantity: sizeSold,
-            };
-          }
-        }
+        const variants = (product.variants || []) as unknown as StoredVariantLean[];
+        const totalStock = sumVariantStock(variants);
+        const totalFullStock = sumVariantFullStock(variants);
 
         return {
           ...product,
-          stock: inventory.availableStock,
-          availableStock: inventory.availableStock,
-          soldQuantity: inventory.soldQuantity,
-          fullStock: inventory.fullStock,
-          sizeStock: sizeStockData,
+          stock: totalStock,
+          availableStock: totalStock,
+          soldQuantity,
+          fullStock: totalFullStock,
+          variants: serializeStoredVariants(variants),
+          sizes: deriveSizes(variants),
+          colors: deriveColors(variants),
           availabilityStatus: getAvailabilityStatus({
             productType: product.productType,
-            stock: Math.max(product.stock ?? 0, 0),
-            sizeStock: product.sizeStock,
+            variants,
           }),
           approvalStatus: product.approvalStatus || "approved",
           visibilityStatus: product.isActive === false ? "inactive" : "active",
@@ -456,42 +320,84 @@ export async function POST(req: NextRequest) {
           : String(formData.get("originPictureRight") || ""),
     };
     const mainImageIndex = Math.max(0, Number(formData.get("mainImageIndex") ?? 0));
-    const body = getProductPayload(
-      formData,
-      imagePaths,
-      mainImageIndex,
-      cloneSourceImagePath,
-      originPictures
-    );
-    const duplicateResponse = await ensureUniqueProductReference({
-      ownerId: auditActor?.id,
-      reference: body.reference || "",
-    });
-    if (duplicateResponse) return duplicateResponse;
-    if (session.role === "store_owner") {
-      body.tag = "NEW";
-      body.newTagDurationDays = 3;
-    }
+
+    const productType = normalizeProductType(String(formData.get("productType") || "fashion"));
+    const fashionSubtype =
+      productType === "fashion" ? String(formData.get("fashionSubtype") || "clothes") : null;
     const rawFullStock = String(formData.get("fullStock") ?? formData.get("stock") ?? "").trim();
     if (rawFullStock.length === 0) {
       return NextResponse.json({ error: "Please enter a full stock value." }, { status: 400 });
     }
     const fullStock = Math.max(0, Number(rawFullStock));
+    const explicitConditionScore =
+      productType === "perfume" ? Number(formData.get("conditionScore") || 9) : null;
 
-    let stock = fullStock;
-    if (body.sizeStock && body.sizeStock instanceof Map && body.sizeStock.size > 0) {
-      stock = 0;
-      for (const entry of body.sizeStock.values()) {
-        stock += entry.stock;
-      }
-    } else {
-      body.sizeStock = null;
+    const requestedVariants = getRequestedVariants(formData, {
+      productType,
+      fullStock,
+      explicitConditionScore,
+    });
+
+    // On create there are no prior orders — stock = fullStock for each variant.
+    const variants = requestedVariants.map((v) => ({
+      size: v.size,
+      color: v.color,
+      fullStock: v.fullStock,
+      stock: v.fullStock,
+      conditionScore: v.conditionScore,
+      images: v.images,
+    }));
+
+    const conditionScore =
+      explicitConditionScore !== null
+        ? explicitConditionScore
+        : averageVariantConditionScore(variants);
+
+    const reference = normalizeReference(formData.get("reference"));
+    const duplicateResponse = await ensureUniqueProductReference({
+      ownerId: auditActor?.id,
+      reference,
+    });
+    if (duplicateResponse) return duplicateResponse;
+
+    let tag = String(formData.get("tag") || "");
+    let newTagDurationDays = Math.max(1, Math.floor(Number(formData.get("newTagDurationDays") || 3)) || 3);
+    if (session.role === "store_owner") {
+      tag = "NEW";
+      newTagDurationDays = 3;
     }
 
+    const totalStock = sumVariantStock(variants);
+    const totalFullStock = sumVariantFullStock(variants);
+
     const product = await Product.create({
-      ...body,
-      stock,
-      fullStock: body.sizeStock ? stock : fullStock,
+      name: String(formData.get("name") || ""),
+      price: Number(formData.get("price") || 0),
+      isActive: String(formData.get("isActive") || "true") === "true",
+      categories: parseStringArray(formData.get("categories")),
+      description: String(formData.get("description") || ""),
+      brand: String(formData.get("brand") || ""),
+      reference,
+      stock: totalStock,
+      fullStock: totalFullStock,
+      variants,
+      tag,
+      newTagDurationDays,
+      productType,
+      fashionSubtype,
+      conditionStatus:
+        conditionScore === null ? null : getConditionStatusFromScore(conditionScore),
+      conditionScore,
+      originPictures: normalizeOriginPictures(productType, fashionSubtype, originPictures),
+      cloneSourceName: productType === "perfume" ? String(formData.get("cloneSourceName") || "") : "",
+      cloneSourceImage:
+        productType === "perfume" ? cloneSourceImagePath || String(formData.get("cloneSourceImage") || "") : "",
+      modelId: String(formData.get("modelId") || ""),
+      companionSettings: parseCompanionSettings(formData.get("companionSettings")),
+      images: imagePaths.map((url, index) => ({
+        url,
+        isMain: index === Math.min(mainImageIndex, imagePaths.length - 1),
+      })),
       approvalStatus: session.role === "store_owner" ? "pending" : "approved",
       createdBy: auditActor,
       updatedBy: auditActor,

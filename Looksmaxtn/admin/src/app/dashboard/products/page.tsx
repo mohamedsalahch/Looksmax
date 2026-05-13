@@ -15,7 +15,7 @@ interface Category {
 
 interface Product {
   _id: string; name: string; price: number; categories: string[];
-  stock: number; availableStock?: number; soldQuantity?: number; fullStock?: number; tag: string; brand: string; reference?: string; createdAt: string; productType?: "fashion" | "perfume" | "clothing" | "shoes"; availabilityStatus?: string; isActive?: boolean; visibilityStatus?: string; approvalStatus?: "pending" | "approved" | "rejected"; images?: Array<{ url: string; isMain: boolean }>; originPictures?: { front?: string; back?: string; left?: string; right?: string };
+  stock: number; availableStock?: number; soldQuantity?: number; fullStock?: number; tag: string; brand: string; reference?: string; createdAt: string; productType?: "fashion" | "perfume" | "clothing" | "shoes"; availabilityStatus?: string; isActive?: boolean; visibilityStatus?: string; approvalStatus?: "pending" | "approved" | "rejected"; images?: Array<{ url: string; isMain: boolean }>; originPictures?: { front?: string; back?: string; left?: string; right?: string }; createdBy?: { id?: string; name?: string; email?: string } | null; storeName?: string;
 }
 
 type SortKey = "name" | "_id" | "categories" | "productType" | "price" | "stock" | "status" | "approval" | "visibility" | "tag";
@@ -70,6 +70,7 @@ export default function ProductsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [storeFilter, setStoreFilter] = useState("all");
   const [visibilityFilter, setVisibilityFilter] = useState("all");
   const [approvalFilter, setApprovalFilter] = useState("all");
   const [loading, setLoading] = useState(true);
@@ -80,8 +81,10 @@ export default function ProductsPage() {
   const [userRole, setUserRole] = useState("");
   const deferredSearch = useDeferredValue(search);
   const canAddProducts = userRole === "store_owner";
+  const canEditProducts = userRole === "store_owner" || userRole === "admin";
   const canDeleteProducts = userRole === "store_owner" || userRole === "admin";
   const canToggleVisibility = userRole === "store_owner" || userRole === "admin";
+  const canFilterByStore = userRole === "admin";
 
   const fetchProducts = () => {
     fetch("/api/products", withAuthRequest())
@@ -168,12 +171,20 @@ export default function ProductsPage() {
           product.brand,
           product.reference,
           product.tag,
+          product.storeName,
+          product.createdBy?.name,
+          product.createdBy?.email,
           ...(product.categories || []),
         ].some((value) => String(value || "").toLowerCase().includes(normalizedSearch));
 
       const matchesCategory =
         categoryFilter === "all" ||
         (product.categories || []).includes(categoryFilter);
+      const productStoreKey = product.createdBy?.id || product.createdBy?.email || product.storeName || "__unknown__";
+      const matchesStore =
+        !canFilterByStore ||
+        storeFilter === "all" ||
+        productStoreKey === storeFilter;
 
       const isInactive = product.isActive === false || product.visibilityStatus === "inactive";
       const normalizedApprovalStatus = product.approvalStatus || "approved";
@@ -184,9 +195,9 @@ export default function ProductsPage() {
       const matchesApproval =
         approvalFilter === "all" || normalizedApprovalStatus === approvalFilter;
 
-      return matchesSearch && matchesCategory && matchesVisibility && matchesApproval;
+      return matchesSearch && matchesCategory && matchesStore && matchesVisibility && matchesApproval;
     });
-  }, [approvalFilter, categoryFilter, deferredSearch, products, visibilityFilter]);
+  }, [approvalFilter, canFilterByStore, categoryFilter, deferredSearch, products, storeFilter, visibilityFilter]);
 
   const categoryOptions = useMemo(() => {
     const bySlug = new Map(categories.map((category) => [category.slug, category]));
@@ -211,6 +222,23 @@ export default function ProductsPage() {
         label: buildLabel(category),
       }));
   }, [categories]);
+
+  const storeOptions = useMemo(() => {
+    const byKey = new Map<string, { value: string; label: string; detail: string }>();
+
+    for (const product of products) {
+      const value = product.createdBy?.id || product.createdBy?.email || product.storeName || "__unknown__";
+      const label = product.storeName || product.createdBy?.name || product.createdBy?.email || "Unknown store";
+      const detail = product.createdBy?.email || "";
+      if (!byKey.has(value)) {
+        byKey.set(value, { value, label, detail });
+      }
+    }
+
+    return [...byKey.values()].sort((a, b) =>
+      a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: "base" })
+    );
+  }, [products]);
 
   const sortedProducts = useMemo(() => {
     const items = [...filteredProducts];
@@ -298,12 +326,12 @@ export default function ProductsPage() {
         )}
       </div>
 
-      <div className="mb-6 grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_180px_180px]">
+      <div className={`mb-6 grid gap-3 ${canFilterByStore ? "md:grid-cols-[minmax(0,1fr)_180px_180px_180px_180px]" : "md:grid-cols-[minmax(0,1fr)_180px_180px_180px]"}`}>
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name, brand, tag, category, or ID..."
+          placeholder="Search by name, brand, store, tag, category, or ID..."
           className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-text-primary transition-colors"
         />
         <select
@@ -318,6 +346,20 @@ export default function ProductsPage() {
             </option>
           ))}
         </select>
+        {canFilterByStore && (
+          <select
+            value={storeFilter}
+            onChange={(e) => setStoreFilter(e.target.value)}
+            className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-text-primary transition-colors"
+          >
+            <option value="all">All stores</option>
+            {storeOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        )}
         <select
           value={visibilityFilter}
           onChange={(e) => setVisibilityFilter(e.target.value)}
@@ -478,6 +520,15 @@ export default function ProductsPage() {
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
+                      {canEditProducts && (
+                        <Link
+                          href={`/dashboard/products/${p._id}/edit`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-[10px] font-medium uppercase tracking-[0.2em] text-text-primary transition-colors hover:text-accent"
+                        >
+                          Edit
+                        </Link>
+                      )}
                       {canDeleteProducts ? (
                         <button
                           type="button"

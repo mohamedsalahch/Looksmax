@@ -1,42 +1,59 @@
 import { NextRequest, NextResponse } from "next/server";
+import mongoose from "mongoose";
 import dbConnect from "@/admin/lib/mongodb";
 import Product from "@/admin/models/Product";
+import Order from "@/admin/models/Order";
 import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
 import { deleteProductImage, saveProductImages } from "@/admin/lib/productUploads";
 import { getConditionStatusFromScore } from "@/admin/lib/productCondition";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 import { broadcastAdminEvent } from "@/admin/lib/adminEvents";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
-import { getSoldQuantityByProductAndSize, getSoldQuantityByProductIds } from "@/lib/productInventory";
+import {
+  getSoldQuantityByProductAndVariant,
+  getSoldQuantityByProductIds,
+} from "@/lib/productInventory";
+import {
+  averageVariantConditionScore,
+  deriveColors,
+  deriveSizes,
+  parseRequestedVariants,
+  singleDefaultVariant,
+  sumVariantFullStock,
+  sumVariantStock,
+  type RequestedVariant,
+} from "@/lib/productVariants";
 
-function getSizeStockEntries(
-  sizeStock: unknown
-): Array<[string, { fullStock?: number; stock?: number; conditionScore?: number | null }]> {
-  if (sizeStock instanceof Map) {
-    return Array.from(sizeStock.entries());
-  }
+type StoredVariantLean = {
+  _id: mongoose.Types.ObjectId;
+  size: string;
+  color: { name?: string; hex: string } | null;
+  fullStock: number;
+  stock: number;
+  conditionScore: number | null;
+  images: number[];
+};
 
-  if (!sizeStock || typeof sizeStock !== "object") return [];
+type NextVariantInput = {
+  _id?: mongoose.Types.ObjectId;
+  size: string;
+  color: { name?: string; hex: string } | null;
+  fullStock: number;
+  stock: number;
+  conditionScore: number | null;
+  images: number[];
+};
 
-  return Object.entries(sizeStock as Record<string, { fullStock?: number; stock?: number; conditionScore?: number | null }>);
-}
+const ACTIVE_ORDER_STATUSES = ["processing", "confirmed"] as const;
 
 function getAvailabilityStatus(params: {
   productType?: string;
-  stock: number;
-  sizeStock?: unknown;
+  variants: ReadonlyArray<{ stock: number }>;
 }) {
-  const { productType, stock, sizeStock } = params;
-  const sizeStockEntries = getSizeStockEntries(sizeStock);
-  const hasSelectableSize = sizeStockEntries.length > 0
-    ? sizeStockEntries.some(([, entry]) => Math.max(entry.stock ?? 0, 0) > 0)
-    : stock > 0;
-  const effectiveStock = sizeStockEntries.length > 0
-    ? sizeStockEntries.reduce((sum, [, entry]) => sum + Math.max(entry.stock ?? 0, 0), 0)
-    : stock;
-
-  if (!hasSelectableSize) return "out-of-stock";
-  if (productType === "perfume" && effectiveStock <= 3) return "low-stock";
+  const { productType, variants } = params;
+  const totalStock = sumVariantStock(variants);
+  if (totalStock <= 0) return "out-of-stock";
+  if (productType === "perfume" && totalStock <= 3) return "low-stock";
   return productType === "perfume" ? "in-stock" : "available";
 }
 
@@ -65,154 +82,147 @@ function normalizeOriginPictures(
   };
 }
 
-function getInventorySnapshot(
-  product: { stock?: number; fullStock?: number; sizeStock?: unknown },
-  soldQuantity: number
-) {
-  const sizeStockEntries = getSizeStockEntries(product.sizeStock);
-  const hasSizeStock = sizeStockEntries.length > 0;
-  const availableStock = hasSizeStock
-    ? sizeStockEntries.reduce((sum, [, entry]) => sum + Math.max(entry.stock ?? 0, 0), 0)
-    : Math.max(product.stock ?? 0, 0);
-  const fullStock = hasSizeStock
-    ? sizeStockEntries.reduce((sum, [, entry]) => sum + Math.max(entry.fullStock ?? entry.stock ?? 0, 0), 0)
-    : typeof product.fullStock === "number"
-      ? Math.max(product.fullStock, 0)
-      : Math.max(availableStock + soldQuantity, 0);
-
-  return { availableStock, fullStock, soldQuantity };
-}
-
 function parseCompanionSettings(raw: FormDataEntryValue | null) {
   const str = String(raw || "").trim();
   if (!str || str === "{}") return null;
   try {
     const parsed = JSON.parse(str) as Record<string, {
-      topType?: string; topColor?: { name: string; hex: string } | null;
-      bottomType?: string; bottomColor?: { name: string; hex: string } | null;
-      footwearType?: string; footwearColor?: { name: string; hex: string } | null;
+      topType?: string; topColor?: { name?: string; hex: string } | null;
+      bottomType?: string; bottomColor?: { name?: string; hex: string } | null;
+      footwearType?: string; footwearColor?: { name?: string; hex: string } | null;
       additionalInstructions?: string;
     }>;
     return parsed;
   } catch { return null; }
 }
 
-function parseProductVariants(raw: FormDataEntryValue | null) {
-  const str = String(raw || "").trim();
-  if (!str || str === "[]") return [];
-  try {
-    const parsed = JSON.parse(str) as Array<{
-      key?: string;
-      size?: string;
-      color?: string;
-      fullStock?: number;
-      stock?: number;
-      conditionScore?: number | null;
-    }>;
-    return parsed
-      .map((variant) => {
-        const key = String(variant.key || "").trim();
-        const size = String(variant.size || "").trim();
-        const color = String(variant.color || "").trim();
-        if (!key || !size) return null;
-        return {
-          key,
-          size,
-          color,
-          fullStock: Math.max(0, Number(variant.fullStock ?? variant.stock ?? 0) || 0),
-          stock: Math.max(0, Number(variant.stock ?? variant.fullStock ?? 0) || 0),
-          conditionScore:
-            variant.conditionScore == null
-              ? null
-              : Math.max(0, Math.min(10, Number(variant.conditionScore) || 0)),
-        };
-      })
-      .filter((variant): variant is NonNullable<typeof variant> => variant !== null);
-  } catch {
-    return [];
-  }
-}
-
 function normalizeReference(value: unknown) {
   return String(value || "").trim();
 }
 
-function getDeclaredSizes(productSizes: unknown, bodySizes?: unknown) {
-  const sizes = new Set<string>();
-  for (const source of [productSizes, bodySizes]) {
-    if (!Array.isArray(source)) continue;
-    for (const size of source) {
-      if (typeof size !== "string") continue;
-      const normalized = size.trim();
-      if (normalized) sizes.add(normalized);
+function getStoredVariants(product: { variants?: unknown }): StoredVariantLean[] {
+  return ((product.variants as StoredVariantLean[] | undefined) || []).map((v) => ({
+    _id: v._id,
+    size: v.size,
+    color: v.color,
+    fullStock: v.fullStock,
+    stock: v.stock,
+    conditionScore: v.conditionScore,
+    images: v.images || [],
+  }));
+}
+
+function serializeStoredVariants(
+  variants: ReadonlyArray<StoredVariantLean>,
+  soldByVariant: Map<string, number>,
+) {
+  return variants.map((v) => {
+    const variantId = v._id.toString();
+    return {
+      _id: variantId,
+      size: v.size,
+      color: v.color,
+      fullStock: v.fullStock,
+      stock: v.stock,
+      conditionScore: v.conditionScore,
+      images: v.images,
+      soldQuantity: soldByVariant.get(variantId) || 0,
+    };
+  });
+}
+
+async function getProtectedVariantIds(
+  productId: string,
+  candidateIds: mongoose.Types.ObjectId[],
+): Promise<Set<string>> {
+  if (candidateIds.length === 0) return new Set();
+  const protectedIds = await Order.distinct("items.variant", {
+    "items.product": new mongoose.Types.ObjectId(productId),
+    "items.variant": { $in: candidateIds },
+    orderStatus: { $in: ACTIVE_ORDER_STATUSES as unknown as string[] },
+  });
+  return new Set(protectedIds.map((v) => String(v)));
+}
+
+async function reconcileVariants(params: {
+  productId: string;
+  existingVariants: StoredVariantLean[];
+  requestedVariants: RequestedVariant[];
+  mode: "restock" | "full";
+  soldByVariant: Map<string, number>;
+}): Promise<NextVariantInput[]> {
+  const { productId, existingVariants, requestedVariants, mode, soldByVariant } = params;
+
+  const existingById = new Map<string, StoredVariantLean>();
+  for (const v of existingVariants) {
+    existingById.set(v._id.toString(), v);
+  }
+
+  const requestedIds = new Set<string>();
+  const next: NextVariantInput[] = [];
+
+  for (const requested of requestedVariants) {
+    const existingId = requested._id && existingById.has(requested._id)
+      ? requested._id
+      : "";
+    const existing = existingId ? existingById.get(existingId)! : null;
+
+    if (existing) {
+      requestedIds.add(existingId);
+      const sold = soldByVariant.get(existingId) || 0;
+      const nextFullStock = mode === "restock"
+        ? Math.max(0, existing.fullStock + requested.fullStock)
+        : Math.max(0, requested.fullStock);
+      next.push({
+        _id: existing._id,
+        size: requested.size,
+        color: requested.color,
+        fullStock: nextFullStock,
+        stock: Math.max(0, nextFullStock - sold),
+        conditionScore:
+          requested.conditionScore !== null
+            ? requested.conditionScore
+            : existing.conditionScore ?? null,
+        images: requested.images.length > 0 ? requested.images : existing.images,
+      });
+    } else {
+      // New variant — no sold history.
+      next.push({
+        size: requested.size,
+        color: requested.color,
+        fullStock: requested.fullStock,
+        stock: requested.fullStock,
+        conditionScore: requested.conditionScore,
+        images: requested.images,
+      });
     }
   }
-  return Array.from(sizes);
-}
 
-async function ensureUniqueProductReference(params: {
-  ownerId?: string | null;
-  reference: string;
-  excludeProductId?: string;
-}) {
-  const { ownerId, reference, excludeProductId } = params;
-  if (!ownerId || !reference) return null;
-
-  const filter: Record<string, unknown> = {
-    "createdBy.id": ownerId,
-    reference,
-  };
-  if (excludeProductId) {
-    filter._id = { $ne: excludeProductId };
-  }
-
-  const existing = await Product.findOne(filter).select("_id").lean();
-  if (existing) {
-    return NextResponse.json(
-      { error: "Reference must be unique within the same store." },
-      { status: 409 }
+  // Handle existing variants absent from the payload: soft-delete if any open
+  // order references them, otherwise drop.
+  const droppedCandidates = existingVariants.filter((v) => !requestedIds.has(v._id.toString()));
+  if (droppedCandidates.length > 0) {
+    const protectedIds = await getProtectedVariantIds(
+      productId,
+      droppedCandidates.map((v) => v._id),
     );
+    for (const v of droppedCandidates) {
+      if (protectedIds.has(v._id.toString())) {
+        next.push({
+          _id: v._id,
+          size: v.size,
+          color: v.color,
+          fullStock: 0,
+          stock: 0,
+          conditionScore: v.conditionScore,
+          images: v.images,
+        });
+      }
+      // else: truly dropped — omit from next[].
+    }
   }
 
-  return null;
-}
-
-function buildSizeStockSnapshot(params: {
-  sizeStock?: unknown;
-  sizes: string[];
-  soldBySize: Map<string, number>;
-}) {
-  const { sizeStock, sizes, soldBySize } = params;
-  if (!sizeStock && sizes.length === 0) return null;
-
-  const snapshot: Record<string, { fullStock: number; stock: number; soldQuantity: number; conditionScore: number | null }> = {};
-  const sizeStockEntries = new Map(getSizeStockEntries(sizeStock));
-  const sizesCoveredByComposite = new Set<string>();
-  for (const key of sizeStockEntries.keys()) {
-    if (key.includes(" / ")) sizesCoveredByComposite.add(key.split(" / ")[0]);
-  }
-  const orderedSizes = Array.from(
-    new Set([
-      ...sizes.filter((size) => !sizesCoveredByComposite.has(size)),
-      ...Array.from(sizeStockEntries.keys()),
-    ])
-  );
-
-  if (orderedSizes.length === 0) return null;
-
-  for (const size of orderedSizes) {
-    const entry = sizeStockEntries.get(size);
-    snapshot[size] = {
-      fullStock: Math.max(entry?.fullStock ?? 0, 0),
-      stock: Math.max(entry?.stock ?? 0, 0),
-      soldQuantity: Math.max(soldBySize.get(size) || 0, 0),
-      conditionScore: typeof entry?.conditionScore === "number"
-        ? Math.max(0, Math.min(10, Number(entry.conditionScore) || 0))
-        : null,
-    };
-  }
-
-  return snapshot;
+  return next;
 }
 
 function canAccessProduct(session: { userId: string; role: string }, product: { createdBy?: { id?: string } | null }) {
@@ -262,6 +272,33 @@ function buildAdminProductEventPayload(
   };
 }
 
+async function ensureUniqueProductReference(params: {
+  ownerId?: string | null;
+  reference: string;
+  excludeProductId?: string;
+}) {
+  const { ownerId, reference, excludeProductId } = params;
+  if (!ownerId || !reference) return null;
+
+  const filter: Record<string, unknown> = {
+    "createdBy.id": ownerId,
+    reference,
+  };
+  if (excludeProductId) {
+    filter._id = { $ne: excludeProductId };
+  }
+
+  const existing = await Product.findOne(filter).select("_id").lean();
+  if (existing) {
+    return NextResponse.json(
+      { error: "Reference must be unique within the same store." },
+      { status: 409 }
+    );
+  }
+
+  return null;
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getSession();
@@ -271,21 +308,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const product = await Product.findById(id).lean();
     if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (!canAccessProduct(session, product)) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    const soldQuantityMap = await getSoldQuantityByProductIds([id]);
+
+    const variants = getStoredVariants(product);
+    const totalStock = sumVariantStock(variants);
+    const totalFullStock = sumVariantFullStock(variants);
+
+    const [soldQuantityMap, soldByVariantMap] = await Promise.all([
+      getSoldQuantityByProductIds([id]),
+      getSoldQuantityByProductAndVariant([id]),
+    ]);
     const soldQuantity = soldQuantityMap.get(id) || 0;
-    const soldBySizeMap = await getSoldQuantityByProductAndSize([id]);
-    const soldBySize = soldBySizeMap.get(id) || new Map<string, number>();
-    const inventory = getInventorySnapshot(product, soldQuantity);
-
-    const sizeStockData = buildSizeStockSnapshot({
-      sizeStock: product.sizeStock,
-      sizes: getDeclaredSizes(product.sizes),
-      soldBySize,
-    });
-
-    const colorImagesData = product.colorImages instanceof Map
-      ? Object.fromEntries(product.colorImages)
-      : (product.colorImages && typeof product.colorImages === "object" ? product.colorImages : null);
+    const soldByVariant = soldByVariantMap.get(id) || new Map<string, number>();
 
     const companionSettingsData = product.companionSettings instanceof Map
       ? Object.fromEntries(product.companionSettings)
@@ -294,18 +327,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({
       product: {
         ...product,
-        stock: inventory.availableStock,
-        availableStock: inventory.availableStock,
-        soldQuantity: inventory.soldQuantity,
-        fullStock: inventory.fullStock,
-        sizeStock: sizeStockData,
-        colorImages: colorImagesData,
+        stock: totalStock,
+        availableStock: totalStock,
+        soldQuantity,
+        fullStock: totalFullStock,
+        variants: serializeStoredVariants(variants, soldByVariant),
+        sizes: deriveSizes(variants),
+        colors: deriveColors(variants),
         companionSettings: companionSettingsData,
         visibilityStatus: product.isActive === false ? "inactive" : "active",
         availabilityStatus: getAvailabilityStatus({
           productType: product.productType,
-          stock: inventory.availableStock,
-          sizeStock: product.sizeStock,
+          variants,
         }),
         approvalStatus: product.approvalStatus || "approved",
       },
@@ -324,19 +357,25 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const existingProduct = await Product.findById(id).lean();
     if (!existingProduct) return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (!canAccessProduct(session, existingProduct)) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    const soldQuantityMap = await getSoldQuantityByProductIds([id]);
-    const soldQuantity = soldQuantityMap.get(id) || 0;
-    const soldBySizeMap = await getSoldQuantityByProductAndSize([id]);
-    const soldBySize = soldBySizeMap.get(id) || new Map<string, number>();
+
+    const existingVariants = getStoredVariants(existingProduct);
+    const soldByVariantMap = await getSoldQuantityByProductAndVariant([id]);
+    const soldByVariant = soldByVariantMap.get(id) || new Map<string, number>();
 
     const contentType = req.headers.get("content-type") || "";
-    if (session.role === "admin" && contentType.includes("multipart/form-data")) {
-      return NextResponse.json({ error: "Admins cannot edit products." }, { status: 403 });
-    }
     if (contentType.includes("application/json")) {
       const body = await req.json();
       if (session.role === "admin") {
-        const allowedAdminKeys = new Set(["approvalStatus", "isActive", "tag"]);
+        const allowedAdminKeys = new Set([
+          "approvalStatus",
+          "isActive",
+          "tag",
+          "reference",
+          "variants",
+          "sizeStockMode",
+          "fullStock",
+          "stock",
+        ]);
         const bodyKeys = Object.keys(body || {});
         const hasRestrictedKeys = bodyKeys.some((key) => !allowedAdminKeys.has(key));
         if (hasRestrictedKeys) {
@@ -344,8 +383,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         }
       }
       const update: Record<string, unknown> = {};
-      const sizeStockMode = body.sizeStockMode === "restock" ? "restock" : "full";
-      const declaredSizes = getDeclaredSizes(existingProduct.sizes, body.sizes);
+      const sizeStockMode: "restock" | "full" = body.sizeStockMode === "restock" ? "restock" : "full";
 
       if (typeof body.isActive === "boolean") {
         update.isActive = body.isActive;
@@ -375,85 +413,61 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         }
       }
 
-      if (body.sizeStock && typeof body.sizeStock === "object") {
-        const sizeStockMap = new Map<string, { fullStock: number; stock: number; conditionScore: number | null }>();
-        const bodySizeStockKeys = Object.keys(
-          body.sizeStock as Record<string, unknown>
-        );
-        const sizesCoveredByComposite = new Set<string>();
-        for (const key of bodySizeStockKeys) {
-          if (key.includes(" / ")) {
-            sizesCoveredByComposite.add(key.split(" / ")[0]);
-          }
-        }
-        for (const size of declaredSizes) {
-          if (sizesCoveredByComposite.has(size)) continue;
-          sizeStockMap.set(size, { fullStock: 0, stock: 0, conditionScore: null });
-        }
-
-        for (const [size, entry] of getSizeStockEntries(existingProduct.sizeStock)) {
-          sizeStockMap.set(size, {
-            fullStock: Math.max(entry.fullStock ?? 0, 0),
-            stock: Math.max(entry.stock ?? 0, 0),
-            conditionScore: typeof (entry as { conditionScore?: number | null }).conditionScore === "number"
-              ? Math.max(0, Math.min(10, Number((entry as { conditionScore?: number | null }).conditionScore) || 0))
-              : null,
-          });
-        }
-
-        for (const [size, qty] of Object.entries(
-          body.sizeStock as Record<string, number | { fullStock?: number; stock?: number; conditionScore?: number }>
-        )) {
-          const nextValue =
-            typeof qty === "object" && qty !== null
-              ? Math.max(0, Number(qty.fullStock ?? qty.stock ?? 0) || 0)
-              : Math.max(0, Number(qty) || 0);
-          const currentEntry = sizeStockMap.get(size) || { fullStock: 0, stock: 0, conditionScore: null };
-          const currentFullStock = Math.max(currentEntry.fullStock ?? currentEntry.stock ?? 0, 0);
-          const fullStockForSize = sizeStockMode === "restock" ? currentFullStock + nextValue : nextValue;
-          const sizeSold = soldBySize.get(size) || 0;
-          const availableForSize = Math.max(0, fullStockForSize - sizeSold);
-          sizeStockMap.set(size, {
-            fullStock: fullStockForSize,
-            stock: availableForSize,
-            conditionScore:
-              typeof qty === "object" && qty !== null && qty.conditionScore !== undefined
-                ? Math.max(0, Math.min(10, Number(qty.conditionScore) || 0))
-                : currentEntry.conditionScore ?? null,
-          });
-        }
-
-        const sizeFilter = declaredSizes.length > 0 ? new Set(declaredSizes) : null;
-        const entries = sizeFilter
-          ? Array.from(sizeStockMap.entries()).filter(([size]) => sizeFilter.has(size))
-          : Array.from(sizeStockMap.entries());
-        const nextSizeStockMap = new Map(entries);
-        let totalStock = 0;
-        let totalFullStock = 0;
-        for (const entry of nextSizeStockMap.values()) {
-          totalStock += Math.max(entry.stock ?? 0, 0);
-          totalFullStock += Math.max(entry.fullStock ?? 0, 0);
-        }
-        update.sizeStock = nextSizeStockMap;
+      if (Array.isArray(body.variants)) {
+        const requestedVariants = parseRequestedVariants(body.variants);
+        const nextVariants = await reconcileVariants({
+          productId: id,
+          existingVariants,
+          requestedVariants,
+          mode: sizeStockMode,
+          soldByVariant,
+        });
+        const totalStock = sumVariantStock(nextVariants);
+        const totalFullStock = sumVariantFullStock(nextVariants);
+        update.variants = nextVariants;
         update.stock = totalStock;
         update.fullStock = totalFullStock;
         if (totalStock > 0) update.isActive = true;
-      } else {
+      } else if (typeof body.fullStock !== "undefined" || typeof body.stock !== "undefined") {
+        // Single-variant convenience path: update fullStock on the sole variant.
         const submittedFullStock =
           typeof body.fullStock !== "undefined" ? body.fullStock : body.stock;
-        if (typeof submittedFullStock !== "undefined") {
-          const rawStock = String(submittedFullStock).trim();
-          if (rawStock.length === 0) {
-            return NextResponse.json({ error: "Please enter a full stock value." }, { status: 400 });
-          }
-          const nextFullStock = Number(rawStock);
-          if (!Number.isNaN(nextFullStock)) {
-            const normalizedFullStock = Math.max(0, nextFullStock);
-            update.fullStock = normalizedFullStock;
-            update.stock = Math.max(0, normalizedFullStock - soldQuantity);
-            if (normalizedFullStock - soldQuantity > 0) {
-              update.isActive = true;
-            }
+        const rawStock = String(submittedFullStock).trim();
+        if (rawStock.length === 0) {
+          return NextResponse.json({ error: "Please enter a full stock value." }, { status: 400 });
+        }
+        const nextFullStock = Number(rawStock);
+        if (!Number.isNaN(nextFullStock)) {
+          const normalizedFullStock = Math.max(0, nextFullStock);
+          const soleVariant = existingVariants[0];
+          const sold = soleVariant ? soldByVariant.get(soleVariant._id.toString()) || 0 : 0;
+          const defaultVariant = singleDefaultVariant({
+            fullStock: normalizedFullStock,
+            conditionScore: null,
+          });
+          const nextVariants: NextVariantInput[] = soleVariant
+            ? [{
+                _id: soleVariant._id,
+                size: soleVariant.size,
+                color: soleVariant.color,
+                fullStock: normalizedFullStock,
+                stock: Math.max(0, normalizedFullStock - sold),
+                conditionScore: soleVariant.conditionScore,
+                images: soleVariant.images,
+              }]
+            : [{
+                size: defaultVariant.size,
+                color: defaultVariant.color,
+                fullStock: defaultVariant.fullStock,
+                stock: normalizedFullStock,
+                conditionScore: defaultVariant.conditionScore,
+                images: defaultVariant.images,
+              }];
+          update.variants = nextVariants;
+          update.fullStock = sumVariantFullStock(nextVariants);
+          update.stock = sumVariantStock(nextVariants);
+          if (update.stock as number > 0) {
+            update.isActive = true;
           }
         }
       }
@@ -461,32 +475,30 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
       const product = await Product.findByIdAndUpdate(id, update, { new: true }).lean();
       if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 });
-      const inventory = getInventorySnapshot(product, soldQuantity);
-      const sizeStockData = buildSizeStockSnapshot({
-        sizeStock: product.sizeStock,
-        sizes: getDeclaredSizes(product.sizes),
-        soldBySize,
-      });
+      const variants = getStoredVariants(product);
+      const updatedSoldByVariantMap = await getSoldQuantityByProductAndVariant([id]);
+      const updatedSoldByVariant = updatedSoldByVariantMap.get(id) || new Map<string, number>();
 
       return NextResponse.json({
         product: {
           ...product,
-          stock: inventory.availableStock,
-          availableStock: inventory.availableStock,
-          soldQuantity: inventory.soldQuantity,
-          fullStock: inventory.fullStock,
-          sizeStock: sizeStockData,
+          stock: sumVariantStock(variants),
+          availableStock: sumVariantStock(variants),
+          fullStock: sumVariantFullStock(variants),
+          variants: serializeStoredVariants(variants, updatedSoldByVariant),
+          sizes: deriveSizes(variants),
+          colors: deriveColors(variants),
           visibilityStatus: product.isActive === false ? "inactive" : "active",
           availabilityStatus: getAvailabilityStatus({
             productType: product.productType,
-            stock: inventory.availableStock,
-            sizeStock: product.sizeStock,
+            variants,
           }),
           approvalStatus: product.approvalStatus || "approved",
         },
       });
     }
 
+    // Multipart full edit.
     const formData = await req.formData();
     const existingImages = JSON.parse(String(formData.get("existingImages") || "[]")) as { url: string }[];
     const imageOrder = JSON.parse(String(formData.get("imageOrder") || "[]")) as string[];
@@ -578,62 +590,37 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           .filter((url) => !existingImages.some((image) => image.url === url))
       : [];
 
-    const sizes = productType === "perfume" ? [] : parseStringArray(formData.get("sizes"));
-    const variants = productType === "perfume" ? [] : parseProductVariants(formData.get("variants"));
-    const rawSizeStock = String(formData.get("sizeStock") || "").trim();
-    let sizeStockMap: Map<string, { fullStock: number; stock: number; conditionScore: number | null }> | null = null;
-    let computedStock: number;
-    let computedFullStock: number;
+    const requestedVariants: RequestedVariant[] =
+      productType === "perfume"
+        ? [singleDefaultVariant({ fullStock: nextFullStock, conditionScore: explicitConditionScore })]
+        : (() => {
+            const parsed = parseRequestedVariants(formData.get("variants"));
+            return parsed.length > 0
+              ? parsed
+              : [singleDefaultVariant({ fullStock: nextFullStock, conditionScore: null })];
+          })();
 
-    if (productType !== "perfume" && rawSizeStock && rawSizeStock !== "{}") {
-      try {
-        const parsed = JSON.parse(rawSizeStock) as Record<string, number | { fullStock?: number; stock?: number; conditionScore?: number }>;
-        sizeStockMap = new Map();
-        computedStock = 0;
-        computedFullStock = 0;
-        for (const [size, qty] of Object.entries(parsed)) {
-          const fullStockForSize =
-            typeof qty === "object" && qty !== null
-              ? Math.max(0, Number(qty.fullStock ?? qty.stock ?? 0) || 0)
-              : Math.max(0, Number(qty) || 0);
-          const sizeSold = soldBySize.get(size) || 0;
-          const availableForSize = Math.max(0, fullStockForSize - sizeSold);
-          const conditionScore =
-            typeof qty === "object" && qty !== null && qty.conditionScore !== undefined
-              ? Math.max(0, Math.min(10, Number(qty.conditionScore) || 0))
-              : null;
-          sizeStockMap.set(size, { fullStock: fullStockForSize, stock: availableForSize, conditionScore });
-          computedStock += availableForSize;
-          computedFullStock += fullStockForSize;
-        }
-      } catch {
-        sizeStockMap = null;
-        computedStock = Math.max(0, nextFullStock - soldQuantity);
-        computedFullStock = nextFullStock;
-      }
-    } else {
-      computedStock = Math.max(0, nextFullStock - soldQuantity);
-      computedFullStock = nextFullStock;
-    }
+    const nextVariants = await reconcileVariants({
+      productId: id,
+      existingVariants,
+      requestedVariants,
+      mode: "full",
+      soldByVariant,
+    });
+    const totalStock = sumVariantStock(nextVariants);
+    const totalFullStock = sumVariantFullStock(nextVariants);
 
-    const rawColorImages = String(formData.get("colorImages") || "").trim();
-    let colorImagesMap: Map<string, number[]> | null = null;
-    if (productType !== "perfume" && rawColorImages && rawColorImages !== "{}") {
-      try {
-        const parsed = JSON.parse(rawColorImages) as Record<string, number[]>;
-        colorImagesMap = new Map(Object.entries(parsed));
-      } catch { colorImagesMap = null; }
-    }
+    const conditionScore = explicitConditionScore !== null
+      ? explicitConditionScore
+      : averageVariantConditionScore(nextVariants);
 
-    const conditionScore = (() => {
-      if (explicitConditionScore !== null) return explicitConditionScore;
-      if (!sizeStockMap) return null;
-      const scores = Array.from(sizeStockMap.values())
-        .map((e) => e.conditionScore)
-        .filter((s): s is number => s !== null);
-      if (scores.length === 0) return null;
-      return Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length);
-    })();
+    const reference = normalizeReference(formData.get("reference"));
+    const duplicateResponse = await ensureUniqueProductReference({
+      ownerId: existingProduct.createdBy?.id || session.userId,
+      reference,
+      excludeProductId: id,
+    });
+    if (duplicateResponse) return duplicateResponse;
 
     const body = {
       name: String(formData.get("name") || ""),
@@ -644,7 +631,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       categories: parseStringArray(formData.get("categories")),
       description: String(formData.get("description") || ""),
       brand: String(formData.get("brand") || "LOOKSMAX"),
-      reference: normalizeReference(formData.get("reference")),
+      reference,
       tag: String(formData.get("tag") || ""),
       newTagDurationDays: Math.max(1, Math.floor(Number(formData.get("newTagDurationDays") || 3)) || 3),
       productType,
@@ -652,14 +639,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       conditionStatus:
         conditionScore === null ? null : getConditionStatusFromScore(conditionScore),
       conditionScore,
-      fullStock: computedFullStock,
-      stock: computedStock,
-      sizeStock: sizeStockMap,
-      colorImages: colorImagesMap,
+      fullStock: totalFullStock,
+      stock: totalStock,
+      variants: nextVariants,
       originPictures: normalizeOriginPictures(productType, fashionSubtype, newOriginPictures),
-      sizes,
-      colors: productType === "perfume" ? [] : parseStringArray(formData.get("colors")),
-      variants,
       cloneSourceName: productType === "perfume" ? String(formData.get("cloneSourceName") || "") : "",
       cloneSourceImage:
         productType === "perfume"
@@ -672,16 +655,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       updatedBy: auditActor,
     };
 
-    if (computedStock > 0) {
+    if (totalStock > 0) {
       body.isActive = true;
     }
-
-    const duplicateResponse = await ensureUniqueProductReference({
-      ownerId: existingProduct.createdBy?.id || session.userId,
-      reference: body.reference || "",
-      excludeProductId: id,
-    });
-    if (duplicateResponse) return duplicateResponse;
 
     const product = await Product.findByIdAndUpdate(id, body, { new: true }).lean();
     if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -700,7 +676,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       left: existingProduct.originPictures?.left || "",
       right: existingProduct.originPictures?.right || "",
     };
-    const nextOriginPictures: Record<"front" | "back" | "left" | "right", string> = {
+    const nextOriginPicturesMap: Record<"front" | "back" | "left" | "right", string> = {
       front: body.originPictures?.front || "",
       back: body.originPictures?.back || "",
       left: body.originPictures?.left || "",
@@ -709,50 +685,37 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     await Promise.all(
       (["front", "back", "left", "right"] as const).map(async (key) => {
         const previous = previousOriginPictures[key];
-        const next = nextOriginPictures[key];
+        const next = nextOriginPicturesMap[key];
         if (previous && previous !== next) {
           await deleteProductImage(previous);
         }
       })
     );
 
-    const inventory = getInventorySnapshot(product, soldQuantity);
-
-    let sizeStockData: Record<string, { fullStock: number; stock: number; soldQuantity: number; conditionScore: number | null }> | null = null;
-    if (product.sizeStock) {
-      sizeStockData = {};
-      for (const [size, entry] of getSizeStockEntries(product.sizeStock)) {
-        sizeStockData[size] = {
-          fullStock: entry.fullStock ?? 0,
-          stock: entry.stock ?? 0,
-          soldQuantity: soldBySize.get(size) || 0,
-          conditionScore: typeof entry.conditionScore === "number"
-            ? Math.max(0, Math.min(10, Number(entry.conditionScore) || 0))
-            : null,
-        };
-      }
-    }
+    const variants = getStoredVariants(product);
+    const finalSoldByVariantMap = await getSoldQuantityByProductAndVariant([id]);
+    const finalSoldByVariant = finalSoldByVariantMap.get(id) || new Map<string, number>();
 
     const response = NextResponse.json({
       product: {
         ...product,
-        stock: inventory.availableStock,
-        availableStock: inventory.availableStock,
-        soldQuantity: inventory.soldQuantity,
-        fullStock: inventory.fullStock,
-        sizeStock: sizeStockData,
+        stock: sumVariantStock(variants),
+        availableStock: sumVariantStock(variants),
+        fullStock: sumVariantFullStock(variants),
+        variants: serializeStoredVariants(variants, finalSoldByVariant),
+        sizes: deriveSizes(variants),
+        colors: deriveColors(variants),
         visibilityStatus: product.isActive === false ? "inactive" : "active",
         availabilityStatus: getAvailabilityStatus({
           productType: product.productType,
-          stock: inventory.availableStock,
-          sizeStock: product.sizeStock,
+          variants,
         }),
         approvalStatus: product.approvalStatus || "approved",
       },
     });
     broadcastAdminEvent(buildAdminProductEventPayload(product, "updated"));
     return response;
-    } catch (error) { logRequestError("admin.products.id.put", req, error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
+  } catch (error) { logRequestError("admin.products.id.put", req, error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

@@ -5,6 +5,16 @@ interface ProductImage {
   isMain: boolean;
 }
 
+type RowVariant = {
+  _id: string;
+  size: string;
+  color: { name?: string; hex: string } | null;
+  stock?: number;
+  fullStock?: number;
+  conditionScore?: number | null;
+  images?: number[];
+};
+
 export interface ProductCardRowItem {
   _id: string;
   name: string;
@@ -12,7 +22,8 @@ export interface ProductCardRowItem {
   categories?: string[];
   price: number;
   stock: number;
-  sizeAvailability?: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null;
+  variants?: RowVariant[];
+  variantAvailability?: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null;
   cartCount?: number;
   reservedElsewhere?: boolean;
   ownedReservation?: boolean;
@@ -32,7 +43,6 @@ export interface ProductCardRowItem {
   cloneSourceName?: string;
   cloneSourceImage?: string;
   storeType?: "thrift" | "retail" | null;
-  colorImages?: Record<string, number[]> | null;
 }
 
 function getMainImage(images?: ProductImage[]): string | undefined {
@@ -66,12 +76,12 @@ export default function ProductCardRow({
               categories={product.categories}
               price={product.price.toFixed(2)}
               stock={product.stock}
-              sizeAvailability={product.sizeAvailability}
+              variants={product.variants}
+              variantAvailability={product.variantAvailability}
               cartCount={product.cartCount}
               reservedElsewhere={product.reservedElsewhere}
               ownedReservation={product.ownedReservation}
               tag={product.tag}
-              sizes={product.sizes}
               image={getMainImage(product.images)}
               conditionScore={product.conditionScore}
               conditionStatus={product.conditionStatus}
@@ -81,7 +91,6 @@ export default function ProductCardRow({
               cloneSourceName={product.cloneSourceName}
               cloneSourceImage={product.cloneSourceImage}
               storeType={product.storeType}
-              colorImages={product.colorImages}
               images={product.images}
             />
           ))}

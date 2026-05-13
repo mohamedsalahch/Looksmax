@@ -43,17 +43,7 @@ function calculateShippingFee(subtotal: number, settings: ShippingSettings) {
 
 function formatCheckoutSizeLabel(size?: string) {
   if (!size) return "One size";
-  if (size === "__default__") return "One size";
-
-  const colorVariantMatch = size.match(/^(.*?)(?:\s*\/\s*#?[0-9a-fA-F]{3,8})$/);
-  if (colorVariantMatch?.[1]) {
-    return colorVariantMatch[1].trim() || "One size";
-  }
-
-  const separatorIndex = size.lastIndexOf(" / ");
-  if (separatorIndex === -1) return size;
-
-  return size.slice(0, separatorIndex).trim() || "One size";
+  return size;
 }
 
 export default function CheckoutPage() {
@@ -306,6 +296,7 @@ export default function CheckoutPage() {
     try {
       const orderItems = items.map((item) => ({
         productId: getCartItemProductId(item.id),
+        variantId: item.variantId,
         name: item.name,
         size: item.size,
         color: item.color,

@@ -1,31 +1,22 @@
 const CART_ITEM_SEPARATOR = "__";
 
-function normalizePart(value?: string | null) {
-  return (value || "").trim().toLowerCase();
-}
-
-export function buildCartItemId(productId: string, size?: string | null, color?: string | null) {
+export function buildCartItemId(productId: string, variantId?: string | null) {
   const normalizedProductId = productId.trim();
-  const normalizedSize = normalizePart(size);
-  const normalizedColor = normalizePart(color);
+  const normalizedVariantId = (variantId || "").trim();
 
-  if (!normalizedSize && !normalizedColor) {
+  if (!normalizedVariantId) {
     return normalizedProductId;
   }
 
-  return [
-    normalizedProductId,
-    normalizedSize || "_",
-    normalizedColor || "_",
-  ].join(CART_ITEM_SEPARATOR);
+  return [normalizedProductId, normalizedVariantId].join(CART_ITEM_SEPARATOR);
 }
 
 export function getCartItemProductId(cartItemId: string) {
-  return cartItemId.split(CART_ITEM_SEPARATOR)[0] || cartItemId.split("-")[0] || cartItemId;
+  return cartItemId.split(CART_ITEM_SEPARATOR)[0] || cartItemId;
 }
 
-export function getCartItemVariantKey(cartItemId: string) {
+export function getCartItemVariantId(cartItemId: string) {
   const parts = cartItemId.split(CART_ITEM_SEPARATOR);
   if (parts.length < 2) return "";
-  return parts.slice(1).join(CART_ITEM_SEPARATOR);
+  return parts[1];
 }

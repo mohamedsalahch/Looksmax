@@ -4,12 +4,19 @@ import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
 import User from "@/store/models/User";
 import { getSession } from "@/store/lib/auth";
-import { getSizeStockEntries } from "@/lib/sizeAvailability";
 import { broadcastAvailabilityChange } from "@/lib/sseClients";
 import mongoose from "mongoose";
 import { isStoreOwnerApproved } from "@/store/lib/storeApproval";
 
 const CART_PRESENCE_DURATION_MS = 30 * 60 * 1000;
+
+function normalizeVariantId(value: unknown): mongoose.Types.ObjectId | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (!mongoose.Types.ObjectId.isValid(trimmed)) return null;
+  return new mongoose.Types.ObjectId(trimmed);
+}
 
 export async function POST(
   req: NextRequest,
@@ -19,11 +26,11 @@ export async function POST(
     await dbConnect();
 
     const { id } = await params;
-    const { reservationKey, cartKey, quantity, size } = await req.json();
+    const { reservationKey, cartKey, quantity, variantId } = await req.json();
     const session = await getSession();
     const key = session?.userId ? `user:${session.userId}` : cartKey || reservationKey;
     const requestedQuantity = Math.max(1, Number(quantity) || 1);
-    const normalizedSize = size || "";
+    const variantObjectId = normalizeVariantId(variantId);
 
     if (!key) {
       return NextResponse.json({ error: "Missing cart key" }, { status: 400 });
@@ -48,43 +55,36 @@ export async function POST(
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
 
-    const sizeStockEntries = getSizeStockEntries(product.sizeStock);
-    const hasSizeStock = sizeStockEntries.length > 0;
+    const variants = product.variants || [];
+    const variant = variantObjectId
+      ? variants.find((v) => v._id?.toString() === variantObjectId.toString())
+      : null;
 
-    if (hasSizeStock && normalizedSize) {
-      const sizeStock = Math.max(
-        sizeStockEntries.find(([entrySize]) => entrySize === normalizedSize)?.[1]?.stock ?? 0,
-        0
+    if (!variant) {
+      return NextResponse.json(
+        { error: "This variant is no longer available." },
+        { status: 409 }
       );
-      if (sizeStock <= 0) {
-        return NextResponse.json(
-          { error: "This size is no longer available." },
-          { status: 409 }
-        );
-      }
-      if (requestedQuantity > sizeStock) {
-        return NextResponse.json(
-          { error: `Only ${sizeStock} left for size ${normalizedSize}.` },
-          { status: 409 }
-        );
-      }
-    } else {
-      const availableStock = Math.max(product.stock ?? 0, 0);
-      if (availableStock <= 0) {
-        return NextResponse.json({ error: "Product not found" }, { status: 404 });
-      }
-      if (requestedQuantity > availableStock) {
-        return NextResponse.json(
-          { error: `Only ${availableStock} left for this product.` },
-          { status: 409 }
-        );
-      }
+    }
+
+    const variantStock = Math.max(variant.stock ?? 0, 0);
+    if (variantStock <= 0) {
+      return NextResponse.json(
+        { error: "This variant is no longer available." },
+        { status: 409 }
+      );
+    }
+    if (requestedQuantity > variantStock) {
+      return NextResponse.json(
+        { error: `Only ${variantStock} left for this variant.` },
+        { status: 409 }
+      );
     }
 
     const existingReservation = await ProductReservation.findOne({
       product: id,
       reservationKey: key,
-      size: normalizedSize,
+      variant: variantObjectId,
       reservedUntil: { $gt: now },
     })
       .select("reservedUntil")
@@ -96,11 +96,11 @@ export async function POST(
     let cartPresence: { reservedUntil?: Date } | null = null;
     try {
       cartPresence = await ProductReservation.findOneAndUpdate(
-        { product: id, reservationKey: key, size: normalizedSize },
+        { product: id, reservationKey: key, variant: variantObjectId },
         {
           product: id,
           reservationKey: key,
-          size: normalizedSize,
+          variant: variantObjectId,
           quantity: requestedQuantity,
           reservedUntil,
         },
@@ -120,11 +120,11 @@ export async function POST(
       await cleanupProductReservationIndexes(mongoose);
 
       cartPresence = await ProductReservation.findOneAndUpdate(
-        { product: id, reservationKey: key, size: normalizedSize },
+        { product: id, reservationKey: key, variant: variantObjectId },
         {
           product: id,
           reservationKey: key,
-          size: normalizedSize,
+          variant: variantObjectId,
           quantity: requestedQuantity,
           reservedUntil,
         },
@@ -135,7 +135,7 @@ export async function POST(
     const allActiveReservations = await ProductReservation.find({
       product: id,
       reservedUntil: { $gt: now },
-    }).select("reservationKey quantity size").lean();
+    }).select("reservationKey quantity variant").lean();
 
     const finalCartCount = allActiveReservations.reduce(
       (sum, r) => sum + Math.max(1, Number(r.quantity) || 1), 0
@@ -144,7 +144,7 @@ export async function POST(
     broadcastAvailabilityChange({
       productId: id,
       stock: Math.max(product.stock ?? 0, 0),
-      sizeStock: product.sizeStock,
+      variants: product.variants,
       reservations: allActiveReservations,
     });
 
@@ -167,22 +167,22 @@ export async function DELETE(
     await dbConnect();
 
     const { id } = await params;
-    const { reservationKey, cartKey, size } = await req.json();
+    const { reservationKey, cartKey, variantId } = await req.json();
     const session = await getSession();
     const key = session?.userId ? `user:${session.userId}` : cartKey || reservationKey;
-    const normalizedSize = size || "";
+    const variantObjectId = normalizeVariantId(variantId);
 
     if (!key) {
       return NextResponse.json({ error: "Missing cart key" }, { status: 400 });
     }
 
-    await ProductReservation.deleteOne({ product: id, reservationKey: key, size: normalizedSize });
+    await ProductReservation.deleteOne({ product: id, reservationKey: key, variant: variantObjectId });
 
     const now = new Date();
     const [allActiveReservations, productForBroadcast] = await Promise.all([
       ProductReservation.find({ product: id, reservedUntil: { $gt: now } })
-        .select("reservationKey quantity size").lean(),
-      Product.findById(id).select("stock sizeStock").lean(),
+        .select("reservationKey quantity variant").lean(),
+      Product.findById(id).select("stock variants").lean(),
     ]);
 
     const finalCartCount = allActiveReservations.reduce(
@@ -192,7 +192,7 @@ export async function DELETE(
     broadcastAvailabilityChange({
       productId: id,
       stock: Math.max(productForBroadcast?.stock ?? 0, 0),
-      sizeStock: productForBroadcast?.sizeStock,
+      variants: productForBroadcast?.variants,
       reservations: allActiveReservations,
     });
 

@@ -5,7 +5,10 @@ import ProductReservation from "@/store/models/ProductReservation";
 import User from "@/store/models/User";
 import { getSession } from "@/store/lib/auth";
 import { getActiveOrderHoldMapByProductIds } from "@/lib/productInventory";
-import { buildSizeAvailability, getSizeStockEntries } from "@/lib/sizeAvailability";
+import {
+  buildVariantAvailability,
+  type VariantLike,
+} from "@/lib/variantAvailability";
 import { isStoreOwnerApproved } from "@/store/lib/storeApproval";
 
 function normalizeProductType(value?: string) {
@@ -29,13 +32,13 @@ export async function POST(req: NextRequest) {
 
     const [products, reservations] = await Promise.all([
       Product.find({ _id: { $in: ids } })
-        .select("_id stock sizeStock productType fashionSubtype images originPictures isActive approvalStatus createdBy")
+        .select("_id stock variants productType fashionSubtype images originPictures isActive approvalStatus createdBy")
         .lean(),
       ProductReservation.find({
         product: { $in: ids },
         reservedUntil: { $gt: now },
       })
-        .select("product reservationKey reservedUntil quantity size")
+        .select("product reservationKey reservedUntil quantity variant")
         .lean(),
     ]);
     const ownerIds = [...new Set(
@@ -64,11 +67,11 @@ export async function POST(req: NextRequest) {
         reservationKey: reservation.reservationKey,
         reservationExpiresAt: reservation.reservedUntil.toISOString(),
         quantity: Math.max(1, Number(reservation.quantity) || 1),
-        size: reservation.size || "",
+        variant: reservation.variant,
       });
       map.set(productId, current);
       return map;
-    }, new Map<string, Array<{ reservationKey: string; reservationExpiresAt: string; quantity: number; size: string }>>());
+    }, new Map<string, Array<{ reservationKey: string; reservationExpiresAt: string; quantity: number; variant: unknown }>>());
 
     return NextResponse.json({
       items: ids.map((productId) => {
@@ -90,7 +93,7 @@ export async function POST(req: NextRequest) {
             reservedElsewhere: false,
             ownedReservation: false,
             reservationExpiresAt: null,
-            sizeAvailability: null,
+            variantAvailability: null,
           };
         }
         const productReservations = reservationsMap.get(productId) || [];
@@ -100,11 +103,11 @@ export async function POST(req: NextRequest) {
           product?.images?.[0]?.url ||
           "";
 
-        const sizeStockEntries = getSizeStockEntries(product?.sizeStock);
-        const hasSizeStock = sizeStockEntries.length > 0;
+        const variants = (product?.variants || []) as unknown as VariantLike[];
+        const hasVariants = variants.length > 0;
 
-        const sizeAvailability = hasSizeStock && product
-          ? buildSizeAvailability(product.sizeStock, productReservations, key)
+        const variantAvailability = hasVariants
+          ? buildVariantAvailability(variants, productReservations, key)
           : null;
 
         const remainingStock = Math.max(product?.stock ?? 0, 0);
@@ -116,11 +119,11 @@ export async function POST(req: NextRequest) {
           if (reservation.reservationKey !== key) return sum;
           return sum + reservation.quantity;
         }, 0);
-        const hasSelectableSize = hasSizeStock
-          ? Object.values(sizeAvailability || {}).some((sizeInfo) => sizeInfo.available)
+        const hasSelectableVariant = hasVariants
+          ? Object.values(variantAvailability || {}).some((entry) => entry.available)
           : remainingStock > 0;
-        const reservedElsewhere = hasSizeStock
-          ? Object.values(sizeAvailability || {}).some((sizeInfo) => sizeInfo.reservedElsewhere)
+        const reservedElsewhere = hasVariants
+          ? Object.values(variantAvailability || {}).some((entry) => entry.reservedElsewhere)
           : reservedByOthers > 0 && (reservedByOthers >= remainingStock || reservedByOthers + ownedQuantity > remainingStock);
 
         const ownedReservationEntry = key
@@ -128,15 +131,15 @@ export async function POST(req: NextRequest) {
           : null;
 
         const isApproved = !product?.approvalStatus || product.approvalStatus === "approved";
-        const available = product?.isActive !== false && isApproved && (hasSizeStock
-          ? hasSelectableSize
+        const available = product?.isActive !== false && isApproved && (hasVariants
+          ? hasSelectableVariant
           : remainingStock > 0);
 
         return {
           productId,
           available,
           blockedByOrder: false,
-          maxStock: Math.max(hasSizeStock ? remainingStock : remainingStock, 1),
+          maxStock: Math.max(remainingStock, 1),
           productType: normalizeProductType(product?.productType),
           fashionSubtype: product?.fashionSubtype || "clothes",
           originPictures: product?.originPictures || { front: "", back: "", left: "", right: "" },
@@ -145,7 +148,7 @@ export async function POST(req: NextRequest) {
           reservedElsewhere,
           ownedReservation: Boolean(ownedReservationEntry) || Boolean(activeOrderHold?.ownedReservation),
           reservationExpiresAt: ownedReservationEntry ? ownedReservationEntry.reservationExpiresAt : null,
-          sizeAvailability,
+          variantAvailability,
         };
       }),
     });

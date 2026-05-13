@@ -7,14 +7,30 @@ import { getSession } from "@/store/lib/auth";
 import { filterAndRankProducts } from "@/store/lib/productSearch";
 import { getActiveOrderHoldMapByProductIds } from "@/lib/productInventory";
 import {
-  buildSizeAvailability,
+  buildVariantAvailability,
   getDisplayStock,
-  getSizeStockEntries,
-} from "@/lib/sizeAvailability";
+  type VariantLike,
+} from "@/lib/variantAvailability";
 import { isStoreOwnerApproved } from "@/store/lib/storeApproval";
+import {
+  averageVariantConditionScore,
+  deriveColors,
+  deriveSizes,
+} from "@/lib/productVariants";
 
 function uniqueSortedValues(values: string[]) {
   return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
+}
+
+function uniqueSortedColors(values: Array<{ name?: string; hex: string }>) {
+  const seen = new Set<string>();
+  const result: Array<{ name?: string; hex: string }> = [];
+  for (const value of values) {
+    if (!value?.hex || seen.has(value.hex)) continue;
+    seen.add(value.hex);
+    result.push(value);
+  }
+  return result.sort((a, b) => a.hex.localeCompare(b.hex));
 }
 
 export async function GET(req: NextRequest) {
@@ -46,7 +62,7 @@ export async function GET(req: NextRequest) {
       weekAgo.setDate(weekAgo.getDate() - 7);
       filter.createdAt = { $gte: weekAgo };
     } else if (category) {
-      filter.categories = category; // MongoDB matches if the array contains this value
+      filter.categories = category;
     }
 
     const skip = (page - 1) * limit;
@@ -72,7 +88,7 @@ export async function GET(req: NextRequest) {
     const ownerMap = new Map(owners.map((o) => [o._id.toString(), o]));
     const now = new Date();
     const activeReservations = await ProductReservation.find({ reservedUntil: { $gt: now } })
-      .select("product reservationKey quantity size")
+      .select("product reservationKey quantity variant")
       .lean();
     const activeOrderHoldMap = await getActiveOrderHoldMapByProductIds(
       products.map((product) => product._id.toString()),
@@ -85,60 +101,64 @@ export async function GET(req: NextRequest) {
         map.get(productId) || {
           totalQuantity: 0,
           ownedQuantity: 0,
+          entries: [] as Array<{ reservationKey: string; quantity: number; variant: unknown }>,
         };
       const quantity = Math.max(1, Number(reservation.quantity) || 1);
       current.totalQuantity += quantity;
       if (reservationKey && reservation.reservationKey === reservationKey) {
         current.ownedQuantity += quantity;
       }
+      current.entries.push({
+        reservationKey: reservation.reservationKey,
+        quantity,
+        variant: reservation.variant,
+      });
       map.set(productId, current);
       return map;
-    }, new Map<string, { totalQuantity: number; ownedQuantity: number }>());
+    }, new Map<string, {
+      totalQuantity: number;
+      ownedQuantity: number;
+      entries: Array<{ reservationKey: string; quantity: number; variant: unknown }>;
+    }>());
 
     const productsWithAvailability = products.map((product) => {
       const ownerId = product.createdBy?.id || "";
       if (ownerId && !approvedOwnerIds.has(ownerId)) {
         return null;
       }
+      const variants = (product.variants || []) as unknown as VariantLike[];
       const stock = Math.max(product.stock ?? 0, 0);
       const reservationInfo = reservationMap.get(product._id.toString()) || {
         totalQuantity: 0,
         ownedQuantity: 0,
+        entries: [],
       };
       const activeOrderHold = activeOrderHoldMap.get(product._id.toString());
-      const sizeStockEntries = getSizeStockEntries(product.sizeStock);
-      const sizeAvailability = sizeStockEntries.length > 0
-        ? buildSizeAvailability(product.sizeStock, activeReservations, reservationKey)
+      const variantAvailability = variants.length > 0
+        ? buildVariantAvailability(variants, reservationInfo.entries, reservationKey)
         : null;
       const reservedByOthers = reservationInfo.totalQuantity - reservationInfo.ownedQuantity;
-      const displayStock = sizeAvailability
-        ? getDisplayStock(stock, sizeAvailability)
+      const displayStock = variantAvailability
+        ? getDisplayStock(stock, variantAvailability)
         : Math.max(stock - reservedByOthers, 0);
 
-      const hasSelectableSize = sizeAvailability
-        ? Object.values(sizeAvailability as Record<string, { available: boolean }>).some((sizeInfo) => sizeInfo.available)
+      const hasSelectableVariant = variantAvailability
+        ? Object.values(variantAvailability).some((entry) => entry.available)
         : displayStock > 0;
-      const reservedElsewhere = sizeAvailability
-        ? Object.values(sizeAvailability as Record<string, { reservedElsewhere: boolean }>).some((sizeInfo) => sizeInfo.reservedElsewhere)
+      const reservedElsewhere = variantAvailability
+        ? Object.values(variantAvailability).some((entry) => entry.reservedElsewhere)
         : reservedByOthers > 0 && (reservedByOthers >= stock || reservedByOthers + reservationInfo.ownedQuantity > stock);
-      const blockedByOrder = sizeAvailability
-        ? Boolean(activeOrderHold) && !hasSelectableSize
+      const blockedByOrder = variantAvailability
+        ? Boolean(activeOrderHold) && !hasSelectableVariant
         : Boolean(activeOrderHold) && displayStock <= 0;
 
       const owner = ownerMap.get(ownerId);
-      const colorImagesData = product.colorImages instanceof Map
-        ? Object.fromEntries(product.colorImages)
-        : (product.colorImages && typeof product.colorImages === "object" ? product.colorImages : null);
+      const derivedSizes = deriveSizes(variants);
+      const derivedColors = deriveColors(variants);
 
       const conditionScore = product.conditionScore != null
         ? product.conditionScore
-        : (() => {
-            const scores = sizeStockEntries
-              .map(([, entry]) => (entry as { conditionScore?: number | null }).conditionScore)
-              .filter((s): s is number => typeof s === "number");
-            if (scores.length === 0) return null;
-            return Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length);
-          })();
+        : averageVariantConditionScore(variants);
 
       return {
         ...product,
@@ -148,10 +168,11 @@ export async function GET(req: NextRequest) {
         blockedByOrder,
         reservedElsewhere,
         ownedReservation: reservationInfo.ownedQuantity > 0,
-        sizeAvailability,
+        variantAvailability,
+        sizes: derivedSizes,
+        colors: derivedColors,
         storeType: owner?.role === "store_owner" ? (owner as { storeType?: string }).storeType || null : null,
         storeName: (owner as { storeName?: string; name?: string } | undefined)?.storeName || product.createdBy?.name || "",
-        colorImages: colorImagesData,
       };
     });
 
@@ -167,15 +188,15 @@ export async function GET(req: NextRequest) {
       if (product.isActive === false) return false;
       if (product.approvalStatus && product.approvalStatus !== "approved") return false;
       const stock = Math.max(product.stock ?? 0, 0);
-      const hasSelectableSize = product.sizeAvailability
-        ? Object.values(product.sizeAvailability as Record<string, { available: boolean }>).some((sizeInfo) => sizeInfo.available)
+      const hasSelectableVariant = product.variantAvailability
+        ? Object.values(product.variantAvailability).some((entry) => entry.available)
         : stock > 0;
       if (store && product.storeName !== store) return false;
       if (brand && product.brand !== brand) return false;
       if (sizes.length > 0 && !sizes.some((sizeValue) => (product.sizes || []).includes(sizeValue))) return false;
-      if (color && !(product.colors || []).includes(color)) return false;
-      if (availability === "out-of-stock") return !hasSelectableSize;
-      if (availability === "in-stock") return hasSelectableSize;
+      if (color && !(product.colors || []).some((c) => c.hex === color || c.name === color)) return false;
+      if (availability === "out-of-stock") return !hasSelectableVariant;
+      if (availability === "in-stock") return hasSelectableVariant;
       if (Number.isFinite(priceMin) && product.price < priceMin) return false;
       if (Number.isFinite(priceMax) && priceMax > 0 && product.price > priceMax) return false;
       return true;
@@ -190,7 +211,7 @@ export async function GET(req: NextRequest) {
           brands: uniqueSortedValues(facetsSource.map((product) => product.brand || "")),
           stores: uniqueSortedValues(facetsSource.map((product) => product.storeName || "")),
           sizes: uniqueSortedValues(facetsSource.flatMap((product) => product.sizes || [])),
-          colors: uniqueSortedValues(facetsSource.flatMap((product) => product.colors || [])),
+          colors: uniqueSortedColors(facetsSource.flatMap((product) => product.colors || [])),
           priceRange: {
             min: facetsSource.length > 0 ? Math.min(...facetsSource.map((product) => product.price || 0)) : 0,
             max: facetsSource.length > 0 ? Math.max(...facetsSource.map((product) => product.price || 0)) : 0,

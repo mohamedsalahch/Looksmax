@@ -1,8 +1,10 @@
 import {
-  buildSizeAvailability,
-  getSizeStockEntries,
-  type SizeAvailabilityMap,
-} from "@/lib/sizeAvailability";
+  buildVariantAvailability,
+  variantIdString,
+  type ReservationLike,
+  type VariantAvailabilityMap,
+  type VariantLike,
+} from "@/lib/variantAvailability";
 
 type ClientController = ReadableStreamDefaultController<Uint8Array>;
 
@@ -15,15 +17,15 @@ export type SSEAvailabilityPayload = {
   productId: string;
   cartCount: number;
   stock: number;
-  sizeAvailability: SizeAvailabilityMap | null;
+  variantAvailability: VariantAvailabilityMap | null;
   viewerBlocked: boolean;
 };
 
 export type SSEBroadcastInput = {
   productId: string;
   stock: number;
-  sizeStock: unknown;
-  reservations: Array<{ reservationKey: string; quantity?: number; size?: string }>;
+  variants: ReadonlyArray<VariantLike> | null | undefined;
+  reservations: ReservationLike[];
 };
 
 const clients = new Map<string, ClientEntry>();
@@ -42,15 +44,14 @@ function qty(r: { quantity?: number }) {
 }
 
 export function computeViewerBlocked(
-  sizeStock: unknown,
+  variants: ReadonlyArray<VariantLike> | null | undefined,
   stock: number,
-  reservations: Array<{ reservationKey: string; quantity?: number; size?: string }>,
+  reservations: ReservationLike[],
   reservationKey: string | null,
 ): boolean {
-  const entries = getSizeStockEntries(sizeStock);
-  const hasSize = entries.length > 0;
+  const hasVariants = Boolean(variants && variants.length > 0);
 
-  if (!hasSize) {
+  if (!hasVariants) {
     const others = reservations
       .filter((r) => r.reservationKey !== reservationKey)
       .reduce((sum, r) => sum + qty(r), 0);
@@ -66,40 +67,41 @@ export function computeViewerBlocked(
 
   let hasOwnedCart = false;
   let anyConflict = false;
-  let everyFullSizeFlagged = true;
-  let anyInStockSize = false;
+  let everyFullVariantFlagged = true;
+  let anyInStockVariant = false;
 
-  for (const [size, entry] of entries) {
-    const sizeStockVal = Math.max(entry.stock ?? 0, 0);
-    if (sizeStockVal <= 0) continue;
-    anyInStockSize = true;
+  for (const variant of variants!) {
+    const variantId = variantIdString(variant._id);
+    const stockVal = Math.max(variant.stock ?? 0, 0);
+    if (stockVal <= 0) continue;
+    anyInStockVariant = true;
 
     let owned = 0;
     let others = 0;
     for (const r of reservations) {
-      if ((r.size || "") !== size) continue;
+      if (variantIdString(r.variant) !== variantId) continue;
       if (reservationKey && r.reservationKey === reservationKey) owned += qty(r);
       else others += qty(r);
     }
 
     if (owned > 0) hasOwnedCart = true;
-    if (owned + others > sizeStockVal) anyConflict = true;
-    if (others < sizeStockVal) everyFullSizeFlagged = false;
+    if (owned + others > stockVal) anyConflict = true;
+    if (others < stockVal) everyFullVariantFlagged = false;
   }
 
   if (hasOwnedCart) return anyConflict;
-  return anyInStockSize && everyFullSizeFlagged;
+  return anyInStockVariant && everyFullVariantFlagged;
 }
 
 export function broadcastAvailabilityChange(input: SSEBroadcastInput) {
   if (clients.size === 0) return;
 
-  const hasSizeStock = getSizeStockEntries(input.sizeStock).length > 0;
+  const hasVariants = Boolean(input.variants && input.variants.length > 0);
   const totalReservedQty = input.reservations.reduce((sum, r) => sum + qty(r), 0);
 
   for (const [id, entry] of clients) {
-    const sizeAvailability = hasSizeStock
-      ? buildSizeAvailability(input.sizeStock, input.reservations, entry.reservationKey)
+    const variantAvailability = hasVariants
+      ? buildVariantAvailability(input.variants, input.reservations, entry.reservationKey)
       : null;
 
     const ownedQty = entry.reservationKey
@@ -108,12 +110,12 @@ export function broadcastAvailabilityChange(input: SSEBroadcastInput) {
           .reduce((sum, r) => sum + qty(r), 0)
       : 0;
 
-    const broadcastStock = hasSizeStock
+    const broadcastStock = hasVariants
       ? input.stock
       : Math.max(input.stock - (totalReservedQty - ownedQty), 0);
 
     const viewerBlocked = computeViewerBlocked(
-      input.sizeStock,
+      input.variants,
       input.stock,
       input.reservations,
       entry.reservationKey,
@@ -123,7 +125,7 @@ export function broadcastAvailabilityChange(input: SSEBroadcastInput) {
       productId: input.productId,
       cartCount: totalReservedQty,
       stock: broadcastStock,
-      sizeAvailability,
+      variantAvailability,
       viewerBlocked,
     };
 

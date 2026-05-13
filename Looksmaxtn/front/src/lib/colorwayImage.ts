@@ -1,7 +1,12 @@
+type VariantSummary = {
+  color?: { name?: string; hex?: string } | null;
+  images?: number[];
+};
+
 type ColorwayImageSource = {
   image?: string;
   images?: { url: string; isMain: boolean }[];
-  colorImages?: Record<string, number[]> | null;
+  variants?: ReadonlyArray<VariantSummary> | null;
 };
 
 type EnhancedFrontImageSource = ColorwayImageSource & {
@@ -14,6 +19,17 @@ type EnhancedFrontImageSource = ColorwayImageSource & {
     right?: string;
   };
 };
+
+function getIndicesForHex(hex: string | null | undefined, source: ColorwayImageSource): number[] {
+  if (!hex || !source.variants) return [];
+  const target = hex.toLowerCase();
+  for (const variant of source.variants) {
+    if (variant?.color?.hex?.toLowerCase() === target) {
+      return Array.isArray(variant.images) ? [...variant.images] : [];
+    }
+  }
+  return [];
+}
 
 export function getColorwayEnhancedFrontImage(
   hex: string | null | undefined,
@@ -41,11 +57,9 @@ function getColorwayViewImage(
     return fallback;
   }
 
-  const indices = hex && source.colorImages?.[hex]
-    ? source.colorImages[hex]
-    : source.images.map((_, index) => index);
-
-  const sortedIndices = [...indices].sort((a, b) => a - b);
+  const indices = hex ? getIndicesForHex(hex, source) : [];
+  const effective = indices.length > 0 ? indices : source.images.map((_, index) => index);
+  const sortedIndices = [...effective].sort((a, b) => a - b);
   if (sortedIndices.length === 0) {
     return fallback;
   }
@@ -68,12 +82,12 @@ export function getColorwayMainImage(
   source: ColorwayImageSource,
   fallback = ""
 ) {
-  if (!hex || !source.colorImages || !source.images || source.images.length === 0) {
+  if (!hex || !source.images || source.images.length === 0) {
     return fallback;
   }
 
-  const indices = source.colorImages[hex];
-  if (!indices || indices.length === 0) {
+  const indices = getIndicesForHex(hex, source);
+  if (indices.length === 0) {
     return fallback;
   }
 

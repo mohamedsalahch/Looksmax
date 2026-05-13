@@ -61,28 +61,27 @@ function hasAnyImage(value: { front: string; back: string; left: string; right: 
   return Boolean(value.front || value.back || value.left || value.right);
 }
 
-function getColorIndices(
-  colorImages: unknown,
-  color: string
-) {
-  if (!color || !colorImages || typeof colorImages !== "object") return [];
-  const record = colorImages as Record<string, number[]>;
-  const candidates = [color, color.toUpperCase(), color.toLowerCase()];
-  for (const key of candidates) {
-    const value = record[key];
-    if (Array.isArray(value) && value.length > 0) return value;
+type VariantWithImages = { color?: { hex?: string } | null; images?: number[] };
+
+function getColorIndices(variants: unknown, color: string) {
+  if (!color || !Array.isArray(variants)) return [];
+  const target = color.toLowerCase();
+  for (const variant of variants as VariantWithImages[]) {
+    if (variant?.color?.hex?.toLowerCase() === target) {
+      return Array.isArray(variant.images) ? variant.images : [];
+    }
   }
   return [];
 }
 
 function getColorIndicesByImage(
-  colorImages: unknown,
+  variants: unknown,
   images: Array<{ url?: string }>,
   image: string
 ) {
-  if (!image || !colorImages || typeof colorImages !== "object") return [];
-  const record = colorImages as Record<string, number[]>;
-  for (const indices of Object.values(record)) {
+  if (!image || !Array.isArray(variants)) return [];
+  for (const variant of variants as VariantWithImages[]) {
+    const indices = variant?.images;
     if (!Array.isArray(indices) || indices.length === 0) continue;
     if (indices.some((index) => images[index]?.url === image)) {
       return indices;
@@ -177,7 +176,7 @@ export async function POST(req: NextRequest) {
     )].map((productId) => normalizeProductId(productId));
     const selectedProducts = selectedProductIds.length > 0
       ? await Product.find({ _id: { $in: selectedProductIds } })
-          .select("_id originPictures fashionSubtype images colorImages")
+          .select("_id originPictures fashionSubtype images variants")
           .lean()
       : [];
     const productMap = new Map(
@@ -195,9 +194,9 @@ export async function POST(req: NextRequest) {
         const selectedColor = String(value?.color || "").trim();
         const selectedImage = String(value?.image || "").trim();
         const colorIndices = (() => {
-          const byColor = getColorIndices(product?.colorImages, selectedColor);
+          const byColor = getColorIndices(product?.variants, selectedColor);
           if (byColor.length > 0) return byColor;
-          return getColorIndicesByImage(product?.colorImages, savedImages, selectedImage);
+          return getColorIndicesByImage(product?.variants, savedImages, selectedImage);
         })();
         const selectedIndices = colorIndices.length > 0 ? colorIndices : savedImages.map((_, index) => index);
         const enhancedViews = selectedIndices.length > 0
