@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-export type RequestedVariantColor = { name?: string; hex: string } | null;
+export type RequestedVariantColor = string | null;
 
 export type RequestedVariant = {
   _id?: string;
@@ -21,6 +21,10 @@ export type StoredVariant = {
   images: number[];
 };
 
+export type NormalizedStoredVariant = Omit<StoredVariant, "_id"> & {
+  _id: unknown;
+};
+
 function clamp01To10(value: unknown): number | null {
   if (value === null || value === undefined) return null;
   const num = Number(value);
@@ -35,12 +39,20 @@ function normalizeHex(value: unknown): string {
 }
 
 function normalizeColor(raw: unknown): RequestedVariantColor {
-  if (!raw || typeof raw !== "object") return null;
-  const obj = raw as { name?: unknown; hex?: unknown };
-  const hex = normalizeHex(obj.hex);
-  if (!hex) return null;
-  const name = String(obj.name || "").trim();
-  return name ? { name, hex } : { hex };
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw !== "string") return null;
+  const hex = normalizeHex(raw);
+  return hex || null;
+}
+
+export function normalizeStoredVariantColor(raw: unknown): RequestedVariantColor {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw === "string") return normalizeHex(raw) || null;
+  if (typeof raw === "object") {
+    const hex = normalizeHex((raw as { hex?: unknown }).hex);
+    return hex || null;
+  }
+  return null;
 }
 
 function normalizeImages(raw: unknown): number[] {
@@ -48,6 +60,28 @@ function normalizeImages(raw: unknown): number[] {
   return raw
     .map((n) => Number(n))
     .filter((n) => Number.isInteger(n) && n >= 0);
+}
+
+export function normalizeStoredVariants(raw: unknown): NormalizedStoredVariant[] {
+  if (!Array.isArray(raw)) return [];
+
+  return raw
+    .map((entry): NormalizedStoredVariant | null => {
+      if (!entry || typeof entry !== "object") return null;
+      const obj = entry as Record<string, unknown>;
+      const fullStock = Math.max(0, Math.floor(Number(obj.fullStock ?? obj.stock ?? 0)) || 0);
+      const stock = Math.max(0, Math.floor(Number(obj.stock ?? fullStock)) || 0);
+      return {
+        _id: obj._id,
+        size: String(obj.size ?? "").trim(),
+        color: normalizeStoredVariantColor(obj.color),
+        fullStock,
+        stock,
+        conditionScore: clamp01To10(obj.conditionScore),
+        images: normalizeImages(obj.images),
+      };
+    })
+    .filter((variant): variant is NormalizedStoredVariant => variant !== null);
 }
 
 export function parseRequestedVariants(raw: unknown): RequestedVariant[] {
@@ -118,21 +152,22 @@ export function deriveSizes(variants: ReadonlyArray<{ size: string }>): string[]
 }
 
 export function deriveColors(
-  variants: ReadonlyArray<{ color: RequestedVariantColor }>,
-): Array<{ name?: string; hex: string }> {
+  variants: ReadonlyArray<{ color: unknown }>,
+): string[] {
   const seen = new Set<string>();
-  const result: Array<{ name?: string; hex: string }> = [];
+  const result: string[] = [];
   for (const v of variants) {
-    if (v.color && !seen.has(v.color.hex)) {
-      seen.add(v.color.hex);
-      result.push(v.color);
+    const color = normalizeStoredVariantColor(v.color);
+    if (color && !seen.has(color)) {
+      seen.add(color);
+      result.push(color);
     }
   }
   return result;
 }
 
 export function averageVariantConditionScore(
-  variants: ReadonlyArray<{ conditionScore: number | null }>,
+  variants: ReadonlyArray<{ conditionScore?: number | null }>,
 ): number | null {
   const scores = variants
     .map((v) => v.conditionScore)

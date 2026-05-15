@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import ProductCard from "./ProductCard";
 import { getStoredReservationKey } from "@/lib/reservations";
 import { getColorwayEnhancedLeftImage } from "@/lib/colorwayImage";
+import type { VariantAvailabilityMap } from "@/lib/variantAvailability";
 
 interface ProductImage {
   url: string;
@@ -13,7 +14,7 @@ interface ProductImage {
 type ProductVariant = {
   _id: string;
   size: string;
-  color: { name?: string; hex: string } | null;
+  color: string | null;
   stock?: number;
   fullStock?: number;
   conditionScore?: number | null;
@@ -25,11 +26,11 @@ interface Product {
   name: string;
   brand?: string;
   categories?: string[];
-  colors?: Array<{ name?: string; hex: string }>;
+  colors?: string[];
   price: number;
   stock: number;
   variants?: ProductVariant[];
-  variantAvailability?: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null;
+  variantAvailability?: VariantAvailabilityMap | null;
   cartCount?: number;
   reservedElsewhere?: boolean;
   ownedReservation?: boolean;
@@ -57,7 +58,7 @@ interface Facets {
   brands: string[];
   stores: string[];
   sizes: string[];
-  colors: Array<{ name?: string; hex: string }>;
+  colors: string[];
   priceRange: { min: number; max: number };
 }
 
@@ -444,19 +445,19 @@ export default function ProductGrid({
                   </button>
                 </div>
                 <div className="grid grid-cols-6 gap-2 pl-2">
-                  {facets.colors.map((color) => (
+                  {facets.colors.map((hex) => (
                     <button
-                      key={color.hex}
+                      key={hex}
                       type="button"
-                      onClick={() => setDraftColor(color.hex)}
-                      title={color.name || color.hex}
-                      aria-label={color.name || color.hex}
+                      onClick={() => setDraftColor(hex)}
+                      title={hex}
+                      aria-label={hex}
                       className={`relative h-8 w-8 border transition-all duration-200 cursor-pointer ${
-                        draftColor.toLowerCase() === color.hex.toLowerCase()
+                        draftColor.toLowerCase() === hex.toLowerCase()
                           ? "border-foreground scale-110"
                           : "border-border-color hover:border-foreground/40"
                       }`}
-                      style={{ backgroundColor: color.hex }}
+                      style={{ backgroundColor: hex }}
                     />
                   ))}
                 </div>

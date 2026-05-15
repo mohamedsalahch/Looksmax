@@ -54,7 +54,7 @@ interface StudioProduct {
     variants?: Array<{
         _id: string;
         size: string;
-        color: { name?: string; hex: string } | null;
+        color: string | null;
         stock?: number;
         fullStock?: number;
         conditionScore?: number | null;
@@ -78,7 +78,7 @@ interface OutfitSlotItem {
     variants?: Array<{
         _id: string;
         size: string;
-        color: { name?: string; hex: string } | null;
+        color: string | null;
         stock?: number;
         fullStock?: number;
         conditionScore?: number | null;
@@ -2116,7 +2116,6 @@ export default function OutfitStudioPage() {
                                     reservedElsewhere={product.reservedElsewhere}
                                     ownedReservation={product.ownedReservation}
                                     tag={product.tag}
-                                    sizes={product.sizes}
                                     image={getMainImage(product.images)}
                                     conditionScore={product.conditionScore}
                                     conditionStatus={product.conditionStatus}

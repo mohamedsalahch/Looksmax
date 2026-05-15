@@ -171,7 +171,7 @@ export async function POST(req: NextRequest) {
       }
 
       const variantSize = variant.size || "";
-      const variantColor = variant.color?.hex || "";
+      const variantColor = variant.color || "";
       const sizeLabelForError = variantSize ? ` (size ${variantSize})` : "";
       if (Math.max(variant.stock ?? 0, 0) < quantityToDeduct) {
         return NextResponse.json(

@@ -16,21 +16,15 @@ import {
   averageVariantConditionScore,
   deriveColors,
   deriveSizes,
+  normalizeStoredVariants,
 } from "@/lib/productVariants";
 
 function uniqueSortedValues(values: string[]) {
   return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
 }
 
-function uniqueSortedColors(values: Array<{ name?: string; hex: string }>) {
-  const seen = new Set<string>();
-  const result: Array<{ name?: string; hex: string }> = [];
-  for (const value of values) {
-    if (!value?.hex || seen.has(value.hex)) continue;
-    seen.add(value.hex);
-    result.push(value);
-  }
-  return result.sort((a, b) => a.hex.localeCompare(b.hex));
+function uniqueSortedHexes(values: string[]) {
+  return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
 }
 
 export async function GET(req: NextRequest) {
@@ -126,7 +120,7 @@ export async function GET(req: NextRequest) {
       if (ownerId && !approvedOwnerIds.has(ownerId)) {
         return null;
       }
-      const variants = (product.variants || []) as unknown as VariantLike[];
+      const variants = normalizeStoredVariants(product.variants) as VariantLike[];
       const stock = Math.max(product.stock ?? 0, 0);
       const reservationInfo = reservationMap.get(product._id.toString()) || {
         totalQuantity: 0,
@@ -169,6 +163,7 @@ export async function GET(req: NextRequest) {
         reservedElsewhere,
         ownedReservation: reservationInfo.ownedQuantity > 0,
         variantAvailability,
+        variants,
         sizes: derivedSizes,
         colors: derivedColors,
         storeType: owner?.role === "store_owner" ? (owner as { storeType?: string }).storeType || null : null,
@@ -194,7 +189,7 @@ export async function GET(req: NextRequest) {
       if (store && product.storeName !== store) return false;
       if (brand && product.brand !== brand) return false;
       if (sizes.length > 0 && !sizes.some((sizeValue) => (product.sizes || []).includes(sizeValue))) return false;
-      if (color && !(product.colors || []).some((c) => c.hex === color || c.name === color)) return false;
+      if (color && !(product.colors || []).some((c) => c === color)) return false;
       if (availability === "out-of-stock") return !hasSelectableVariant;
       if (availability === "in-stock") return hasSelectableVariant;
       if (Number.isFinite(priceMin) && product.price < priceMin) return false;
@@ -211,7 +206,7 @@ export async function GET(req: NextRequest) {
           brands: uniqueSortedValues(facetsSource.map((product) => product.brand || "")),
           stores: uniqueSortedValues(facetsSource.map((product) => product.storeName || "")),
           sizes: uniqueSortedValues(facetsSource.flatMap((product) => product.sizes || [])),
-          colors: uniqueSortedColors(facetsSource.flatMap((product) => product.colors || [])),
+          colors: uniqueSortedHexes(facetsSource.flatMap((product) => product.colors || [])),
           priceRange: {
             min: facetsSource.length > 0 ? Math.min(...facetsSource.map((product) => product.price || 0)) : 0,
             max: facetsSource.length > 0 ? Math.max(...facetsSource.map((product) => product.price || 0)) : 0,

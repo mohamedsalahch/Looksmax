@@ -19,7 +19,7 @@ interface AuditActor {
 interface ProductVariant {
   _id: string;
   size: string;
-  color: { name?: string; hex: string } | null;
+  color: string | null;
   fullStock: number;
   stock: number;
   conditionScore?: number | null;
@@ -35,7 +35,7 @@ interface ProductDetail {
   description: string;
   details?: string[];
   sizes?: string[];
-  colors?: Array<{ name?: string; hex: string }>;
+  colors?: string[];
   stock: number;
   availableStock?: number;
   soldQuantity?: number;
@@ -452,9 +452,9 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
                     </span>
                     {variant.color && (
                       <span className="inline-flex items-center gap-1 shrink-0">
-                        <span className="h-3 w-3 border border-border/60" style={{ backgroundColor: variant.color.hex }} />
+                        <span className="h-3 w-3 border border-border/60" style={{ backgroundColor: variant.color }} />
                         <span className="text-[9px] uppercase tracking-wider text-text-secondary hidden sm:inline">
-                          {variant.color.name || variant.color.hex.toUpperCase()}
+                          {variant.color.toUpperCase()}
                         </span>
                       </span>
                     )}

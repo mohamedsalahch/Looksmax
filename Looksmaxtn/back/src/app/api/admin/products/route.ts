@@ -12,6 +12,7 @@ import {
   averageVariantConditionScore,
   deriveColors,
   deriveSizes,
+  normalizeStoredVariants,
   parseRequestedVariants,
   singleDefaultVariant,
   sumVariantFullStock,
@@ -22,7 +23,7 @@ import {
 type StoredVariantLean = {
   _id: { toString(): string };
   size: string;
-  color: { name?: string; hex: string } | null;
+  color: string | null;
   fullStock: number;
   stock: number;
   conditionScore: number | null;
@@ -242,7 +243,7 @@ export async function GET(req: NextRequest) {
       products: products.map((product) => {
         const productId = product._id.toString();
         const soldQuantity = soldQuantityMap.get(productId) || 0;
-        const variants = (product.variants || []) as unknown as StoredVariantLean[];
+        const variants = normalizeStoredVariants(product.variants) as StoredVariantLean[];
         const totalStock = sumVariantStock(variants);
         const totalFullStock = sumVariantFullStock(variants);
 

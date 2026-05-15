@@ -61,13 +61,13 @@ function hasAnyImage(value: { front: string; back: string; left: string; right: 
   return Boolean(value.front || value.back || value.left || value.right);
 }
 
-type VariantWithImages = { color?: { hex?: string } | null; images?: number[] };
+type VariantWithImages = { color?: string | null; images?: number[] };
 
 function getColorIndices(variants: unknown, color: string) {
   if (!color || !Array.isArray(variants)) return [];
   const target = color.toLowerCase();
   for (const variant of variants as VariantWithImages[]) {
-    if (variant?.color?.hex?.toLowerCase() === target) {
+    if (variant?.color?.toLowerCase() === target) {
       return Array.isArray(variant.images) ? variant.images : [];
     }
   }

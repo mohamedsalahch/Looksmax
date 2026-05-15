@@ -16,15 +16,10 @@ export interface IOriginPictures {
 export type ProductType = "fashion" | "perfume" | "clothing" | "shoes";
 export type ProductApprovalStatus = "pending" | "approved" | "rejected";
 
-export interface IVariantColor {
-  name: string;
-  hex: string;
-}
-
 export interface IProductVariant {
   _id: Types.ObjectId;
   size: string;
-  color: IVariantColor | null;
+  color: string | null;
   fullStock: number;
   stock: number;
   conditionScore?: number | null;
@@ -77,17 +72,9 @@ const originPicturesSchema = new Schema<IOriginPictures>(
   { _id: false }
 );
 
-const variantColorSchema = new Schema<IVariantColor>(
-  {
-    name: { type: String, required: true, trim: true },
-    hex: { type: String, required: true, trim: true, lowercase: true },
-  },
-  { _id: false }
-);
-
 const productVariantSchema = new Schema<IProductVariant>({
   size: { type: String, default: "", trim: true },
-  color: { type: variantColorSchema, default: null },
+  color: { type: String, default: null, trim: true, lowercase: true },
   fullStock: { type: Number, default: 0, min: 0 },
   stock: { type: Number, default: 0, min: 0 },
   conditionScore: { type: Number, min: 0, max: 10, default: null },
@@ -142,7 +129,7 @@ const productSchema = new Schema<IProduct>(
 productSchema.index({ categories: 1 });
 productSchema.index({ name: "text", description: "text" });
 productSchema.index({ "variants._id": 1 });
-productSchema.index({ "variants.color.hex": 1, "variants.size": 1 });
+productSchema.index({ "variants.color": 1, "variants.size": 1 });
 productSchema.index(
   { "createdBy.id": 1, reference: 1 },
   {

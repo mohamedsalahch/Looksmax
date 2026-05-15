@@ -1,4 +1,5 @@
 import ProductCard from "./ProductCard";
+import type { VariantAvailabilityMap } from "@/lib/variantAvailability";
 
 interface ProductImage {
   url: string;
@@ -8,7 +9,7 @@ interface ProductImage {
 type RelatedVariant = {
   _id: string;
   size: string;
-  color: { name?: string; hex: string } | null;
+  color: string | null;
   stock?: number;
   fullStock?: number;
   conditionScore?: number | null;
@@ -23,7 +24,7 @@ export interface RelatedProduct {
   price: number;
   stock: number;
   variants?: RelatedVariant[];
-  variantAvailability?: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null;
+  variantAvailability?: VariantAvailabilityMap | null;
   cartCount?: number;
   reservedElsewhere?: boolean;
   ownedReservation?: boolean;

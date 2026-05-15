@@ -23,7 +23,7 @@ type ProductType = "fashion" | "perfume" | "clothing" | "shoes";
 type ProductVariant = {
   _id: string;
   size: string;
-  color: { name?: string; hex: string } | null;
+  color: string | null;
   stock?: number;
   fullStock?: number;
   conditionScore?: number | null;
@@ -78,12 +78,12 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
 
   const uniqueColors = useMemo(() => {
     const seen = new Set<string>();
-    const result: Array<{ name?: string; hex: string }> = [];
+    const result: string[] = [];
     for (const variant of variants) {
-      const hex = variant.color?.hex?.toLowerCase();
+      const hex = variant.color?.toLowerCase();
       if (hex && !seen.has(hex)) {
         seen.add(hex);
-        result.push(variant.color!);
+        result.push(hex);
       }
     }
     return result;
@@ -108,14 +108,14 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
   );
 
   const selectedVariant = selectedVariantId ? variantsById.get(selectedVariantId) : undefined;
-  const activeHex = selectedVariant?.color?.hex || product.initialSelectedColorHex || null;
+  const activeHex = selectedVariant?.color || product.initialSelectedColorHex || null;
   const [selectedColorHex, setSelectedColorHex] = useState<string | null>(activeHex);
 
   const variantsForActiveColor = useMemo(() => {
     if (!isColorwayProduct) return variants;
     if (!selectedColorHex) return variants;
     return variants.filter(
-      (variant) => variant.color?.hex?.toLowerCase() === selectedColorHex.toLowerCase(),
+      (variant) => variant.color?.toLowerCase() === selectedColorHex.toLowerCase(),
     );
   }, [isColorwayProduct, selectedColorHex, variants]);
   const hasVisibleSizeOptions = variantsForActiveColor.some((variant) => Boolean(variant.size.trim()));
@@ -372,7 +372,7 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
   const handleSelectColorway = (hex: string) => {
     setSelectedColorHex(hex);
     const nextVariants = variants.filter(
-      (variant) => variant.color?.hex?.toLowerCase() === hex.toLowerCase(),
+      (variant) => variant.color?.toLowerCase() === hex.toLowerCase(),
     );
     const firstAvailable = nextVariants.find(
       (variant) => (variantAvailability?.[variant._id]?.stock ?? variant.stock ?? 0) > 0,
@@ -476,25 +476,25 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
         <div>
           <p className="text-xs text-text-secondary uppercase tracking-wider mb-3">Colorways</p>
           <div className="flex flex-wrap gap-2">
-            {uniqueColors.map((color) => {
+            {uniqueColors.map((hex) => {
               const variantsOfColor = variants.filter(
-                (variant) => variant.color?.hex?.toLowerCase() === color.hex.toLowerCase(),
+                (variant) => variant.color?.toLowerCase() === hex.toLowerCase(),
               );
               const hasStock = variantsOfColor.some(
                 (variant) => (variantAvailability?.[variant._id]?.stock ?? variant.stock ?? 0) > 0,
               );
               return (
                 <button
-                  key={color.hex}
+                  key={hex}
                   type="button"
-                  title={color.name || color.hex}
-                  onClick={() => handleSelectColorway(color.hex)}
+                  title={hex}
+                  onClick={() => handleSelectColorway(hex)}
                   className={`w-7 h-7 rounded-full border-2 transition-all duration-200 cursor-pointer ${
-                    selectedColorHex?.toLowerCase() === color.hex.toLowerCase()
+                    selectedColorHex?.toLowerCase() === hex.toLowerCase()
                       ? "border-foreground scale-110"
                       : "border-transparent hover:border-border-color"
                   } ${!hasStock ? "opacity-40" : ""}`}
-                  style={{ backgroundColor: color.hex }}
+                  style={{ backgroundColor: hex }}
                 />
               );
             })}

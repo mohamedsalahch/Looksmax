@@ -202,7 +202,7 @@ function ProductLightbox({
 }
 
 type GalleryVariant = {
-  color?: { hex?: string } | null;
+  color?: string | null;
   images?: number[];
 };
 
@@ -210,7 +210,7 @@ function getIndicesForHex(hex: string | null, variants: GalleryVariant[] | undef
   if (!hex || !variants) return [];
   const target = hex.toLowerCase();
   for (const variant of variants) {
-    if (variant?.color?.hex?.toLowerCase() === target) {
+    if (variant?.color?.toLowerCase() === target) {
       return Array.isArray(variant.images) ? [...variant.images] : [];
     }
   }

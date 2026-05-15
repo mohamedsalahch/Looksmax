@@ -16,6 +16,7 @@ import {
   averageVariantConditionScore,
   deriveColors,
   deriveSizes,
+  normalizeStoredVariants,
 } from "@/lib/productVariants";
 
 export async function GET(
@@ -47,7 +48,7 @@ export async function GET(
     if (!isStoreOwnerApproved(owner)) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
-    const variants = (product.variants || []) as unknown as VariantLike[];
+    const variants = normalizeStoredVariants(product.variants) as VariantLike[];
     const ownedReservationQuantity = activeReservations
       .filter((reservation) => reservation.reservationKey === reservationKey)
       .reduce((sum, reservation) => sum + Math.max(1, Number(reservation.quantity) || 1), 0);
@@ -111,6 +112,7 @@ export async function GET(
         storeType: owner?.role === "store_owner" ? owner?.storeType || null : null,
         reservationExpiresAt: null,
         variantAvailability,
+        variants,
         sizes: deriveSizes(variants),
         colors: deriveColors(variants),
         viewerBlocked,

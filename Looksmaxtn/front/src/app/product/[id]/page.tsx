@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 type ProductVariantPayload = {
   _id: string;
   size: string;
-  color: { name?: string; hex: string } | null;
+  color: string | null;
   stock: number;
   fullStock: number;
   conditionScore?: number | null;
@@ -39,7 +39,7 @@ type ProductResponse = {
     } | null;
     images?: { url: string; isMain: boolean }[];
     sizes?: string[];
-    colors?: { name: string; hex: string }[];
+    colors?: string[];
     variants?: ProductVariantPayload[];
     variantAvailability?: VariantAvailabilityMap | null;
     stock: number;
@@ -104,7 +104,7 @@ function resolveInitialSelection(
 
   const candidates = variants.filter((variant) => {
     if (requestedSize && variant.size !== requestedSize) return false;
-    if (requestedColorHex && variant.color?.hex?.toLowerCase() !== requestedColorHex) return false;
+    if (requestedColorHex && variant.color?.toLowerCase() !== requestedColorHex) return false;
     return true;
   });
   const pool = candidates.length > 0 ? candidates : variants;
@@ -113,7 +113,7 @@ function resolveInitialSelection(
   const chosen = available || pool[0];
   return {
     variantId: chosen._id,
-    colorHex: chosen.color?.hex || (requestedColorHex || null),
+    colorHex: chosen.color || (requestedColorHex || null),
   };
 }
 

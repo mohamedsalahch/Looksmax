@@ -1,10 +1,13 @@
-export type VariantColor = { name: string; hex: string } | null;
+import { normalizeStoredVariantColor } from "@/lib/productVariants";
+
+export type VariantColor = string | null;
 
 export type VariantLike = {
   _id: unknown;
   size: string;
   color: VariantColor;
   stock: number;
+  conditionScore?: number | null;
 };
 
 export type VariantAvailabilityEntry = {
@@ -58,7 +61,7 @@ export function buildVariantAvailability(
     result[variantId] = {
       variantId,
       size: variant.size,
-      color: variant.color,
+      color: normalizeStoredVariantColor(variant.color),
       stock,
       available: stock > 0,
       reservedElsewhere:

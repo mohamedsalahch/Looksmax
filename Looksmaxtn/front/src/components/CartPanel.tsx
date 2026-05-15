@@ -10,10 +10,6 @@ import { getCartItemProductId } from "@/lib/cartItem";
 import { getEnhancedFrontDisplayImage } from "@/lib/colorwayImage";
 import { queueStudioAssignment } from "@/lib/studioAssignment";
 
-function formatCartSizeLabel(size?: string) {
-  return size?.trim() || "";
-}
-
 export default function CartPanel() {
   const { items, isOpen, openCart, closeCart, removeItem, updateQuantity, totalItems, totalPrice } =
     useCart();
@@ -182,8 +178,8 @@ export default function CartPanel() {
                             </span>
                           ) : (
                             <>
-                              {formatCartSizeLabel(item.size) && (
-                                <span className="text-[10px] text-text-secondary">{formatCartSizeLabel(item.size)}</span>
+                              {item.size?.trim() && (
+                                <span className="text-[10px] text-text-secondary">{item.size.trim()}</span>
                               )}
                               {item.color ? (
                                 <span

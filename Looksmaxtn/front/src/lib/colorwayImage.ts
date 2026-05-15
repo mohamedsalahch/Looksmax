@@ -1,5 +1,5 @@
 type VariantSummary = {
-  color?: { name?: string; hex?: string } | null;
+  color?: string | null;
   images?: number[];
 };
 
@@ -24,7 +24,7 @@ function getIndicesForHex(hex: string | null | undefined, source: ColorwayImageS
   if (!hex || !source.variants) return [];
   const target = hex.toLowerCase();
   for (const variant of source.variants) {
-    if (variant?.color?.hex?.toLowerCase() === target) {
+    if (variant?.color?.toLowerCase() === target) {
       return Array.isArray(variant.images) ? [...variant.images] : [];
     }
   }

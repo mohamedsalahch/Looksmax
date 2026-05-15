@@ -18,7 +18,7 @@ type ProductType = "fashion" | "perfume" | "clothing" | "shoes";
 type ProductVariant = {
   _id: string;
   size: string;
-  color: { name?: string; hex: string } | null;
+  color: string | null;
   stock?: number;
   fullStock?: number;
   conditionScore?: number | null;
@@ -97,12 +97,12 @@ export default function ProductCard({
 
   const colorwayColors = useMemo(() => {
     const seen = new Set<string>();
-    const result: Array<{ name?: string; hex: string }> = [];
+    const result: string[] = [];
     for (const variant of variants) {
-      const hex = variant.color?.hex?.toLowerCase();
+      const hex = variant.color?.toLowerCase();
       if (hex && !seen.has(hex)) {
         seen.add(hex);
-        result.push(variant.color!);
+        result.push(hex);
       }
     }
     return result;
@@ -117,7 +117,7 @@ export default function ProductCard({
   }, [isPerfume, variantAvailabilityState, variants]);
 
   const [activeColorHex, setActiveColorHex] = useState<string | null>(
-    defaultSelectableVariant?.color?.hex || colorwayColors[0]?.hex || null,
+    defaultSelectableVariant?.color || colorwayColors[0] || null,
   );
 
   const selectedCartImage = getColorwayMainImage(activeColorHex, { image, images, variants }, image);
@@ -144,7 +144,7 @@ export default function ProductCard({
     if (isPerfume) return [];
     if (!activeColorHex || colorwayColors.length === 0) return variants;
     return variants.filter(
-      (variant) => variant.color?.hex?.toLowerCase() === activeColorHex.toLowerCase(),
+      (variant) => variant.color?.toLowerCase() === activeColorHex.toLowerCase(),
     );
   }, [activeColorHex, colorwayColors.length, isPerfume, variants]);
 
@@ -189,8 +189,8 @@ export default function ProductCard({
   }, []);
 
   useEffect(() => {
-    if (colorwayColors.length > 0 && (!activeColorHex || !colorwayColors.some((c) => c.hex.toLowerCase() === activeColorHex.toLowerCase()))) {
-      setActiveColorHex(colorwayColors[0].hex);
+    if (colorwayColors.length > 0 && (!activeColorHex || !colorwayColors.some((c) => c.toLowerCase() === activeColorHex.toLowerCase()))) {
+      setActiveColorHex(colorwayColors[0]);
     }
   }, [activeColorHex, colorwayColors]);
 
@@ -270,7 +270,7 @@ export default function ProductCard({
     e.stopPropagation();
     setActiveColorHex(hex);
     const nextVariants = variants.filter(
-      (variant) => variant.color?.hex?.toLowerCase() === hex.toLowerCase(),
+      (variant) => variant.color?.toLowerCase() === hex.toLowerCase(),
     );
     const next = nextVariants.find(
       (variant) => (variantAvailabilityState?.[variant._id]?.stock ?? variant.stock ?? 0) > 0,
@@ -608,18 +608,18 @@ export default function ProductCard({
       </div>
       {!isPerfume && colorwayColors.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-2">
-          {colorwayColors.map((color) => (
+          {colorwayColors.map((hex) => (
             <button
-              key={color.hex}
+              key={hex}
               type="button"
-              title={color.name || color.hex}
-              onClick={(e) => handleColorwayClick(e, color.hex)}
+              title={hex}
+              onClick={(e) => handleColorwayClick(e, hex)}
               className={`w-4 h-4 border transition-all duration-150 ${
-                activeColorHex?.toLowerCase() === color.hex.toLowerCase()
+                activeColorHex?.toLowerCase() === hex.toLowerCase()
                   ? "border-foreground scale-110"
                   : "border-border-color hover:border-foreground"
               }`}
-              style={{ backgroundColor: color.hex }}
+              style={{ backgroundColor: hex }}
             />
           ))}
         </div>

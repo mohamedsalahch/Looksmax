@@ -17,6 +17,7 @@ import {
   averageVariantConditionScore,
   deriveColors,
   deriveSizes,
+  normalizeStoredVariants,
   parseRequestedVariants,
   singleDefaultVariant,
   sumVariantFullStock,
@@ -27,7 +28,7 @@ import {
 type StoredVariantLean = {
   _id: mongoose.Types.ObjectId;
   size: string;
-  color: { name?: string; hex: string } | null;
+  color: string | null;
   fullStock: number;
   stock: number;
   conditionScore: number | null;
@@ -37,7 +38,7 @@ type StoredVariantLean = {
 type NextVariantInput = {
   _id?: mongoose.Types.ObjectId;
   size: string;
-  color: { name?: string; hex: string } | null;
+  color: string | null;
   fullStock: number;
   stock: number;
   conditionScore: number | null;
@@ -101,7 +102,7 @@ function normalizeReference(value: unknown) {
 }
 
 function getStoredVariants(product: { variants?: unknown }): StoredVariantLean[] {
-  return ((product.variants as StoredVariantLean[] | undefined) || []).map((v) => ({
+  return normalizeStoredVariants(product.variants).map((v) => ({
     _id: v._id,
     size: v.size,
     color: v.color,
@@ -109,7 +110,7 @@ function getStoredVariants(product: { variants?: unknown }): StoredVariantLean[]
     stock: v.stock,
     conditionScore: v.conditionScore,
     images: v.images || [],
-  }));
+  })) as StoredVariantLean[];
 }
 
 function serializeStoredVariants(

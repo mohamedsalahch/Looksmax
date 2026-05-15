@@ -21,6 +21,14 @@ import {
   getLeavesForZone,
   getZoneRequirements,
 } from "@/lib/categoryClassification";
+import {
+  groupVariantsByColor,
+  normalizeHex,
+  parseApiVariants,
+  toOutgoingVariant,
+  type OutgoingVariant,
+  type VariantRow,
+} from "@/lib/adminVariants";
 
 interface Category {
   _id: string;
@@ -151,15 +159,6 @@ function createEmptyColorway(hex = ""): Colorway {
   };
 }
 
-type FashionVariantRow = {
-  id: string;
-  size: string;
-  colors: string;
-  stock: string;
-  conditionScore: string;
-};
-
-
 const initialForm = {
   name: "",
   price: "",
@@ -169,12 +168,9 @@ const initialForm = {
   stock: "1",
   tag: "",
   newTagDurationDays: "3",
-  sizes: "",
-  colors: "",
   conditionScore: "10",
   productType: "fashion" as ProductType,
   fashionSubtype: "" as FashionSubtype,
-  sizeStock: {} as Record<string, string>,
   originPictures: {
     front: "",
     back: "",
@@ -219,40 +215,6 @@ function hasAccessoryWorkflowCategory(categories: Category[], slug: string, zone
   return chain.some((category) => /accessor/i.test(category.slug) || /accessor/i.test(category.name));
 }
 
-function buildColorwayVariantKey(size: string, color: string) {
-  const trimmedSize = size.trim();
-  const trimmedColor = color.trim();
-  if (trimmedSize && trimmedColor) return `${trimmedSize} / ${trimmedColor}`;
-  if (trimmedColor) return trimmedColor;
-  if (trimmedSize) return trimmedSize;
-  return "__default__";
-}
-
-function normalizeSizeList(value: string) {
-  return value
-    .split(",")
-    .map((size) => size.trim())
-    .filter(Boolean);
-}
-
-function buildSizeStockRecord(
-  sizes: string[],
-  sizeStock?: Record<string, { fullStock: number; stock: number; soldQuantity: number }> | null
-) {
-  return Object.fromEntries(
-    sizes.map((size) => [size, String(Math.max(Number(sizeStock?.[size]?.fullStock ?? 0), 0))])
-  ) as Record<string, string>;
-}
-
-function buildSoldQuantityRecord(
-  sizes: string[],
-  sizeStock?: Record<string, { fullStock: number; stock: number; soldQuantity: number }> | null
-) {
-  return Object.fromEntries(
-    sizes.map((size) => [size, Math.max(Number(sizeStock?.[size]?.soldQuantity ?? 0), 0)])
-  ) as Record<string, number>;
-}
-
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
     <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-text-secondary mb-1.5">
@@ -264,16 +226,6 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
   return <p className="mt-1 text-[11px] text-danger">{message}</p>;
-}
-
-function getPrimaryColor(value: unknown) {
-  if (Array.isArray(value)) {
-    return String(value[0] || "").trim();
-  }
-  return String(value || "")
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean)[0] || "";
 }
 
 function SectionCard({
@@ -1112,12 +1064,6 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const [models, setModels] = useState<ModelAsset[]>([]);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImageAsset[]>([]);
   const [form, setForm] = useState(initialForm);
-  // Map of "size|hex" -> persisted variant _id, captured at hydration.
-  // Used on submit to preserve variant identity so reconcileVariants on the
-  // server can match against open-order soft-delete rules.
-  const savedVariantIdsRef = useRef<Map<string, string>>(new Map());
-  const variantKeyFor = (size: string, hex: string) =>
-    `${(size || "").trim()}|${(hex || "").trim().toLowerCase()}`;
   const [selectedParentSlug, setSelectedParentSlug] = useState("");
   const [selectedChildSlug, setSelectedChildSlug] = useState("");
   const [selectedGrandchildSlug, setSelectedGrandchildSlug] = useState("");
@@ -1153,20 +1099,9 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const modelPicturesSectionRef = useRef<HTMLDivElement | null>(null);
   const productMediaSectionRef = useRef<HTMLDivElement | null>(null);
   const [soldQuantity, setSoldQuantity] = useState(0);
-  const [soldQuantityBySize, setSoldQuantityBySize] = useState<Record<string, number>>({});
-  const [sizeStockConditionBySize, setSizeStockConditionBySize] = useState<Record<string, number | null>>({});
-  const [restockAmounts, setRestockAmounts] = useState<Record<string, string>>({});
-  const [savingSizeStockFor, setSavingSizeStockFor] = useState<string>("");
+  const [existingVariants, setExistingVariants] = useState<VariantRow[]>([]);
   const [restockAmount, setRestockAmount] = useState("0");
   const [restocking, setRestocking] = useState(false);
-  const [variantRows, setVariantRows] = useState<FashionVariantRow[]>([]);
-  const [variantDraft, setVariantDraft] = useState<FashionVariantRow>({
-    id: "draft",
-    size: "",
-    colors: "",
-    stock: "",
-    conditionScore: "10",
-  });
   const [colorways, setColorways] = useState<Colorway[]>([createEmptyColorway()]);
   const generationAbortRef = useRef<AbortController | null>(null);
   const hasHydratedProductRef = useRef(false);
@@ -1188,35 +1123,13 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const isRetailStoreOwner = isStoreOwner && userStoreType === "retail";
   const isThriftStoreOwner = isStoreOwner && userStoreType === "thrift";
   const storeOwnerPayoutPrice = getStoreOwnerPayoutPrice(form.price);
-  const sizeList = useMemo(
-    () =>
-      form.productType !== "perfume"
-        ? normalizeSizeList(form.sizes)
-        : [],
-    [form.productType, form.sizes]
-  );
-  const activeVariantRows = useMemo(
-    () =>
-      variantRows.filter(
-        (row) => row.size.trim() || row.stock.trim() || row.colors.trim() || row.conditionScore.trim()
-      ),
-    [variantRows]
-  );
-  const completeVariantRows = useMemo(
-    () =>
-      activeVariantRows.filter(
-        (row) => row.size.trim() && row.stock.trim()
-      ),
-    [activeVariantRows]
-  );
-  const newVariantStockTotal = useMemo(
-    () =>
-      completeVariantRows.reduce((sum, row) => sum + Math.max(0, Number(row.stock || 0)), 0),
-    [completeVariantRows]
-  );
+  const updateExistingVariant = (uiId: string, patch: Partial<VariantRow>) =>
+    setExistingVariants((current) =>
+      current.map((row) => (row.uiId === uiId ? { ...row, ...patch } : row))
+    );
   const existingStockTotal = useMemo(
-    () => sizeList.reduce((sum, size) => sum + Math.max(0, Number(form.sizeStock[size] || 0)), 0),
-    [form.sizeStock, sizeList]
+    () => existingVariants.reduce((sum, row) => sum + Math.max(0, Number(row.fullStock || 0)), 0),
+    [existingVariants]
   );
 
   const updateColorway = (id: string, patch: Partial<Colorway>) =>
@@ -1632,87 +1545,10 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         if (!d.product) return;
 
         const p = d.product;
-
-        // Bridge from new variants[] schema to the legacy composite-keyed
-        // sizeStock / colorImages shape the form internals still rely on.
-        // Also captures variant _ids by (size, hex) for use on submit.
-        type ApiVariant = {
-          _id: string;
-          size: string;
-          color: { name?: string; hex: string } | null;
-          fullStock: number;
-          stock: number;
-          conditionScore?: number | null;
-          soldQuantity?: number;
-          images?: number[];
-        };
-        const apiVariants: ApiVariant[] = Array.isArray(p.variants) ? p.variants : [];
-        if (apiVariants.length > 0) {
-          const compositeFor = (size: string, hex: string) => {
-            const s = (size || "").trim();
-            const h = (hex || "").trim().toLowerCase();
-            if (s && h) return `${s} / ${h}`;
-            if (h) return h;
-            return s;
-          };
-          const synthesizedSizeStock: Record<
-            string,
-            { fullStock: number; stock: number; soldQuantity: number; conditionScore: number | null }
-          > = {};
-          const synthesizedColorImages: Record<string, number[]> = {};
-          const idMap = new Map<string, string>();
-          for (const v of apiVariants) {
-            const hex = v.color?.hex?.toLowerCase() || "";
-            const compositeKey = compositeFor(v.size, hex);
-            synthesizedSizeStock[compositeKey] = {
-              fullStock: v.fullStock,
-              stock: v.stock,
-              soldQuantity: Math.max(0, v.soldQuantity || 0),
-              conditionScore: v.conditionScore ?? null,
-            };
-            if (hex && Array.isArray(v.images) && v.images.length > 0) {
-              synthesizedColorImages[hex] = v.images;
-            }
-            idMap.set(variantKeyFor(v.size, hex), v._id);
-          }
-          p.sizeStock = synthesizedSizeStock;
-          p.colorImages = synthesizedColorImages;
-          p.variants = apiVariants.map((v) => ({
-            key: compositeFor(v.size, v.color?.hex?.toLowerCase() || ""),
-            size: v.size,
-            color: v.color?.hex || "",
-            fullStock: v.fullStock,
-            stock: v.stock,
-            conditionScore: v.conditionScore,
-            _id: v._id,
-          }));
-          savedVariantIdsRef.current = idMap;
-        } else {
-          savedVariantIdsRef.current = new Map();
-        }
-
-        const nextSizeStockEntries =
-          p.sizeStock && typeof p.sizeStock === "object"
-            ? (p.sizeStock as Record<string, { fullStock: number; stock: number; soldQuantity: number; conditionScore: number | null }>)
-            : null;
-        const sizeStockEntriesForDisplay = nextSizeStockEntries
-          ? Object.fromEntries(
-              Object.entries(nextSizeStockEntries).map(([key, entry]) => {
-                const savedVariant = (p.variants || []).find((variant: { key?: string }) => variant.key === key);
-                const displaySize = String(savedVariant?.size || (key.includes(" / ") ? key.split(" / ")[0] : key)).trim();
-                return [displaySize, entry];
-              })
-            )
-          : null;
-        const nextSizes = Array.from(
-          new Set([
-            ...(Array.isArray(p.variants) ? p.variants.map((variant: { size?: string }) => String(variant.size || "").trim()).filter(Boolean) : []),
-            ...normalizeSizeList((p.sizes || []).join(",")),
-            ...(sizeStockEntriesForDisplay ? Object.keys(sizeStockEntriesForDisplay) : []),
-          ])
-        );
-        const nextSizeStock = buildSizeStockRecord(nextSizes, sizeStockEntriesForDisplay);
-        const nextSoldQuantityBySize = buildSoldQuantityRecord(nextSizes, sizeStockEntriesForDisplay);
+        const nextVariants = parseApiVariants(p.variants);
+        const nextFullStock = nextVariants.length > 0
+          ? nextVariants.reduce((sum, row) => sum + Math.max(0, Number(row.fullStock || 0)), 0)
+          : Math.max(Number(p.fullStock ?? p.stock ?? 1), 0);
         const loadedFormData = {
           name: p.name,
           price: p.price.toString(),
@@ -1722,12 +1558,9 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           stock: String(p.fullStock ?? p.stock ?? 1),
           tag: p.tag || "",
           newTagDurationDays: String(p.newTagDurationDays ?? 3),
-          sizes: nextSizes.join(","),
-          colors: getPrimaryColor(p.colors),
           conditionScore: String(p.conditionScore ?? 9),
           productType: (p.productType === "perfume" ? "perfume" : "fashion") as "perfume" | "fashion",
           fashionSubtype: "" as FashionSubtype,
-          sizeStock: nextSizeStock,
           originPictures: {
             front: p.originPictures?.front || "",
             back: p.originPictures?.back || "",
@@ -1737,60 +1570,19 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           cloneSourceName: p.cloneSourceName || "",
           cloneSourceImage: p.cloneSourceImage || "",
         };
+        loadedFormData.stock = String(nextFullStock);
         setForm(loadedFormData);
+        setExistingVariants(nextVariants);
         setSoldQuantity(Math.max(Number(p.soldQuantity ?? 0), 0));
         setSavedFashionSubtype(p.fashionSubtype || "clothes");
-        setSoldQuantityBySize(nextSoldQuantityBySize);
-        setSizeStockConditionBySize(
-          nextSizeStockEntries
-            ? Object.fromEntries(
-                Object.entries(nextSizeStockEntries).map(([size, entry]) => [
-                  size,
-                  typeof entry.conditionScore === "number"
-                    ? Math.max(0, Math.min(10, Number(entry.conditionScore) || 0))
-                    : null,
-                ])
-              )
-            : {}
-        );
-        setRestockAmounts(Object.fromEntries(nextSizes.map((size) => [size, "0"])));
         setInitialCategorySlugs(p.categories || []);
 
-        // Initialize colorways from sizeStock for store owners
-        if (p.sizeStock && typeof p.sizeStock === "object") {
+        // Initialize colorways from native variants for store owners.
+        if (nextVariants.length > 0) {
           const isShoesProduct = p.fashionSubtype === "shoes";
-          const sizeStockEntries = Object.entries(p.sizeStock as Record<string, { fullStock: number; stock: number; conditionScore: number | null }>);
-          // Sizes that appear in a composite "size / #hex" key are already
-          // represented in a hex'd colorway; drop the bare-size entries that
-          // would otherwise create a phantom empty-hex colorway (legacy bug).
-          const sizesCoveredByComposite = new Set<string>();
-          for (const [key] of sizeStockEntries) {
-            if (key.includes(" / ")) sizesCoveredByComposite.add(key.split(" / ")[0]);
-          }
-          const filteredSizeStockEntries = sizeStockEntries.filter(([key]) => {
-            const isComposite = key.includes(" / ");
-            const isHexOnly = key.startsWith("#");
-            if (isComposite || isHexOnly) return true;
-            return !sizesCoveredByComposite.has(key);
-          });
-          const colorwayMap = new Map<string, SizeRow[]>();
-          for (const [key, entry] of filteredSizeStockEntries) {
-            const isHexOnlyKey = key.startsWith("#");
-            const parts = key.split(" / ");
-            const hasHex = isHexOnlyKey || (parts.length >= 2 && parts[parts.length - 1].startsWith("#"));
-            const hex = isHexOnlyKey ? key : hasHex ? parts[parts.length - 1] : "";
-            const sizeName = isHexOnlyKey ? "" : hasHex ? parts.slice(0, -1).join(" / ") : key === "__default__" ? "" : key;
-            if (!colorwayMap.has(hex)) colorwayMap.set(hex, []);
-            colorwayMap.get(hex)!.push({
-              id: generateId(),
-              size: sizeName,
-              stock: String(entry.fullStock ?? entry.stock ?? 0),
-              conditionScore: String(entry.conditionScore ?? 9),
-            });
-          }
+          const colorwayMap = groupVariantsByColor(nextVariants);
           if (colorwayMap.size > 0) {
             const productImages: { url: string }[] = p.images || [];
-            const colorImagesMap = p.colorImages as Record<string, number[]> | null;
             const originPictureUrls: Record<ColorwayView, string> = {
               front: p.originPictures?.front || "",
               back: p.originPictures?.back || "",
@@ -1804,8 +1596,14 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               additionalInstructions?: string;
             };
             const savedCompanion = p.companionSettings as Record<string, SavedCompanionSettings> | null;
-            const loadedColorways: Colorway[] = Array.from(colorwayMap.entries()).map(([hex, sizes]) => {
-              const indices = colorImagesMap?.[hex] || [];
+            const loadedColorways: Colorway[] = Array.from(colorwayMap.entries()).map(([hex, rows]) => {
+              const indices = rows.find((row) => row.images.length > 0)?.images || [];
+              const sizes = rows.map((row) => ({
+                id: generateId(),
+                size: row.size,
+                stock: String(row.fullStock),
+                conditionScore: String(row.conditionScore ?? 9),
+              }));
               const colorwayViews: ColorwayView[] = isShoesProduct ? FOUR_IMAGE_VIEWS : ["front", "back"];
               const originIndexStart = indices.length >= colorwayViews.length
                 ? indices.length - colorwayViews.length
@@ -1842,7 +1640,6 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                    savedCompanion[hex.toUpperCase()] ||
                    savedCompanion[hex.toLowerCase()] ||
                    savedCompanion[hex.trim()] ||
-                   (!hex.trim() ? savedCompanion["__default__"] : null) ||
                    Object.entries(savedCompanion).find(
                      ([key]) => key.trim().toLowerCase() === normalizedHex
                    )?.[1])
@@ -2049,48 +1846,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     ? requiredOriginPictureKeys.some((key) => Boolean(generationInputs[key].file || generationInputs[key].previewUrl || form.originPictures[key]))
     : requiredOriginPictureKeys.every((key) => Boolean(generationInputs[key].file || generationInputs[key].previewUrl || form.originPictures[key]));
   const hasPendingEnhanceOriginPictures = requiredOriginPictureKeys.some((key) => Boolean(originPictureFiles[key]));
-  const hasRequiredEnhanceInputs = Boolean(selectedCategorySlug) && form.productType === "fashion";
   const canSelectOriginPictures = Boolean(selectedCategorySlug);
-  const enhanceButtonLabel =
-    productMediaStatus === "processing"
-      ? "Enhancing..."
-      : !selectedCategorySlug
-        ? "Select category"
-        : "Enhance";
-  const productMediaItems = useMemo(
-    () => [
-      ...generatedModelMedia.map((image, index) => ({
-        label:
-          index === 0
-            ? "Front generated model"
-            : index === 1
-              ? "Back generated model"
-              : `Generated view ${index + 1}`,
-        url: image.url,
-        kind: "generated" as const,
-      })),
-      ...(generationInputs.front.previewUrl
-        ? [{ label: "Enhanced front", url: generationInputs.front.previewUrl, kind: "enhanced" as const, slot: "front" as const }]
-        : []),
-      ...(generationInputs.back.previewUrl
-        ? [{ label: "Enhanced back", url: generationInputs.back.previewUrl, kind: "enhanced" as const, slot: "back" as const }]
-        : []),
-      ...(generationInputs.left.previewUrl
-        ? [{ label: usesAccessoryImageWorkflow ? "Enhanced image 3" : "Enhanced left", url: generationInputs.left.previewUrl, kind: "enhanced" as const, slot: "left" as const }]
-        : []),
-      ...(generationInputs.right.previewUrl
-        ? [{ label: usesAccessoryImageWorkflow ? "Enhanced image 4" : "Enhanced right", url: generationInputs.right.previewUrl, kind: "enhanced" as const, slot: "right" as const }]
-        : []),
-    ],
-    [
-      generatedModelMedia,
-      generationInputs.front.previewUrl,
-      generationInputs.back.previewUrl,
-      generationInputs.left.previewUrl,
-      generationInputs.right.previewUrl,
-      usesAccessoryImageWorkflow,
-    ]
-  );
 
   const scrollToElement = (element: HTMLElement | null | undefined) => {
     if (!element) return false;
@@ -2104,19 +1860,12 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   };
   const fullStock = Math.max(Number(form.stock || 0), 0);
   const availableStock = Math.max(fullStock - soldQuantity, 0);
-  const normalizedSizeStock = useMemo(
-    () =>
-      Object.fromEntries(
-        sizeList.map((size) => [size, Math.max(0, Number(form.sizeStock[size] || 0))])
-      ) as Record<string, number>,
-    [form.sizeStock, sizeList]
-  );
 
   const syncInventoryState = (product: {
     stock?: number;
     fullStock?: number;
     soldQuantity?: number;
-    sizeStock?: Record<string, { fullStock: number; stock: number; soldQuantity: number; conditionScore: number | null }> | null;
+    variants?: unknown;
   }) => {
     if (typeof product.fullStock === "number" || typeof product.stock === "number") {
       const nextFullStock = Math.max(Number(product.fullStock ?? product.stock ?? 0), 0);
@@ -2130,46 +1879,26 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       setSoldQuantity(Math.max(product.soldQuantity, 0));
     }
 
-    if (product.sizeStock && typeof product.sizeStock === "object") {
-      const nextSizeStock: Record<string, string> = {};
-      const nextSoldBySize: Record<string, number> = {};
-      const nextConditionBySize: Record<string, number | null> = {};
-
-      for (const [size, entry] of Object.entries(product.sizeStock)) {
-        nextSizeStock[size] = String(entry.fullStock ?? 0);
-        nextSoldBySize[size] = Math.max(Number(entry.soldQuantity ?? 0), 0);
-        nextConditionBySize[size] =
-          typeof entry.conditionScore === "number"
-            ? Math.max(0, Math.min(10, Number(entry.conditionScore) || 0))
-            : null;
+    if (Array.isArray(product.variants)) {
+      const rows = parseApiVariants(product.variants);
+      setExistingVariants(rows);
+      if (rows.length > 0) {
+        setForm((current) => ({
+          ...current,
+          stock: String(rows.reduce((sum, row) => sum + Math.max(0, Number(row.fullStock || 0)), 0)),
+        }));
       }
-
-      setForm((current) => ({
-        ...current,
-        sizeStock: nextSizeStock,
-      }));
-      setSoldQuantityBySize(nextSoldBySize);
-      setSizeStockConditionBySize(nextConditionBySize);
-      setRestockAmounts(Object.fromEntries(Object.keys(nextSizeStock).map((size) => [size, "0"])));
     }
   };
 
-  const handleSubmitSelectedSizeStock = async (size: string) => {
-    const amount = Math.max(0, Number(restockAmounts[size] || 0));
+  const handleSubmitSelectedSizeStock = async (uiId: string) => {
+    const row = existingVariants.find((item) => item.uiId === uiId);
+    if (!row) return;
+    const amount = Math.max(0, Number(row.restockAmount || 0));
     if (amount <= 0) return;
 
     setError("");
-    setSavingSizeStockFor(size);
-
-    // size here is a composite key "size / hex" produced by hydration.
-    let sizePart = size;
-    let hexPart = "";
-    if (size.includes(" / ")) {
-      const parts = size.split(" / ");
-      sizePart = parts[0];
-      hexPart = parts[parts.length - 1].trim().toLowerCase();
-    }
-    const existingId = savedVariantIdsRef.current.get(variantKeyFor(sizePart, hexPart));
+    updateExistingVariant(uiId, { savingRestock: true });
 
     try {
       const response = await fetch(
@@ -2181,12 +1910,12 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
             sizeStockMode: "restock",
             variants: [
               {
-                ...(existingId ? { _id: existingId } : {}),
-                size: sizePart,
-                color: hexPart ? { name: "", hex: hexPart } : null,
+                ...(row._id ? { _id: row._id } : {}),
+                size: row.size,
+                color: row.color,
                 fullStock: amount,
-                conditionScore: sizeStockConditionBySize[size] ?? null,
-                images: [],
+                conditionScore: row.conditionScore,
+                images: row.images,
               },
             ],
           }),
@@ -2199,37 +1928,20 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       }
 
       syncInventoryState(data.product);
-      setRestockAmounts((current) => ({ ...current, [size]: "0" }));
     } catch {
       setError("Network error", "basics");
     } finally {
-      setSavingSizeStockFor("");
+      updateExistingVariant(uiId, { savingRestock: false, restockAmount: "0" });
     }
   };
 
-  const handleRemoveExistingSize = async (size: string) => {
-    const remainingSizes = sizeList.filter((item) => item !== size);
-    const remainingVariants = remainingSizes.map((item) => {
-      let sizePart = item;
-      let hexPart = "";
-      if (item.includes(" / ")) {
-        const parts = item.split(" / ");
-        sizePart = parts[0];
-        hexPart = parts[parts.length - 1].trim().toLowerCase();
-      }
-      const existingId = savedVariantIdsRef.current.get(variantKeyFor(sizePart, hexPart));
-      return {
-        ...(existingId ? { _id: existingId } : {}),
-        size: sizePart,
-        color: hexPart ? { name: "", hex: hexPart } : null,
-        fullStock: Math.max(0, Number(form.sizeStock[item] || 0)),
-        conditionScore: sizeStockConditionBySize[item] ?? null,
-        images: [],
-      };
-    });
+  const handleRemoveExistingSize = async (uiId: string) => {
+    const remainingVariants = existingVariants
+      .filter((item) => item.uiId !== uiId)
+      .map(toOutgoingVariant);
 
     setError("");
-    setSavingSizeStockFor(size);
+    updateExistingVariant(uiId, { savingRestock: true });
 
     try {
       const response = await fetch(
@@ -2250,29 +1962,10 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       }
 
       syncInventoryState(data.product);
-      setForm((current) => ({
-        ...current,
-        sizes: remainingSizes.join(","),
-      }));
-      setRestockAmounts((current) => {
-        const next = { ...current };
-        delete next[size];
-        return next;
-      });
-      setSoldQuantityBySize((current) => {
-        const next = { ...current };
-        delete next[size];
-        return next;
-      });
-      setSizeStockConditionBySize((current) => {
-        const next = { ...current };
-        delete next[size];
-        return next;
-      });
     } catch {
       setError("Network error", "basics");
     } finally {
-      setSavingSizeStockFor("");
+      updateExistingVariant(uiId, { savingRestock: false });
     }
   };
 
@@ -2732,668 +2425,206 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     setError("");
   };
 
-  const handleEnhanceButtonClick = () => {
-    if (!selectedCategorySlug) {
-      categorySelectRef.current?.focus();
-      categorySelectRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-      return;
-    }
-
-    void handleEnhanceProductMedia();
-  };
-
-  const handleEnhanceProductMedia = async () => {
-    if (!hasRequiredEnhanceInputs) {
-      setProductMediaError("Please choose categories first.");
-      return;
-    }
-
-    const isShoes = form.fashionSubtype === "shoes";
-
-    const uploadedViews = requiredOriginPictureKeys.filter((key) => Boolean(generationInputs[key].file));
-    if (usesAccessoryImageWorkflow && uploadedViews.length === 0) {
-      setProductMediaError("Please upload at least one image first.");
-      return;
-    }
-
-    if (!usesAccessoryImageWorkflow && (!generationInputs.front.file || !generationInputs.back.file)) {
-      setProductMediaError(isShoes ? "Please upload front, back, left, and right images first." : "Please upload front and back images first.");
-      return;
-    }
-
-    if (isShoes && (!generationInputs.left.file || !generationInputs.right.file)) {
-      setProductMediaError("Please upload front, back, left, and right images first.");
-      return;
-    }
-
-    setProductMediaError("");
-    setProductMediaStatus("processing");
-
-    try {
-      if (isShoes) {
-        const [frontFile, backFile, leftFile, rightFile] = await Promise.all([
-          compressImageFile(generationInputs.front.file!),
-          compressImageFile(generationInputs.back.file!),
-          compressImageFile(generationInputs.left.file!),
-          compressImageFile(generationInputs.right.file!),
-        ]);
-
-        const body = new FormData();
-        body.append("front", frontFile);
-        body.append("back", backFile);
-        body.append("left", leftFile);
-        body.append("right", rightFile);
-
-        const res = await fetch("/api/products/enhance-shoes", withAuthRequest({ method: "POST", body }));
-        const data = await res.json();
-
-        if (!res.ok) {
-          setProductMediaStatus("failed");
-          setProductMediaError(data.error || "Unable to start shoe image enhancement.");
-          return;
-        }
-
-        setProductMediaJobId(data.job_id || "");
-        setProductMediaStatus(data.status || "processing");
-      } else if (usesAccessoryImageWorkflow) {
-        const compressedEntries = await Promise.all(
-          uploadedViews.map(async (view) => [view, await compressImageFile(generationInputs[view].file!)] as const)
-        );
-
-        const body = new FormData();
-        body.append("mode", "accessory");
-        compressedEntries.forEach(([view, file]) => body.append(view, file));
-
-        const res = await fetch("/api/products/enhance", withAuthRequest({ method: "POST", body }));
-        const data = await res.json();
-
-        if (!res.ok) {
-          setProductMediaStatus("failed");
-          setProductMediaError(data.error || "Unable to start product media enhancement.");
-          return;
-        }
-
-        setProductMediaJobId(data.job_id || "");
-        setProductMediaStatus(data.status || "processing");
-      } else {
-        const [frontFile, backFile] = await Promise.all([
-          compressImageFile(generationInputs.front.file!),
-          compressImageFile(generationInputs.back.file!),
-        ]);
-
-        const body = new FormData();
-        body.append("front", frontFile);
-        body.append("back", backFile);
-
-        const res = await fetch("/api/products/enhance", withAuthRequest({ method: "POST", body }));
-        const data = await res.json();
-
-        if (!res.ok) {
-          setProductMediaStatus("failed");
-          setProductMediaError(data.error || "Unable to start product media enhancement.");
-          return;
-        }
-
-        setProductMediaJobId(data.job_id || "");
-        setProductMediaStatus(data.status || "processing");
-      }
-    } catch {
-      setProductMediaStatus("failed");
-      setProductMediaError("Network error");
-    }
-  };
-
-  const handleGenerate = async () => {
-    setError("");
-
-    if (!form.fashionSubtype) {
-      setError("Please select what you want to generate first.", "model");
-      return;
-    }
-
-    if (needsModelSelection && form.fashionSubtype === "clothes" && !selectedModelId) {
-      setError("Please select a model first.", "model");
-      return;
-    }
-
-    if (needsModelSelection && form.fashionSubtype === "clothes") {
-      if (companionZones.includes("top") && (!companionTopType || !secondaryTopColor)) {
-        setError("Please select the top type and color.", "model");
-        return;
-      }
-
-      if (companionZones.includes("bottom") && (!companionBottomType || !secondaryBottomColor)) {
-        setError("Please select the bottom type and color.", "model");
-        return;
-      }
-
-      if (companionZones.includes("footwear") && (!footwearType || !shoesColor)) {
-        setError("Please select the footwear type and color.", "model");
-        return;
-      }
-    }
-
-    if (
-      (usesAccessoryImageWorkflow && !requiredOriginPictureKeys.some((key) => Boolean(generationInputs[key].file))) ||
-      (!usesAccessoryImageWorkflow &&
-        (!generationInputs.front.file ||
-          !generationInputs.back.file ||
-          (form.fashionSubtype === "shoes" && (!generationInputs.left.file || !generationInputs.right.file))))
-    ) {
-      setError(
-        usesAccessoryImageWorkflow
-          ? "Please upload at least one product image before generating."
-          : form.fashionSubtype === "shoes"
-          ? "Please upload front, back, left, and right product images before generating."
-          : "Please upload front and back product images before generating.",
-        "media"
-      );
-      return;
-    }
-
-    const controller = new AbortController();
-    generationAbortRef.current?.abort();
-    generationAbortRef.current = controller;
-
-    try {
-      setGenerating(true);
-      const body = new FormData();
-      body.append("modelId", selectedModelId);
-      body.append("type", form.productType);
-      body.append("fashionSubtype", form.fashionSubtype);
-      if (form.fashionSubtype === "clothes") {
-        const selectedShoesColor = shoesColor;
-        body.append("generationTarget", generationRequirements.generationTarget);
-        body.append(
-          "garmentZone",
-          generationRequirements.generationTarget === "bottom" ? "bottom" : "top"
-        );
-        body.append("companionTopType", companionZones.includes("top") ? companionTopType : "");
-        body.append(
-          "companionBottomType",
-          companionZones.includes("bottom") ? companionBottomType : ""
-        );
-        body.append("footwearType", companionZones.includes("footwear") ? footwearType : "");
-        if (companionZones.includes("top") && secondaryTopColor) {
-          body.append("topColorName", secondaryTopColor.name);
-          body.append("topColorHex", secondaryTopColor.hex);
-        }
-        if (companionZones.includes("bottom") && secondaryBottomColor) {
-          body.append("bottomColorName", secondaryBottomColor.name);
-          body.append("bottomColorHex", secondaryBottomColor.hex);
-        }
-        if (companionZones.includes("footwear") && selectedShoesColor) {
-          body.append("shoesColorName", selectedShoesColor.name);
-          body.append("shoesColorHex", selectedShoesColor.hex);
-        }
-      }
-      const [frontFile, backFile, leftFile, rightFile] = await Promise.all([
-        compressImageFile(generationInputs.front.file!),
-        compressImageFile(generationInputs.back.file!),
-        generationInputs.left.file ? compressImageFile(generationInputs.left.file) : Promise.resolve(null),
-        generationInputs.right.file ? compressImageFile(generationInputs.right.file) : Promise.resolve(null),
-      ]);
-      body.append("front", frontFile);
-      body.append("back", backFile);
-      if (leftFile) body.append("left", leftFile);
-      if (rightFile) body.append("right", rightFile);
-
-      // 1. Trigger the job
-      const triggerRes = await fetch("/api/products/generate", withAuthRequest({
-        method: "POST",
-        body,
-        signal: controller.signal,
-      }));
-      const triggerData = await triggerRes.json();
-
-      if (!triggerRes.ok) {
-        setError(triggerData.error || "Unable to start generation.", "model");
-        return;
-      }
-
-      const jobId = triggerData.job_id;
-
-      // 2. Wait for completion via SSE, with one-shot backfill in case the
-      // webhook fired before the SSE connection was established.
-      let finalImages: Record<string, string> | null = null;
-      try {
-        const result = await waitForJob(jobId, { signal: controller.signal });
-        finalImages = result.images || null;
-      } catch (err) {
-        if ((err as Error)?.name === "AbortError") return;
-        setError((err as Error)?.message || "Generation failed.", "model");
-        setGenerating(false);
-        return;
-      }
-
-      // 3. Process completed images
-      const viewList = form.fashionSubtype === "shoes" 
-        ? ["front", "back", "left", "right"] 
-        : ["front", "back"];
-
-      const generatedImages = await Promise.all(
-        viewList.map(async (view, index) => {
-          const image = finalImages?.[view];
-          if (!image) return null;
-          const file = await generatedResultToFile(image, index);
-          return {
-            id: generateId(),
-            url: URL.createObjectURL(file),
-            file,
-            existing: false,
-            kind: "generated" as const,
-          };
-        })
-      );
-
-      type GeneratedProductImage = NonNullable<(typeof generatedImages)[number]>;
-      const nextGeneratedImages = generatedImages.filter((img): img is GeneratedProductImage => img !== null);
-      setImages((current) => [...current, ...nextGeneratedImages]);
-      setGeneratedModelMedia(nextGeneratedImages);
-      setShowProductMediaSection(true);
-    } catch {
-      if (!controller.signal.aborted) {
-        setError("Generation request failed.", "model");
-      }
-    } finally {
-      if (generationAbortRef.current === controller) {
-        generationAbortRef.current = null;
-      }
-      setGenerating(false);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setFieldErrors({});
     setLoading(true);
 
-    if (usesStoreOwnerEditFlow) {
-      const nextFieldErrors: Record<string, string> = {};
-      if (!form.name.trim()) nextFieldErrors.name = "Product name is required.";
-      if (!form.price.trim()) nextFieldErrors.price = "Price is required.";
-      if (!selectedParentSlug) nextFieldErrors.category = "Category is required.";
-      if (Object.keys(nextFieldErrors).length > 0) {
-        setFieldErrors(nextFieldErrors);
-        scrollToElement(productBasicsRef.current);
-        setLoading(false);
-        return;
-      }
-      if (colorways.length === 0) { setError("Please add at least one colorway.", "colorways"); scrollToElement(colorwaysSectionRef.current); setLoading(false); return; }
-      if (colorways.length > 1 && colorways.some((cw) => !cw.hex.trim())) {
-        setError("Please assign a color to every colorway before adding more than one.", "colorways");
-        scrollToColorwayCard(colorways.find((cw) => !cw.hex.trim())?.id);
-        setLoading(false);
-        return;
-      }
-      if (needsModelSelection && !selectedModelId) { setError("Please select a model first.", "model"); scrollToElement(modelPicturesSectionRef.current); setLoading(false); return; }
-      for (const cw of colorways) {
-        if (usesAccessoryImageWorkflow) {
-          if (!FOUR_IMAGE_VIEWS.some((view) => Boolean(cw[`${view}File` as keyof Colorway] || cw[`${view}Preview` as keyof Colorway]))) { setError("Please upload at least one image for each product.", "colorways"); scrollToColorwayCard(cw.id); setLoading(false); return; }
-        } else {
-          if (!cw.frontFile && !cw.frontPreview) { setError("Please upload a front image for each colorway.", "colorways"); scrollToColorwayCard(cw.id); setLoading(false); return; }
-          if (!cw.backFile && !cw.backPreview) { setError("Please upload a back image for each colorway.", "colorways"); scrollToColorwayCard(cw.id); setLoading(false); return; }
-          if (selectedCategoryZone === "footwear" && (!(cw.leftFile || cw.leftPreview) || !(cw.rightFile || cw.rightPreview))) { setError("Please upload front, back, left, and right images for each colorway.", "colorways"); scrollToColorwayCard(cw.id); setLoading(false); return; }
-        }
-        if (cw.sizes.filter((s) => (isSizelessCategory ? s.stock.trim() : s.size.trim() && s.stock.trim())).length === 0) { setError(isSizelessCategory ? "Please add stock for each product." : "Please add at least one size and stock for each colorway.", "colorways"); scrollToColorwayCard(cw.id); setLoading(false); return; }
-      }
-      try {
-        const productCategories = [selectedParentSlug, selectedChildSlug, selectedGrandchildSlug, selectedGreatGrandchildSlug].filter(Boolean);
-        type VariantEntry = { key: string; size: string; color: string; stock: number; conditionScore: number };
-        const allVariants: VariantEntry[] = [];
-        for (const cw of colorways) {
-          const colorKey = cw.hex.trim();
-          for (const s of cw.sizes.filter((s) => (isSizelessCategory ? s.stock.trim() : s.size.trim() && s.stock.trim()))) {
-            const size = isSizelessCategory ? "" : s.size.trim();
-            allVariants.push({
-              key: buildColorwayVariantKey(size, colorKey),
-              size,
-              color: colorKey,
-              stock: Math.max(0, Number(s.stock || 0)),
-              conditionScore: Math.max(1, Math.min(10, Number(s.conditionScore || 9))),
-            });
-          }
-        }
-        const totalStock = allVariants.reduce((sum, v) => sum + v.stock, 0);
-        const body = new FormData();
-        body.append("name", form.name);
-        body.append("price", form.price);
-        body.append("brand", form.brand);
-        body.append("reference", form.reference);
-        body.append("description", "");
-        body.append("productType", "fashion");
-        body.append("fashionSubtype", form.fashionSubtype || savedFashionSubtype || "clothes");
-        body.append("stock", String(totalStock));
-        body.append("fullStock", String(totalStock));
-        body.append("categories", JSON.stringify(productCategories));
-        body.append("mainImageIndex", "0");
-        if (selectedModelId) body.append("modelId", selectedModelId);
-        const companionSettingsPayload: Record<string, object> = {};
-        for (const cw of colorways) {
-          const colorKey = cw.hex.trim() || "__default__";
-          companionSettingsPayload[colorKey] = {
-            topType: cw.companionTopType,
-            topColor: cw.companionTopColor,
-            bottomType: cw.companionBottomType,
-            bottomColor: cw.companionBottomColor,
-            footwearType: cw.companionFootwearType,
-            footwearColor: cw.companionFootwearColor,
-            additionalInstructions: (cw.additionalInstructions || "").trim(),
-          };
-        }
-        body.append("companionSettings", JSON.stringify(companionSettingsPayload));
-        const imageFiles: File[] = [];
-        const imageOrder: string[] = [];
-        const existingImagesPayload: { url: string }[] = [];
-        const existingUrlToOrderIndex = new Map<string, number>();
-        const colorImagesPayload: Record<string, number[]> = {};
-        const isUploadableUrl = (url: string) => Boolean(url) && !url.startsWith("blob:") && !url.startsWith("data:");
-        const pushExisting = (url: string): number => {
-          const cached = existingUrlToOrderIndex.get(url);
-          if (cached !== undefined) return cached;
-          const idx = imageOrder.length;
-          existingImagesPayload.push({ url });
-          existingUrlToOrderIndex.set(url, idx);
-          imageOrder.push(`existing:${url}`);
-          return idx;
-        };
-        const pushNew = (file: File): number => {
-          const idx = imageOrder.length;
-          const newIdx = imageFiles.length;
-          imageFiles.push(file);
-          imageOrder.push(`new:${newIdx}`);
-          return idx;
-        };
-        for (const cw of colorways) {
-          const colorKey = cw.hex.trim();
-          const indices: number[] = [];
-          for (const gi of cw.generatedImages) {
-            if (gi.file) indices.push(pushNew(gi.file));
-            else if (isUploadableUrl(gi.url)) indices.push(pushExisting(gi.url));
-          }
-          for (const view of requiredOriginPictureKeys) {
-            const imageFile = getColorwayViewInputFile(cw, view);
-            const imageUrl =
-              cw.enhanceStatus === "completed"
-                ? cw[`enhanced${view.charAt(0).toUpperCase()}${view.slice(1)}Url` as keyof Colorway] || cw[`${view}Preview` as keyof Colorway]
-                : cw[`${view}Preview` as keyof Colorway];
-            if (imageFile) indices.push(pushNew(imageFile));
-            else if (typeof imageUrl === "string" && isUploadableUrl(imageUrl)) indices.push(pushExisting(imageUrl));
-          }
-          if (indices.length > 0) colorImagesPayload[colorKey] = indices;
-        }
-        const compressedImages = await Promise.all(imageFiles.map((f) => compressImageFile(f)));
-        compressedImages.forEach((f) => body.append("images", f));
+    if (!usesStoreOwnerEditFlow) {
+      setLoading(false);
+      return;
+    }
 
-        const variantsPayload = allVariants.map((v) => {
-          const hex = v.color.trim().toLowerCase();
-          const existingId = savedVariantIdsRef.current.get(variantKeyFor(v.size, hex));
-          return {
-            ...(existingId ? { _id: existingId } : {}),
-            size: v.size,
-            color: hex ? { name: "", hex } : null,
-            fullStock: v.stock,
-            conditionScore: v.conditionScore,
-            images: colorImagesPayload[v.color.trim()] || [],
-          };
-        });
-        body.append("variants", JSON.stringify(variantsPayload));
-        body.append("existingImages", JSON.stringify(existingImagesPayload));
-        body.append("imageOrder", JSON.stringify(imageOrder));
-        const firstCw = colorways[0];
-        const frontOriginFile = firstCw.frontFile;
-        const backOriginFile = firstCw.backFile;
-        const leftOriginFile = firstCw.leftFile;
-        const rightOriginFile = firstCw.rightFile;
-        if (frontOriginFile) body.append("originPictureFrontFile", await compressImageFile(frontOriginFile));
-        else if (isUploadableUrl(form.originPictures.front)) body.append("originPictureFront", form.originPictures.front);
-        else if (isUploadableUrl(firstCw.frontPreview)) body.append("originPictureFront", firstCw.frontPreview);
-        if (backOriginFile) body.append("originPictureBackFile", await compressImageFile(backOriginFile));
-        else if (isUploadableUrl(form.originPictures.back)) body.append("originPictureBack", form.originPictures.back);
-        else if (isUploadableUrl(firstCw.backPreview)) body.append("originPictureBack", firstCw.backPreview);
-        if (leftOriginFile) body.append("originPictureLeftFile", await compressImageFile(leftOriginFile));
-        else if (isUploadableUrl(form.originPictures.left)) body.append("originPictureLeft", form.originPictures.left);
-        else if (isUploadableUrl(firstCw.leftPreview)) body.append("originPictureLeft", firstCw.leftPreview);
-        if (rightOriginFile) body.append("originPictureRightFile", await compressImageFile(rightOriginFile));
-        else if (isUploadableUrl(form.originPictures.right)) body.append("originPictureRight", form.originPictures.right);
-        else if (isUploadableUrl(firstCw.rightPreview)) body.append("originPictureRight", firstCw.rightPreview);
-        const res = await fetch(`/api/products/${id}`, withAuthRequest({ method: "PUT", body }));
-        if (!res.ok) {
-          const d = await res.json();
-          const message = d.error || "Unable to save product.";
-          const isBasicsError = res.status === 409 || /reference must be unique within the same store/i.test(message);
-          setError(message, isBasicsError ? "basics" : "general");
-          if (isBasicsError) scrollToElement(productBasicsRef.current);
+    const nextFieldErrors: Record<string, string> = {};
+    if (!form.name.trim()) nextFieldErrors.name = "Product name is required.";
+    if (!form.price.trim()) nextFieldErrors.price = "Price is required.";
+    if (!selectedParentSlug) nextFieldErrors.category = "Category is required.";
+    if (Object.keys(nextFieldErrors).length > 0) {
+      setFieldErrors(nextFieldErrors);
+      scrollToElement(productBasicsRef.current);
+      setLoading(false);
+      return;
+    }
+    if (colorways.length === 0) {
+      setError("Please add at least one colorway.", "colorways");
+      scrollToElement(colorwaysSectionRef.current);
+      setLoading(false);
+      return;
+    }
+    if (colorways.length > 1 && colorways.some((cw) => !cw.hex.trim())) {
+      setError("Please assign a color to every colorway before adding more than one.", "colorways");
+      scrollToColorwayCard(colorways.find((cw) => !cw.hex.trim())?.id);
+      setLoading(false);
+      return;
+    }
+    if (needsModelSelection && !selectedModelId) {
+      setError("Please select a model first.", "model");
+      scrollToElement(modelPicturesSectionRef.current);
+      setLoading(false);
+      return;
+    }
+    for (const cw of colorways) {
+      if (usesAccessoryImageWorkflow) {
+        if (!FOUR_IMAGE_VIEWS.some((view) => Boolean(cw[`${view}File` as keyof Colorway] || cw[`${view}Preview` as keyof Colorway]))) {
+          setError("Please upload at least one image for each product.", "colorways");
+          scrollToColorwayCard(cw.id);
           setLoading(false);
           return;
         }
-        router.push("/dashboard/products");
-      } catch { setError("Network error", "general"); setLoading(false); }
-      return;
-    }
-
-    if (!selectedCategorySlug) {
-      setFieldErrors((current) => ({ ...current, category: "Category is required." }));
-      scrollToElement(categorySelectRef.current);
-      setLoading(false);
-      return;
-    }
-
-    if (form.productType === "perfume" && !form.cloneSourceName.trim()) {
-      setFieldErrors((current) => ({ ...current, cloneSourceName: "Original fragrance name is required." }));
-      scrollToElement(productBasicsRef.current);
-      setLoading(false);
-      return;
-    }
-
-    if (form.stock.trim() === "") {
-      setError("Please enter a full stock value.", "basics");
-      scrollToElement(productBasicsRef.current);
-      setLoading(false);
-      return;
-    }
-
-    if (form.productType === "fashion") {
-      const hasExistingMedia = generatedModelMedia.some((m) => !m.file);
-      const hasEnhanced = hasExistingMedia || hasRequiredOriginPictures;
-      if (!hasEnhanced) {
-        setError("Please enhance the product images before saving.", "media");
-        scrollToElement(productMediaSectionRef.current);
-        setLoading(false);
-        return;
-      }
-      if (needsModelSelection && generatedModelMedia.length === 0) {
-        setError("Please generate at least one model picture before saving.", "model");
-        scrollToElement(modelPicturesSectionRef.current) || scrollToElement(productMediaSectionRef.current);
-        setLoading(false);
-        return;
-      }
-    }
-
-    const brandToSend = form.brand;
-
-    try {
-      const productCategories = [
-        selectedParentSlug,
-        selectedChildSlug,
-        selectedGrandchildSlug,
-        selectedGreatGrandchildSlug,
-      ].filter(Boolean);
-
-      const snapshotMedia = savedSnapshot.current?.generatedModelMedia || [];
-      const snapshotSourceMedia = savedSnapshot.current?.images || [];
-      const currentProductMedia =
-        generatedModelMedia.length > 0
-          ? generatedModelMedia
-          : images.filter((image) => image.kind === "source");
-      const effectiveProductMedia =
-        currentProductMedia.length > 0
-          ? currentProductMedia
-          : snapshotMedia.length > 0
-            ? snapshotMedia
-            : snapshotSourceMedia;
-      if (effectiveProductMedia.length === 0) {
-        setError("Please keep or upload at least one product image.", "basics");
-        setLoading(false);
-        return;
-      }
-      const existingImages = effectiveProductMedia
-        .filter((image) => !image.file)
-        .map((image) => ({ url: image.url }));
-      const newMediaFiles = effectiveProductMedia
-        .filter((image): image is ProductImage & { file: File } => Boolean(image.file))
-        .map((image) => image.file);
-      const imageOrder: string[] = [];
-      let newImageIndex = 0;
-      let mainImageKey = "";
-      for (const image of effectiveProductMedia) {
-        const key = image.file ? `new:${newImageIndex++}` : `existing:${image.url}`;
-        imageOrder.push(key);
-        if (!mainImageKey && (image as { isMain?: boolean }).isMain) {
-          mainImageKey = key;
+      } else {
+        if (!cw.frontFile && !cw.frontPreview) {
+          setError("Please upload a front image for each colorway.", "colorways");
+          scrollToColorwayCard(cw.id);
+          setLoading(false);
+          return;
+        }
+        if (!cw.backFile && !cw.backPreview) {
+          setError("Please upload a back image for each colorway.", "colorways");
+          scrollToColorwayCard(cw.id);
+          setLoading(false);
+          return;
+        }
+        if (selectedCategoryZone === "footwear" && (!(cw.leftFile || cw.leftPreview) || !(cw.rightFile || cw.rightPreview))) {
+          setError("Please upload front, back, left, and right images for each colorway.", "colorways");
+          scrollToColorwayCard(cw.id);
+          setLoading(false);
+          return;
         }
       }
-      if (!mainImageKey && imageOrder.length > 0) {
-        mainImageKey = imageOrder[0];
+      if (cw.sizes.filter((s) => (isSizelessCategory ? s.stock.trim() : s.size.trim() && s.stock.trim())).length === 0) {
+        setError(isSizelessCategory ? "Please add stock for each product." : "Please add at least one size and stock for each colorway.", "colorways");
+        scrollToColorwayCard(cw.id);
+        setLoading(false);
+        return;
       }
-      const compressedProductMediaFiles = await Promise.all(
-        newMediaFiles.map(async (file) => await compressImageFile(file))
-      );
-      const compressedOriginPictureFiles = {
-        front: originPictureFiles.front ? await compressImageFile(originPictureFiles.front) : null,
-        back: originPictureFiles.back ? await compressImageFile(originPictureFiles.back) : null,
-        left: originPictureFiles.left ? await compressImageFile(originPictureFiles.left) : null,
-        right: originPictureFiles.right ? await compressImageFile(originPictureFiles.right) : null,
-      };
-      const compressedCloneSourceImageFile = cloneSourceImageFile
-        ? await compressImageFile(cloneSourceImageFile)
-        : null;
+    }
 
+    try {
+      const productCategories = [selectedParentSlug, selectedChildSlug, selectedGrandchildSlug, selectedGreatGrandchildSlug].filter(Boolean);
+      type VariantEntry = { size: string; color: string; stock: number; conditionScore: number };
+      const allVariants: VariantEntry[] = [];
+      for (const cw of colorways) {
+        const colorKey = normalizeHex(cw.hex);
+        for (const s of cw.sizes.filter((s) => (isSizelessCategory ? s.stock.trim() : s.size.trim() && s.stock.trim()))) {
+          allVariants.push({
+            size: isSizelessCategory ? "" : s.size.trim(),
+            color: colorKey,
+            stock: Math.max(0, Number(s.stock || 0)),
+            conditionScore: Math.max(1, Math.min(10, Number(s.conditionScore || 9))),
+          });
+        }
+      }
+      const totalStock = allVariants.reduce((sum, v) => sum + v.stock, 0);
       const body = new FormData();
       body.append("name", form.name);
       body.append("price", form.price);
-      body.append("brand", brandToSend);
+      body.append("brand", form.brand);
       body.append("reference", form.reference);
-      body.append("description", form.description);
-      body.append("tag", form.tag);
-      body.append("newTagDurationDays", form.newTagDurationDays || "3");
-      body.append("productType", form.productType);
+      body.append("description", "");
+      body.append("productType", "fashion");
       body.append("fashionSubtype", form.fashionSubtype || savedFashionSubtype || "clothes");
-      body.append("fullStock", form.stock);
-      const existingSizes = sizeList;
-      const fallbackColorHex = String(form.colors || "")
-        .split(",")
-        .map((value) => value.trim())
-        .filter(Boolean)[0] || "";
-
-      type OutgoingVariant = {
-        _id?: string;
-        size: string;
-        color: { name?: string; hex: string } | null;
-        fullStock: number;
-        conditionScore: number | null;
-        images: number[];
-      };
-
-      const outgoingVariants: OutgoingVariant[] = [];
-
-      for (const size of existingSizes) {
-        let sizePart = size;
-        let hexPart = fallbackColorHex.toLowerCase();
-        if (size.includes(" / ")) {
-          const parts = size.split(" / ");
-          sizePart = parts[0];
-          hexPart = parts[parts.length - 1].trim().toLowerCase();
-        }
-        const existingId = savedVariantIdsRef.current.get(variantKeyFor(sizePart, hexPart));
-        outgoingVariants.push({
-          ...(existingId ? { _id: existingId } : {}),
-          size: sizePart,
-          color: hexPart ? { name: "", hex: hexPart } : null,
-          fullStock: Math.max(0, Number(form.sizeStock[size] || 0)),
-          conditionScore: null,
-          images: [],
-        });
-      }
-
-      for (const row of completeVariantRows) {
-        const sizePart = row.size.trim();
-        const hexPart = row.colors.trim().toLowerCase();
-        const existingId = savedVariantIdsRef.current.get(variantKeyFor(sizePart, hexPart));
-        outgoingVariants.push({
-          ...(existingId ? { _id: existingId } : {}),
-          size: sizePart,
-          color: hexPart ? { name: "", hex: hexPart } : null,
-          fullStock: Math.max(0, Number(row.stock || 0)),
-          conditionScore: Math.max(0, Math.min(10, Number(row.conditionScore || 9) || 9)),
-          images: [],
-        });
-      }
-
-      if (outgoingVariants.length > 0) {
-        body.append("variants", JSON.stringify(outgoingVariants));
-      }
-      if (form.productType === "perfume") {
-        body.append("conditionScore", form.conditionScore);
-      }
-      body.append("originPictureFront", form.originPictures.front);
-      body.append("originPictureBack", form.originPictures.back);
-      body.append("originPictureLeft", form.originPictures.left);
-      body.append("originPictureRight", form.originPictures.right);
-      if (compressedOriginPictureFiles.front) body.append("originPictureFrontFile", compressedOriginPictureFiles.front);
-      if (compressedOriginPictureFiles.back) body.append("originPictureBackFile", compressedOriginPictureFiles.back);
-      if (compressedOriginPictureFiles.left) body.append("originPictureLeftFile", compressedOriginPictureFiles.left);
-      if (compressedOriginPictureFiles.right) body.append("originPictureRightFile", compressedOriginPictureFiles.right);
-      body.append("cloneSourceName", form.cloneSourceName);
-      body.append("cloneSourceImage", form.cloneSourceImage);
-      if (compressedCloneSourceImageFile) body.append("cloneSourceImageFile", compressedCloneSourceImageFile);
+      body.append("stock", String(totalStock));
+      body.append("fullStock", String(totalStock));
       body.append("categories", JSON.stringify(productCategories));
-      body.append(
-        "sizes",
-        JSON.stringify(Array.from(new Set([
-          ...existingSizes.map((size) => (size.includes(" / ") ? size.split(" / ")[0] : size)),
-          ...completeVariantRows.map((row) => row.size.trim()).filter(Boolean),
-        ])))
-      );
-      body.append(
-        "colors",
-        JSON.stringify(
-          form.productType === "perfume"
-            ? []
-            : Array.from(
-                new Set(
-                  [
-                    ...form.colors
-                      .split(",")
-                      .map((color) => color.trim())
-                      .filter(Boolean),
-                    ...completeVariantRows.map((row) => row.colors.trim()).filter(Boolean),
-                  ]
-                )
-              )
-        )
-      );
-      body.append("existingImages", JSON.stringify(existingImages));
-      body.append("imageOrder", JSON.stringify(imageOrder));
-      body.append("mainImageKey", mainImageKey);
+      body.append("mainImageIndex", "0");
       if (selectedModelId) body.append("modelId", selectedModelId);
-      body.append("companionSettings", JSON.stringify({
-        __global__: {
-          topType: companionTopType, topColor: secondaryTopColor,
-          bottomType: companionBottomType, bottomColor: secondaryBottomColor,
-          footwearType, footwearColor: shoesColor,
-        },
-      }));
-      compressedProductMediaFiles.forEach((file) => {
-        body.append("images", file);
+
+      const companionSettingsPayload: Record<string, object> = {};
+      for (const cw of colorways) {
+        const colorKey = normalizeHex(cw.hex);
+        companionSettingsPayload[colorKey] = {
+          topType: cw.companionTopType,
+          topColor: cw.companionTopColor,
+          bottomType: cw.companionBottomType,
+          bottomColor: cw.companionBottomColor,
+          footwearType: cw.companionFootwearType,
+          footwearColor: cw.companionFootwearColor,
+          additionalInstructions: (cw.additionalInstructions || "").trim(),
+        };
+      }
+      body.append("companionSettings", JSON.stringify(companionSettingsPayload));
+
+      const imageFiles: File[] = [];
+      const imageOrder: string[] = [];
+      const existingImagesPayload: { url: string }[] = [];
+      const existingUrlToOrderIndex = new Map<string, number>();
+      const imagesByHex: Record<string, number[]> = {};
+      const isUploadableUrl = (url: string) => Boolean(url) && !url.startsWith("blob:") && !url.startsWith("data:");
+      const pushExisting = (url: string): number => {
+        const cached = existingUrlToOrderIndex.get(url);
+        if (cached !== undefined) return cached;
+        const idx = imageOrder.length;
+        existingImagesPayload.push({ url });
+        existingUrlToOrderIndex.set(url, idx);
+        imageOrder.push(`existing:${url}`);
+        return idx;
+      };
+      const pushNew = (file: File): number => {
+        const idx = imageOrder.length;
+        const newIdx = imageFiles.length;
+        imageFiles.push(file);
+        imageOrder.push(`new:${newIdx}`);
+        return idx;
+      };
+      for (const cw of colorways) {
+        const colorKey = normalizeHex(cw.hex);
+        const indices: number[] = [];
+        for (const gi of cw.generatedImages) {
+          if (gi.file) indices.push(pushNew(gi.file));
+          else if (isUploadableUrl(gi.url)) indices.push(pushExisting(gi.url));
+        }
+        for (const view of requiredOriginPictureKeys) {
+          const imageFile = getColorwayViewInputFile(cw, view);
+          const imageUrl =
+            cw.enhanceStatus === "completed"
+              ? cw[`enhanced${view.charAt(0).toUpperCase()}${view.slice(1)}Url` as keyof Colorway] || cw[`${view}Preview` as keyof Colorway]
+              : cw[`${view}Preview` as keyof Colorway];
+          if (imageFile) indices.push(pushNew(imageFile));
+          else if (typeof imageUrl === "string" && isUploadableUrl(imageUrl)) indices.push(pushExisting(imageUrl));
+        }
+        if (indices.length > 0) imagesByHex[colorKey] = indices;
+      }
+      const compressedImages = await Promise.all(imageFiles.map((f) => compressImageFile(f)));
+      compressedImages.forEach((f) => body.append("images", f));
+
+      const variantsPayload = allVariants.map((v) => {
+        const hex = normalizeHex(v.color);
+        const existing = existingVariants.find(
+          (row) => row.size.trim() === v.size && normalizeHex(row.color) === hex
+        );
+        return {
+          ...(existing?._id ? { _id: existing._id } : {}),
+          size: v.size,
+          color: hex || null,
+          fullStock: v.stock,
+          conditionScore: v.conditionScore,
+          images: imagesByHex[hex] || [],
+        };
       });
+      body.append("variants", JSON.stringify(variantsPayload));
+      body.append("existingImages", JSON.stringify(existingImagesPayload));
+      body.append("imageOrder", JSON.stringify(imageOrder));
 
-      const res = await fetch(`/api/products/${id}`, withAuthRequest({
-        method: "PUT",
-        body,
-      }));
+      const firstCw = colorways[0];
+      const frontOriginFile = firstCw.frontFile;
+      const backOriginFile = firstCw.backFile;
+      const leftOriginFile = firstCw.leftFile;
+      const rightOriginFile = firstCw.rightFile;
+      if (frontOriginFile) body.append("originPictureFrontFile", await compressImageFile(frontOriginFile));
+      else if (isUploadableUrl(form.originPictures.front)) body.append("originPictureFront", form.originPictures.front);
+      else if (isUploadableUrl(firstCw.frontPreview)) body.append("originPictureFront", firstCw.frontPreview);
+      if (backOriginFile) body.append("originPictureBackFile", await compressImageFile(backOriginFile));
+      else if (isUploadableUrl(form.originPictures.back)) body.append("originPictureBack", form.originPictures.back);
+      else if (isUploadableUrl(firstCw.backPreview)) body.append("originPictureBack", firstCw.backPreview);
+      if (leftOriginFile) body.append("originPictureLeftFile", await compressImageFile(leftOriginFile));
+      else if (isUploadableUrl(form.originPictures.left)) body.append("originPictureLeft", form.originPictures.left);
+      else if (isUploadableUrl(firstCw.leftPreview)) body.append("originPictureLeft", firstCw.leftPreview);
+      if (rightOriginFile) body.append("originPictureRightFile", await compressImageFile(rightOriginFile));
+      else if (isUploadableUrl(form.originPictures.right)) body.append("originPictureRight", form.originPictures.right);
+      else if (isUploadableUrl(firstCw.rightPreview)) body.append("originPictureRight", firstCw.rightPreview);
 
+      const res = await fetch(`/api/products/${id}`, withAuthRequest({ method: "PUT", body }));
       if (!res.ok) {
         const d = await res.json();
         const message = d.error || "Unable to save product.";
@@ -3403,7 +2634,6 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         setLoading(false);
         return;
       }
-
       router.push("/dashboard/products");
     } catch {
       setError("Network error", "general");
@@ -3608,880 +2838,5 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     );
   }
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold tracking-wide">Edit Product</h1>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {sectionErrors.general && (
-          <div className="border border-[#8B3520]/40 bg-[#8B3520]/5 px-4 py-3 text-xs text-[#8B3520]">
-            {sectionErrors.general}
-          </div>
-        )}
-
-        <div ref={productBasicsRef}>
-          <SectionCard
-            title="Product Basics"
-            description="Set the core product info first, then add colorways and other variants."
-            error={sectionErrors.basics}
-          >
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-            <div className="xl:col-span-2">
-              <FieldLabel>Product Name</FieldLabel>
-              <input
-                type="text"
-                required
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="input-line"
-                placeholder="e.g. Vintage Denim Jacket"
-              />
-              <FieldError message={fieldErrors.name} />
-            </div>
-            {!isStoreOwner && (
-              <div>
-                <FieldLabel>Product Type</FieldLabel>
-                <select
-                  value={form.productType}
-                  onChange={(e) =>
-                    setForm((current) => ({
-                      ...current,
-                      productType: e.target.value as ProductType,
-                    }))
-                  }
-                  className="input-line"
-                >
-                  <option value="fashion">Fashion (Clothes & Shoes)</option>
-                  <option value="perfume">Perfume</option>
-                </select>
-              </div>
-            )}
-            {!isRetailStoreOwner && (
-              <div>
-                <FieldLabel>Brand</FieldLabel>
-                <input
-                  type="text"
-                  value={form.brand}
-                  onChange={(e) => setForm({ ...form, brand: e.target.value })}
-                  className="input-line"
-                  placeholder={isThriftStoreOwner ? "Original brand, e.g. Zara (optional)" : "Brand name, e.g. Nike"}
-                />
-                <FieldError message={fieldErrors.brand} />
-              </div>
-            )}
-            <div>
-              <FieldLabel>Reference</FieldLabel>
-              <input
-                type="text"
-                value={form.reference}
-                onChange={(e) => setForm({ ...form, reference: e.target.value })}
-                className="input-line"
-                placeholder="SKU or internal reference"
-              />
-            </div>
-            <div>
-              <FieldLabel>Price (TND)</FieldLabel>
-              <input
-                type="number"
-                step="0.01"
-                required
-                value={form.price}
-                onChange={(e) => setForm({ ...form, price: e.target.value })}
-                className="input-line"
-                placeholder="0.00"
-              />
-              <FieldError message={fieldErrors.price} />
-            </div>
-            <div className="xl:col-span-3">
-              <FieldLabel>Category</FieldLabel>
-              <div className="relative">
-                <input
-                  ref={categorySelectRef}
-                  type="text"
-                  value={categorySearch}
-                  onChange={(e) => {
-                    setCategorySearch(e.target.value);
-                    setCategoryDropdownOpen(true);
-                    if (!e.target.value.trim()) {
-                      setSelectedParentSlug("");
-                      setSelectedChildSlug("");
-                      setSelectedGrandchildSlug("");
-                      setSelectedGreatGrandchildSlug("");
-                    }
-                  }}
-                  onFocus={() => setCategoryDropdownOpen(true)}
-                  onBlur={() => setTimeout(() => setCategoryDropdownOpen(false), 150)}
-                  placeholder="Type to search categories..."
-                  className="input-line"
-                />
-                {categoryDropdownOpen && filteredCategoryOptions.length > 0 && (
-                  <div className="absolute z-20 mt-0.5 w-full border border-border bg-bg-card shadow-lg max-h-52 overflow-y-auto">
-                    {filteredCategoryOptions.map((cat) => (
-                      <button
-                        key={cat.slug}
-                        type="button"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => {
-                          const path = getCategoryPath(categories, [cat.slug]);
-                          setSelectedParentSlug(path.parent);
-                          setSelectedChildSlug(path.child);
-                          setSelectedGrandchildSlug(path.grandchild);
-                          setSelectedGreatGrandchildSlug(path.greatGrandchild || "");
-                          setCategorySearch(cat.label);
-                          setCategoryDropdownOpen(false);
-                        }}
-                        className={`w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-bg-hover ${selectedCategorySlug === cat.slug ? "text-accent" : "text-text-primary"}`}
-                      >
-                        {cat.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <FieldError message={fieldErrors.category} />
-            </div>
-            <div className="xl:col-span-3">
-              <FieldLabel>Description</FieldLabel>
-              <textarea
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                rows={4}
-                className="input-line resize-none"
-                placeholder="Describe fit, materials, condition, and any notable details"
-              />
-            </div>
-          </div>
-          </SectionCard>
-        </div>
-
-        {form.productType === "perfume" ? (
-          <SectionCard title="Perfume Details" description="Keep the clone source details and visual reference together.">
-            <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="space-y-4">
-                <div>
-                  <FieldLabel>Original Fragrance Name</FieldLabel>
-                  <input
-                    type="text"
-                    value={form.cloneSourceName}
-                    onChange={(e) => setForm({ ...form, cloneSourceName: e.target.value })}
-                    className="input-line"
-                    placeholder="e.g. Bleu de Chanel"
-                  />
-                  <FieldError message={fieldErrors.cloneSourceName} />
-                </div>
-              </div>
-              <div className="space-y-3">
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
-                  Import Original Fragrance Image
-                </h3>
-                <p className="mt-1 text-[11px] text-text-secondary">
-                  Upload or import the image of the fragrance this perfume is cloning.
-                </p>
-              </div>
-              <input
-                id="clone-source-image-upload-edit"
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleCloneSourceImageSelect(e.target.files?.[0] || null)}
-                className="hidden"
-              />
-              <div
-                onClick={() => document.getElementById("clone-source-image-upload-edit")?.click()}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  handleCloneSourceImageSelect(e.dataTransfer.files?.[0] || null);
-                }}
-                className="flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded border border-dashed border-border bg-bg-secondary px-4 py-6 text-center transition-colors hover:border-accent hover:bg-bg-hover"
-              >
-                <span className="text-sm font-medium text-text-primary">Drag or click to import original fragrance image</span>
-                <span className="text-[10px] uppercase tracking-wider text-text-secondary">
-                  One reference image
-                </span>
-              </div>
-              {form.cloneSourceImage && (
-                <div className="max-w-xs space-y-2">
-                  <div className="aspect-[4/5] overflow-hidden rounded border border-border bg-bg-hover p-3">
-                    <img
-                      src={form.cloneSourceImage}
-                      alt={form.cloneSourceName || "Original fragrance"}
-                      className="h-full w-full object-contain"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleCloneSourceImageSelect(null)}
-                    className="text-[10px] text-danger uppercase tracking-wider"
-                  >
-                    Remove image
-                  </button>
-                </div>
-              )}
-            </div>
-            </div>
-          </SectionCard>
-        ) : (
-          <SectionCard title="Fashion Details" description="">
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-              <div className="xl:col-span-2 rounded-2xl border border-border bg-bg-secondary p-4 space-y-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">Existing Stock</p>
-
-                  </div>
-                  <div className="rounded border border-border bg-bg-card px-3 py-2 text-right">
-                    <p className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">Total stock</p>
-                    <p className="mt-1 text-sm font-semibold text-text-primary">{existingStockTotal}</p>
-                  </div>
-                </div>
-                {sizeList.length > 0 ? (
-                  <div className="space-y-2">
-                    {sizeList.map((size) => {
-                      const fullStockForSize = Math.max(Number(normalizedSizeStock[size] || 0), 0);
-                      const soldForSize = Math.max(Number(soldQuantityBySize[size] || 0), 0);
-                      const availableForSize = Math.max(fullStockForSize - soldForSize, 0);
-                      const conditionScore = sizeStockConditionBySize[size];
-                      const restockValue = restockAmounts[size] || "0";
-                      const isSaving = savingSizeStockFor === size;
-                      return (
-                        <div
-                          key={size}
-                          className="flex flex-col gap-2 rounded border border-border bg-bg-card p-3 xl:flex-row xl:flex-nowrap xl:items-stretch"
-                        >
-                          <div className="flex items-center justify-between gap-3 xl:min-w-[90px] xl:flex-1">
-                            <p className="text-sm font-semibold text-text-primary">{size}</p>
-                          </div>
-                          <div className="rounded border border-border bg-bg-secondary px-3 py-2 xl:w-[110px] xl:flex-none">
-                            <p className="text-[10px] uppercase tracking-[0.16em] text-text-secondary">Full</p>
-                            <p className="mt-1 text-sm font-semibold text-text-primary">{fullStockForSize}</p>
-                          </div>
-                          <div className="rounded border border-border bg-bg-secondary px-3 py-2 xl:w-[110px] xl:flex-none">
-                            <p className="text-[10px] uppercase tracking-[0.16em] text-text-secondary">Available</p>
-                            <p className="mt-1 text-sm font-semibold text-text-primary">{availableForSize}</p>
-                          </div>
-                          <div className="rounded border border-border bg-bg-secondary px-3 py-2 xl:w-[110px] xl:flex-none">
-                            <p className="text-[10px] uppercase tracking-[0.16em] text-text-secondary">Sold</p>
-                            <p className="mt-1 text-sm font-semibold text-text-primary">{soldForSize}</p>
-                          </div>
-                          <div className="rounded border border-border bg-bg-secondary px-3 py-2 xl:min-w-[280px] xl:flex-1">
-                            <FieldLabel>Restock</FieldLabel>
-                            <div className="flex gap-2">
-                              <input
-                                type="number"
-                                min="0"
-                                value={restockValue}
-                                onChange={(e) =>
-                                  setRestockAmounts((current) => ({
-                                    ...current,
-                                    [size]: e.target.value,
-                                  }))
-                                }
-                                className="min-w-0 flex-1 bg-bg-card border border-border px-3 py-2 text-sm focus:border-text-primary transition-colors"
-                                placeholder="Restock amount"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => void handleSubmitSelectedSizeStock(size)}
-                                disabled={isSaving}
-                                className="shrink-0 border border-border px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-text-primary transition-colors hover:border-accent hover:text-accent disabled:opacity-60"
-                              >
-                                {isSaving ? "Saving..." : "Restock"}
-                              </button>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => void handleRemoveExistingSize(size)}
-                            disabled={isSaving}
-                            className="shrink-0 border border-border px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-danger transition-colors hover:border-danger hover:text-danger disabled:opacity-60 xl:self-center"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-[10px] text-text-secondary">No existing stock rows yet.</p>
-                )}
-              </div>
-              <div className="xl:col-span-2 rounded-2xl border border-border bg-bg-secondary p-4 space-y-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">New Variants</p>
-
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_140px_minmax(0,1.5fr)_120px]">
-                  <input
-                    type="text"
-                    value={variantDraft.size}
-                    onChange={(e) => setVariantDraft((current) => ({ ...current, size: e.target.value }))}
-                    className="w-full bg-bg-card border border-border px-3 py-2 text-sm focus:border-text-primary transition-colors"
-                    placeholder="Size, e.g. 42"
-                  />
-                  <input
-                    type="number"
-                    min="0"
-                    value={variantDraft.stock}
-                    onChange={(e) => setVariantDraft((current) => ({ ...current, stock: e.target.value }))}
-                    className="w-full bg-bg-card border border-border px-3 py-2 text-sm focus:border-text-primary transition-colors"
-                    placeholder="Stock"
-                  />
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">Color</span>
-                    <ColorPicker
-                      value={variantDraft.colors}
-                      onChange={(color) =>
-                        setVariantDraft((current) => ({ ...current, colors: color.name }))
-                      }
-                      inspectorSources={variantInspectorSources}
-                    />
-                  </div>
-                  {!variantDraft.colors.trim() && (
-                    <div className="rounded border border-border bg-bg-card px-3 py-2">
-                      <div className="flex items-center justify-between mb-1">
-                        <FieldLabel>Condition</FieldLabel>
-                        <span className="text-[10px] uppercase tracking-wider text-text-secondary">{getConditionStatusFromScore(Number(variantDraft.conditionScore))}</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="1"
-                        max="10"
-                        step="1"
-                        value={variantDraft.conditionScore}
-                        onChange={(e) => setVariantDraft((current) => ({ ...current, conditionScore: e.target.value }))}
-                        className="w-full accent-accent cursor-pointer"
-                      />
-                    </div>
-                  )}
-                  <div className="md:col-span-4 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!variantDraft.size.trim() || !variantDraft.stock.trim()) return;
-                        const stockValue = Math.max(0, Number(variantDraft.stock || 0));
-                        const conditionScore = variantDraft.colors.trim()
-                          ? "10"
-                          : String(Math.max(1, Math.min(10, Number(variantDraft.conditionScore || 10) || 10)));
-                        setVariantRows((current) => [
-                          ...current,
-                          {
-                            id: generateId(),
-                            size: variantDraft.size.trim(),
-                            colors: variantDraft.colors.trim(),
-                            stock: String(stockValue),
-                            conditionScore,
-                          },
-                        ]);
-                        setVariantDraft({
-                          id: "draft",
-                          size: "",
-                          colors: "",
-                          stock: "",
-                          conditionScore: "10",
-                        });
-                      }}
-                      disabled={!variantDraft.size.trim() || !variantDraft.stock.trim()}
-                      className="border border-border bg-foreground px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-background transition-colors hover:bg-accent disabled:opacity-60"
-                    >
-                      ADD
-                    </button>
-                  </div>
-                </div>
-                {activeVariantRows.length > 0 && (
-                  <div className="space-y-2">
-                    {activeVariantRows.map((row, index) => (
-                      <div key={row.id} className="grid grid-cols-1 gap-2 rounded border border-border bg-bg-card p-3 md:grid-cols-[minmax(0,1fr)_140px_minmax(0,1.5fr)_120px_auto] md:items-center">
-                        <input
-                          type="text"
-                          value={row.size}
-                          onChange={(e) =>
-                            setVariantRows((current) =>
-                              current.map((item) => (item.id === row.id ? { ...item, size: e.target.value } : item))
-                            )
-                          }
-                          className="w-full border-0 border-b border-border bg-transparent px-1 py-2 text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
-                          placeholder="Size"
-                        />
-                        <input
-                          type="number"
-                          min="0"
-                          value={row.stock}
-                          onChange={(e) =>
-                            setVariantRows((current) =>
-                              current.map((item) => (item.id === row.id ? { ...item, stock: e.target.value } : item))
-                            )
-                          }
-                          className="w-full border-0 border-b border-border bg-transparent px-1 py-2 text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
-                          placeholder="Stock"
-                        />
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">Color</span>
-                          <ColorPicker
-                            value={row.colors}
-                            onChange={(color) =>
-                              setVariantRows((current) =>
-                                current.map((item) =>
-                                  item.id === row.id ? { ...item, colors: color.name } : item
-                                )
-                              )
-                            }
-                            inspectorSources={variantInspectorSources}
-                          />
-                        </div>
-                        {!row.colors.trim() && (
-                          <div className="rounded border border-border bg-bg-secondary px-3 py-2">
-                            <div className="flex items-center justify-between mb-1">
-                              <FieldLabel>Condition</FieldLabel>
-                              <span className="text-[10px] uppercase tracking-wider text-text-secondary">{getConditionStatusFromScore(Number(row.conditionScore))}</span>
-                            </div>
-                            <input
-                              type="range"
-                              min="1"
-                              max="10"
-                              step="1"
-                              value={row.conditionScore}
-                              onChange={(e) =>
-                                setVariantRows((current) =>
-                                  current.map((item) =>
-                                    item.id === row.id ? { ...item, conditionScore: e.target.value } : item
-                                  )
-                                )
-                              }
-                              className="w-full accent-accent cursor-pointer"
-                            />
-                          </div>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => setVariantRows((current) => current.filter((item) => item.id !== row.id))}
-                          className="shrink-0 border border-border px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-text-secondary transition-colors hover:border-accent hover:text-accent"
-                          aria-label={`Remove variant ${index + 1}`}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </SectionCard>
-        )}
-
-        {zoomedImage && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-            onClick={() => setZoomedImage(null)}
-          >
-            <div className="relative max-h-[92vh] w-full max-w-5xl" onClick={(e) => e.stopPropagation()}>
-              <button
-                type="button"
-                onClick={() => setZoomedImage(null)}
-                aria-label="Close image preview"
-                className="absolute right-0 top-0 z-10 h-9 w-9 border border-white/30 bg-black/60 text-xl leading-none text-white transition-colors hover:bg-black"
-              >
-                ×
-              </button>
-              <div className="flex max-h-[92vh] items-center justify-center bg-bg-card p-4">
-                <img
-                  src={zoomedImage.url}
-                  alt="Zoomed product preview"
-                  className="max-h-[86vh] max-w-full object-contain"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {!isStoreOwner && generatedImages.length > 0 && (
-          <section className="overflow-hidden rounded border border-border bg-bg-card">
-            <button
-              type="button"
-              onClick={() => setIsGeneratedImagesOpen((current) => !current)}
-              className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-bg-hover"
-            >
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
-                  Import Generated Images
-                </h3>
-                <p className="mt-1 text-[11px] text-text-secondary">
-                  Import a previously generated result directly into this product.
-                </p>
-              </div>
-              <span className="text-[10px] uppercase tracking-wider text-text-secondary">
-                {isGeneratedImagesOpen ? "Hide" : "Show"}
-              </span>
-            </button>
-            {isGeneratedImagesOpen && (
-              <div className="border-t border-border p-4 space-y-3">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={generatedImagesSearch}
-                    onChange={(e) => setGeneratedImagesSearch(e.target.value)}
-                    placeholder="Search generated images by name or prompt"
-                    className="w-full max-w-xs bg-bg-secondary border border-border px-3 py-2 text-xs placeholder:text-text-secondary/50"
-                  />
-                  <span className="text-[10px] text-text-secondary">
-                    {generatedImages.flatMap((a) => a.images).filter((image) => {
-                      const search = generatedImagesSearch.toLowerCase();
-                      const asset = generatedImages.find((a) => a.images.includes(image));
-                      return (
-                        (asset?.name || "").toLowerCase().includes(search) ||
-                        (asset?.prompt || "").toLowerCase().includes(search)
-                      );
-                    }).length} results
-                  </span>
-                </div>
-                <div className="grid grid-cols-3 gap-3 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
-                  {generatedImages.flatMap((asset) =>
-                    asset.images.map((image, index) => {
-                      const search = generatedImagesSearch.toLowerCase();
-                      const matches =
-                        !search ||
-                        (asset.name || "").toLowerCase().includes(search) ||
-                        (asset.prompt || "").toLowerCase().includes(search);
-                      if (!matches) return null;
-                      return (
-                        <button
-                          key={`${asset._id}-${index}`}
-                          type="button"
-                          onClick={() => importGeneratedImage(image)}
-                          disabled={importingGeneratedImage === image}
-                          className="group overflow-hidden rounded border border-border bg-bg-card text-left disabled:opacity-50"
-                        >
-                          <div className="aspect-square overflow-hidden bg-bg-secondary">
-                            <img src={image} alt={`Generated ${index + 1}`} className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]" />
-                          </div>
-                          <div className="p-1.5 space-y-0.5">
-                            <p className="line-clamp-1 text-[8px] font-medium uppercase tracking-wider text-text-primary">
-                              {asset.name || "Generated"}
-                            </p>
-                            <p className="text-[8px] uppercase tracking-wider text-accent">
-                              {importingGeneratedImage === image ? "..." : "Import"}
-                            </p>
-                          </div>
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            )}
-          </section>
-        )}
-
-        {form.productType === "fashion" && (
-          <div ref={productMediaSectionRef}>
-            <SectionCard
-              title="Origin Pictures"
-              error={sectionErrors.media}
-            >
-            {!isStoreOwner && (
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
-                <div>
-                  <FieldLabel>Tag</FieldLabel>
-                  <select
-                    value={form.tag}
-                    onChange={(e) => setForm({ ...form, tag: e.target.value })}
-                    className="input-line"
-                  >
-                    <option value="">None</option>
-                    <option value="NEW">NEW</option>
-                    <option value="FAVORITE">FAVORITE</option>
-                  </select>
-                  {form.tag === "NEW" && (
-                    <div className="mt-3">
-                      <FieldLabel>NEW tag duration (days)</FieldLabel>
-                      <input
-                        type="number"
-                        min={1}
-                        value={form.newTagDurationDays}
-                        onChange={(e) => setForm({ ...form, newTagDurationDays: e.target.value })}
-                        className="input-line"
-                        placeholder="3 days"
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-            {form.fashionSubtype === "shoes" && (
-              <div className="mt-4 rounded border border-accent/30 bg-accent/5 px-4 py-3 text-xs leading-relaxed text-text-secondary">
-                {FOOTWEAR_VIEW_VERIFICATION_COPY}
-              </div>
-            )}
-
-            <div className={`mt-4 grid justify-items-center gap-4 ${requiredOriginPictureKeys.length === 4 ? "md:grid-cols-2 xl:grid-cols-4" : "md:grid-cols-2"}`}>
-              {requiredOriginPictureKeys.map((key) => {
-                const preview = generationInputs[key].previewUrl || form.originPictures[key];
-                return (
-                  <div key={key} className="mx-auto w-full max-w-[260px] justify-self-center space-y-3 rounded border border-border bg-bg-secondary p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[10px] text-text-secondary uppercase tracking-wider">{usesAccessoryImageWorkflow ? ACCESSORY_VIEW_LABELS[key] : `${key} view`}</p>
-                      {preview && (
-                        <button
-                          type="button"
-                          onClick={() => clearGenerationInput(key)}
-                          className="text-[10px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary"
-                        >
-                          Clear
-                        </button>
-                      )}
-                    </div>
-                    <div className="aspect-[4/5] max-h-56 overflow-hidden rounded bg-bg-secondary flex">
-                      {preview ? (
-                        <button
-                          type="button"
-                          onClick={() => setZoomedImage({ id: key, url: preview, file: null, existing: false, kind: "source", slot: key })}
-                          className="flex h-full w-full cursor-zoom-in items-center justify-center p-2"
-                        >
-                          <img src={preview} alt={`${key} origin`} className="max-h-full max-w-full object-contain" />
-                        </button>
-                      ) : (
-                        <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[10px] text-text-secondary uppercase tracking-wider">
-                          <span>{usesAccessoryImageWorkflow ? `Upload ${ACCESSORY_VIEW_LABELS[key]}` : `Upload ${key}`}</span>
-                          <span className="text-[8px] tracking-normal normal-case text-text-secondary/80">
-                            One image only
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    <input
-                      id={`origin-picture-edit-${key}`}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      disabled={!canSelectOriginPictures}
-                      onClick={(e) => {
-                        e.currentTarget.value = "";
-                      }}
-                      onChange={(e) => handleOriginPictureSelect(key, e.currentTarget.files?.[0] || null)}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!canSelectOriginPictures) return;
-                        document.getElementById(`origin-picture-edit-${key}`)?.click();
-                      }}
-                      disabled={!canSelectOriginPictures}
-                      className="inline-flex w-full items-center justify-center gap-2 border border-border bg-bg-card px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-text-primary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {preview ? "Replace" : "Upload"}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-
-            {form.productType === "fashion" && hasPendingEnhanceOriginPictures && (
-              <div className="mt-4">
-                <div className="flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={handleEnhanceButtonClick}
-                    disabled={productMediaStatus === "processing" || !selectedCategorySlug}
-                    className="bg-accent px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50"
-                  >
-                    {productMediaStatus === "processing" && (
-                      <span className="mr-2 inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary align-[-2px]" />
-                    )}
-                    {enhanceButtonLabel}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {productMediaError && (
-              <div className="border border-[#BD3100] bg-[#faf3f2] px-4 py-3 text-xs text-[#BD3100]">
-                {productMediaError}
-              </div>
-            )}
-
-            {!showProductMediaSection && selectedCategoryZone !== "other" && canRunAnyGeneration && productMediaStatus === "completed" && (
-              <div className="mt-6 space-y-5 border-t border-border pt-5">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
-                      Generation
-                    </h3>
-                    <p className="mt-1 text-[11px] text-text-secondary">
-                      Target auto-detected from category: {generationTarget || "unknown"}.
-                    </p>
-                  </div>
-                  <span className="text-[10px] uppercase tracking-wider text-text-secondary">
-                    Gender: {selectedCategoryGender}
-                  </span>
-                </div>
-
-                {needsModelSelection ? (
-                  <div className="space-y-5">
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wider text-text-secondary">
-                        Select a model
-                      </p>
-                      <div className="mt-3 flex gap-3 overflow-x-auto pb-2">
-                        {filteredModels.map((model) => {
-                          const active = selectedModelId === model._id;
-                          return (
-                            <button
-                              key={model._id}
-                              type="button"
-                              onClick={() => setSelectedModelId(model._id)}
-                              className={`flex-none w-[288px] overflow-hidden rounded border text-left transition-colors ${
-                                active ? "border-accent" : "border-border hover:border-accent"
-                              }`}
-                            >
-                              <div className="aspect-[4/5] bg-bg-secondary">
-                                <img
-                                  src={model.frontImage || model.images?.[0] || ""}
-                                  alt={model.name}
-                                  className="h-full w-full object-cover"
-                                />
-                              </div>
-                              <div className="space-y-1 p-2">
-                                <p className="text-xs font-medium">{model.name}</p>
-                                <p className="text-[10px] uppercase tracking-wider text-text-secondary">
-                                  Front view
-                                </p>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {selectedModelId && companionZones.length > 0 && (
-                      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-                        {companionZones.map((zone) => renderCompanionZoneCard(zone))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="rounded border border-border bg-bg-secondary p-4 text-xs text-text-secondary">
-                    Shoes generation uses the uploaded origin pictures only.
-                  </div>
-                )}
-
-                <div className="flex justify-end gap-2">
-                  {generating && (
-                    <button
-                      type="button"
-                      onClick={handleCancelGenerate}
-                      aria-label="Cancel generation"
-                      className="inline-flex h-9 w-9 items-center justify-center border border-border text-xs text-text-secondary hover:bg-bg-hover"
-                    >
-                      ×
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleGenerate}
-                    disabled={generating || !canGenerate}
-                    className="bg-accent px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50"
-                  >
-                    {generating ? "Generating..." : "Generate"}
-                  </button>
-                </div>
-              </div>
-            )}
-            {showProductMediaSection && productMediaItems.length > 0 && (
-              <div ref={modelPicturesSectionRef} className="mt-6 space-y-5 border-t border-border pt-5">
-                {sectionErrors.model && (
-                  <div className="border border-[#8B3520]/40 bg-[#8B3520]/5 px-4 py-3 text-xs text-[#8B3520]">
-                    {sectionErrors.model}
-                  </div>
-                )}
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
-                      Product Media
-                    </h3>
-                  </div>
-                  {(generatedModelMedia.length > 0 || canRunAnyGeneration) && (
-                    <div className="flex flex-wrap items-center gap-2">
-                      {generatedModelMedia.length > 0 && (
-                        <button
-                          type="button"
-                          disabled
-                          className="border border-accent bg-accent/10 px-3 py-2 text-[10px] uppercase tracking-wider text-accent"
-                        >
-                          Generated
-                        </button>
-                      )}
-                      {generatedModelMedia.length > 0 ? (
-                        <button
-                          type="button"
-                          onClick={handleRegenerateModel}
-                          className="border border-border px-3 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:bg-bg-hover"
-                        >
-                          Regenerate model
-                        </button>
-                      ) : canRunAnyGeneration ? (
-                        <button
-                          type="button"
-                          onClick={handleGenerate}
-                          disabled={generating || !canGenerate}
-                          className="border border-border px-3 py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:bg-bg-hover"
-                        >
-                          {generating ? "Generating..." : "Generate model"}
-                        </button>
-                      ) : null}
-                    </div>
-                  )}
-                </div>
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                  {productMediaItems.map((item, index) => (
-                    <div key={`${item.label}-${index}`} className="mx-auto w-full max-w-[220px] space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-[10px] uppercase tracking-wider text-text-secondary">{item.label}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setZoomedImage({ id: item.label, url: item.url, file: null, existing: false, kind: "source" })}
-                        className="group relative flex aspect-[4/5] w-full cursor-zoom-in items-center justify-center overflow-hidden rounded border border-transparent bg-bg-secondary p-2 transition-colors hover:border-accent/60"
-                      >
-                        <img src={item.url} alt={item.label} className="max-h-full max-w-full object-contain" />
-                        <span className="pointer-events-none absolute inset-x-2 bottom-2 translate-y-1 rounded bg-black/60 px-2 py-1 text-center text-[9px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
-                          Preview
-                        </span>
-                      </button>
-                      {(item.kind === "generated" || item.kind === "enhanced") && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            item.kind === "generated"
-                              ? clearGeneratedModelMedia()
-                              : clearEnhancedProductMedia(item.slot)
-                          }
-                          className="w-full border border-border px-3 py-2 text-[10px] uppercase tracking-wider text-danger transition-colors hover:bg-danger/5"
-                        >
-                          Clear
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            </SectionCard>
-          </div>
-        )}
-
-        <div className="flex gap-3">
-          <button type="submit" disabled={loading} className="bg-text-primary text-bg-primary px-8 py-3 text-xs font-semibold tracking-wide uppercase disabled:opacity-50">
-            {loading ? "Saving..." : "Save Changes"}
-          </button>
-          <button type="button" onClick={handleCancel} className="border border-border px-6 py-3 text-xs text-text-secondary uppercase tracking-wider">
-            Cancel
-          </button>
-        </div>
-      </form>
-    </div>
-  );
+  return null;
 }
