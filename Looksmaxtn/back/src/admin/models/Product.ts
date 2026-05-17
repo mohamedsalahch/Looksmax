@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document, Model } from "mongoose";
+import mongoose, { Schema, Document, Model, Types } from "mongoose";
 import { type IAuditActor, auditActorSchema } from "@/admin/lib/audit";
 
 export interface IProductImage {
@@ -16,10 +16,14 @@ export interface IOriginPictures {
 export type ProductType = "fashion" | "perfume" | "clothing" | "shoes";
 export type ProductApprovalStatus = "pending" | "approved" | "rejected";
 
-export interface ISizeStockEntry {
+export interface IProductVariant {
+  _id: Types.ObjectId;
+  size: string;
+  color: string | null;
   fullStock: number;
   stock: number;
   conditionScore?: number | null;
+  images: number[];
 }
 
 export interface IProduct extends Document {
@@ -29,12 +33,9 @@ export interface IProduct extends Document {
   approvalStatus: ProductApprovalStatus;
   categories: string[];
   description: string;
-  sizes: string[];
-  colors: string[];
   stock: number;
-  fullStock?: number;
-  sizeStock?: Map<string, ISizeStockEntry> | null;
-  colorImages?: Map<string, number[]> | null;
+  fullStock: number;
+  variants: Types.DocumentArray<IProductVariant>;
   images: IProductImage[];
   tag?: string;
   newTagDurationDays?: number;
@@ -55,6 +56,7 @@ export interface IProduct extends Document {
     bottomColor?: { name: string; hex: string } | null;
     footwearType?: string;
     footwearColor?: { name: string; hex: string } | null;
+    additionalInstructions?: string;
   }> | null;
   createdBy?: IAuditActor | null;
   updatedBy?: IAuditActor | null;
@@ -80,6 +82,15 @@ const originPicturesSchema = new Schema<IOriginPictures>(
   { _id: false }
 );
 
+const productVariantSchema = new Schema<IProductVariant>({
+  size: { type: String, default: "", trim: true },
+  color: { type: String, default: null, trim: true, lowercase: true },
+  fullStock: { type: Number, default: 0, min: 0 },
+  stock: { type: Number, default: 0, min: 0 },
+  conditionScore: { type: Number, min: 0, max: 10, default: null },
+  images: { type: [Number], default: [] },
+});
+
 const productSchema = new Schema<IProduct>(
   {
     name: { type: String, required: true, trim: true },
@@ -92,24 +103,9 @@ const productSchema = new Schema<IProduct>(
     },
     categories: [{ type: String, lowercase: true, trim: true }],
     description: { type: String, default: "" },
-    sizes: [{ type: String }],
-    colors: [{ type: String }],
-    stock: { type: Number, default: 1, min: 0 },
-    fullStock: { type: Number, default: 1, min: 0 },
-    sizeStock: {
-      type: Map,
-      of: new Schema({
-        fullStock: { type: Number, default: 0, min: 0 },
-        stock: { type: Number, default: 0, min: 0 },
-        conditionScore: { type: Number, min: 0, max: 10, default: null },
-      }, { _id: false }),
-      default: null,
-    },
-    colorImages: {
-      type: Map,
-      of: [Number],
-      default: null,
-    },
+    stock: { type: Number, default: 0, min: 0 },
+    fullStock: { type: Number, default: 0, min: 0 },
+    variants: { type: [productVariantSchema], default: [] },
     images: [productImageSchema],
     tag: { type: String, default: "" },
     newTagDurationDays: { type: Number, default: 3, min: 1 },
@@ -144,6 +140,7 @@ const productSchema = new Schema<IProduct>(
         bottomColor: { type: new Schema({ name: String, hex: String }, { _id: false }), default: null },
         footwearType: { type: String, default: "" },
         footwearColor: { type: new Schema({ name: String, hex: String }, { _id: false }), default: null },
+        additionalInstructions: { type: String, default: "" },
       }, { _id: false }),
       default: null,
     },
@@ -155,6 +152,8 @@ const productSchema = new Schema<IProduct>(
 
 productSchema.index({ categories: 1 });
 productSchema.index({ name: "text", description: "text" });
+productSchema.index({ "variants._id": 1 });
+productSchema.index({ "variants.color": 1, "variants.size": 1 });
 productSchema.index(
   { "createdBy.id": 1, reference: 1 },
   {

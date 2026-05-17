@@ -66,6 +66,7 @@ export async function POST(req: NextRequest) {
     const footwearType = String(formData.get("footwearType") || "");
     const shoesColorName = String(formData.get("shoesColorName") || "");
     const shoesColorHex = String(formData.get("shoesColorHex") || "");
+    const additionalInstructions = String(formData.get("additionalInstructions") || "");
     const normalizedType = normalizeType(type, fashionSubtype);
     const model =
       normalizedType === "clothes" ? await ModelAsset.findById(modelId).lean() : null;
@@ -141,6 +142,7 @@ export async function POST(req: NextRequest) {
                 shoesColorName && shoesColorHex
                   ? { name: shoesColorName, hex: shoesColorHex }
                   : undefined,
+              additional_instructions: additionalInstructions,
             },
           };
 

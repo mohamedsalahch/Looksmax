@@ -1,4 +1,20 @@
-"""Prompt templates for image generation."""
+"""Prompt templates for image generation.
+
+Prompt versions are recorded with every training sample. Bump the version
+whenever the corresponding template's text is edited so the dataset stays
+groupable by exact prompt revision.
+"""
+
+CLOTHES_TOP_PROMPT_VERSION = "clothes_top/v1"
+CLOTHES_BOTTOM_PROMPT_VERSION = "clothes_bottom/v1"
+CLOTHES_PROMPT_VERSION = "clothes/v1"
+SHOES_PROMPT_VERSION = "shoes/v1"
+FRONT_VIEW_PROMPT_VERSION = "outfit_front/v1"
+BACK_VIEW_PROMPT_VERSION = "outfit_back/v1"
+GARMENT_ENHANCE_PROMPT_VERSION = "garment_enhance/v1"
+ACCESSORY_ENHANCE_PROMPT_VERSION = "accessory_enhance/v1"
+PHOTO_VALIDATION_PROMPT_VERSION = "photo_validation/v1"
+COMPARE_FRONT_BACK_PROMPT_VERSION = "compare_front_back/v1"
 
 CLOTHES_TOP_PROMPT_TEMPLATE = """
 You are a professional fashion photography generator.
@@ -90,6 +106,7 @@ STRICT CONSTRAINTS:
 - Do NOT distort proportions
 - Face must remain clean and undistorted
 
+{ADDITIONAL_INSTRUCTIONS}
 --------------------------------
 FINAL REQUIREMENT:
 portrait orientation, exact 9:16 aspect ratio, full-body framing, model centered, feet visible, consistent margins, studio composition
@@ -184,6 +201,7 @@ STRICT CONSTRAINTS:
 - Do NOT distort proportions
 - Avoid hiding key garment areas
 
+{ADDITIONAL_INSTRUCTIONS}
 --------------------------------
 FINAL REQUIREMENT:
 portrait orientation, exact 9:16 aspect ratio, full-body framing, model centered, feet visible, consistent margins, studio composition

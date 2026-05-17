@@ -111,11 +111,23 @@ class ImageGenerator:
             bottom_hex=bottom_hex,
         )
 
+        additional_instructions = (
+            secondary_colors.additional_instructions.strip()
+            if secondary_colors is not None and secondary_colors.additional_instructions
+            else ""
+        )
+        additional_section = (
+            f"--------------------------------\nADDITIONAL USER INSTRUCTIONS:\n{additional_instructions}\n"
+            if additional_instructions
+            else ""
+        )
+
         prompt = (
             template
             .replace("{VIEW}", view_name.upper())
             .replace("{GENERATION_TARGET}", target.upper())
             .replace("{COMPANION_GARMENTS_SECTION}", companion_instructions)
+            .replace("{ADDITIONAL_INSTRUCTIONS}", additional_section)
             .replace("{TOP_TYPE}", top_type)
             .replace("{BOTTOM_TYPE}", bottom_type)
             .replace("{TOP_COLOR_NAME}", top_name)

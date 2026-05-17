@@ -48,6 +48,13 @@ export type AdminProductEventPayload = {
   createdBy?: { id?: string; name?: string; email?: string } | null;
 };
 
+export type AdminGeneratedImageEventPayload = {
+  _id: string;
+  status: "processing" | "completed" | "failed";
+  images: string[];
+  errorMessage?: string;
+};
+
 export type AdminEvent =
   | { type: "order:upsert"; order: AdminOrderEventPayload }
   | { type: "order:delete"; orderId: string }
@@ -56,7 +63,8 @@ export type AdminEvent =
   | { type: "store:upsert"; store: AdminStoreEventPayload }
   | { type: "store:delete"; storeId: string }
   | { type: "product:upsert"; product: AdminProductEventPayload }
-  | { type: "product:delete"; productId: string };
+  | { type: "product:delete"; productId: string }
+  | { type: "generated-image:update"; asset: AdminGeneratedImageEventPayload };
 
 const clients = new Map<string, AdminEventClient>();
 const encoder = new TextEncoder();

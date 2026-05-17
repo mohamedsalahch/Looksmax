@@ -4,6 +4,36 @@ import Category from "@/admin/models/Category";
 import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 
+type LeanCategory = {
+  _id: unknown;
+  name: string;
+  slug: string;
+  order: number;
+  isActive: boolean;
+  parentSlug?: string | null;
+};
+
+function hasActiveAncestorChain(category: LeanCategory, bySlug: Map<string, LeanCategory>) {
+  let parentSlug = category.parentSlug || null;
+  const seen = new Set<string>();
+
+  while (parentSlug) {
+    if (seen.has(parentSlug)) return false;
+    seen.add(parentSlug);
+
+    const parent = bySlug.get(parentSlug);
+    if (!parent || !parent.isActive) return false;
+    parentSlug = parent.parentSlug || null;
+  }
+
+  return true;
+}
+
+function getVisibleCategories(categories: LeanCategory[]) {
+  const bySlug = new Map(categories.map((category) => [category.slug, category]));
+  return categories.filter((category) => category.isActive && hasActiveAncestorChain(category, bySlug));
+}
+
 // Admin — get all categories (including inactive)
 export async function GET() {
   try {
@@ -13,7 +43,9 @@ export async function GET() {
 
     await dbConnect();
     const categories = await Category.find().sort({ parentSlug: 1, order: 1, name: 1 }).lean();
-    return NextResponse.json({ categories });
+    return NextResponse.json({
+      categories: session.role === "admin" ? categories : getVisibleCategories(categories),
+    });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

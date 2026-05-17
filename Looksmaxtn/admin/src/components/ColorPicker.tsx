@@ -4,10 +4,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import colorsData from "@/lib/colors.json";
 import type { PaletteColor } from "@/lib/generationPalette";
 
+export interface InspectorSource {
+  url: string;
+  label?: string;
+}
+
 interface ColorPickerProps {
   value: string;
   onChange: (color: PaletteColor) => void;
-  onPickInspector?: () => void;
+  inspectorSources?: InspectorSource[];
   label?: string;
 }
 
@@ -127,30 +132,123 @@ function findColorByName(name: string): CategorizedColor | undefined {
   return ALL_COLORS.find((c) => c.name.toLowerCase() === lower);
 }
 
-export default function ColorPicker({ value, onChange, onPickInspector, label }: ColorPickerProps) {
+function rgbToHex(r: number, g: number, b: number) {
+  return "#" + [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("").toUpperCase();
+}
+
+type SamplerMode = "grid" | "canvas";
+
+export default function ColorPicker({ value, onChange, inspectorSources, label }: ColorPickerProps) {
   const [open, setOpen] = useState(false);
   const [activeFamily, setActiveFamily] = useState<FamilyName | null>(null);
   const [query, setQuery] = useState("");
+  const [samplerOpen, setSamplerOpen] = useState(false);
+  const [samplerMode, setSamplerMode] = useState<SamplerMode>("grid");
+  const [samplerUrl, setSamplerUrl] = useState<string | null>(null);
+  const [samplerError, setSamplerError] = useState<string | null>(null);
+  const [sampledHex, setSampledHex] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadedUrlRef = useRef<string | null>(null);
 
   const selectedSwatch = useMemo(() => findColorByName(value), [value]);
+  const hasInspector = true;
+
+  const resetSampler = () => {
+    setSamplerOpen(false);
+    setSamplerMode("grid");
+    setSamplerUrl(null);
+    setSamplerError(null);
+    setSampledHex(null);
+    if (uploadedUrlRef.current) {
+      URL.revokeObjectURL(uploadedUrlRef.current);
+      uploadedUrlRef.current = null;
+    }
+  };
+
+  const handleFilePicked = (file: File | null) => {
+    if (!file) return;
+    if (uploadedUrlRef.current) {
+      URL.revokeObjectURL(uploadedUrlRef.current);
+    }
+    const url = URL.createObjectURL(file);
+    uploadedUrlRef.current = url;
+    setSamplerUrl(url);
+    setSampledHex(null);
+    setSamplerError(null);
+    setSamplerMode("canvas");
+  };
 
   useEffect(() => {
     if (!open) return;
-    const handler = (event: MouseEvent) => {
+    const handler = (event: MouseEvent | TouchEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setOpen(false);
-        setActiveFamily(null);
       }
     };
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
   }, [open]);
 
-  // reset drill-down when closing
   useEffect(() => {
-    if (!open) { setActiveFamily(null); setQuery(""); }
+    if (!open) {
+      setActiveFamily(null);
+      setQuery("");
+      resetSampler();
+    }
   }, [open]);
+
+  useEffect(() => {
+    return () => {
+      if (uploadedUrlRef.current) {
+        URL.revokeObjectURL(uploadedUrlRef.current);
+        uploadedUrlRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (samplerMode !== "canvas" || !samplerUrl) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return;
+    setSamplerError(null);
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const maxW = 280;
+      const ratio = img.naturalHeight / Math.max(1, img.naturalWidth);
+      canvas.width = maxW;
+      canvas.height = Math.max(1, Math.round(maxW * ratio));
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    };
+    img.onerror = () => setSamplerError("Could not load image");
+    img.src = samplerUrl;
+  }, [samplerMode, samplerUrl]);
+
+  const samplePixel = (clientX: number, clientY: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    const x = Math.floor(((clientX - rect.left) / rect.width) * canvas.width);
+    const y = Math.floor(((clientY - rect.top) / rect.height) * canvas.height);
+    if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return;
+    try {
+      const data = ctx.getImageData(x, y, 1, 1).data;
+      setSampledHex(rgbToHex(data[0], data[1], data[2]));
+    } catch {
+      setSamplerError("Image blocked by CORS — can't sample");
+    }
+  };
 
   const filteredItems = useMemo(() => {
     if (!activeFamily) return null;
@@ -181,10 +279,9 @@ export default function ColorPicker({ value, onChange, onPickInspector, label }:
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-2 w-[300px] rounded-lg border border-border bg-bg-card shadow-xl">
+        <div className="absolute z-50 mt-2 w-[min(300px,calc(100vw-2rem))] rounded-lg border border-border bg-bg-card shadow-xl">
 
-          {/* ── Family grid ── */}
-          {!activeFamily && (
+          {!samplerOpen && !activeFamily && (
             <div className="p-3 grid grid-cols-6 gap-2">
               {FAMILY_ORDER.map((family) => {
                 const isFamilyOfSelected =
@@ -212,8 +309,7 @@ export default function ColorPicker({ value, onChange, onPickInspector, label }:
             </div>
           )}
 
-          {/* ── Color strip ── */}
-          {activeFamily && (
+          {!samplerOpen && activeFamily && (
             <>
               <div className="flex items-center gap-2 border-b border-border px-3 py-2">
                 <button
@@ -238,7 +334,7 @@ export default function ColorPicker({ value, onChange, onPickInspector, label }:
                 />
               </div>
               <div className="p-3">
-                <div className="flex gap-px overflow-x-auto pb-1">
+                <div className="grid grid-cols-8 gap-1 sm:flex sm:gap-px sm:overflow-x-auto sm:pb-1">
                   {(filteredItems ?? []).map((color) => {
                     const active = value.trim().toLowerCase() === color.name.toLowerCase();
                     return (
@@ -247,8 +343,8 @@ export default function ColorPicker({ value, onChange, onPickInspector, label }:
                         type="button"
                         title={`${color.name} (${color.hex})`}
                         onClick={() => { onChange({ name: color.name, hex: color.hex }); setOpen(false); }}
-                        className={`h-6 w-3 shrink-0 transition-all ${
-                          active ? "scale-y-125 outline outline-2 outline-accent" : "hover:scale-y-110"
+                        className={`h-7 w-7 sm:h-6 sm:w-3 rounded-full sm:rounded-none shrink-0 transition-all ${
+                          active ? "outline outline-2 outline-accent" : ""
                         }`}
                         style={{ backgroundColor: color.hex }}
                       />
@@ -264,15 +360,115 @@ export default function ColorPicker({ value, onChange, onPickInspector, label }:
             </>
           )}
 
-          {/* Inspector */}
-          {onPickInspector && (
+          {samplerOpen && samplerMode === "grid" && (
+            <>
+              <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+                <button
+                  type="button"
+                  onClick={resetSampler}
+                  className="text-[11px] text-text-secondary hover:text-text-primary transition-colors"
+                >
+                  ←
+                </button>
+                <span className="text-[10px] uppercase tracking-[0.2em] text-text-primary">Sample from image</span>
+              </div>
+              <div className="p-3 space-y-3">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full rounded border border-dashed border-border bg-bg-secondary px-3 py-3 text-[11px] uppercase tracking-[0.18em] text-text-primary transition-colors hover:border-accent hover:text-accent"
+                >
+                  Take photo or upload
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    handleFilePicked(e.target.files?.[0] ?? null);
+                    e.target.value = "";
+                  }}
+                />
+                {inspectorSources && inspectorSources.length > 0 && (
+                  <>
+                    <p className="text-[9px] uppercase tracking-[0.2em] text-text-secondary">Or pick from product</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {inspectorSources.map((source) => (
+                        <button
+                          key={source.url}
+                          type="button"
+                          onClick={() => { setSamplerUrl(source.url); setSamplerMode("canvas"); }}
+                          title={source.label || "Image"}
+                          className="aspect-square overflow-hidden rounded border border-border bg-bg-secondary transition-colors hover:border-accent"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={source.url} alt={source.label || "Source"} className="h-full w-full object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
+          )}
+
+          {samplerOpen && samplerMode === "canvas" && (
+            <>
+              <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+                <button
+                  type="button"
+                  onClick={() => { setSamplerMode("grid"); setSamplerUrl(null); setSampledHex(null); setSamplerError(null); }}
+                  className="text-[11px] text-text-secondary hover:text-text-primary transition-colors"
+                >
+                  ←
+                </button>
+                <span className="text-[10px] uppercase tracking-[0.2em] text-text-primary">Tap to sample</span>
+              </div>
+              <div className="p-3 space-y-2">
+                <div className="relative w-full overflow-hidden rounded border border-border bg-bg-secondary">
+                  <canvas
+                    ref={canvasRef}
+                    className="block w-full select-none"
+                    style={{ touchAction: "none" }}
+                    onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); samplePixel(e.clientX, e.clientY); }}
+                    onPointerMove={(e) => { if (e.buttons === 0 && e.pointerType === "mouse") return; samplePixel(e.clientX, e.clientY); }}
+                  />
+                </div>
+                {samplerError && (
+                  <p className="text-[10px] text-danger">{samplerError}</p>
+                )}
+                <div className="flex items-center gap-2">
+                  <span
+                    className="h-6 w-6 shrink-0 rounded-full border border-border"
+                    style={{ backgroundColor: sampledHex || "transparent" }}
+                  />
+                  <span className="font-mono text-[11px] text-text-primary">{sampledHex || "—"}</span>
+                  <button
+                    type="button"
+                    disabled={!sampledHex}
+                    onClick={() => {
+                      if (!sampledHex) return;
+                      onChange({ name: sampledHex, hex: sampledHex });
+                      setOpen(false);
+                    }}
+                    className="ml-auto rounded border border-border px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-text-primary transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
+                  >
+                    Use color
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {hasInspector && !samplerOpen && (
             <div className="border-t border-border p-2">
               <button
                 type="button"
-                onClick={async () => { await onPickInspector(); setOpen(false); }}
+                onClick={() => { setSamplerOpen(true); setActiveFamily(null); }}
                 className="w-full rounded border border-border px-3 py-1.5 text-[10px] uppercase tracking-[0.22em] text-text-secondary transition-colors hover:border-accent hover:text-accent"
               >
-                Pick from screen (inspector)
+                Sample from image
               </button>
             </div>
           )}

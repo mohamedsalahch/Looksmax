@@ -3,7 +3,7 @@ import mongoose, { Document, Model, Schema } from "mongoose";
 export interface IProductReservation extends Document {
   product: mongoose.Types.ObjectId;
   reservationKey: string;
-  size: string;
+  variant: mongoose.Types.ObjectId | null;
   quantity: number;
   reservedUntil: Date;
   createdAt: Date;
@@ -14,7 +14,7 @@ const productReservationSchema = new Schema<IProductReservation>(
   {
     product: { type: Schema.Types.ObjectId, ref: "Product", required: true, index: true },
     reservationKey: { type: String, required: true, index: true },
-    size: { type: String, required: true, default: "", index: true },
+    variant: { type: Schema.Types.ObjectId, default: null, index: true },
     quantity: { type: Number, required: true, default: 1, min: 1 },
     reservedUntil: { type: Date, required: true, index: true },
   },
@@ -22,7 +22,7 @@ const productReservationSchema = new Schema<IProductReservation>(
 );
 
 productReservationSchema.index({ reservedUntil: 1 }, { expireAfterSeconds: 0 });
-productReservationSchema.index({ product: 1, reservationKey: 1, size: 1 }, { unique: true });
+productReservationSchema.index({ product: 1, reservationKey: 1, variant: 1 }, { unique: true });
 
 const ProductReservation: Model<IProductReservation> =
   mongoose.models.ProductReservation ||

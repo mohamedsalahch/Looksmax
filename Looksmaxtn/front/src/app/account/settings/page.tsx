@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/providers/AuthContext";
 import { withAuthRequest } from "@/lib/authClient";
 import { compressImageFile } from "@/lib/imageCompression";
+import { subscribeToBodyProfile } from "@/lib/storeEvents";
 
 function normalizeGender(value: string | undefined) {
   const normalized = String(value || "").trim().toLowerCase();
@@ -180,13 +181,13 @@ export default function SettingsPage() {
     }
   }, [refreshUser, resetPhotoUploadForRetry, user]);
 
-  // Poll while enhancing
+  // Refresh from SSE while enhancing
   useEffect(() => {
     if (!imageEnhancing) return;
-    const interval = window.setInterval(() => {
+    const unsubscribe = subscribeToBodyProfile(() => {
       refreshUser();
-    }, 3000);
-    return () => window.clearInterval(interval);
+    });
+    return () => unsubscribe();
   }, [imageEnhancing, refreshUser]);
 
   const hasOriginal = Boolean(bodyProfile.profileImage);

@@ -34,18 +34,6 @@ function calculateShippingFee(subtotal: number, settings?: { shippingCost?: numb
   return Math.round(shippingCost * 100) / 100;
 }
 
-function getSizeStockEntries(
-  sizeStock: unknown
-): Array<[string, { fullStock?: number; stock?: number }]> {
-  if (sizeStock instanceof Map) {
-    return Array.from(sizeStock.entries());
-  }
-
-  if (!sizeStock || typeof sizeStock !== "object") return [];
-
-  return Object.entries(sizeStock as Record<string, { fullStock?: number; stock?: number }>);
-}
-
 export async function GET() {
   try {
     const session = await getSession();
@@ -75,8 +63,14 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const stockAdjustments: Array<{ productId: string; quantity: number; size: string }> = [];
-  const pendingStockAdjustments: Array<{ productId: string; quantity: number; size: string; name: string }> = [];
+  const stockAdjustments: Array<{ productId: string; quantity: number; variantId: mongoose.Types.ObjectId }> = [];
+  const pendingStockAdjustments: Array<{
+    productId: string;
+    quantity: number;
+    variantId: mongoose.Types.ObjectId;
+    name: string;
+    sizeLabel: string;
+  }> = [];
   const storeOwnerOrderItems = new Map<
     string,
     {
@@ -119,6 +113,14 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
+      const rawVariantId = typeof item.variantId === "string" ? item.variantId : "";
+      if (!rawVariantId || !mongoose.Types.ObjectId.isValid(rawVariantId)) {
+        return NextResponse.json(
+          { error: `${item.name || "An item in your cart"} is missing a variant selection. Please re-add it from the product page.` },
+          { status: 400 }
+        );
+      }
+      const variantId = new mongoose.Types.ObjectId(rawVariantId);
 
       const product = await Product.findById(item.productId);
       if (!product) {
@@ -144,16 +146,15 @@ export async function POST(req: NextRequest) {
       }
 
       const productId = product._id.toString();
-      const itemSize = item.size || "";
-      const variantKey = `${productId}:${itemSize}`;
+      const variantKey = `${productId}:${rawVariantId}`;
       if (seenVariantKeys.has(variantKey)) {
         return NextResponse.json(
-          { error: `${product.name}${itemSize ? ` (size ${itemSize})` : ""} can only appear once in an order.` },
+          { error: `${product.name} variant can only appear once in an order.` },
           { status: 400 }
         );
       }
 
-      const quantityToDeduct = item.quantity;
+      const quantityToDeduct = Math.max(1, Number(item.quantity) || 0);
       if (quantityToDeduct < 1) {
         return NextResponse.json(
           { error: `${product.name} does not have enough stock available.` },
@@ -161,37 +162,34 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const sizeStockEntries = getSizeStockEntries(product.sizeStock);
-      const hasSizeStock = sizeStockEntries.length > 0;
+      const variant = product.variants?.id(variantId);
+      if (!variant) {
+        return NextResponse.json(
+          { error: `${product.name} variant is no longer available. Please remove it from your cart.` },
+          { status: 409 }
+        );
+      }
 
-      if (hasSizeStock && itemSize) {
-        const sizeEntry = sizeStockEntries.find(([size]) => size === itemSize)?.[1];
-        if (!sizeEntry || Math.max(sizeEntry.stock ?? 0, 0) < quantityToDeduct) {
-          return NextResponse.json(
-            { error: `${product.name} (size ${itemSize}) is already sold. Please remove it from your cart.` },
-            { status: 409 }
-          );
-        }
-
-      } else {
-        if ((product.stock ?? 0) < quantityToDeduct) {
-          return NextResponse.json(
-            { error: `${product.name} is already sold. Please remove it from your cart.` },
-            { status: 409 }
-          );
-        }
-
+      const variantSize = variant.size || "";
+      const variantColor = variant.color || "";
+      const sizeLabelForError = variantSize ? ` (size ${variantSize})` : "";
+      if (Math.max(variant.stock ?? 0, 0) < quantityToDeduct) {
+        return NextResponse.json(
+          { error: `${product.name}${sizeLabelForError} is already sold. Please remove it from your cart.` },
+          { status: 409 }
+        );
       }
 
       pendingStockAdjustments.push({
         productId,
         quantity: quantityToDeduct,
-        size: itemSize,
+        variantId,
         name: product.name,
+        sizeLabel: sizeLabelForError,
       });
       seenVariantKeys.add(variantKey);
 
-      const itemTotal = product.price * item.quantity;
+      const itemTotal = product.price * quantityToDeduct;
       subtotalPrice += itemTotal;
 
       if (productOwner?.email && product.createdBy?.id) {
@@ -208,9 +206,9 @@ export async function POST(req: NextRequest) {
         existingOwnerEntry.items.push({
           name: product.name,
           price: product.price,
-          size: item.size || "",
-          color: item.color || "",
-          quantity: item.quantity,
+          size: variantSize,
+          color: variantColor,
+          quantity: quantityToDeduct,
         });
         existingOwnerEntry.totalPrice += itemTotal;
         storeOwnerOrderItems.set(ownerId, existingOwnerEntry);
@@ -218,11 +216,12 @@ export async function POST(req: NextRequest) {
 
       orderItems.push({
         product: product._id,
+        variant: variantId,
         name: product.name,
         price: product.price,
-        size: item.size || "",
-        color: item.color || "",
-        quantity: item.quantity,
+        size: variantSize,
+        color: variantColor,
+        quantity: quantityToDeduct,
       });
     }
 
@@ -270,49 +269,38 @@ export async function POST(req: NextRequest) {
     const totalPrice = Math.max(0, subtotalPrice - couponDiscountAmount + shippingFee);
 
     for (const adjustment of pendingStockAdjustments) {
-      if (adjustment.size) {
-        const sizeStockKey = `sizeStock.${adjustment.size}.stock`;
-        const updatedProduct = await Product.findOneAndUpdate(
-          {
-            _id: adjustment.productId,
-            isActive: { $ne: false },
-            $or: [{ approvalStatus: "approved" }, { approvalStatus: { $exists: false } }],
-            [sizeStockKey]: { $gte: adjustment.quantity },
+      const updatedProduct = await Product.findOneAndUpdate(
+        {
+          _id: adjustment.productId,
+          isActive: { $ne: false },
+          $or: [{ approvalStatus: "approved" }, { approvalStatus: { $exists: false } }],
+          variants: {
+            $elemMatch: {
+              _id: adjustment.variantId,
+              stock: { $gte: adjustment.quantity },
+            },
           },
-          { $inc: { [sizeStockKey]: -adjustment.quantity, stock: -adjustment.quantity } },
-          { returnDocument: "after" }
-        ).lean();
-
-        if (!updatedProduct) {
-          throw new OrderRequestError(
-            `${adjustment.name} (size ${adjustment.size}) is already sold. Please remove it from your cart.`,
-            409
-          );
-        }
-      } else {
-        const updatedProduct = await Product.findOneAndUpdate(
-          {
-            _id: adjustment.productId,
-            isActive: { $ne: false },
-            $or: [{ approvalStatus: "approved" }, { approvalStatus: { $exists: false } }],
-            stock: { $gte: adjustment.quantity },
+        },
+        {
+          $inc: {
+            "variants.$.stock": -adjustment.quantity,
+            stock: -adjustment.quantity,
           },
-          { $inc: { stock: -adjustment.quantity } },
-          { returnDocument: "after" }
-        ).lean();
+        },
+        { returnDocument: "after" }
+      ).lean();
 
-        if (!updatedProduct) {
-          throw new OrderRequestError(
-            `${adjustment.name} is already sold. Please remove it from your cart.`,
-            409
-          );
-        }
+      if (!updatedProduct) {
+        throw new OrderRequestError(
+          `${adjustment.name}${adjustment.sizeLabel} is already sold. Please remove it from your cart.`,
+          409
+        );
       }
 
       stockAdjustments.push({
         productId: adjustment.productId,
         quantity: adjustment.quantity,
-        size: adjustment.size,
+        variantId: adjustment.variantId,
       });
     }
 
@@ -439,14 +427,9 @@ export async function POST(req: NextRequest) {
 
     try {
       for (const adjustment of stockAdjustments) {
-        const sizeStockKey = adjustment.size ? `sizeStock.${adjustment.size}.stock` : null;
-        const update: Record<string, unknown> = { $inc: { stock: adjustment.quantity } };
-        if (sizeStockKey) {
-          (update.$inc as Record<string, number>)[sizeStockKey] = adjustment.quantity;
-        }
         await Product.updateOne(
-          { _id: adjustment.productId },
-          update
+          { _id: adjustment.productId, "variants._id": adjustment.variantId },
+          { $inc: { "variants.$.stock": adjustment.quantity, stock: adjustment.quantity } },
         );
       }
     } catch {

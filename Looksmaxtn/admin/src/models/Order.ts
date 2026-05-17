@@ -2,7 +2,7 @@ import mongoose, { Schema, Document, Model } from "mongoose";
 
 export interface IOrder extends Document {
   user: mongoose.Types.ObjectId;
-  items: { product: mongoose.Types.ObjectId; name: string; price: number; size: string; color: string; quantity: number; }[];
+  items: { product: mongoose.Types.ObjectId; variant: mongoose.Types.ObjectId | null; name: string; price: number; size: string; color: string; quantity: number; }[];
   shippingAddress: { fullName: string; street: string; city: string; state: string; zip: string; phone: string; };
   paymentMethod: string;
   orderStatus: "processing" | "confirmed" | "canceled" | "shipping" | "delivered" | "returned";
@@ -13,6 +13,7 @@ const orderSchema = new Schema<IOrder>({
   user: { type: Schema.Types.ObjectId, ref: "User", required: true },
   items: [{
     product: { type: Schema.Types.ObjectId, ref: "Product", required: true },
+    variant: { type: Schema.Types.ObjectId, default: null },
     name: { type: String, required: true }, price: { type: Number, required: true },
     size: { type: String, default: "" }, color: { type: String, default: "" },
     quantity: { type: Number, required: true, min: 1 },

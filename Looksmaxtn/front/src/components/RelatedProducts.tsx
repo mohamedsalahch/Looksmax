@@ -1,9 +1,20 @@
 import ProductCard from "./ProductCard";
+import type { VariantAvailabilityMap } from "@/lib/variantAvailability";
 
 interface ProductImage {
   url: string;
   isMain: boolean;
 }
+
+type RelatedVariant = {
+  _id: string;
+  size: string;
+  color: string | null;
+  stock?: number;
+  fullStock?: number;
+  conditionScore?: number | null;
+  images?: number[];
+};
 
 export interface RelatedProduct {
   _id: string;
@@ -12,7 +23,8 @@ export interface RelatedProduct {
   categories?: string[];
   price: number;
   stock: number;
-  sizeAvailability?: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null;
+  variants?: RelatedVariant[];
+  variantAvailability?: VariantAvailabilityMap | null;
   cartCount?: number;
   reservedElsewhere?: boolean;
   ownedReservation?: boolean;
@@ -31,7 +43,6 @@ export interface RelatedProduct {
   };
   cloneSourceName?: string;
   cloneSourceImage?: string;
-  colorImages?: Record<string, number[]> | null;
 }
 
 function getMainImage(images?: ProductImage[]): string | undefined {
@@ -59,12 +70,12 @@ export default function RelatedProducts({ products }: { products: RelatedProduct
               categories={product.categories}
               price={product.price.toFixed(2)}
               stock={product.stock}
-              sizeAvailability={product.sizeAvailability}
+              variants={product.variants}
+              variantAvailability={product.variantAvailability}
               cartCount={product.cartCount}
               reservedElsewhere={product.reservedElsewhere}
               ownedReservation={product.ownedReservation}
               tag={product.tag}
-              sizes={product.sizes}
               image={getMainImage(product.images)}
               conditionScore={product.conditionScore}
               conditionStatus={product.conditionStatus}
@@ -73,7 +84,6 @@ export default function RelatedProducts({ products }: { products: RelatedProduct
               originPictures={product.originPictures}
               cloneSourceName={product.cloneSourceName}
               cloneSourceImage={product.cloneSourceImage}
-              colorImages={product.colorImages}
               images={product.images}
             />
           ))}

@@ -96,16 +96,18 @@ export async function PUT(
       for (const item of existingOrder.items) {
         const quantityToRestore = item.quantity || 0;
         if (quantityToRestore > 0) {
-          const itemSize = item.size || "";
-          const sizeStockKey = itemSize ? `sizeStock.${itemSize}.stock` : null;
-          const update: Record<string, unknown> = { $inc: { stock: quantityToRestore } };
-          if (sizeStockKey) {
-            (update.$inc as Record<string, number>)[sizeStockKey] = quantityToRestore;
+          const variantId = item.variant;
+          if (variantId) {
+            await Product.updateOne(
+              { _id: item.product, "variants._id": variantId },
+              { $inc: { "variants.$.stock": quantityToRestore, stock: quantityToRestore } },
+            );
+          } else {
+            await Product.updateOne(
+              { _id: item.product },
+              { $inc: { stock: quantityToRestore } },
+            );
           }
-          await Product.updateOne(
-            { _id: item.product },
-            update
-          );
         }
       }
 
@@ -133,7 +135,9 @@ export async function PUT(
     }
 
     if (orderStatus === "confirmed" && existingOrder.orderStatus !== "confirmed") {
-      const productVariantKeys = existingOrder.items.map((item) => `${item.product?.toString?.() || String(item.product || "")}:${item.size || ""}`);
+      const productVariantKeys = existingOrder.items.map(
+        (item) => `${item.product?.toString?.() || String(item.product || "")}:${item.variant ? item.variant.toString() : ""}`
+      );
       const conflictingOrders = await Order.find({
         _id: { $ne: id },
         orderStatus: { $in: BLOCKING_ORDER_STATUSES },
@@ -142,7 +146,7 @@ export async function PUT(
       const conflictingProductNames = new Set<string>();
       for (const order of conflictingOrders) {
         for (const item of order.items || []) {
-          const key = `${item.product?.toString?.() || String(item.product || "")}:${item.size || ""}`;
+          const key = `${item.product?.toString?.() || String(item.product || "")}:${item.variant ? item.variant.toString() : ""}`;
           if (productVariantKeys.includes(key)) {
             const product = await Product.findById(item.product).select("name").lean();
             if (product?.name) conflictingProductNames.add(`${product.name}${item.size ? ` (size ${item.size})` : ""}`);
@@ -153,7 +157,7 @@ export async function PUT(
       if (conflictingProductNames.size > 0) {
         const productNames = Array.from(conflictingProductNames).join(", ");
         return NextResponse.json(
-          { error: `These product sizes are already confirmed in another order: ${productNames}` },
+          { error: `These product variants are already confirmed in another order: ${productNames}` },
           { status: 409 }
         );
       }

@@ -40,6 +40,14 @@ export function getR2Bucket() {
   return getR2Config().bucket;
 }
 
+export function getR2TrainingBucket() {
+  const bucket = process.env.R2_TRAINING_BUCKET?.trim();
+  if (!bucket) {
+    throw new Error("R2_TRAINING_BUCKET is not configured.");
+  }
+  return bucket;
+}
+
 export function getPublicUrlForKey(key: string) {
   const base = getR2PublicBaseUrl();
   return `${base}/${key.replace(/^\/+/, "")}`;

@@ -3,9 +3,9 @@ import ProductInfo from "@/components/ProductInfo";
 import RelatedProducts, { type RelatedProduct } from "@/components/RelatedProducts";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getDefaultSelectableSize, getSelectedSizeStock } from "@/lib/sizeAvailability";
 import JsonLd from "@/components/JsonLd";
 import TikTokViewContent from "@/components/TikTokViewContent";
+import type { VariantAvailabilityMap } from "@/lib/variantAvailability";
 import {
   absoluteUrl,
   buildPageMetadata,
@@ -14,6 +14,16 @@ import {
 } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
+
+type ProductVariantPayload = {
+  _id: string;
+  size: string;
+  color: string | null;
+  stock: number;
+  fullStock: number;
+  conditionScore?: number | null;
+  images: number[];
+};
 
 type ProductResponse = {
   product?: {
@@ -29,15 +39,9 @@ type ProductResponse = {
     } | null;
     images?: { url: string; isMain: boolean }[];
     sizes?: string[];
-    variants?: Array<{
-      key: string;
-      size: string;
-      color?: string;
-      stock?: number;
-      fullStock?: number;
-      conditionScore?: number | null;
-    }>;
-    sizeAvailability?: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null;
+    colors?: string[];
+    variants?: ProductVariantPayload[];
+    variantAvailability?: VariantAvailabilityMap | null;
     stock: number;
     description: string;
     reservationExpiresAt?: string | null;
@@ -57,7 +61,6 @@ type ProductResponse = {
     };
     cloneSourceName?: string;
     cloneSourceImage?: string;
-    colorImages?: Record<string, number[]> | null;
   };
 };
 
@@ -80,6 +83,38 @@ async function loadRelatedProducts(): Promise<RelatedProduct[]> {
   } catch {
     return [];
   }
+}
+
+function normalizeHexParam(value: string | undefined) {
+  if (!value) return "";
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return "";
+  return trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
+}
+
+function resolveInitialSelection(
+  variants: ProductVariantPayload[],
+  availability: VariantAvailabilityMap | null,
+  requestedSize: string,
+  requestedColorHex: string,
+): { variantId: string; colorHex: string | null } {
+  if (variants.length === 0) {
+    return { variantId: "", colorHex: requestedColorHex || null };
+  }
+
+  const candidates = variants.filter((variant) => {
+    if (requestedSize && variant.size !== requestedSize) return false;
+    if (requestedColorHex && variant.color?.toLowerCase() !== requestedColorHex) return false;
+    return true;
+  });
+  const pool = candidates.length > 0 ? candidates : variants;
+
+  const available = pool.find((variant) => availability?.[variant._id]?.available);
+  const chosen = available || pool[0];
+  return {
+    variantId: chosen._id,
+    colorHex: chosen.color || (requestedColorHex || null),
+  };
 }
 
 export async function generateMetadata({
@@ -120,8 +155,8 @@ export default async function ProductDetailPage({
 }) {
   const { id } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const requestedSize = resolvedSearchParams?.size || "";
-  const requestedColor = resolvedSearchParams?.color || "";
+  const requestedSize = (resolvedSearchParams?.size || "").trim();
+  const requestedColorHex = normalizeHexParam(resolvedSearchParams?.color);
 
   const [dbProduct, relatedProducts] = await Promise.all([
     loadProduct(id),
@@ -131,40 +166,15 @@ export default async function ProductDetailPage({
     notFound();
   }
 
-  const selectableSizeKeys = (
-    dbProduct.variants?.length
-      ? dbProduct.variants.map((variant) => variant.key)
-      : dbProduct.sizes?.length
-        ? dbProduct.sizes
-        : Object.keys(dbProduct.sizeAvailability || {})
-  ).filter((size) =>
-    Boolean(size && size.trim())
-  );
-  const colorwayHexes = Array.from(
-    new Set(
-      [
-        ...(dbProduct.variants || []).map((variant) => variant.color || ""),
-        ...(dbProduct.sizes || []),
-        ...Object.keys(dbProduct.sizeAvailability || {}),
-        ...Object.keys(dbProduct.colorImages || {}),
-      ]
-        .map((size) => {
-          if (size.startsWith("#")) return size;
-          const match = size.match(/\/\s*(#?[0-9a-fA-F]{3,8})$/);
-          return match?.[1] || "";
-        })
-        .filter(Boolean)
-    )
-  );
-  const sizeAvailability = dbProduct.sizeAvailability || null;
+  const variants = dbProduct.variants || [];
+  const variantAvailability = dbProduct.variantAvailability || null;
   const stock = Math.max(dbProduct.stock ?? 0, 0);
-  const initialSelectedSize = requestedSize && selectableSizeKeys.includes(requestedSize)
-    ? requestedSize
-    : getDefaultSelectableSize(selectableSizeKeys, sizeAvailability);
-  const initialSelectedColorHex = requestedColor && colorwayHexes.includes(requestedColor)
-    ? requestedColor
-    : colorwayHexes[0] || null;
-  const initialSelectedSizeStock = getSelectedSizeStock(sizeAvailability, initialSelectedSize, stock);
+  const { variantId: initialSelectedVariantId, colorHex: initialSelectedColorHex } =
+    resolveInitialSelection(variants, variantAvailability, requestedSize, requestedColorHex);
+  const initialSelectedVariantStock =
+    initialSelectedVariantId && variantAvailability?.[initialSelectedVariantId]
+      ? variantAvailability[initialSelectedVariantId].stock
+      : stock;
 
   const product = {
     name: dbProduct.name,
@@ -175,12 +185,12 @@ export default async function ProductDetailPage({
     storeType: dbProduct.storeType || null,
     image: dbProduct.images?.find((image) => image.isMain)?.url || dbProduct.images?.[0]?.url || "",
     images: dbProduct.images || [],
-    sizes: selectableSizeKeys,
-    variants: dbProduct.variants || [],
-    stock: Math.max(dbProduct.stock ?? 0, 0),
-    sizeAvailability,
-    initialSelectedSize,
-    initialSelectedSizeStock,
+    variants,
+    variantAvailability,
+    stock,
+    initialSelectedVariantId,
+    initialSelectedVariantStock,
+    initialSelectedColorHex,
     description: dbProduct.description || "",
     reservationExpiresAt: null,
     cartCount: dbProduct.cartCount ?? 0,
@@ -199,8 +209,6 @@ export default async function ProductDetailPage({
     },
     cloneSourceName: dbProduct.cloneSourceName || "",
     cloneSourceImage: dbProduct.cloneSourceImage || "",
-    colorImages: (dbProduct.colorImages as Record<string, number[]> | null) ?? null,
-    initialSelectedColorHex,
   };
   const productId = String(dbProduct._id || id);
   const productUrl = absoluteUrl(`/product/${productId}`);
@@ -226,7 +234,7 @@ export default async function ProductDetailPage({
       url: productUrl,
       priceCurrency: "TND",
       price: dbProduct.price.toFixed(2),
-      availability: productAvailability(product.initialSelectedSizeStock),
+      availability: productAvailability(product.initialSelectedVariantStock),
       itemCondition:
         product.conditionStatus === "new"
           ? "https://schema.org/NewCondition"
@@ -243,7 +251,6 @@ export default async function ProductDetailPage({
         value={dbProduct.price}
       />
       <div className="max-w-7xl mx-auto px-4 md:px-8 py-8">
-        {/* Breadcrumb */}
         <nav className="mb-6">
           <ol className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-text-secondary">
             <li>
@@ -265,25 +272,19 @@ export default async function ProductDetailPage({
           </ol>
         </nav>
 
-        {/* Product Layout */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
-          {/* Left — Images */}
           <ProductImageGallery
             images={product.images as { url: string; isMain: boolean }[]}
-            colorImages={product.colorImages}
+            variants={product.variants}
             initialColorHex={initialSelectedColorHex}
           />
 
-          {/* Right — Info */}
           <div className="md:sticky md:top-[80px] md:self-start">
-            <ProductInfo
-              product={{ ...product, id: productId, colorImages: product.colorImages, initialSelectedColorHex }}
-            />
+            <ProductInfo product={{ ...product, id: productId }} />
           </div>
         </div>
       </div>
 
-      {/* Related Products */}
       <RelatedProducts products={relatedProducts} />
     </div>
   );

@@ -15,11 +15,19 @@ interface Category {
 
 interface Product {
   _id: string; name: string; price: number; categories: string[];
-  stock: number; availableStock?: number; soldQuantity?: number; fullStock?: number; tag: string; brand: string; reference?: string; createdAt: string; productType?: "fashion" | "perfume" | "clothing" | "shoes"; availabilityStatus?: string; isActive?: boolean; visibilityStatus?: string; approvalStatus?: "pending" | "approved" | "rejected"; images?: Array<{ url: string; isMain: boolean }>; originPictures?: { front?: string; back?: string; left?: string; right?: string };
+  stock: number; availableStock?: number; soldQuantity?: number; fullStock?: number; tag: string; brand: string; reference?: string; createdAt: string; productType?: "fashion" | "perfume" | "clothing" | "shoes"; availabilityStatus?: string; isActive?: boolean; visibilityStatus?: string; approvalStatus?: "pending" | "approved" | "rejected"; images?: Array<{ url: string; isMain: boolean }>; originPictures?: { front?: string; back?: string; left?: string; right?: string }; createdBy?: { id?: string; name?: string; email?: string } | null; storeName?: string;
 }
 
-type SortKey = "name" | "_id" | "categories" | "productType" | "price" | "stock" | "status" | "approval" | "visibility" | "tag";
+type SortKey = "name" | "_id" | "categories" | "store" | "productType" | "price" | "stock" | "status" | "approval" | "visibility" | "tag";
 type SortDirection = "asc" | "desc";
+
+function getProductStoreLabel(product: Product) {
+  return product.storeName || product.createdBy?.name || product.createdBy?.email || "Unknown store";
+}
+
+function getProductStoreKey(product: Product) {
+  return getProductStoreLabel(product).trim().toLowerCase() || "__unknown__";
+}
 
 function getProductStatus(product: Product) {
   if (product.availabilityStatus === "sold") {
@@ -70,6 +78,7 @@ export default function ProductsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [storeFilter, setStoreFilter] = useState("all");
   const [visibilityFilter, setVisibilityFilter] = useState("all");
   const [approvalFilter, setApprovalFilter] = useState("all");
   const [loading, setLoading] = useState(true);
@@ -80,8 +89,10 @@ export default function ProductsPage() {
   const [userRole, setUserRole] = useState("");
   const deferredSearch = useDeferredValue(search);
   const canAddProducts = userRole === "store_owner";
+  const canEditProducts = userRole === "store_owner" || userRole === "admin";
   const canDeleteProducts = userRole === "store_owner" || userRole === "admin";
   const canToggleVisibility = userRole === "store_owner" || userRole === "admin";
+  const canFilterByStore = userRole === "admin";
 
   const fetchProducts = () => {
     fetch("/api/products", withAuthRequest())
@@ -168,12 +179,19 @@ export default function ProductsPage() {
           product.brand,
           product.reference,
           product.tag,
+          product.storeName,
+          product.createdBy?.name,
+          product.createdBy?.email,
           ...(product.categories || []),
         ].some((value) => String(value || "").toLowerCase().includes(normalizedSearch));
 
       const matchesCategory =
         categoryFilter === "all" ||
         (product.categories || []).includes(categoryFilter);
+      const matchesStore =
+        !canFilterByStore ||
+        storeFilter === "all" ||
+        getProductStoreKey(product) === storeFilter;
 
       const isInactive = product.isActive === false || product.visibilityStatus === "inactive";
       const normalizedApprovalStatus = product.approvalStatus || "approved";
@@ -184,9 +202,9 @@ export default function ProductsPage() {
       const matchesApproval =
         approvalFilter === "all" || normalizedApprovalStatus === approvalFilter;
 
-      return matchesSearch && matchesCategory && matchesVisibility && matchesApproval;
+      return matchesSearch && matchesCategory && matchesStore && matchesVisibility && matchesApproval;
     });
-  }, [approvalFilter, categoryFilter, deferredSearch, products, visibilityFilter]);
+  }, [approvalFilter, canFilterByStore, categoryFilter, deferredSearch, products, storeFilter, visibilityFilter]);
 
   const categoryOptions = useMemo(() => {
     const bySlug = new Map(categories.map((category) => [category.slug, category]));
@@ -212,6 +230,23 @@ export default function ProductsPage() {
       }));
   }, [categories]);
 
+  const storeOptions = useMemo(() => {
+    const byKey = new Map<string, { value: string; label: string; detail: string }>();
+
+    for (const product of products) {
+      const label = getProductStoreLabel(product);
+      const value = getProductStoreKey(product);
+      const detail = product.createdBy?.email || "";
+      if (!byKey.has(value)) {
+        byKey.set(value, { value, label, detail });
+      }
+    }
+
+    return [...byKey.values()].sort((a, b) =>
+      a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: "base" })
+    );
+  }, [products]);
+
   const sortedProducts = useMemo(() => {
     const items = [...filteredProducts];
 
@@ -223,6 +258,8 @@ export default function ProductsPage() {
           return product._id;
         case "categories":
           return (product.categories || []).join(", ");
+        case "store":
+          return getProductStoreLabel(product);
         case "price":
           return product.price;
         case "stock":
@@ -298,12 +335,12 @@ export default function ProductsPage() {
         )}
       </div>
 
-      <div className="mb-6 grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_180px_180px]">
+      <div className={`mb-6 grid gap-3 ${canFilterByStore ? "md:grid-cols-[minmax(0,1fr)_180px_180px_180px_180px]" : "md:grid-cols-[minmax(0,1fr)_180px_180px_180px]"}`}>
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name, brand, tag, category, or ID..."
+          placeholder="Search by name, brand, store, tag, category, or ID..."
           className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-text-primary transition-colors"
         />
         <select
@@ -318,6 +355,20 @@ export default function ProductsPage() {
             </option>
           ))}
         </select>
+        {canFilterByStore && (
+          <select
+            value={storeFilter}
+            onChange={(e) => setStoreFilter(e.target.value)}
+            className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-text-primary transition-colors"
+          >
+            <option value="all">All store names</option>
+            {storeOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        )}
         <select
           value={visibilityFilter}
           onChange={(e) => setVisibilityFilter(e.target.value)}
@@ -347,7 +398,7 @@ export default function ProductsPage() {
         </div>
       ) : (
         <div className="overflow-x-auto border border-border rounded-none">
-          <table className="min-w-[760px] w-full text-left">
+          <table className="min-w-[900px] w-full text-left">
             <thead className="bg-bg-secondary">
               <tr className="text-[10px] text-text-secondary uppercase tracking-wider">
                 <th className="px-4 py-3">
@@ -360,6 +411,13 @@ export default function ProductsPage() {
                     Category {renderSortIndicator("categories")}
                   </button>
                 </th>
+                {canFilterByStore && (
+                  <th className="px-4 py-3">
+                    <button type="button" onClick={() => toggleSort("store")} className="inline-flex items-center gap-1 cursor-pointer">
+                      Store {renderSortIndicator("store")}
+                    </button>
+                  </th>
+                )}
                 <th className="px-4 py-3">
                   <span className="inline-flex items-center gap-1">Reference</span>
                 </th>
@@ -409,6 +467,14 @@ export default function ProductsPage() {
                     <p className="text-[10px] text-text-secondary">{p.brand}</p>
                   </td>
                   <td className="px-4 py-3 text-xs text-text-secondary capitalize">{(p.categories || []).join(", ")}</td>
+                  {canFilterByStore && (
+                    <td className="px-4 py-3">
+                      <p className="text-xs text-text-primary">{getProductStoreLabel(p)}</p>
+                      {p.createdBy?.email && (
+                        <p className="text-[10px] text-text-secondary">{p.createdBy.email}</p>
+                      )}
+                    </td>
+                  )}
                   <td className="px-4 py-3 text-xs text-text-secondary">{p.reference || "—"}</td>
                   <td className="px-4 py-3 text-xs font-medium">{p.price.toFixed(2)} TND</td>
                   <td className="px-4 py-3">
@@ -478,6 +544,15 @@ export default function ProductsPage() {
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
+                      {canEditProducts && (
+                        <Link
+                          href={`/dashboard/products/${p._id}/edit`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-[10px] font-medium uppercase tracking-[0.2em] text-text-primary transition-colors hover:text-accent"
+                        >
+                          Edit
+                        </Link>
+                      )}
                       {canDeleteProducts ? (
                         <button
                           type="button"

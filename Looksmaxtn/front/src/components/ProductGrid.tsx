@@ -4,11 +4,22 @@ import { useEffect, useRef, useState } from "react";
 import ProductCard from "./ProductCard";
 import { getStoredReservationKey } from "@/lib/reservations";
 import { getColorwayEnhancedLeftImage } from "@/lib/colorwayImage";
+import type { VariantAvailabilityMap } from "@/lib/variantAvailability";
 
 interface ProductImage {
   url: string;
   isMain: boolean;
 }
+
+type ProductVariant = {
+  _id: string;
+  size: string;
+  color: string | null;
+  stock?: number;
+  fullStock?: number;
+  conditionScore?: number | null;
+  images?: number[];
+};
 
 interface Product {
   _id: string;
@@ -18,7 +29,8 @@ interface Product {
   colors?: string[];
   price: number;
   stock: number;
-  sizeAvailability?: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null;
+  variants?: ProductVariant[];
+  variantAvailability?: VariantAvailabilityMap | null;
   cartCount?: number;
   reservedElsewhere?: boolean;
   ownedReservation?: boolean;
@@ -39,7 +51,6 @@ interface Product {
   cloneSourceName?: string;
   cloneSourceImage?: string;
   storeType?: "thrift" | "retail" | null;
-  colorImages?: Record<string, number[]> | null;
 }
 
 interface Facets {
@@ -61,7 +72,7 @@ function getCollectionCardImage(product: Product): string | undefined {
   if (product.fashionSubtype === "shoes") {
     const enhancedLeft = getColorwayEnhancedLeftImage(null, {
       images: product.images,
-      colorImages: product.colorImages,
+      variants: product.variants,
     });
     if (enhancedLeft) {
       return enhancedLeft;
@@ -77,26 +88,12 @@ function formatCategoryLabel(value: string) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function formatSizeLabel(value: string) {
-  if (value === "__default__") return "One size";
-
-  const colorwayMatch = value.match(/^(.*?)(?:\s*\/\s*#?[0-9a-fA-F]{3,8})$/);
-  if (colorwayMatch?.[1]) {
-    return colorwayMatch[1].trim();
-  }
-
-  const separatorIndex = value.lastIndexOf(" / ");
-  if (separatorIndex === -1) return value;
-
-  return value.slice(0, separatorIndex).trim();
-}
-
 function getUniqueSizeOptions(values: string[]) {
   const seen = new Set<string>();
   return values.filter((value) => {
-    const label = formatSizeLabel(value);
-    if (seen.has(label)) return false;
-    seen.add(label);
+    const trimmed = value.trim();
+    if (!trimmed || seen.has(trimmed)) return false;
+    seen.add(trimmed);
     return true;
   });
 }
@@ -428,7 +425,7 @@ export default function ProductGrid({
                           : "text-text-secondary hover:text-foreground"
                       }`}
                     >
-                      {formatSizeLabel(size)}
+                      {size}
                     </button>
                   ))}
                 </div>
@@ -448,19 +445,19 @@ export default function ProductGrid({
                   </button>
                 </div>
                 <div className="grid grid-cols-6 gap-2 pl-2">
-                  {facets.colors.map((value) => (
+                  {facets.colors.map((hex) => (
                     <button
-                      key={value}
+                      key={hex}
                       type="button"
-                      onClick={() => setDraftColor(value)}
-                      title={value}
-                      aria-label={value}
+                      onClick={() => setDraftColor(hex)}
+                      title={hex}
+                      aria-label={hex}
                       className={`relative h-8 w-8 border transition-all duration-200 cursor-pointer ${
-                        draftColor === value
+                        draftColor.toLowerCase() === hex.toLowerCase()
                           ? "border-foreground scale-110"
                           : "border-border-color hover:border-foreground/40"
                       }`}
-                      style={{ backgroundColor: value }}
+                      style={{ backgroundColor: hex }}
                     />
                   ))}
                 </div>
@@ -540,13 +537,13 @@ export default function ProductGrid({
                   categories={product.categories}
                   price={product.price.toFixed(2)}
                   stock={product.stock}
-                  sizeAvailability={product.sizeAvailability}
+                  variants={product.variants}
+                  variantAvailability={product.variantAvailability}
                   cartCount={product.cartCount}
                   reservedElsewhere={product.reservedElsewhere}
                   ownedReservation={product.ownedReservation}
                   blockedByOrder={product.blockedByOrder}
                   tag={product.tag}
-                  sizes={product.sizes}
                   image={getCollectionCardImage(product)}
                   conditionScore={product.conditionScore}
                   conditionStatus={product.conditionStatus}
@@ -556,7 +553,6 @@ export default function ProductGrid({
                   cloneSourceName={product.cloneSourceName}
                   cloneSourceImage={product.cloneSourceImage}
                   storeType={product.storeType}
-                  colorImages={product.colorImages}
                   images={product.images}
                   preferCollectionLeftImage
                 />

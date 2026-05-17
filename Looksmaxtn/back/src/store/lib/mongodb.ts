@@ -28,18 +28,28 @@ export async function cleanupProductReservationIndexes(conn: typeof mongoose = m
   }
 
   const indexes = await collection.indexes();
-  const obsoleteIndex = indexes.find(
-    (index) =>
-      index.name === "product_1" &&
-      Array.isArray(index.key) === false &&
+  const obsoleteIndexNames = new Set<string>();
+  for (const index of indexes) {
+    if (typeof index.name !== "string") continue;
+    if (index.name === "product_1") {
+      obsoleteIndexNames.add(index.name);
+      continue;
+    }
+    // Old uniqueness was keyed on `size`; variants migration replaces it with `variant`.
+    if (
       typeof index.key === "object" &&
-      "product" in index.key &&
-      (index.key as Record<string, number>).product === 1
-  );
+      index.key !== null &&
+      "size" in (index.key as Record<string, unknown>)
+    ) {
+      obsoleteIndexNames.add(index.name);
+    }
+  }
 
-  if (obsoleteIndex) {
-    if (typeof obsoleteIndex.name === "string") {
-      await collection.dropIndex(obsoleteIndex.name);
+  for (const name of obsoleteIndexNames) {
+    try {
+      await collection.dropIndex(name);
+    } catch {
+      // Index may not exist on a fresh DB; ignore.
     }
   }
 

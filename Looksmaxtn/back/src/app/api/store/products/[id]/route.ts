@@ -6,12 +6,18 @@ import User from "@/store/models/User";
 import { getSession } from "@/store/lib/auth";
 import { getActiveOrderHoldMapByProductIds } from "@/lib/productInventory";
 import {
-  buildSizeAvailability,
+  buildVariantAvailability,
   getDisplayStock,
-  getSizeStockEntries,
-} from "@/lib/sizeAvailability";
+  type VariantLike,
+} from "@/lib/variantAvailability";
 import { computeViewerBlocked } from "@/lib/sseClients";
 import { isStoreOwnerApproved } from "@/store/lib/storeApproval";
+import {
+  averageVariantConditionScore,
+  deriveColors,
+  deriveSizes,
+  normalizeStoredVariants,
+} from "@/lib/productVariants";
 
 export async function GET(
   req: NextRequest,
@@ -26,7 +32,7 @@ export async function GET(
     const [product, activeReservations] = await Promise.all([
       Product.findById(id).lean(),
       ProductReservation.find({ product: id, reservedUntil: { $gt: now } })
-        .select("reservationKey quantity size")
+        .select("reservationKey quantity variant")
         .lean(),
     ]);
     const [activeOrderHoldMap, owner] = await Promise.all([
@@ -42,6 +48,7 @@ export async function GET(
     if (!isStoreOwnerApproved(owner)) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
+    const variants = normalizeStoredVariants(product.variants) as VariantLike[];
     const ownedReservationQuantity = activeReservations
       .filter((reservation) => reservation.reservationKey === reservationKey)
       .reduce((sum, reservation) => sum + Math.max(1, Number(reservation.quantity) || 1), 0);
@@ -49,29 +56,30 @@ export async function GET(
       .filter((reservation) => reservation.reservationKey !== reservationKey)
       .reduce((sum, reservation) => sum + Math.max(1, Number(reservation.quantity) || 1), 0);
     const stock = Math.max(product.stock ?? 0, 0);
-    const sizeStockEntries = getSizeStockEntries(product.sizeStock);
-    const hasSizeStock = sizeStockEntries.length > 0;
-    const sizeAvailability = hasSizeStock
-      ? buildSizeAvailability(product.sizeStock, activeReservations, reservationKey)
+    const hasVariants = variants.length > 0;
+    const variantAvailability = hasVariants
+      ? buildVariantAvailability(variants, activeReservations, reservationKey)
       : null;
-    const displayStock = hasSizeStock ? getDisplayStock(stock, sizeAvailability) : Math.max(stock - reservedByOthersQuantity, 0);
+    const displayStock = hasVariants
+      ? getDisplayStock(stock, variantAvailability)
+      : Math.max(stock - reservedByOthersQuantity, 0);
     const ownedReservation = ownedReservationQuantity > 0;
-    const anySizeAvailable = hasSizeStock
-      ? Object.values(sizeAvailability || {}).some((sizeInfo) => sizeInfo.available)
+    const anyVariantAvailable = hasVariants
+      ? Object.values(variantAvailability || {}).some((entry) => entry.available)
       : displayStock > 0;
-    const blockedByOrder = hasSizeStock
-      ? Boolean(activeOrderHold) && !anySizeAvailable
+    const blockedByOrder = hasVariants
+      ? Boolean(activeOrderHold) && !anyVariantAvailable
       : Boolean(activeOrderHold) && displayStock <= 0;
 
     if (product.isActive === false || (product.approvalStatus && product.approvalStatus !== "approved")) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
-    const reservedElsewhere = hasSizeStock
-      ? Object.values(sizeAvailability || {}).some((size) => size.reservedElsewhere)
+    const reservedElsewhere = hasVariants
+      ? Object.values(variantAvailability || {}).some((entry) => entry.reservedElsewhere)
       : reservedByOthersQuantity > 0 && (reservedByOthersQuantity >= stock || reservedByOthersQuantity + ownedReservationQuantity > stock);
 
     const viewerBlocked = computeViewerBlocked(
-      product.sizeStock,
+      variants,
       stock,
       activeReservations,
       reservationKey,
@@ -86,19 +94,9 @@ export async function GET(
       }
     }
 
-    const colorImagesData = product.colorImages instanceof Map
-      ? Object.fromEntries(product.colorImages)
-      : (product.colorImages && typeof product.colorImages === "object" ? product.colorImages : null);
-
     const conditionScore = product.conditionScore != null
       ? product.conditionScore
-      : (() => {
-          const scores = sizeStockEntries
-            .map(([, entry]) => (entry as { conditionScore?: number | null }).conditionScore)
-            .filter((s): s is number => typeof s === "number");
-          if (scores.length === 0) return null;
-          return Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length);
-        })();
+      : averageVariantConditionScore(variants);
 
     return NextResponse.json({
       product: {
@@ -113,9 +111,11 @@ export async function GET(
         storeName: owner?.storeName || product.createdBy?.name || "",
         storeType: owner?.role === "store_owner" ? owner?.storeType || null : null,
         reservationExpiresAt: null,
-        sizeAvailability,
+        variantAvailability,
+        variants,
+        sizes: deriveSizes(variants),
+        colors: deriveColors(variants),
         viewerBlocked,
-        colorImages: colorImagesData,
       },
     });
   } catch (error: unknown) {

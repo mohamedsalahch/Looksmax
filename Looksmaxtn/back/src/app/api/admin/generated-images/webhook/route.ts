@@ -5,6 +5,7 @@ import {
   saveGeneratedResultBase64,
 } from "@/admin/lib/generatedImageUploads";
 import { requireWebhookSecret } from "@/lib/webhookAuth";
+import { broadcastAdminEvent } from "@/admin/lib/adminEvents";
 
 export async function POST(req: NextRequest) {
   try {
@@ -30,6 +31,15 @@ export async function POST(req: NextRequest) {
       asset.status = "failed";
       asset.errorMessage = "Generation failed.";
       await asset.save();
+      broadcastAdminEvent({
+        type: "generated-image:update",
+        asset: {
+          _id: String(asset._id),
+          status: "failed",
+          images: [...asset.images],
+          errorMessage: asset.errorMessage,
+        },
+      });
       return NextResponse.json({ ok: true });
     }
 
@@ -40,16 +50,16 @@ export async function POST(req: NextRequest) {
           ? body.base64
           : "";
     const view = body.view; // "front", "back", "left", "right" or "result"
-    
+
     if (imageBase64) {
       const savedPath = await saveGeneratedResultBase64(imageBase64, asset.images.length);
       asset.images.push(savedPath);
-      
+
       // Determine if job is finished
       // 1. One image case (proxy)
       if (view === "result") {
         asset.status = "completed";
-      } 
+      }
       // 2. Simple heuristic: clothes expect 2, shoes expect 4
       else if (view === "back" && asset.images.length >= 2) {
          asset.status = "completed";
@@ -69,6 +79,16 @@ export async function POST(req: NextRequest) {
     }
 
     await asset.save();
+
+    broadcastAdminEvent({
+      type: "generated-image:update",
+      asset: {
+        _id: String(asset._id),
+        status: asset.status as "processing" | "completed" | "failed",
+        images: [...asset.images],
+      },
+    });
+
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("Webhook processing error:", error);

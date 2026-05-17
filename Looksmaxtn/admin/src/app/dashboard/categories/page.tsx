@@ -128,9 +128,7 @@ export default function CategoriesPage() {
         body: JSON.stringify({ isActive: !cat.isActive }),
       }));
       if (res.ok) {
-        setCategories((prev) =>
-          prev.map((c) => (c._id === cat._id ? { ...c, isActive: !c.isActive } : c))
-        );
+        fetchCategories();
       }
     } finally {
       setTogglingVisibilityId("");

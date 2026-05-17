@@ -201,13 +201,29 @@ function ProductLightbox({
   );
 }
 
+type GalleryVariant = {
+  color?: string | null;
+  images?: number[];
+};
+
+function getIndicesForHex(hex: string | null, variants: GalleryVariant[] | undefined | null) {
+  if (!hex || !variants) return [];
+  const target = hex.toLowerCase();
+  for (const variant of variants) {
+    if (variant?.color?.toLowerCase() === target) {
+      return Array.isArray(variant.images) ? [...variant.images] : [];
+    }
+  }
+  return [];
+}
+
 export default function ProductImageGallery({
   images = [],
-  colorImages,
+  variants,
   initialColorHex = null,
 }: {
   images?: ProductImage[];
-  colorImages?: Record<string, number[]> | null;
+  variants?: GalleryVariant[] | null;
   initialColorHex?: string | null;
 }) {
   const { displayImages, originalToDisplay } = useMemo(() => {
@@ -221,9 +237,9 @@ export default function ProductImageGallery({
 
   const [activeColorHex, setActiveColorHex] = useState<string | null>(initialColorHex);
   const selectedColorOriginalIndices = useMemo(() => {
-    if (!activeColorHex || !colorImages?.[activeColorHex]) return [];
-    return [...colorImages[activeColorHex]].sort((a, b) => a - b);
-  }, [activeColorHex, colorImages]);
+    const indices = getIndicesForHex(activeColorHex, variants);
+    return indices.length > 0 ? [...indices].sort((a, b) => a - b) : [];
+  }, [activeColorHex, variants]);
 
   const visibleImages = useMemo(() => {
     if (selectedColorOriginalIndices.length > 0) {
@@ -263,17 +279,18 @@ export default function ProductImageGallery({
 
       const displayIdx = originalToDisplay.get(detail.index);
       if (displayIdx === undefined) return;
-      if (!activeColorHex || !colorImages?.[activeColorHex]) {
+      const allowedOriginalIndices = getIndicesForHex(activeColorHex, variants);
+      if (allowedOriginalIndices.length === 0) {
         setActiveIndex(displayIdx);
         return;
       }
-      const allowedOriginalIndices = [...(colorImages[activeColorHex] ?? [])].sort((a, b) => a - b);
-      const visibleIdx = allowedOriginalIndices.indexOf(detail.index);
+      const sorted = [...allowedOriginalIndices].sort((a, b) => a - b);
+      const visibleIdx = sorted.indexOf(detail.index);
       if (visibleIdx !== -1) setActiveIndex(visibleIdx);
     };
     window.addEventListener("product:gallery:selectIndex", handler);
     return () => window.removeEventListener("product:gallery:selectIndex", handler);
-  }, [originalToDisplay, activeColorHex, colorImages, selectedColorOriginalIndices]);
+  }, [originalToDisplay, activeColorHex, variants, selectedColorOriginalIndices]);
   const [isDesktop, setIsDesktop] = useState(false);
   const [zoomPoint, setZoomPoint] = useState({ x: 50, y: 50 });
   const [zoomPosition, setZoomPosition] = useState({ left: 0, top: 0 });

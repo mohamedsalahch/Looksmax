@@ -109,15 +109,30 @@ export default function GenerateImagesPage() {
   }, []);
 
   useEffect(() => {
-    const hasProcessing = generatedImages.some((img) => img.status === "processing");
-    if (!hasProcessing && !saving) return;
-
-    const timeoutId = setTimeout(() => {
-      loadGeneratedImages();
-    }, 5000);
-
-    return () => clearTimeout(timeoutId);
-  }, [generatedImages, saving]);
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        _id: string;
+        status: "processing" | "completed" | "failed";
+        images: string[];
+        errorMessage?: string;
+      }>).detail;
+      if (!detail?._id) return;
+      setGeneratedImages((current) =>
+        current.map((item) =>
+          item._id === detail._id
+            ? {
+                ...item,
+                status: detail.status,
+                images: detail.images,
+                errorMessage: detail.errorMessage ?? item.errorMessage,
+              }
+            : item
+        )
+      );
+    };
+    window.addEventListener("looksmax-admin-generated-image-event", handler);
+    return () => window.removeEventListener("looksmax-admin-generated-image-event", handler);
+  }, []);
 
   useEffect(() => {
     if (!viewImage) return;

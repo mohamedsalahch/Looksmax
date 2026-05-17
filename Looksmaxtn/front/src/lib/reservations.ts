@@ -42,13 +42,13 @@ export function clearReservationKey() {
   window.localStorage.removeItem(RESERVATION_KEY_STORAGE);
 }
 
-export async function reserveProduct(productId: string, quantity = 1, size?: string) {
+export async function reserveProduct(productId: string, quantity = 1, variantId?: string | null) {
   const reservationKey = getReservationKey();
 
   const response = await fetch(`/api/products/${productId}/reserve`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ reservationKey, quantity, size }),
+    body: JSON.stringify({ reservationKey, quantity, variantId: variantId || null }),
   });
 
   const data = await response.json();
@@ -61,13 +61,13 @@ export async function reserveProduct(productId: string, quantity = 1, size?: str
   return data as { reservationExpiresAt: string; cartCount?: number };
 }
 
-export async function releaseProductReservation(productId: string, size?: string) {
+export async function releaseProductReservation(productId: string, variantId?: string | null) {
   const reservationKey = getReservationKey();
 
   const response = await fetch(`/api/products/${productId}/reserve`, {
     method: "DELETE",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ reservationKey, size }),
+    body: JSON.stringify({ reservationKey, variantId: variantId || null }),
   });
 
   const data = await response.json().catch(() => ({}));

@@ -9,6 +9,13 @@ from app.models.requests import (
 from app.models.responses import GenerationResponse, ImageResult, OutfitResponse
 from app.services.generator import ImageGenerator
 from app.services.webhook import send_webhook, send_error_webhook
+from app.services import dataset
+from app.prompts.templates import (
+    GARMENT_ENHANCE_PROMPT_TEMPLATE,
+    GARMENT_ENHANCE_PROMPT_VERSION,
+    ACCESSORY_ENHANCE_PROMPT_TEMPLATE,
+    ACCESSORY_ENHANCE_PROMPT_VERSION,
+)
 
 router = APIRouter(prefix="/api", tags=["enhance"])
 logger = logging.getLogger(__name__)
@@ -33,6 +40,16 @@ async def process_garment_enhancement(job_id: str, webhook_url: str, request: Ga
 
     async def run_view(view: str):
         image_b64 = await _generator.enhance_garment_view(view, product_images[view])
+        dataset.record(
+            flow="garment_enhance",
+            model=_generator.model,
+            prompt_version=GARMENT_ENHANCE_PROMPT_VERSION,
+            prompt_text=GARMENT_ENHANCE_PROMPT_TEMPLATE,
+            inputs={view: product_images[view]},
+            outputs={view: image_b64},
+            job_id=job_id,
+            extra={"view": view},
+        )
         await send_webhook(webhook_url, job_id, view, image_b64)
 
     try:
@@ -53,6 +70,16 @@ async def process_accessory_enhancement(job_id: str, webhook_url: str, request: 
 
     async def run_view(view: str):
         image_b64 = await _generator.enhance_accessory_view(view, product_images[view])
+        dataset.record(
+            flow="accessory_enhance",
+            model=_generator.model,
+            prompt_version=ACCESSORY_ENHANCE_PROMPT_VERSION,
+            prompt_text=ACCESSORY_ENHANCE_PROMPT_TEMPLATE,
+            inputs={view: product_images[view]},
+            outputs={view: image_b64},
+            job_id=job_id,
+            extra={"view": view},
+        )
         await send_webhook(webhook_url, job_id, view, image_b64)
 
     try:
@@ -83,6 +110,16 @@ async def enhance_garment_images(request: GarmentEnhanceRequest, background_task
             _generator.enhance_garment_view(view, product_images[view])
             for view in GARMENT_VIEWS
         ))
+        for view, out_b64 in zip(GARMENT_VIEWS, outputs):
+            dataset.record(
+                flow="garment_enhance",
+                model=_generator.model,
+                prompt_version=GARMENT_ENHANCE_PROMPT_VERSION,
+                prompt_text=GARMENT_ENHANCE_PROMPT_TEMPLATE,
+                inputs={view: product_images[view]},
+                outputs={view: out_b64},
+                extra={"view": view, "mode": "sync"},
+            )
         return GenerationResponse(images=[ImageResult(base64=b) for b in outputs])
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -112,6 +149,16 @@ async def enhance_accessory_images(request: AccessoryEnhanceRequest, background_
             _generator.enhance_accessory_view(view, product_images[view])
             for view in provided_views
         ))
+        for view, out_b64 in zip(provided_views, outputs):
+            dataset.record(
+                flow="accessory_enhance",
+                model=_generator.model,
+                prompt_version=ACCESSORY_ENHANCE_PROMPT_VERSION,
+                prompt_text=ACCESSORY_ENHANCE_PROMPT_TEMPLATE,
+                inputs={view: product_images[view]},
+                outputs={view: out_b64},
+                extra={"view": view, "mode": "sync"},
+            )
         return GenerationResponse(images=[ImageResult(base64=b) for b in outputs])
     except HTTPException:
         raise

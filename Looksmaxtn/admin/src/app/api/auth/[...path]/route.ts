@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 const COOKIE_NAME = "looksmax-admin-token";
 
 function getBackendBaseUrl(req: NextRequest) {
-  const localHostnames = new Set(["localhost", "127.0.0.1"]);
+  const localHostnames = new Set(["localhost", "127.0.0.1", "192.168.1.127"]);
 
   if (localHostnames.has(req.nextUrl.hostname)) {
     return "http://localhost:3002";

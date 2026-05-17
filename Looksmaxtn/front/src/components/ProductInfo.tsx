@@ -10,6 +10,7 @@ import { getConditionColor, getConditionLabel, getConditionPercent } from "@/lib
 import { buildCartItemId } from "@/lib/cartItem";
 import { queueStudioAssignment } from "@/lib/studioAssignment";
 import { getColorwayEnhancedFrontImage } from "@/lib/colorwayImage";
+import type { VariantAvailabilityMap } from "@/lib/variantAvailability";
 
 type TikTokWindow = Window & {
   ttq?: {
@@ -19,9 +20,18 @@ type TikTokWindow = Window & {
 
 type ProductType = "fashion" | "perfume" | "clothing" | "shoes";
 
+type ProductVariant = {
+  _id: string;
+  size: string;
+  color: string | null;
+  stock?: number;
+  fullStock?: number;
+  conditionScore?: number | null;
+  images?: number[];
+};
+
 type ProductInfoProduct = {
   id?: string;
-  initialSelectedColorHex?: string | null;
   name: string;
   categories?: string[];
   price: string;
@@ -30,20 +40,12 @@ type ProductInfoProduct = {
   storeType?: "thrift" | "retail" | null;
   image?: string;
   images?: { url: string; isMain: boolean }[];
-  size?: string;
-  sizes?: string[];
-  variants?: Array<{
-    key: string;
-    size: string;
-    color?: string;
-    stock?: number;
-    fullStock?: number;
-    conditionScore?: number | null;
-  }>;
+  variants: ProductVariant[];
+  variantAvailability?: VariantAvailabilityMap | null;
+  initialSelectedVariantId?: string;
+  initialSelectedVariantStock?: number;
+  initialSelectedColorHex?: string | null;
   stock: number;
-  sizeAvailability?: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null;
-  initialSelectedSize?: string;
-  initialSelectedSizeStock?: number;
   description: string;
   reservationExpiresAt?: string | null;
   cartCount?: number;
@@ -62,139 +64,105 @@ type ProductInfoProduct = {
   };
   cloneSourceName?: string;
   cloneSourceImage?: string;
-  colorImages?: Record<string, number[]> | null;
 };
 
-const DEFAULT_VARIANT_KEY = "__default__";
-
-function formatVariantSizeLabel(sizeOption: string, isColorwayProduct: boolean, variantSize?: string) {
-  if (variantSize?.trim()) return variantSize.trim();
-  if (sizeOption === DEFAULT_VARIANT_KEY) return "";
-  const fallback = isColorwayProduct ? sizeOption.split(" / ")[0] : sizeOption;
-  return fallback === DEFAULT_VARIANT_KEY ? "" : fallback.trim();
-}
-
 export default function ProductInfo({ product }: { product: ProductInfoProduct }) {
+  const router = useRouter();
+  const { addItem, items, updateQuantity } = useCart();
+
+  const variants = useMemo(() => product.variants || [], [product.variants]);
+  const variantsById = useMemo(
+    () => new Map(variants.map((variant) => [variant._id, variant])),
+    [variants],
+  );
+
+  const uniqueColors = useMemo(() => {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const variant of variants) {
+      const hex = variant.color?.toLowerCase();
+      if (hex && !seen.has(hex)) {
+        seen.add(hex);
+        result.push(hex);
+      }
+    }
+    return result;
+  }, [variants]);
+  const isColorwayProduct = uniqueColors.length > 0;
+  const isPerfume = product.productType === "perfume";
+
   const [addedToCart, setAddedToCart] = useState(false);
-  const [currentStock, setCurrentStock] = useState(() => product.stock);
-  const [sizeAvailability, setSizeAvailability] = useState<Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null>(() => product.sizeAvailability || null);
   const [reservationError, setReservationError] = useState("");
   const [hasHydratedAvailability, setHasHydratedAvailability] = useState(false);
-  const [reservedElsewhere, setReservedElsewhere] = useState(false);
+  const [reservedElsewhere, setReservedElsewhere] = useState(Boolean(product.reservedElsewhere));
   const [ownedReservation, setOwnedReservation] = useState(() => Boolean(product.ownedReservation));
   const [blockedByOrder, setBlockedByOrder] = useState(() => Boolean(product.blockedByOrder));
   const [selectedQuantity, setSelectedQuantity] = useState(1);
-  const allSizes = useMemo(
-    () => (
-      product.variants?.length
-        ? product.variants.map((variant) => variant.key)
-        : product.sizes?.length
-          ? product.sizes
-          : product.size
-            ? [product.size]
-            : []
-    ).filter((entry) => Boolean(entry.trim())),
-    [product.variants, product.sizes, product.size]
+  const [variantAvailability, setVariantAvailability] = useState<VariantAvailabilityMap | null>(
+    () => product.variantAvailability || null,
   );
-  const variantByKey = useMemo(
-    () => new Map((product.variants || []).map((variant) => [variant.key, variant])),
-    [product.variants]
+  const [currentStock, setCurrentStock] = useState(() => product.stock);
+
+  const [selectedVariantId, setSelectedVariantId] = useState<string>(
+    () => product.initialSelectedVariantId || variants[0]?._id || "",
   );
 
-  // Detect colorway format: "SIZE / #HEX"
-  const isColorwayProduct = Boolean(product.variants?.some((variant) => variant.color)) || allSizes.some((s) => / \/ #[0-9a-fA-F]{3,8}$/.test(s));
-  const uniqueColorHexes = useMemo(() => {
-    if (!isColorwayProduct) return [];
-    const seen = new Set<string>();
-    const result: string[] = [];
-    for (const s of allSizes) {
-      const hex = variantByKey.get(s)?.color || s.split(" / ")[1];
-      if (hex && !seen.has(hex)) { seen.add(hex); result.push(hex); }
-    }
-    return result;
-  }, [allSizes, isColorwayProduct, variantByKey]);
+  const selectedVariant = selectedVariantId ? variantsById.get(selectedVariantId) : undefined;
+  const activeHex = selectedVariant?.color || product.initialSelectedColorHex || null;
+  const [selectedColorHex, setSelectedColorHex] = useState<string | null>(activeHex);
 
-  const firstAvailableHex = useMemo(() => {
-    if (!isColorwayProduct || uniqueColorHexes.length === 0) return null;
-    for (const hex of uniqueColorHexes) {
-      const sizesForHex = allSizes.filter((s) => (variantByKey.get(s)?.color || (s.endsWith(` / ${hex}`) ? hex : "")) === hex);
-      if (sizesForHex.some((s) => (sizeAvailability?.[s]?.stock ?? 0) > 0)) return hex;
-    }
-    return uniqueColorHexes[0];
-  }, [uniqueColorHexes, allSizes, sizeAvailability, isColorwayProduct, variantByKey]);
+  const variantsForActiveColor = useMemo(() => {
+    if (!isColorwayProduct) return variants;
+    if (!selectedColorHex) return variants;
+    return variants.filter(
+      (variant) => variant.color?.toLowerCase() === selectedColorHex.toLowerCase(),
+    );
+  }, [isColorwayProduct, selectedColorHex, variants]);
+  const hasVisibleSizeOptions = variantsForActiveColor.some((variant) => Boolean(variant.size.trim()));
 
-  const initialSelectedColorHex = product.initialSelectedColorHex || null;
-  const [selectedColorHex, setSelectedColorHex] = useState<string | null>(() => initialSelectedColorHex || firstAvailableHex);
-  const activeHex = selectedColorHex ?? firstAvailableHex;
-  const selectedColorImage = getColorwayEnhancedFrontImage(activeHex, {
+  const selectedColorImage = getColorwayEnhancedFrontImage(selectedColorHex, {
     image: product.image,
     images: product.images,
-    colorImages: product.colorImages,
+    variants,
   }, "");
   const cartDisplayImage = selectedColorImage || product.originPictures?.front || product.image;
 
   useEffect(() => {
-    if (!activeHex) return;
+    if (!selectedColorHex) return;
     window.dispatchEvent(
       new CustomEvent("product:gallery:filterColorway", {
-        detail: {
-          hex: activeHex,
-        },
-      })
+        detail: { hex: selectedColorHex },
+      }),
     );
-  }, [activeHex]);
+  }, [selectedColorHex]);
 
-  const availableSizes = useMemo(() => {
-    if (!isColorwayProduct || !activeHex) return allSizes;
-    return allSizes.filter((s) => (variantByKey.get(s)?.color || (s.endsWith(` / ${activeHex}`) ? activeHex : "")) === activeHex);
-  }, [allSizes, isColorwayProduct, activeHex, variantByKey]);
-  const hasVisibleSizeOptions = availableSizes.some((sizeOption) =>
-    Boolean(formatVariantSizeLabel(sizeOption, isColorwayProduct, variantByKey.get(sizeOption)?.size))
-  );
-
-  const initialSelectedSize = product.initialSelectedSize || availableSizes[0] || "";
-  const defaultSelectedSize = initialSelectedSize || availableSizes[0] || "";
-  const initialSelectedSizeStock = product.initialSelectedSizeStock ?? currentStock;
-  const [selectedSize, setSelectedSize] = useState(defaultSelectedSize);
-  const { addItem, items, updateQuantity } = useCart();
-  const router = useRouter();
-  const isPerfume = product.productType === "perfume";
-  const getDefaultSelectableSize = (
-    sizesList: string[],
-    availability: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null
-  ) => sizesList.find((sizeOption) => availability?.[sizeOption]?.available) || sizesList[0] || "";
-
-  const selectedSizeStock = (() => {
-    if (!isPerfume && selectedSize && sizeAvailability?.[selectedSize]) {
-      return sizeAvailability[selectedSize].stock;
+  const selectedVariantStock = (() => {
+    if (selectedVariantId && variantAvailability?.[selectedVariantId]) {
+      return variantAvailability[selectedVariantId].stock;
     }
-    if (!isPerfume && selectedSize && initialSelectedSize === selectedSize) {
-      return initialSelectedSizeStock;
+    if (selectedVariantId === product.initialSelectedVariantId) {
+      return product.initialSelectedVariantStock ?? currentStock;
     }
     return currentStock;
   })();
-  const selectedSizeReservedElsewhere = (() => {
-    if (!isPerfume && selectedSize && sizeAvailability?.[selectedSize]) {
-      return sizeAvailability[selectedSize].reservedElsewhere;
-    }
-    if (!isPerfume && selectedSize && initialSelectedSize === selectedSize) {
-      return false;
+
+  const selectedVariantReservedElsewhere = (() => {
+    if (selectedVariantId && variantAvailability?.[selectedVariantId]) {
+      return variantAvailability[selectedVariantId].reservedElsewhere;
     }
     return reservedElsewhere;
   })();
-  const displaySelectedSize = selectedSize || initialSelectedSize;
-  const displaySelectedSizeStock = selectedSize ? selectedSizeStock : initialSelectedSizeStock;
 
   const showReservedElsewhere = hasHydratedAvailability
-    ? selectedSizeReservedElsewhere || (!availableSizes.length && reservedElsewhere)
+    ? selectedVariantReservedElsewhere ||
+      (variantsForActiveColor.length === 0 && reservedElsewhere)
     : false;
-  const isSoldOut = selectedSizeStock < 1 && !showReservedElsewhere;
-  const isBlocked = selectedSizeStock < 1;
-  const statusLabel = showReservedElsewhere
-    ? "Reserved elsewhere"
-    : "Sold Out";
+  const isSoldOut = selectedVariantStock < 1 && !showReservedElsewhere;
+  const isBlocked = selectedVariantStock < 1;
+  const statusLabel = showReservedElsewhere ? "Reserved elsewhere" : "Sold Out";
+
   const cartItemId = product.id
-    ? buildCartItemId(product.id, isPerfume ? undefined : selectedSize)
+    ? buildCartItemId(product.id, selectedVariantId || undefined)
     : "";
   const cartItemQuantity = items.find((item) => item.id === cartItemId)?.quantity || 0;
 
@@ -213,8 +181,8 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
         setReservedElsewhere(Boolean(data.product.reservedElsewhere));
         setOwnedReservation(Boolean(data.product.ownedReservation));
         setBlockedByOrder(Boolean(data.product.blockedByOrder));
-        if (data.product.sizeAvailability) {
-          setSizeAvailability(data.product.sizeAvailability);
+        if (data.product.variantAvailability) {
+          setVariantAvailability(data.product.variantAvailability);
         }
         setHasHydratedAvailability(true);
       })
@@ -223,10 +191,7 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
 
   useEffect(() => {
     if (!product.id) return;
-
     let cancelled = false;
-
-    // Initial hydration — user-specific fields (ownedReservation, blockedByOrder, reservedElsewhere)
     refreshAvailability();
 
     const handleFocus = () => {
@@ -234,13 +199,11 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
     };
     window.addEventListener("focus", handleFocus);
 
-    // Apply neutral availability from SSE payload directly — no round-trip fetch needed.
-    // On reconnect, do a full fetch to restore user-specific fields.
     const unsubscribeSSE = subscribeToAvailabilityStream(
       (event) => {
         if (cancelled || event.productId !== product.id) return;
-        if (event.sizeAvailability !== null) {
-          setSizeAvailability(event.sizeAvailability);
+        if (event.variantAvailability !== null) {
+          setVariantAvailability(event.variantAvailability);
         } else {
           setCurrentStock(event.stock);
         }
@@ -259,18 +222,18 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
   }, [product.id]);
 
   useEffect(() => {
-    setSelectedQuantity((current) => Math.min(Math.max(1, current), Math.max(1, selectedSizeStock)));
-  }, [selectedSizeStock]);
+    setSelectedQuantity((current) => Math.min(Math.max(1, current), Math.max(1, selectedVariantStock)));
+  }, [selectedVariantStock]);
 
   useEffect(() => {
     if (!product.id) return;
 
     const nextQuantity = cartItemQuantity > 0 ? cartItemQuantity : 1;
-    setSelectedQuantity(Math.min(Math.max(1, nextQuantity), Math.max(1, selectedSizeStock)));
-  }, [product.id, cartItemQuantity, selectedSizeStock, selectedSize, isPerfume]);
+    setSelectedQuantity(Math.min(Math.max(1, nextQuantity), Math.max(1, selectedVariantStock)));
+  }, [product.id, cartItemQuantity, selectedVariantStock, selectedVariantId, isPerfume]);
 
   const syncQuantity = (nextQuantity: number) => {
-    const boundedQuantity = Math.min(Math.max(1, nextQuantity), Math.max(1, selectedSizeStock));
+    const boundedQuantity = Math.min(Math.max(1, nextQuantity), Math.max(1, selectedVariantStock));
     setSelectedQuantity(boundedQuantity);
     if (cartItemQuantity > 0 && cartItemId) {
       updateQuantity(cartItemId, boundedQuantity);
@@ -278,20 +241,21 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
   };
 
   useEffect(() => {
-    if (availableSizes.length === 0) {
-      setSelectedSize("");
+    if (variantsForActiveColor.length === 0) {
+      setSelectedVariantId("");
       return;
     }
-
-    setSelectedSize((current) => {
-      const currentInfo = current ? sizeAvailability?.[current] : null;
-      if (current && availableSizes.includes(current) && (currentInfo?.stock ?? 0) > 0) return current;
-      if (defaultSelectedSize && availableSizes.includes(defaultSelectedSize)) {
-        return defaultSelectedSize;
-      }
-      return getDefaultSelectableSize(availableSizes, sizeAvailability);
+    setSelectedVariantId((current) => {
+      const currentInColor = variantsForActiveColor.find((variant) => variant._id === current);
+      const currentAvailable =
+        currentInColor && (variantAvailability?.[current]?.stock ?? currentInColor.stock ?? 0) > 0;
+      if (currentInColor && currentAvailable) return current;
+      const firstAvailable = variantsForActiveColor.find(
+        (variant) => (variantAvailability?.[variant._id]?.stock ?? variant.stock ?? 0) > 0,
+      );
+      return (firstAvailable || variantsForActiveColor[0])._id;
     });
-  }, [availableSizes.join("|"), defaultSelectedSize, sizeAvailability]);
+  }, [variantsForActiveColor, variantAvailability]);
 
   useEffect(() => {
     setOwnedReservation(Boolean(product.ownedReservation));
@@ -303,12 +267,10 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
 
   useEffect(() => {
     if (!product.id) return;
-
     const unsubscribe = subscribeToReservationChanges((payload) => {
       if (payload.productId !== product.id) return;
       refreshAvailability();
     });
-
     return unsubscribe;
   }, [product.id]);
 
@@ -325,18 +287,19 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
       const reservation = await reserveProduct(
         product.id || "unknown",
         selectedQuantity,
-        isPerfume ? undefined : selectedSize
+        selectedVariantId || null,
       );
       addItem({
         id: product.id || "unknown",
+        variantId: selectedVariantId,
         name: product.name,
         price: product.price,
         brand: product.brand,
         image: cartDisplayImage,
         color: activeHex || undefined,
         categories: product.categories,
-        size: isPerfume ? undefined : selectedSize,
-        maxStock: Math.max(1, selectedSizeStock),
+        size: selectedVariant?.size || undefined,
+        maxStock: Math.max(1, selectedVariantStock),
         productType: product.productType,
         fashionSubtype: product.fashionSubtype,
         originPictures: product.originPictures,
@@ -361,19 +324,23 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
 
   const handleAddToTryOn = async () => {
     if (isBlocked || isPerfume) return;
-
     try {
-      const reservation = await reserveProduct(product.id || "unknown", selectedQuantity, isPerfume ? undefined : selectedSize);
+      const reservation = await reserveProduct(
+        product.id || "unknown",
+        selectedQuantity,
+        selectedVariantId || null,
+      );
       addItem({
         id: product.id || "unknown",
+        variantId: selectedVariantId,
         name: product.name,
         price: product.price,
         brand: product.brand,
         image: cartDisplayImage,
         color: activeHex || undefined,
         categories: product.categories,
-        size: isPerfume ? undefined : selectedSize,
-        maxStock: Math.max(1, selectedSizeStock),
+        size: selectedVariant?.size || undefined,
+        maxStock: Math.max(1, selectedVariantStock),
         productType: product.productType,
         fashionSubtype: product.fashionSubtype,
         originPictures: product.originPictures,
@@ -390,11 +357,11 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
         price: product.price,
         brand: product.brand,
         quantity: 1,
-        maxStock: Math.max(1, selectedSizeStock),
+        maxStock: Math.max(1, selectedVariantStock),
         productType: product.productType,
         fashionSubtype: product.fashionSubtype,
         originPictures: product.originPictures,
-        size: isPerfume ? undefined : selectedSize,
+        size: selectedVariant?.size || undefined,
       });
       router.push("/studio");
     } catch {
@@ -404,25 +371,29 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
 
   const handleSelectColorway = (hex: string) => {
     setSelectedColorHex(hex);
-    const nextSize = allSizes.find((sizeOption) => (variantByKey.get(sizeOption)?.color || (sizeOption.endsWith(` / ${hex}`) ? hex : "")) === hex);
-    if (nextSize) {
-      setSelectedSize(nextSize);
+    const nextVariants = variants.filter(
+      (variant) => variant.color?.toLowerCase() === hex.toLowerCase(),
+    );
+    const firstAvailable = nextVariants.find(
+      (variant) => (variantAvailability?.[variant._id]?.stock ?? variant.stock ?? 0) > 0,
+    );
+    const next = firstAvailable || nextVariants[0];
+    if (next) {
+      setSelectedVariantId(next._id);
     }
     const params = new URLSearchParams();
     params.set("color", hex);
-    if (!isPerfume && nextSize) {
-      params.set("size", nextSize);
-    } else if (selectedSize) {
-      params.set("size", selectedSize);
+    if (next?.size) {
+      params.set("size", next.size);
+    } else if (selectedVariant?.size) {
+      params.set("size", selectedVariant.size);
     }
     router.replace(`/product/${product.id || ""}?${params.toString()}`, { scroll: false });
-    window.dispatchEvent(new CustomEvent("product:gallery:filterColorway", {
-      detail: { hex },
-    }));
+    window.dispatchEvent(new CustomEvent("product:gallery:filterColorway", { detail: { hex } }));
   };
 
   const normalizedConditionScore = product.conditionScore ?? 0;
-  const hasCondition = uniqueColorHexes.length === 0 && product.conditionScore != null;
+  const hasCondition = uniqueColors.length === 0 && product.conditionScore != null;
   const conditionPercent = hasCondition ? getConditionPercent(normalizedConditionScore) : 0;
   const conditionLabel = hasCondition ? getConditionLabel(normalizedConditionScore, product.conditionStatus ?? undefined) : "";
   const conditionColor = hasCondition ? getConditionColor(normalizedConditionScore) : "transparent";
@@ -501,13 +472,17 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
         </div>
       )}
 
-      {!isPerfume && isColorwayProduct && uniqueColorHexes.length > 0 && (
+      {!isPerfume && isColorwayProduct && uniqueColors.length > 0 && (
         <div>
           <p className="text-xs text-text-secondary uppercase tracking-wider mb-3">Colorways</p>
           <div className="flex flex-wrap gap-2">
-            {uniqueColorHexes.map((hex) => {
-              const hexSizes = allSizes.filter((s) => (variantByKey.get(s)?.color || (s.endsWith(` / ${hex}`) ? hex : "")) === hex);
-              const hasStock = hexSizes.some((s) => (sizeAvailability?.[s]?.stock ?? 0) > 0 || (!sizeAvailability && currentStock > 0));
+            {uniqueColors.map((hex) => {
+              const variantsOfColor = variants.filter(
+                (variant) => variant.color?.toLowerCase() === hex.toLowerCase(),
+              );
+              const hasStock = variantsOfColor.some(
+                (variant) => (variantAvailability?.[variant._id]?.stock ?? variant.stock ?? 0) > 0,
+              );
               return (
                 <button
                   key={hex}
@@ -515,7 +490,7 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
                   title={hex}
                   onClick={() => handleSelectColorway(hex)}
                   className={`w-7 h-7 rounded-full border-2 transition-all duration-200 cursor-pointer ${
-                    activeHex === hex
+                    selectedColorHex?.toLowerCase() === hex.toLowerCase()
                       ? "border-foreground scale-110"
                       : "border-transparent hover:border-border-color"
                   } ${!hasStock ? "opacity-40" : ""}`}
@@ -533,30 +508,30 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
             <p className="text-xs text-text-secondary uppercase tracking-wider">Sizes</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {availableSizes.map((sizeOption) => {
-              const sizeInfo = sizeAvailability?.[sizeOption];
-              const sizeAvailable = sizeInfo ? sizeInfo.stock > 0 : currentStock > 0;
-              const reservedElsewhereForSize = Boolean(sizeInfo?.reservedElsewhere);
-              const displayLabel = formatVariantSizeLabel(sizeOption, isColorwayProduct, variantByKey.get(sizeOption)?.size);
-              if (!displayLabel) return null;
+            {variantsForActiveColor.map((variant) => {
+              if (!variant.size.trim()) return null;
+              const info = variantAvailability?.[variant._id];
+              const stockForVariant = info ? info.stock : variant.stock ?? 0;
+              const variantAvailable = stockForVariant > 0;
+              const reservedElsewhereForVariant = Boolean(info?.reservedElsewhere);
               return (
                 <button
-                  key={sizeOption}
+                  key={variant._id}
                   type="button"
-                  onClick={() => sizeAvailable && setSelectedSize(sizeOption)}
-                  disabled={!sizeAvailable}
+                  onClick={() => variantAvailable && setSelectedVariantId(variant._id)}
+                  disabled={!variantAvailable}
                   className={`min-w-10 border px-3 py-2 text-sm font-medium transition-colors flex flex-col items-center gap-0.5 ${
-                    !sizeAvailable
+                    !variantAvailable
                       ? "border-border-color text-text-secondary bg-surface cursor-not-allowed line-through opacity-50"
-                      : selectedSize === sizeOption
+                      : selectedVariantId === variant._id
                         ? "border-foreground bg-foreground text-background"
                         : "border-border-color text-foreground hover:bg-hover cursor-pointer"
                   }`}
                 >
-                  <span>{displayLabel}</span>
-                  {sizeInfo?.stock === 0 ? (
+                  <span>{variant.size}</span>
+                  {stockForVariant === 0 ? (
                     <span className="text-[9px] uppercase tracking-wide text-text-secondary">Sold out</span>
-                  ) : hasHydratedAvailability && reservedElsewhereForSize ? (
+                  ) : hasHydratedAvailability && reservedElsewhereForVariant ? (
                     <span className="text-[9px] uppercase tracking-wide text-text-secondary">Reserved elsewhere</span>
                   ) : null}
                 </button>
@@ -571,18 +546,10 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
         <span className="text-xs text-text-secondary">
           {isPerfume
             ? `${currentStock} bottle${currentStock !== 1 ? "s" : ""} available`
-            : displaySelectedSize
-              ? (() => {
-                  const selectedLabel = formatVariantSizeLabel(
-                    displaySelectedSize,
-                    isColorwayProduct,
-                    variantByKey.get(displaySelectedSize)?.size
-                  );
-                  if (!selectedLabel) return displaySelectedSizeStock === 1 ? "Last one" : "In stock";
-                  return displaySelectedSizeStock === 1
-                    ? `Last one — ${selectedLabel}`
-                    : `Selected size: ${selectedLabel}`;
-                })()
+            : selectedVariant?.size
+              ? selectedVariantStock === 1
+                ? `Last one — ${selectedVariant.size}`
+                : `Selected size: ${selectedVariant.size}`
               : currentStock === 1
                 ? "Last one"
                 : "Size selected"}
@@ -626,9 +593,9 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
           <button
             type="button"
             onClick={() => syncQuantity(selectedQuantity + 1)}
-            disabled={isBlocked || selectedQuantity >= selectedSizeStock}
+            disabled={isBlocked || selectedQuantity >= selectedVariantStock}
             className={`w-8 h-8 flex items-center justify-center text-sm transition-colors cursor-pointer ${
-              isBlocked || selectedQuantity >= selectedSizeStock ? "text-border-color cursor-not-allowed" : "hover:bg-hover"
+              isBlocked || selectedQuantity >= selectedVariantStock ? "text-border-color cursor-not-allowed" : "hover:bg-hover"
             }`}
             aria-label="Increase quantity"
           >
@@ -675,6 +642,8 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
         <p className="text-xs text-text-secondary uppercase tracking-wider mb-3">Description</p>
         <p className="text-sm leading-relaxed text-foreground/80">{product.description}</p>
       </div>
+      {/* Surface unused viewer state for future use; suppress unused warnings. */}
+      <span hidden>{ownedReservation ? "1" : ""}{isSoldOut ? "1" : ""}</span>
     </div>
   );
 }

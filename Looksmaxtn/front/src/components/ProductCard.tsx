@@ -11,8 +11,19 @@ import { formatTndPrice } from "@/lib/formatPrice";
 import { getConditionColor, getConditionLabel, getConditionPercent } from "@/lib/productCondition";
 import { queueStudioAssignment } from "@/lib/studioAssignment";
 import { getColorwayEnhancedFrontImage, getColorwayEnhancedLeftImage, getColorwayMainImage } from "@/lib/colorwayImage";
+import type { VariantAvailabilityMap } from "@/lib/variantAvailability";
 
 type ProductType = "fashion" | "perfume" | "clothing" | "shoes";
+
+type ProductVariant = {
+  _id: string;
+  size: string;
+  color: string | null;
+  stock?: number;
+  fullStock?: number;
+  conditionScore?: number | null;
+  images?: number[];
+};
 
 interface ProductCardProps {
   id: string;
@@ -31,9 +42,8 @@ interface ProductCardProps {
   conditionStatus?: string | null;
   productType?: ProductType;
   fashionSubtype?: "clothes" | "shoes" | null;
-  sizes?: string[];
-  size?: string;
-  sizeAvailability?: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null;
+  variants?: ProductVariant[];
+  variantAvailability?: VariantAvailabilityMap | null;
   originPictures?: {
     front?: string;
     back?: string;
@@ -43,7 +53,6 @@ interface ProductCardProps {
   cloneSourceName?: string;
   cloneSourceImage?: string;
   storeType?: "thrift" | "retail" | null;
-  colorImages?: Record<string, number[]> | null;
   images?: { url: string; isMain: boolean }[];
   preferCollectionLeftImage?: boolean;
 }
@@ -51,23 +60,6 @@ interface ProductCardProps {
 const CLONE_PREVIEW_WIDTH = 184;
 const CLONE_PREVIEW_HEIGHT = 240;
 const CLONE_PREVIEW_OFFSET = 24;
-const DEFAULT_VARIANT_KEY = "__default__";
-
-function splitVariantLabel(value: string) {
-  if (value === DEFAULT_VARIANT_KEY) {
-    return { sizeLabel: "", colorHex: "" };
-  }
-
-  const separatorIndex = value.lastIndexOf(" / ");
-  if (separatorIndex === -1) {
-    return { sizeLabel: value.trim() === DEFAULT_VARIANT_KEY ? "" : value.trim(), colorHex: "" };
-  }
-
-  return {
-    sizeLabel: value.slice(0, separatorIndex).trim() === DEFAULT_VARIANT_KEY ? "" : value.slice(0, separatorIndex).trim(),
-    colorHex: value.slice(separatorIndex + 3).trim(),
-  };
-}
 
 export default function ProductCard({
   id,
@@ -79,20 +71,17 @@ export default function ProductCard({
   image,
   stock = 1,
   reservedElsewhere: initialReservedElsewhere = false,
-  ownedReservation: initialOwnedReservation = false,
   blockedByOrder: initialBlockedByOrder = false,
   conditionScore = null,
   conditionStatus = null,
   productType = "fashion",
   fashionSubtype = "clothes",
-  sizes,
-  size,
-  sizeAvailability,
+  variants = [],
+  variantAvailability,
   originPictures,
   cloneSourceName = "",
   cloneSourceImage = "",
   storeType,
-  colorImages,
   images = [],
   preferCollectionLeftImage = false,
 }: ProductCardProps) {
@@ -100,95 +89,98 @@ export default function ProductCard({
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
   const [hasHydratedAvailability, setHasHydratedAvailability] = useState(false);
-  const [sizeAvailabilityState, setSizeAvailabilityState] = useState(sizeAvailability || null);
-  const [viewerBlocked, setViewerBlocked] = useState<boolean>(initialReservedElsewhere);
-  const availabilitySizeKeys = Object.keys(sizeAvailabilityState || {});
-  const allSizes = (
-    availabilitySizeKeys.some((entry) => entry.includes(" / "))
-      ? availabilitySizeKeys
-      : sizes?.length
-        ? sizes
-        : availabilitySizeKeys.length > 0
-          ? availabilitySizeKeys
-          : size
-            ? [size]
-            : []
-  ).filter((entry) => Boolean(entry.trim()));
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [addedToCart, setAddedToCart] = useState(false);
-  const [clonePreview, setClonePreview] = useState({ visible: false, x: 0, y: 0 });
-  const colorwayHexes = useMemo(
-    () => {
-      const fromColorImages = colorImages
-        ? Object.keys(colorImages).filter(Boolean)
-        : [];
-      return fromColorImages.length > 0
-        ? fromColorImages
-        : (Array.from(new Set(allSizes.map((entry) => splitVariantLabel(entry).colorHex).filter(Boolean))) as string[]);
-    },
-    [allSizes, colorImages],
+  const [variantAvailabilityState, setVariantAvailabilityState] = useState<VariantAvailabilityMap | null>(
+    variantAvailability || null,
   );
-  const [activeColorHex, setActiveColorHex] = useState<string | null>(colorwayHexes[0] || null);
-  const selectedCartImage = getColorwayMainImage(activeColorHex, { image, images, colorImages }, image);
-  const selectedStoreImage = getColorwayEnhancedFrontImage(activeColorHex, { image, images, colorImages }, image);
+  const [viewerBlocked, setViewerBlocked] = useState<boolean>(initialReservedElsewhere);
+  const isPerfume = productType === "perfume";
+
+  const colorwayColors = useMemo(() => {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const variant of variants) {
+      const hex = variant.color?.toLowerCase();
+      if (hex && !seen.has(hex)) {
+        seen.add(hex);
+        result.push(hex);
+      }
+    }
+    return result;
+  }, [variants]);
+
+  const defaultSelectableVariant = useMemo(() => {
+    if (isPerfume || variants.length === 0) return null;
+    const available = variants.find(
+      (variant) => (variantAvailabilityState?.[variant._id]?.stock ?? variant.stock ?? 0) > 0,
+    );
+    return available || variants[0] || null;
+  }, [isPerfume, variantAvailabilityState, variants]);
+
+  const [activeColorHex, setActiveColorHex] = useState<string | null>(
+    defaultSelectableVariant?.color || colorwayColors[0] || null,
+  );
+
+  const selectedCartImage = getColorwayMainImage(activeColorHex, { image, images, variants }, image);
+  const selectedStoreImage = getColorwayEnhancedFrontImage(activeColorHex, { image, images, variants }, image);
   const selectedCollectionImage = preferCollectionLeftImage && fashionSubtype === "shoes"
-    ? getColorwayEnhancedLeftImage(activeColorHex, { image, images, colorImages }, image)
+    ? getColorwayEnhancedLeftImage(activeColorHex, { image, images, variants }, image)
     : "";
   const displayImage = selectedCollectionImage || selectedCartImage || image;
   const normalizedConditionScore = conditionScore ?? 0;
 
-  const handleColorwayClick = (e: React.MouseEvent, hex: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setActiveColorHex(hex);
-    const nextSizes = allSizes.filter((entry) => splitVariantLabel(entry).colorHex === hex);
-    const nextSize = nextSizes.find((entry) => (sizeAvailabilityState?.[entry]?.stock ?? 0) > 0) || nextSizes[0] || "";
-    setSelectedSize(nextSize);
-  };
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [addedToCart, setAddedToCart] = useState(false);
+  const [clonePreview, setClonePreview] = useState({ visible: false, x: 0, y: 0 });
   const [blockedByOrder, setBlockedByOrder] = useState(initialBlockedByOrder);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const isPerfume = productType === "perfume";
-  const hasCondition = colorwayHexes.length === 0 && conditionScore != null;
+  const hasCondition = colorwayColors.length === 0 && conditionScore != null;
   const conditionPercent = hasCondition ? getConditionPercent(normalizedConditionScore) : 0;
   const conditionLabel = hasCondition ? getConditionLabel(normalizedConditionScore, conditionStatus ?? undefined) : "";
   const conditionColor = hasCondition ? getConditionColor(normalizedConditionScore) : "transparent";
   const hasExplicitNewTag = tag?.trim().toUpperCase() === "NEW";
   const showNewBadge = !hasExplicitNewTag && !isPerfume && hasCondition && normalizedConditionScore >= 10;
-  const displayedSizes = useMemo(
-    () => (!isPerfume
-      ? (activeColorHex
-          ? allSizes.filter((entry) => splitVariantLabel(entry).colorHex === activeColorHex)
-          : allSizes)
-      : []),
-    [activeColorHex, allSizes, isPerfume],
-  );
-  const hasSizes = !isPerfume && displayedSizes.some((sizeOption) => Boolean(splitVariantLabel(sizeOption).sizeLabel));
-  const defaultSelectableSize = displayedSizes.find((sizeOption) => (sizeAvailabilityState?.[sizeOption]?.stock ?? 0) > 0) || displayedSizes[0] || "";
-  const [selectedSize, setSelectedSize] = useState(defaultSelectableSize);
-  const selectedSizeAvailability = !isPerfume && selectedSize ? sizeAvailabilityState?.[selectedSize] : null;
-  const getSizeOptionState = (sizeOption: string) => sizeAvailabilityState?.[sizeOption] || null;
-  const selectedSizeStock = (() => {
-    if (!isPerfume && selectedSizeAvailability) {
-      return selectedSizeAvailability.stock;
-    }
+
+  const variantsForActiveColor = useMemo(() => {
+    if (isPerfume) return [];
+    if (!activeColorHex || colorwayColors.length === 0) return variants;
+    return variants.filter(
+      (variant) => variant.color?.toLowerCase() === activeColorHex.toLowerCase(),
+    );
+  }, [activeColorHex, colorwayColors.length, isPerfume, variants]);
+
+  const sizedVariants = variantsForActiveColor.filter((variant) => Boolean(variant.size.trim()));
+  const hasSizes = !isPerfume && sizedVariants.length > 0;
+
+  const defaultSelectableVariantForColor = (() => {
+    if (variantsForActiveColor.length === 0) return null;
+    const available = variantsForActiveColor.find(
+      (variant) => (variantAvailabilityState?.[variant._id]?.stock ?? variant.stock ?? 0) > 0,
+    );
+    return available || variantsForActiveColor[0];
+  })();
+
+  const [selectedVariantId, setSelectedVariantId] = useState<string>(defaultSelectableVariant?._id || "");
+  const selectedVariant = selectedVariantId
+    ? variants.find((variant) => variant._id === selectedVariantId)
+    : undefined;
+  const selectedVariantAvailability = !isPerfume && selectedVariantId
+    ? variantAvailabilityState?.[selectedVariantId]
+    : null;
+  const selectedVariantStock = (() => {
+    if (!isPerfume && selectedVariantAvailability) return selectedVariantAvailability.stock;
+    if (!isPerfume && selectedVariant) return selectedVariant.stock ?? stock;
     return stock;
   })();
-  const isSoldOut = !isPerfume && selectedSizeAvailability
-    ? selectedSizeAvailability.stock <= 0 && !selectedSizeAvailability.reservedElsewhere
+  const isSoldOut = !isPerfume && selectedVariantAvailability
+    ? selectedVariantAvailability.stock <= 0 && !selectedVariantAvailability.reservedElsewhere
     : false;
-  // viewerBlocked is computed server-side per viewer. True when:
-  //   - viewer owns at least one reservation on this product AND some size
-  //     overbooks (owned + others > stock), OR
-  //   - viewer owns nothing AND every in-stock size is fully held by others.
   const showReservedElsewhere = !isPerfume && hasHydratedAvailability && viewerBlocked;
-  const isBlocked = !isPerfume && selectedSizeStock <= 0;
-  const statusLabel = showReservedElsewhere
-    ? "Reserved elsewhere"
-    : "Sold Out";
-  const cardHref = !isPerfume && isMounted && selectedSize
+  const isBlocked = !isPerfume && selectedVariantStock <= 0;
+  const statusLabel = showReservedElsewhere ? "Reserved elsewhere" : "Sold Out";
+  const cardHref = !isPerfume && isMounted && selectedVariant?.size
     ? {
         pathname: `/product/${id}`,
-        query: { size: selectedSize, color: activeColorHex || undefined },
+        query: { size: selectedVariant.size, color: activeColorHex || undefined },
       }
     : `/product/${id}`;
 
@@ -197,30 +189,28 @@ export default function ProductCard({
   }, []);
 
   useEffect(() => {
-    if (colorwayHexes.length > 0 && (!activeColorHex || !colorwayHexes.includes(activeColorHex))) {
-      setActiveColorHex(colorwayHexes[0]);
-      return;
+    if (colorwayColors.length > 0 && (!activeColorHex || !colorwayColors.some((c) => c.toLowerCase() === activeColorHex.toLowerCase()))) {
+      setActiveColorHex(colorwayColors[0]);
     }
-  }, [activeColorHex, colorwayHexes]);
+  }, [activeColorHex, colorwayColors]);
 
   useEffect(() => {
-    if (displayedSizes.length === 0) {
-      setSelectedSize("");
+    if (variantsForActiveColor.length === 0) {
+      setSelectedVariantId("");
       return;
     }
-
-    setSelectedSize((current) => {
-      if (current && displayedSizes.includes(current) && (sizeAvailabilityState?.[current]?.stock ?? 0) > 0) {
-        return current;
-      }
-
-      return defaultSelectableSize;
+    setSelectedVariantId((current) => {
+      const stillInColor = variantsForActiveColor.find((variant) => variant._id === current);
+      const stillAvailable = stillInColor
+        && (variantAvailabilityState?.[current]?.stock ?? stillInColor.stock ?? 0) > 0;
+      if (stillInColor && stillAvailable) return current;
+      return defaultSelectableVariantForColor?._id || "";
     });
-  }, [displayedSizes.join("|"), defaultSelectableSize, sizeAvailabilityState]);
+  }, [variantsForActiveColor, variantAvailabilityState, defaultSelectableVariantForColor?._id]);
 
   useEffect(() => {
-    setSizeAvailabilityState(sizeAvailability || null);
-  }, [sizeAvailability]);
+    setVariantAvailabilityState(variantAvailability || null);
+  }, [variantAvailability]);
 
   useEffect(() => {
     setBlockedByOrder(initialBlockedByOrder);
@@ -228,7 +218,6 @@ export default function ProductCard({
 
   useEffect(() => {
     if (!id) return;
-
     let cancelled = false;
 
     const refresh = () => {
@@ -240,7 +229,7 @@ export default function ProductCard({
         .then((r) => r.json())
         .then((data) => {
           if (cancelled || !data.product) return;
-          setSizeAvailabilityState(data.product.sizeAvailability || null);
+          setVariantAvailabilityState(data.product.variantAvailability || null);
           setBlockedByOrder(Boolean(data.product.blockedByOrder));
           setViewerBlocked(Boolean(data.product.viewerBlocked));
           setHasHydratedAvailability(true);
@@ -248,29 +237,21 @@ export default function ProductCard({
         .catch(() => {});
     };
 
-    // Initial hydration
     refresh();
-
-    // Re-fetch when user returns to the tab (catches any SSE events missed while hidden)
     window.addEventListener("focus", refresh);
 
-    // Apply SSE payload directly — no round-trip fetch needed.
-    // On reconnect, do a full fetch to restore user-specific fields (blockedByOrder, etc.)
     const unsubscribeSSE = subscribeToAvailabilityStream(
       (event) => {
         if (event.productId !== id) return;
         setViewerBlocked(Boolean(event.viewerBlocked));
-        if (event.sizeAvailability !== null) {
-          setSizeAvailabilityState(event.sizeAvailability);
+        if (event.variantAvailability !== null) {
+          setVariantAvailabilityState(event.variantAvailability);
           setHasHydratedAvailability(true);
         }
-        // sizeAvailability === null means a non-size product (perfume);
-        // ProductCard has no blocked state for perfumes so nothing to update.
       },
       refresh,
     );
 
-    // Re-fetch when this tab's own cart action changes this product
     const unsubscribeLocal = subscribeToReservationChanges((payload) => {
       if (payload.productId !== id) return;
       refresh();
@@ -284,21 +265,35 @@ export default function ProductCard({
     };
   }, [id]);
 
+  const handleColorwayClick = (e: React.MouseEvent, hex: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setActiveColorHex(hex);
+    const nextVariants = variants.filter(
+      (variant) => variant.color?.toLowerCase() === hex.toLowerCase(),
+    );
+    const next = nextVariants.find(
+      (variant) => (variantAvailabilityState?.[variant._id]?.stock ?? variant.stock ?? 0) > 0,
+    ) || nextVariants[0];
+    setSelectedVariantId(next?._id || "");
+  };
+
   const handleQuickAdd = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (isBlocked) return;
 
     try {
-      const reservation = await reserveProduct(id, 1, isPerfume ? undefined : selectedSize);
+      const reservation = await reserveProduct(id, 1, selectedVariantId || null);
       addItem({
         id,
+        variantId: selectedVariantId,
         name,
         price,
         brand,
-        size: isPerfume ? undefined : selectedSize,
+        size: selectedVariant?.size || undefined,
         color: activeColorHex || undefined,
-        maxStock: Math.max(1, selectedSizeStock),
+        maxStock: Math.max(1, selectedVariantStock),
         image: selectedStoreImage || selectedCartImage || image,
         categories,
         productType,
@@ -321,16 +316,17 @@ export default function ProductCard({
     if (isBlocked || isPerfume) return;
 
     try {
-      const reservation = await reserveProduct(id, 1, isPerfume ? undefined : selectedSize);
+      const reservation = await reserveProduct(id, 1, selectedVariantId || null);
       addItem({
         id,
+        variantId: selectedVariantId,
         name,
         categories,
         price,
         brand,
-        size: isPerfume ? undefined : selectedSize,
+        size: selectedVariant?.size || undefined,
         color: activeColorHex || undefined,
-        maxStock: Math.max(1, selectedSizeStock),
+        maxStock: Math.max(1, selectedVariantStock),
         image: selectedStoreImage || selectedCartImage || image,
         productType,
         fashionSubtype,
@@ -347,11 +343,11 @@ export default function ProductCard({
         price,
         brand,
         quantity: 1,
-        maxStock: Math.max(1, selectedSizeStock),
+        maxStock: Math.max(1, selectedVariantStock),
         productType,
         fashionSubtype,
         originPictures,
-        size: isPerfume ? undefined : selectedSize,
+        size: selectedVariant?.size || undefined,
       });
       router.push("/studio");
       setIsDropdownOpen(false);
@@ -367,10 +363,10 @@ export default function ProductCard({
     setIsDropdownOpen((prev) => !prev);
   };
 
-  const handleSizeSelect = (e: React.MouseEvent, size: string) => {
+  const handleSizeSelect = (e: React.MouseEvent, variantId: string) => {
     e.preventDefault();
     e.stopPropagation();
-    setSelectedSize(size);
+    setSelectedVariantId(variantId);
     setIsDropdownOpen(false);
   };
 
@@ -413,11 +409,7 @@ export default function ProductCard({
   };
 
   const showClonePreviewAtPointer = (x: number, y: number) => {
-    setClonePreview({
-      visible: true,
-      x,
-      y,
-    });
+    setClonePreview({ visible: true, x, y });
   };
 
   return (
@@ -451,7 +443,7 @@ export default function ProductCard({
           showClonePreviewAtPointer(e.clientX, e.clientY);
         }}
         onMouseLeave={() => setClonePreview({ visible: false, x: 0, y: 0 })}
-        >
+      >
         {displayImage ? (
           <MediaRenderer
             src={displayImage}
@@ -533,7 +525,7 @@ export default function ProductCard({
                     onClick={toggleDropdown}
                     className="w-full h-full flex items-center justify-between px-3 text-[10px] text-foreground font-medium uppercase tracking-wide border-r border-border-color transition-colors hover:bg-hover cursor-pointer"
                   >
-                    <span>Size {splitVariantLabel(selectedSize || defaultSelectableSize).sizeLabel}</span>
+                    <span>Size {selectedVariant?.size || ""}</span>
                     <svg
                       width="10"
                       height="10"
@@ -557,22 +549,22 @@ export default function ProductCard({
                         e.stopPropagation();
                       }}
                     >
-                      {displayedSizes.map((sizeOption) => {
-                        const { sizeLabel } = splitVariantLabel(sizeOption);
-                        if (!sizeLabel) return null;
+                      {sizedVariants.map((variant) => {
+                        const info = variantAvailabilityState?.[variant._id];
+                        const stockForVariant = info ? info.stock : variant.stock ?? 0;
                         return (
-                        <div
-                          key={sizeOption}
-                          onClick={(e) => handleSizeSelect(e, sizeOption)}
-                          className="px-3 py-2.5 text-[10px] text-foreground font-medium hover:bg-surface transition-colors cursor-pointer flex items-center justify-between gap-2"
-                        >
-                          <span>{sizeLabel}</span>
-                          {(getSizeOptionState(sizeOption)?.stock ?? 0) === 0 ? (
-                            <span className="text-[9px] uppercase tracking-wide text-text-secondary">Sold out</span>
-                          ) : hasHydratedAvailability && getSizeOptionState(sizeOption)?.reservedElsewhere ? (
-                            <span className="text-[9px] uppercase tracking-wide text-text-secondary">Reserved elsewhere</span>
-                          ) : null}
-                        </div>
+                          <div
+                            key={variant._id}
+                            onClick={(e) => handleSizeSelect(e, variant._id)}
+                            className="px-3 py-2.5 text-[10px] text-foreground font-medium hover:bg-surface transition-colors cursor-pointer flex items-center justify-between gap-2"
+                          >
+                            <span>{variant.size}</span>
+                            {stockForVariant === 0 ? (
+                              <span className="text-[9px] uppercase tracking-wide text-text-secondary">Sold out</span>
+                            ) : hasHydratedAvailability && info?.reservedElsewhere ? (
+                              <span className="text-[9px] uppercase tracking-wide text-text-secondary">Reserved elsewhere</span>
+                            ) : null}
+                          </div>
                         );
                       })}
                     </div>
@@ -614,16 +606,18 @@ export default function ProductCard({
           </div>
         )}
       </div>
-      {!isPerfume && colorwayHexes.length > 0 && (
+      {!isPerfume && colorwayColors.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-2">
-          {colorwayHexes.map((hex) => (
+          {colorwayColors.map((hex) => (
             <button
               key={hex}
               type="button"
               title={hex}
               onClick={(e) => handleColorwayClick(e, hex)}
               className={`w-4 h-4 border transition-all duration-150 ${
-                activeColorHex === hex ? "border-foreground scale-110" : "border-border-color hover:border-foreground"
+                activeColorHex?.toLowerCase() === hex.toLowerCase()
+                  ? "border-foreground scale-110"
+                  : "border-border-color hover:border-foreground"
               }`}
               style={{ backgroundColor: hex }}
             />
@@ -645,6 +639,8 @@ export default function ProductCard({
           </div>
         )}
       </div>
+      {/* unused state surface */}
+      <span hidden>{blockedByOrder ? "1" : ""}{storeType || ""}</span>
     </Link>
   );
 }

@@ -89,9 +89,30 @@ function formatOrderColor(color: string) {
   return COLOR_NAME_BY_HEX.get(normalized) || getCustomColorName(normalized);
 }
 
+function OrderColorSwatch({ color }: { color: string }) {
+  const normalized = normalizeHexColor(color);
+  if (!normalized) return null;
+  return (
+    <span
+      className="inline-block h-3 w-3 shrink-0 rounded-[2px] border border-black/30 align-middle"
+      style={{ backgroundColor: normalized }}
+      aria-hidden="true"
+      title={normalized}
+    />
+  );
+}
+
 function formatOrderVariant(size: string, color: string) {
-  const parts = [size?.trim(), color?.trim() ? formatOrderColor(color) : ""].filter(Boolean);
-  return parts.join(" · ") || "N/A";
+  const normalizedSize = size?.trim();
+  const normalizedColor = normalizeHexColor(color);
+  if (!normalizedSize && !normalizedColor) return "N/A";
+  return (
+    <span className="inline-flex items-center gap-2">
+      {normalizedSize ? <span>{normalizedSize}</span> : null}
+      {normalizedSize && normalizedColor ? <span className="opacity-60">|</span> : null}
+      {normalizedColor ? <OrderColorSwatch color={normalizedColor} /> : null}
+    </span>
+  );
 }
 
 export default function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {

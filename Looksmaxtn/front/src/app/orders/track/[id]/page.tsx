@@ -34,8 +34,35 @@ interface TrackedOrder {
 }
 
 function formatOrderSizeLabel(size?: string) {
-  if (!size || size === "__default__") return "";
-  return size;
+  return size?.trim() || "";
+}
+
+function OrderColorSwatch({ color }: { color: string }) {
+  if (!color) return null;
+  return (
+    <span
+      className="inline-block h-3 w-3 shrink-0 rounded-[2px] border border-border-color/40 align-middle"
+      style={{ backgroundColor: color }}
+      aria-hidden="true"
+      title={color}
+    />
+  );
+}
+
+function OrderVariantMeta({ size, color, quantity }: { size?: string; color?: string; quantity: number }) {
+  const normalizedSize = formatOrderSizeLabel(size);
+  const normalizedColor = color?.trim() || "";
+  const hasVariantMeta = Boolean(normalizedSize || normalizedColor);
+
+  return (
+    <span className="inline-flex items-center gap-1">
+      {normalizedSize ? <span>{normalizedSize}</span> : null}
+      {normalizedSize && normalizedColor ? <span className="opacity-60">|</span> : null}
+      {normalizedColor ? <OrderColorSwatch color={normalizedColor} /> : null}
+      {hasVariantMeta ? <span className="opacity-60">|</span> : null}
+      <span>Qty: {quantity}</span>
+    </span>
+  );
 }
 
 const PIPELINE_STEPS = [
@@ -196,7 +223,7 @@ export default function TrackOrderPage({ params }: { params: Promise<{ id: strin
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{item.name}</p>
                   <p className="text-[10px] text-text-secondary mt-0.5">
-                    {formatOrderSizeLabel(item.size)}{formatOrderSizeLabel(item.size) && item.color ? " · " : ""}{item.color || ""} · Qty: {item.quantity}
+                    <OrderVariantMeta size={item.size} color={item.color} quantity={item.quantity} />
                   </p>
                 </div>
                 <p className="text-sm font-medium whitespace-nowrap">

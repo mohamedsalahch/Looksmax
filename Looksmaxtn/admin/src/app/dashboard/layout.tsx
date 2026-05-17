@@ -110,7 +110,16 @@ type AdminRealtimeEvent =
         createdBy?: { id?: string; name?: string; email?: string } | null;
       };
     }
-  | { type: "product:delete"; productId: string };
+  | { type: "product:delete"; productId: string }
+  | {
+      type: "generated-image:update";
+      asset: {
+        _id: string;
+        status: "processing" | "completed" | "failed";
+        images: string[];
+        errorMessage?: string;
+      };
+    };
 
 const navItems = [
   { name: "Dashboard", href: "/dashboard", icon: "📊" },
@@ -762,6 +771,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       if (payload.type === "product:delete") {
         setProductNotifications((current) =>
           current.filter((notice) => notice.productId !== payload.productId)
+        );
+        return;
+      }
+
+      if (payload.type === "generated-image:update") {
+        window.dispatchEvent(
+          new CustomEvent("looksmax-admin-generated-image-event", { detail: payload.asset })
         );
         return;
       }

@@ -16,6 +16,17 @@ interface AuditActor {
   email: string;
 }
 
+interface ProductVariant {
+  _id: string;
+  size: string;
+  color: string | null;
+  fullStock: number;
+  stock: number;
+  conditionScore?: number | null;
+  soldQuantity?: number;
+  images?: number[];
+}
+
 interface ProductDetail {
   _id: string;
   name: string;
@@ -29,7 +40,7 @@ interface ProductDetail {
   availableStock?: number;
   soldQuantity?: number;
   fullStock?: number;
-  sizeStock?: Record<string, { fullStock: number; stock: number; soldQuantity: number }> | null;
+  variants?: ProductVariant[];
   images?: ProductImage[];
   tag?: string;
   brand: string;
@@ -47,13 +58,6 @@ interface ProductDetail {
   updatedBy?: AuditActor | null;
   createdAt: string;
   updatedAt: string;
-}
-
-interface SizeStockEntry {
-  fullStock: number;
-  stock: number;
-  soldQuantity: number;
-  conditionScore?: number | null;
 }
 
 function getProductStatus(product: ProductDetail) {
@@ -86,18 +90,6 @@ function getApprovalStatusBadge(approvalStatus: ProductDetail["approvalStatus"] 
     case "approved":
     default:         return { label: "Approved", className: "bg-bg-secondary text-text-secondary" };
   }
-}
-
-function formatVariantLabel(label: string) {
-  const [size] = label.split(" / ");
-  return size?.trim() || label.trim();
-}
-
-function formatVariantColor(label: string) {
-  const parts = label.split(" / ");
-  if (parts.length < 2) return "";
-  const color = parts[parts.length - 1]?.trim() || "";
-  return color.startsWith("#") ? color.toUpperCase() : color;
 }
 
 export default function ProductViewPage({ params }: { params: Promise<{ id: string }> }) {
@@ -198,8 +190,8 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
 
   const status = getProductStatus(product);
   const inventory = getInventorySummary(product);
-  const sizeEntries = Object.entries(product.sizeStock || {});
-  const hasColorVariants = sizeEntries.some(([label]) => Boolean(formatVariantColor(label)));
+  const variants = product.variants || [];
+  const hasColorVariants = variants.some((variant) => variant.color !== null);
   const approvalStatus = product.approvalStatus || "approved";
   const approvalBadge = getApprovalStatusBadge(approvalStatus);
 
@@ -224,6 +216,12 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
           </Link>
         ) : userRole === "admin" ? (
           <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <Link
+              href={`/dashboard/products/${product._id}/edit`}
+              className="btn-primary"
+            >
+              Edit
+            </Link>
             <button
               type="button"
               onClick={() => void handleApprovalUpdate("approved")}
@@ -432,49 +430,46 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
           </div>
         </div>
 
-        {/* Per-size breakdown */}
-        {sizeEntries.length > 0 && (
+        {/* Per-variant breakdown */}
+        {variants.length > 0 && (
           <div className="mt-6">
             <p className="label-meta mb-3">{hasColorVariants ? "By Size & Color" : "By Size"}</p>
             <div>
-              {/* Header row */}
               <div className="grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_repeat(3,5rem)] gap-x-4 border-b border-border pb-2 mb-1">
                 <span className="label-meta">Variant</span>
                 <span className="label-meta text-right hidden sm:block">Full</span>
                 <span className="label-meta text-right hidden sm:block">Avail</span>
                 <span className="label-meta text-right">Sold</span>
               </div>
-              {sizeEntries.map(([size, entry]) => {
-                const typedEntry = entry as SizeStockEntry;
-                const rowLabel = formatVariantLabel(size);
-                const rowColor = formatVariantColor(size);
-                const hasColor = Boolean(rowColor);
-                return (
-                  <div
-                    key={size}
-                    className="grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_repeat(3,5rem)] gap-x-4 border-b border-border py-2.5 items-center hover:bg-bg-secondary/50 transition-colors px-1 -mx-1"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-xs font-medium uppercase tracking-wider text-text-primary truncate">{rowLabel}</span>
-                      {hasColor && (
-                        <span className="inline-flex items-center gap-1 shrink-0">
-                          <span className="h-3 w-3 border border-border/60" style={{ backgroundColor: rowColor }} />
-                          <span className="text-[9px] uppercase tracking-wider text-text-secondary hidden sm:inline">{rowColor}</span>
+              {variants.map((variant) => (
+                <div
+                  key={variant._id}
+                  className="grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_repeat(3,5rem)] gap-x-4 border-b border-border py-2.5 items-center hover:bg-bg-secondary/50 transition-colors px-1 -mx-1"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs font-medium uppercase tracking-wider text-text-primary truncate">
+                      {variant.size || "—"}
+                    </span>
+                    {variant.color && (
+                      <span className="inline-flex items-center gap-1 shrink-0">
+                        <span className="h-3 w-3 border border-border/60" style={{ backgroundColor: variant.color }} />
+                        <span className="text-[9px] uppercase tracking-wider text-text-secondary hidden sm:inline">
+                          {variant.color.toUpperCase()}
                         </span>
-                      )}
-                    </div>
-                    <span className="text-xs text-text-secondary text-right hidden sm:block tabular-nums">
-                      {Math.max(typedEntry.fullStock ?? 0, 0)}
-                    </span>
-                    <span className="text-xs text-text-secondary text-right hidden sm:block tabular-nums">
-                      {Math.max(typedEntry.stock ?? 0, 0)}
-                    </span>
-                    <span className="text-xs text-text-secondary text-right tabular-nums">
-                      {Math.max(typedEntry.soldQuantity ?? 0, 0)}
-                    </span>
+                      </span>
+                    )}
                   </div>
-                );
-              })}
+                  <span className="text-xs text-text-secondary text-right hidden sm:block tabular-nums">
+                    {Math.max(variant.fullStock ?? 0, 0)}
+                  </span>
+                  <span className="text-xs text-text-secondary text-right hidden sm:block tabular-nums">
+                    {Math.max(variant.stock ?? 0, 0)}
+                  </span>
+                  <span className="text-xs text-text-secondary text-right tabular-nums">
+                    {Math.max(variant.soldQuantity ?? 0, 0)}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         )}

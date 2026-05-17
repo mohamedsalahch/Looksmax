@@ -10,18 +10,6 @@ import { getCartItemProductId } from "@/lib/cartItem";
 import { getEnhancedFrontDisplayImage } from "@/lib/colorwayImage";
 import { queueStudioAssignment } from "@/lib/studioAssignment";
 
-function formatCartSizeLabel(size?: string) {
-  if (!size) return "";
-  if (size === "__default__") return "";
-  const colorVariantMatch = size.match(/^(.*?)(?:\s*\/\s*#?[0-9a-fA-F]{3,8})$/);
-  if (colorVariantMatch?.[1]) {
-    return colorVariantMatch[1].trim();
-  }
-  const separatorIndex = size.lastIndexOf(" / ");
-  if (separatorIndex === -1) return size;
-  return size.slice(0, separatorIndex).trim();
-}
-
 export default function CartPanel() {
   const { items, isOpen, openCart, closeCart, removeItem, updateQuantity, totalItems, totalPrice } =
     useCart();
@@ -190,8 +178,8 @@ export default function CartPanel() {
                             </span>
                           ) : (
                             <>
-                              {formatCartSizeLabel(item.size) && (
-                                <span className="text-[10px] text-text-secondary">{formatCartSizeLabel(item.size)}</span>
+                              {item.size?.trim() && (
+                                <span className="text-[10px] text-text-secondary">{item.size.trim()}</span>
                               )}
                               {item.color ? (
                                 <span
