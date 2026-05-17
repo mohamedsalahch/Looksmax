@@ -83,7 +83,8 @@ export default async function CategoryPage({
   const { slug } = await params;
 
   const categoryTree = await loadCategoryTree();
-  const resolvedSlug = categoryExists(categoryTree, slug) ? slug : "";
+  const isVirtualSlug = slug === "new" || slug === "new-arrivals";
+  const resolvedSlug = isVirtualSlug || categoryExists(categoryTree, slug) ? slug : "";
   const initialData = await loadCategoryData(resolvedSlug);
 
   return (
