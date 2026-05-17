@@ -13,6 +13,11 @@ from app.models.requests import ValidatePhotoRequest
 from app.models.responses import CompareFrontBackResponse
 from app.models.responses import ValidatePhotoResponse
 from app.services.generator import ImageGenerator
+from app.services import dataset
+from app.prompts.templates import (
+    PHOTO_VALIDATION_PROMPT_VERSION,
+    COMPARE_FRONT_BACK_PROMPT_VERSION,
+)
 from app.utils.image import b64_to_part
 
 router = APIRouter(prefix="/api", tags=["validation"])
@@ -85,6 +90,17 @@ async def _classify_product_view(image_base64: str, label: str) -> dict:
     reason = result.get("reason")
     if view not in {"front", "back", "left", "right", "unknown"}:
         view = "unknown"
+
+    dataset.record(
+        flow="compare_front_back",
+        model=_VALIDATION_MODEL,
+        prompt_version=COMPARE_FRONT_BACK_PROMPT_VERSION,
+        prompt_text=COMPARE_FRONT_BACK_PROMPT,
+        inputs={"photo": image_base64},
+        outputs={},
+        extra={"label": label, "view": view, "reason": reason},
+    )
+
     return {"view": view, "reason": reason}
 
 
@@ -159,7 +175,17 @@ async def validate_photo(request: ValidatePhotoRequest):
         logger.error(f"validate-photo: failed to parse response: {e}")
         raise HTTPException(status_code=502, detail="Could not parse validation result")
 
-    return ValidatePhotoResponse(
-        valid=result.get("valid", False),
-        reason=result.get("reason"),
+    valid = bool(result.get("valid", False))
+    reason = result.get("reason")
+
+    dataset.record(
+        flow="photo_validation",
+        model=_VALIDATION_MODEL,
+        prompt_version=PHOTO_VALIDATION_PROMPT_VERSION,
+        prompt_text=VALIDATION_PROMPT,
+        inputs={"photo": request.image},
+        outputs={},
+        extra={"valid": valid, "reason": reason},
     )
+
+    return ValidatePhotoResponse(valid=valid, reason=reason)
