@@ -27,6 +27,7 @@ interface Category {
   _id: string;
   name: string;
   slug: string;
+  isActive?: boolean;
   parentSlug?: string | null;
 }
 

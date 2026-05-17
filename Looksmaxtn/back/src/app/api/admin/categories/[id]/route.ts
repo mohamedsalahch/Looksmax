@@ -5,6 +5,37 @@ import Product from "@/store/models/Product";
 import { getSession } from "@/admin/lib/auth";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 
+type LeanCategory = {
+  _id: unknown;
+  slug: string;
+  parentSlug?: string | null;
+};
+
+function getDescendantSlugs(categories: LeanCategory[], rootSlug: string) {
+  const childrenByParent = new Map<string, string[]>();
+  for (const category of categories) {
+    const parentSlug = category.parentSlug || null;
+    if (!parentSlug) continue;
+    const children = childrenByParent.get(parentSlug) || [];
+    children.push(category.slug);
+    childrenByParent.set(parentSlug, children);
+  }
+
+  const descendantSlugs: string[] = [];
+  const stack = [...(childrenByParent.get(rootSlug) || [])];
+  const seen = new Set<string>();
+
+  while (stack.length > 0) {
+    const slug = stack.pop();
+    if (!slug || seen.has(slug)) continue;
+    seen.add(slug);
+    descendantSlugs.push(slug);
+    stack.push(...(childrenByParent.get(slug) || []));
+  }
+
+  return descendantSlugs;
+}
+
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getSession();
@@ -34,6 +65,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "A category cannot be its own parent." }, { status: 400 });
     }
 
+    const shouldCascadeVisibility =
+      !existingCategory.parentSlug &&
+      typeof body.isActive === "boolean" &&
+      body.isActive !== existingCategory.isActive;
+    const descendantSlugs = shouldCascadeVisibility
+      ? getDescendantSlugs(await Category.find().select("slug parentSlug").lean(), oldSlug)
+      : [];
+
     if (nextSlug !== oldSlug) {
       await Category.updateMany(
         { parentSlug: oldSlug },
@@ -51,6 +90,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           { $set: { categories: nextCategories } }
         );
       }
+    }
+
+    if (shouldCascadeVisibility && descendantSlugs.length > 0) {
+      await Category.updateMany(
+        { slug: { $in: descendantSlugs } },
+        { $set: { isActive: body.isActive, updatedBy: auditActor } }
+      );
     }
 
     const category = await Category.findByIdAndUpdate(
