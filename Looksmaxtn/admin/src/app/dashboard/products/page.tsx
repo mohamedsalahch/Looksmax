@@ -18,8 +18,16 @@ interface Product {
   stock: number; availableStock?: number; soldQuantity?: number; fullStock?: number; tag: string; brand: string; reference?: string; createdAt: string; productType?: "fashion" | "perfume" | "clothing" | "shoes"; availabilityStatus?: string; isActive?: boolean; visibilityStatus?: string; approvalStatus?: "pending" | "approved" | "rejected"; images?: Array<{ url: string; isMain: boolean }>; originPictures?: { front?: string; back?: string; left?: string; right?: string }; createdBy?: { id?: string; name?: string; email?: string } | null; storeName?: string;
 }
 
-type SortKey = "name" | "_id" | "categories" | "productType" | "price" | "stock" | "status" | "approval" | "visibility" | "tag";
+type SortKey = "name" | "_id" | "categories" | "store" | "productType" | "price" | "stock" | "status" | "approval" | "visibility" | "tag";
 type SortDirection = "asc" | "desc";
+
+function getProductStoreLabel(product: Product) {
+  return product.storeName || product.createdBy?.name || product.createdBy?.email || "Unknown store";
+}
+
+function getProductStoreKey(product: Product) {
+  return getProductStoreLabel(product).trim().toLowerCase() || "__unknown__";
+}
 
 function getProductStatus(product: Product) {
   if (product.availabilityStatus === "sold") {
@@ -180,11 +188,10 @@ export default function ProductsPage() {
       const matchesCategory =
         categoryFilter === "all" ||
         (product.categories || []).includes(categoryFilter);
-      const productStoreKey = product.createdBy?.id || product.createdBy?.email || product.storeName || "__unknown__";
       const matchesStore =
         !canFilterByStore ||
         storeFilter === "all" ||
-        productStoreKey === storeFilter;
+        getProductStoreKey(product) === storeFilter;
 
       const isInactive = product.isActive === false || product.visibilityStatus === "inactive";
       const normalizedApprovalStatus = product.approvalStatus || "approved";
@@ -227,8 +234,8 @@ export default function ProductsPage() {
     const byKey = new Map<string, { value: string; label: string; detail: string }>();
 
     for (const product of products) {
-      const value = product.createdBy?.id || product.createdBy?.email || product.storeName || "__unknown__";
-      const label = product.storeName || product.createdBy?.name || product.createdBy?.email || "Unknown store";
+      const label = getProductStoreLabel(product);
+      const value = getProductStoreKey(product);
       const detail = product.createdBy?.email || "";
       if (!byKey.has(value)) {
         byKey.set(value, { value, label, detail });
@@ -251,6 +258,8 @@ export default function ProductsPage() {
           return product._id;
         case "categories":
           return (product.categories || []).join(", ");
+        case "store":
+          return getProductStoreLabel(product);
         case "price":
           return product.price;
         case "stock":
@@ -352,7 +361,7 @@ export default function ProductsPage() {
             onChange={(e) => setStoreFilter(e.target.value)}
             className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-text-primary transition-colors"
           >
-            <option value="all">All stores</option>
+            <option value="all">All store names</option>
             {storeOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -389,7 +398,7 @@ export default function ProductsPage() {
         </div>
       ) : (
         <div className="overflow-x-auto border border-border rounded-none">
-          <table className="min-w-[760px] w-full text-left">
+          <table className="min-w-[900px] w-full text-left">
             <thead className="bg-bg-secondary">
               <tr className="text-[10px] text-text-secondary uppercase tracking-wider">
                 <th className="px-4 py-3">
@@ -402,6 +411,13 @@ export default function ProductsPage() {
                     Category {renderSortIndicator("categories")}
                   </button>
                 </th>
+                {canFilterByStore && (
+                  <th className="px-4 py-3">
+                    <button type="button" onClick={() => toggleSort("store")} className="inline-flex items-center gap-1 cursor-pointer">
+                      Store {renderSortIndicator("store")}
+                    </button>
+                  </th>
+                )}
                 <th className="px-4 py-3">
                   <span className="inline-flex items-center gap-1">Reference</span>
                 </th>
@@ -451,6 +467,14 @@ export default function ProductsPage() {
                     <p className="text-[10px] text-text-secondary">{p.brand}</p>
                   </td>
                   <td className="px-4 py-3 text-xs text-text-secondary capitalize">{(p.categories || []).join(", ")}</td>
+                  {canFilterByStore && (
+                    <td className="px-4 py-3">
+                      <p className="text-xs text-text-primary">{getProductStoreLabel(p)}</p>
+                      {p.createdBy?.email && (
+                        <p className="text-[10px] text-text-secondary">{p.createdBy.email}</p>
+                      )}
+                    </td>
+                  )}
                   <td className="px-4 py-3 text-xs text-text-secondary">{p.reference || "—"}</td>
                   <td className="px-4 py-3 text-xs font-medium">{p.price.toFixed(2)} TND</td>
                   <td className="px-4 py-3">
