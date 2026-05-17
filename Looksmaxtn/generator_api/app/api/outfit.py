@@ -9,6 +9,13 @@ from app.models.requests import OutfitRequest
 from app.models.responses import OutfitResponse
 from app.services.generator import ImageGenerator
 from app.services.webhook import send_webhook, send_error_webhook
+from app.services import dataset
+from app.prompts.templates import (
+    FRONT_VIEW_PROMPT_TEMPLATE,
+    FRONT_VIEW_PROMPT_VERSION,
+    BACK_VIEW_PROMPT_TEMPLATE,
+    BACK_VIEW_PROMPT_VERSION,
+)
 
 router = APIRouter(prefix="/api", tags=["outfit"])
 logger = logging.getLogger(__name__)
@@ -84,6 +91,50 @@ async def process_outfit_generation(
         )
         logger.info(f"Job {job_id}: Front view generated successfully ({len(front_b64)} chars)")
 
+        # Capture training sample (front view / model generation step)
+        front_prompt = FRONT_VIEW_PROMPT_TEMPLATE.format(
+            height=height, weight=weight,
+            top_size=top_size, bottom_size=bottom_size, shoe_size=shoe_size,
+            headwear_status="true" if body_zones.headwear.status else "false",
+            outerwear_status="true" if body_zones.outerwear.status else "false",
+            dress_status="true" if body_zones.dress.status else "false",
+            top_status="true" if body_zones.top.status else "false",
+            bottom_status="true" if body_zones.bottom.status else "false",
+            footwear_status="true" if body_zones.footwear.status else "false",
+            headwear_piece_size=body_zones.headwear.size or "N/A",
+            outerwear_piece_size=body_zones.outerwear.size or "N/A",
+            dress_piece_size=body_zones.dress.size or "N/A",
+            top_piece_size=body_zones.top.size or "N/A",
+            bottom_piece_size=body_zones.bottom.size or "N/A",
+            footwear_piece_size=body_zones.footwear.size or "N/A",
+        )
+        front_inputs: dict[str, str | None] = {"profile": profile_picture}
+        for zone_name, zone in [
+            ("headwear", body_zones.headwear),
+            ("outerwear", body_zones.outerwear),
+            ("dress", body_zones.dress),
+            ("top", body_zones.top),
+            ("bottom", body_zones.bottom),
+            ("footwear", body_zones.footwear),
+        ]:
+            if zone.status and zone.front:
+                front_inputs[f"{zone_name}_front"] = zone.front
+        dataset.record(
+            flow="outfit",
+            model=_generator.model,
+            prompt_version=FRONT_VIEW_PROMPT_VERSION,
+            prompt_text=front_prompt,
+            inputs=front_inputs,
+            outputs={"front": front_b64},
+            job_id=job_id,
+            extra={
+                "step": "front",
+                "height": height, "weight": weight,
+                "top_size": top_size, "bottom_size": bottom_size, "shoe_size": shoe_size,
+                "active_zones": active_zones,
+            },
+        )
+
         # Send webhook with front image
         logger.info(f"Job {job_id}: Sending webhook with front image...")
         await send_webhook(
@@ -100,6 +151,29 @@ async def process_outfit_generation(
             body_zones=body_zones
         )
         logger.info(f"Job {job_id}: Back view generated successfully ({len(back_b64)} chars)")
+
+        # Capture training sample (back view step)
+        back_inputs: dict[str, str | None] = {"front_view": front_b64}
+        for zone_name, zone in [
+            ("headwear", body_zones.headwear),
+            ("outerwear", body_zones.outerwear),
+            ("dress", body_zones.dress),
+            ("top", body_zones.top),
+            ("bottom", body_zones.bottom),
+            ("footwear", body_zones.footwear),
+        ]:
+            if zone.status and zone.back:
+                back_inputs[f"{zone_name}_back"] = zone.back
+        dataset.record(
+            flow="outfit",
+            model=_generator.model,
+            prompt_version=BACK_VIEW_PROMPT_VERSION,
+            prompt_text=BACK_VIEW_PROMPT_TEMPLATE,
+            inputs=back_inputs,
+            outputs={"back": back_b64},
+            job_id=job_id,
+            extra={"step": "back", "active_zones": active_zones},
+        )
 
         # Send webhook with back image (complete)
         logger.info(f"Job {job_id}: Sending final webhook with back image...")
