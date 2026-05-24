@@ -1931,7 +1931,7 @@ export default function OutfitStudioPage() {
                                         : generationLimitReached
                                             ? "Spend 100 TND to earn more tries"
                                         : hasSelectedOutfitItems
-                                            ? `Generate outfit - ${formatTndPrice(selectedOutfitTotalPrice)}`
+                                            ? "Generate outfit"
                                             : "Select at least one item"}
                                 </button>
                                 {isAuthenticated && (
