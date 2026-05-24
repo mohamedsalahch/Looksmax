@@ -709,6 +709,307 @@ function ColorwayGenerationCard({
 
 type ColorwayView = "front" | "back" | "left" | "right";
 
+function AutoColorwayCard({
+  colorway,
+  index,
+  canRemove,
+  busy,
+  canGenerate,
+  generateLabel,
+  onUpdate,
+  onRemove,
+  onUploadFile,
+  onAddSize,
+  onRemoveSize,
+  onUpdateSize,
+  onGenerate,
+}: {
+  colorway: Colorway;
+  index: number;
+  canRemove: boolean;
+  busy: boolean;
+  canGenerate: boolean;
+  generateLabel: string;
+  onUpdate: (patch: Partial<Colorway>) => void;
+  onRemove: () => void;
+  onUploadFile: (view: "front" | "back", file: File | null) => void;
+  onAddSize: () => void;
+  onRemoveSize: (sizeId: string) => void;
+  onUpdateSize: (sizeId: string, patch: Partial<SizeRow>) => void;
+  onGenerate: () => void;
+}) {
+  const [zoomedPreview, setZoomedPreview] = useState<string | null>(null);
+  const [samplerOpen, setSamplerOpen] = useState(false);
+  const hasColor = Boolean(colorway.hex.trim());
+
+  const samplerSources: SamplerSource[] = [];
+  if (colorway.frontPreview) samplerSources.push({ url: colorway.frontPreview, label: "front" });
+  if (colorway.backPreview) samplerSources.push({ url: colorway.backPreview, label: "back" });
+  colorway.generatedImages.forEach((img, i) => {
+    if (img.url) samplerSources.push({ url: img.url, label: `generated ${i + 1}` });
+  });
+
+  const generatedSlots: Array<{ url: string; label: string }> = [
+    { url: colorway.generatedImages[0]?.url || "", label: "Front" },
+    { url: colorway.generatedImages[1]?.url || "", label: "Back" },
+  ];
+  const isProcessing = colorway.generateStatus === "processing";
+
+  return (
+    <div
+      data-colorway-id={colorway.id}
+      className="rounded-2xl border border-border bg-bg-card p-5 space-y-5"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          {canRemove && (
+            <button
+              type="button"
+              onClick={onRemove}
+              title="Remove variant"
+              className="text-sm leading-none text-text-secondary hover:text-danger transition-colors"
+            >
+              ×
+            </button>
+          )}
+          <span className="text-[10px] uppercase tracking-[0.18em] text-text-secondary">
+            Variant {index + 1}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {hasColor ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setSamplerOpen(true)}
+                title="Change color"
+                className="h-5 w-5 flex-none rounded-full border-2 border-border transition-colors hover:border-accent"
+                style={{ backgroundColor: colorway.hex }}
+              />
+              <span className="text-[9px] font-mono text-text-secondary">{colorway.hex}</span>
+              <button
+                type="button"
+                onClick={() => onUpdate({ hex: "" })}
+                title="Clear color"
+                className="text-[10px] leading-none text-text-secondary transition-colors hover:text-danger"
+              >
+                ×
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setSamplerOpen(true)}
+              className="text-[9px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary"
+            >
+              + Select color
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Body: uploads + sizes + generated preview */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[260px_1fr]">
+        {/* Left: product uploads + sizes */}
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-2">
+            {(["front", "back"] as const).map((slot) => {
+              const inputId = `auto-cw-${slot}-${colorway.id}`;
+              const preview = slot === "front" ? colorway.frontPreview : colorway.backPreview;
+              return (
+                <div key={slot} className="space-y-1">
+                  <p className="text-[9px] uppercase tracking-wider text-text-secondary">{slot}</p>
+                  <input
+                    id={inputId}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => onUploadFile(slot, e.target.files?.[0] || null)}
+                    onClick={(e) => { e.currentTarget.value = ""; }}
+                  />
+                  <div
+                    onClick={() => {
+                      if (preview) {
+                        setZoomedPreview(preview);
+                      } else {
+                        document.getElementById(inputId)?.click();
+                      }
+                    }}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      onUploadFile(slot, e.dataTransfer.files?.[0] || null);
+                    }}
+                    className={`group relative aspect-[4/5] overflow-hidden rounded border bg-bg-secondary transition-colors flex items-center justify-center ${preview ? "border-border cursor-zoom-in hover:border-accent/60" : "border-dashed border-border cursor-pointer hover:border-accent"}`}
+                  >
+                    {preview ? (
+                      <>
+                        <img src={preview} alt={slot} className="h-full w-full object-cover" />
+                        <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 translate-y-1 rounded bg-black/60 px-2 py-1 text-center text-[8px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
+                          Preview
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-[8px] uppercase tracking-wider text-text-secondary/60">Upload</span>
+                    )}
+                  </div>
+                  {preview && (
+                    <button
+                      type="button"
+                      onClick={() => onUploadFile(slot, null)}
+                      className="w-full border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-danger transition-colors hover:bg-danger/5"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="space-y-1.5">
+            <p className="text-[9px] uppercase tracking-wider text-text-secondary">Sizes</p>
+            {colorway.sizes.map((sizeRow) => (
+              <div key={sizeRow.id} className="flex items-end gap-2">
+                <input
+                  type="text"
+                  value={sizeRow.size}
+                  onChange={(e) => onUpdateSize(sizeRow.id, { size: e.target.value })}
+                  placeholder="Size"
+                  className="min-w-0 flex-1 border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
+                />
+                <input
+                  type="number"
+                  min="0"
+                  value={sizeRow.stock}
+                  onChange={(e) => onUpdateSize(sizeRow.id, { stock: e.target.value })}
+                  placeholder="Qty"
+                  className="w-14 flex-none border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => onRemoveSize(sizeRow.id)}
+                  disabled={colorway.sizes.length === 1}
+                  className="flex-none pb-1.5 text-sm leading-none text-text-secondary hover:text-danger transition-colors disabled:opacity-30"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={onAddSize}
+              className="text-[9px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary"
+            >
+              + Add size
+            </button>
+          </div>
+        </div>
+
+        {/* Right: BIG generated previews + generate button */}
+        <div className="space-y-3">
+          <p className="text-[9px] uppercase tracking-wider text-text-secondary">Generated model pictures</p>
+          <div className="grid grid-cols-2 gap-3">
+            {generatedSlots.map((slot, i) => (
+              <div key={i} className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => slot.url && setZoomedPreview(slot.url)}
+                  disabled={!slot.url}
+                  className={`group relative aspect-[9/16] w-full overflow-hidden rounded border bg-bg-secondary transition-colors flex items-center justify-center ${slot.url ? "border-border cursor-zoom-in hover:border-accent/60" : "border-dashed border-border cursor-default"}`}
+                >
+                  {slot.url ? (
+                    <>
+                      <img src={slot.url} alt={slot.label} className="h-full w-full object-cover" />
+                      <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 translate-y-1 rounded bg-black/60 px-2 py-1 text-center text-[8px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
+                        Preview
+                      </span>
+                    </>
+                  ) : isProcessing ? (
+                    <div className="flex flex-col items-center gap-2 text-text-secondary">
+                      <span className="h-3 w-3 animate-spin rounded-full border-2 border-text-secondary/40 border-t-text-secondary" />
+                      <span className="text-[9px] uppercase tracking-wider">{slot.label}</span>
+                    </div>
+                  ) : (
+                    <span className="text-[9px] uppercase tracking-wider text-text-secondary/60">{slot.label}</span>
+                  )}
+                </button>
+                {slot.url && (
+                  <button
+                    type="button"
+                    onClick={() => onUpdate({
+                      generatedImages: [],
+                      generateStatus: "idle",
+                      generateError: "",
+                      generateJobId: "",
+                    })}
+                    className="w-full border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-danger transition-colors hover:bg-danger/5"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {colorway.generateError && (
+            <p className="text-[10px] text-[#BD3100]">{colorway.generateError}</p>
+          )}
+
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={canGenerate && !isProcessing ? onGenerate : undefined}
+              disabled={busy || isProcessing || !canGenerate}
+              className="inline-flex items-center gap-1.5 bg-accent px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-40 transition-opacity"
+            >
+              {isProcessing && (
+                <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />
+              )}
+              {generateLabel}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Zoom modal */}
+      {zoomedPreview && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setZoomedPreview(null)}
+        >
+          <div className="relative max-h-[92vh] w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setZoomedPreview(null)}
+              aria-label="Close preview"
+              className="absolute right-0 top-0 z-10 h-9 w-9 border border-white/30 bg-black/60 text-xl leading-none text-white hover:bg-black transition-colors"
+            >
+              ×
+            </button>
+            <div className="flex max-h-[92vh] items-center justify-center bg-bg-card p-4">
+              <img
+                src={zoomedPreview}
+                alt="Image preview"
+                className="max-h-[86vh] max-w-full object-contain"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ImageColorSampler
+        open={samplerOpen}
+        onClose={() => setSamplerOpen(false)}
+        onPick={(hex) => onUpdate({ hex: hex.toUpperCase() })}
+        sources={samplerSources}
+        title={`Pick color — Variant ${index + 1}`}
+      />
+    </div>
+  );
+}
+
 function ColorwayCard({
   colorway,
   index,
@@ -1305,6 +1606,11 @@ export default function NewProductPage() {
   const [userStoreType, setUserStoreType] = useState<"thrift" | "retail" | "">("");
   const [authLoaded, setAuthLoaded] = useState(false);
   const [colorways, setColorways] = useState<Colorway[]>(() => [createEmptyColorway()]);
+  const [autoMode, setAutoMode] = useState<"manual" | "auto">("auto");
+  const [autoFillGender, setAutoFillGender] = useState<"" | "men" | "women" | "children">("");
+  const [autoFillModelId, setAutoFillModelId] = useState("");
+  const [autoFillError, setAutoFillError] = useState("");
+  const [autoVariantBusyId, setAutoVariantBusyId] = useState("");
   const generationAbortRef = useRef<AbortController | null>(null);
   const productBasicsRef = useRef<HTMLDivElement | null>(null);
   const colorwaysSectionRef = useRef<HTMLDivElement | null>(null);
@@ -1922,6 +2228,143 @@ export default function NewProductPage() {
     }));
 
     setImages((current) => [...current, ...newImages]);
+  };
+
+  const autoFillModelGender = useMemo<"male" | "female" | "child" | "">(() => {
+    if (autoFillGender === "men") return "male";
+    if (autoFillGender === "women") return "female";
+    if (autoFillGender === "children") return "child";
+    return "";
+  }, [autoFillGender]);
+
+  const autoFillCandidateModels = useMemo(
+    () =>
+      !autoFillModelGender
+        ? []
+        : autoFillModelGender === "child"
+          ? models
+          : models.filter((m) => m.gender === autoFillModelGender || m.gender === "child"),
+    [models, autoFillModelGender]
+  );
+
+  useEffect(() => {
+    if (!autoFillCandidateModels.some((m) => m._id === autoFillModelId)) {
+      setAutoFillModelId(autoFillCandidateModels[0]?._id || "");
+    }
+  }, [autoFillCandidateModels, autoFillModelId]);
+
+  const updateAutoVariantFile = async (
+    colorwayId: string,
+    view: "front" | "back",
+    file: File | null
+  ) => {
+    if (!file) {
+      updateColorway(colorwayId, {
+        [`${view}File`]: null,
+        [`${view}Preview`]: "",
+      } as Partial<Colorway>);
+      return;
+    }
+    try {
+      const compressed = await compressImageFile(file);
+      updateColorway(colorwayId, {
+        [`${view}File`]: compressed,
+        [`${view}Preview`]: URL.createObjectURL(compressed),
+      } as Partial<Colorway>);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const runVariantAutoGenerate = async (colorwayId: string) => {
+    const cw = colorways.find((c) => c.id === colorwayId);
+    if (!cw) return;
+
+    if (!autoFillGender) {
+      setAutoFillError("Please select a gender.");
+      return;
+    }
+    if (!autoFillModelId) {
+      setAutoFillError("Please pick a model.");
+      return;
+    }
+    if (!cw.frontFile || !cw.backFile) {
+      setAutoFillError("Upload both front and back product photos for this variant.");
+      return;
+    }
+
+    setAutoFillError("");
+    setAutoVariantBusyId(colorwayId);
+    updateColorway(colorwayId, {
+      generateStatus: "processing",
+      generateError: "",
+      generateJobId: "",
+      generatedImages: [],
+    });
+    try {
+      const body = new FormData();
+      body.append("gender", autoFillGender);
+      body.append("modelId", autoFillModelId);
+      body.append("front", cw.frontFile);
+      body.append("back", cw.backFile);
+
+      const response = await fetch(
+        "/api/admin/products/auto-generate",
+        withAuthRequest({ method: "POST", body })
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message = data?.error || "Auto generation failed. Please try again.";
+        setAutoFillError(message);
+        updateColorway(colorwayId, {
+          generateStatus: "failed",
+          generateError: message,
+          generateJobId: "",
+        });
+        return;
+      }
+
+      const suggestedName = String(data?.name || "").trim();
+      const suggestedSlug = String(data?.category || "").trim();
+      const jobId = String(data?.job_id || "");
+
+      setForm((current) => ({
+        ...current,
+        name: current.name.trim() ? current.name : suggestedName,
+        productType: "fashion",
+        fashionSubtype: "clothes",
+      }));
+
+      if (suggestedSlug && !selectedCategorySlug) {
+        const matched = categories.find((c) => c.slug === suggestedSlug);
+        if (matched) {
+          const path = getCategoryPath(categories, [suggestedSlug]);
+          setSelectedParentSlug(path.parent);
+          setSelectedChildSlug(path.child);
+          setSelectedGrandchildSlug(path.grandchild);
+          setSelectedGreatGrandchildSlug(path.greatGrandchild || "");
+          setCategorySearch(getCategoryPathLabel(categories, matched));
+        }
+      }
+
+      setSelectedModelId(autoFillModelId);
+      updateColorway(colorwayId, {
+        generateStatus: "processing",
+        generateJobId: jobId,
+        generateError: "",
+      });
+    } catch (err) {
+      console.error(err);
+      const message = "Auto generation failed. Please try again.";
+      setAutoFillError(message);
+      updateColorway(colorwayId, {
+        generateStatus: "failed",
+        generateError: message,
+        generateJobId: "",
+      });
+    } finally {
+      setAutoVariantBusyId("");
+    }
   };
 
   const removeImage = (id: string) => {
@@ -2898,9 +3341,136 @@ export default function NewProductPage() {
   if (isStoreOwner) {
     return (
       <div className="space-y-6">
-        <div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-xl font-semibold tracking-wide">Add New Product</h1>
+          <div className="inline-flex border border-border overflow-hidden text-xs uppercase tracking-wide">
+            <button
+              type="button"
+              onClick={() => setAutoMode("manual")}
+              className={`px-4 py-1.5 transition-colors ${autoMode === "manual" ? "bg-black text-white" : "bg-bg-card text-text-secondary hover:text-text-primary"}`}
+            >
+              Manual
+            </button>
+            <button
+              type="button"
+              onClick={() => setAutoMode("auto")}
+              className={`px-4 py-1.5 transition-colors ${autoMode === "auto" ? "bg-black text-white" : "bg-bg-card text-text-secondary hover:text-text-primary"}`}
+            >
+              Auto
+            </button>
+          </div>
         </div>
+
+        {autoMode === "auto" && (
+          <SectionCard
+            title="Auto Generate (AI)"
+            description="Pick a target gender and a model. Add a color variant for each colorway, upload front + back product photos, then click Auto-Generate to produce model pictures. Name and category fill in automatically."
+          >
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div>
+                <FieldLabel>Gender</FieldLabel>
+                <select
+                  value={autoFillGender}
+                  onChange={(e) => setAutoFillGender(e.target.value as "" | "men" | "women" | "children")}
+                  className="input-line"
+                >
+                  <option value="">Select gender</option>
+                  <option value="men">Men</option>
+                  <option value="women">Women</option>
+                  <option value="children">Children</option>
+                </select>
+              </div>
+            </div>
+
+            {autoFillGender && (
+              <div className="mt-4">
+                <FieldLabel>Model</FieldLabel>
+                {autoFillCandidateModels.length === 0 ? (
+                  <p className="text-xs text-text-secondary">No models available for this gender.</p>
+                ) : (
+                  <div className="flex gap-3 overflow-x-auto pb-2">
+                    {autoFillCandidateModels.map((model) => {
+                      const active = autoFillModelId === model._id;
+                      return (
+                        <button
+                          key={model._id}
+                          type="button"
+                          onClick={() => setAutoFillModelId(model._id)}
+                          className={`flex-none w-[160px] overflow-hidden border text-left transition-colors ${
+                            active
+                              ? "border-accent bg-accent/5 ring-1 ring-accent/40"
+                              : "border-border hover:border-accent"
+                          }`}
+                        >
+                          <div className="aspect-[4/5] bg-bg-secondary">
+                            <img
+                              src={model.frontImage || model.images?.[0] || ""}
+                              alt={model.name}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div className="px-2 py-1 text-[11px] truncate">{model.name}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {autoFillError && (
+              <p className="mt-3 text-xs text-[#8B3520]">{autoFillError}</p>
+            )}
+          </SectionCard>
+        )}
+
+        {autoMode === "auto" && (
+          <SectionCard
+            title="Color Variants"
+            description="Each variant is one colorway. Upload its front + back product photos, then click Auto-Generate to produce the model pictures."
+          >
+            <div className="space-y-5">
+              {colorways.map((cw, cwIndex) => {
+                const canGen = Boolean(
+                  cw.frontFile && cw.backFile && autoFillGender && autoFillModelId
+                );
+                const generateLabel =
+                  cw.generateStatus === "processing"
+                    ? "Generating…"
+                    : cw.generatedImages.length > 0
+                      ? "Re-generate"
+                      : "Auto-Generate";
+                return (
+                  <AutoColorwayCard
+                    key={cw.id}
+                    colorway={cw}
+                    index={cwIndex}
+                    canRemove={colorways.length > 1}
+                    busy={autoVariantBusyId === cw.id}
+                    canGenerate={canGen}
+                    generateLabel={generateLabel}
+                    onUpdate={(patch) => updateColorway(cw.id, patch)}
+                    onRemove={() => removeColorway(cw.id)}
+                    onUploadFile={(view, file) => void updateAutoVariantFile(cw.id, view, file)}
+                    onAddSize={() => addSizeRow(cw.id)}
+                    onRemoveSize={(sizeId) => removeSizeRow(cw.id, sizeId)}
+                    onUpdateSize={(sizeId, patch) => updateSizeRow(cw.id, sizeId, patch)}
+                    onGenerate={() => void runVariantAutoGenerate(cw.id)}
+                  />
+                );
+              })}
+
+              <button
+                type="button"
+                onClick={handleAddColorway}
+                disabled={!storeOwnerCanAddColorway}
+                className="w-full flex items-center justify-center gap-2 border border-dashed border-border py-3 text-xs uppercase tracking-wide text-text-secondary hover:border-accent hover:text-accent disabled:opacity-40"
+              >
+                + Add color variant
+              </button>
+            </div>
+          </SectionCard>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {sectionErrors.general && (
@@ -3035,7 +3605,7 @@ export default function NewProductPage() {
             </SectionCard>
           </div>
 
-          {shouldShowModelPictures && (
+          {shouldShowModelPictures && autoMode !== "auto" && (
             <div ref={modelPicturesSectionRef}>
               <SectionCard
                 title="Model Pictures"
@@ -3103,7 +3673,7 @@ export default function NewProductPage() {
             </div>
           )}
 
-          {selectedCategorySlug && (
+          {selectedCategorySlug && autoMode !== "auto" && (
             <div ref={colorwaysSectionRef}>
               <SectionCard
                 title="Colorways"

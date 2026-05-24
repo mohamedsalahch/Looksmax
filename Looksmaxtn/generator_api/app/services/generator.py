@@ -13,6 +13,7 @@ from app.models.requests import BodyZones, SecondaryColors
 from app.prompts.templates import (
     CLOTHES_TOP_PROMPT_TEMPLATE,
     CLOTHES_BOTTOM_PROMPT_TEMPLATE,
+    CLOTHES_AUTO_PROMPT_TEMPLATE,
     SHOES_PROMPT_TEMPLATE,
     FRONT_VIEW_PROMPT_TEMPLATE,
     BACK_VIEW_PROMPT_TEMPLATE,
@@ -170,6 +171,82 @@ class ImageGenerator:
 
         if not response.candidates:
             logger.error(f"generate_clothes_view({view_name}): No candidates returned")
+            raise HTTPException(status_code=500, detail=f"No response from Gemini for {view_name} view")
+
+        for part in response.candidates[0].content.parts:
+            if part.inline_data is not None:
+                image_bytes = part.inline_data.data
+                return base64.b64encode(image_bytes).decode("utf-8")
+
+        raise HTTPException(status_code=500, detail=f"Failed to generate {view_name} view")
+
+    async def generate_clothes_auto_view(
+        self,
+        view_name: str,
+        model_front: str,
+        model_back: str,
+        product_front: str,
+        product_back: str,
+        previous_view_image: str | None = None,
+    ) -> str:
+        """Generate a single fully-automated clothes view.
+
+        The companion outfit is chosen by the model — caller passes only the
+        product images. The prompt forces neutral, accessory-free styling so the
+        product stays the hero of the shot.
+
+        When ``previous_view_image`` is provided (e.g. the already-generated
+        front image when generating the back view), it is attached as an extra
+        reference so the model can replicate the same companion outfit, styling,
+        and accessories instead of inventing a new one.
+        """
+        prompt = CLOTHES_AUTO_PROMPT_TEMPLATE.replace("{VIEW}", view_name.upper())
+        if previous_view_image:
+            prompt = prompt + (
+                "\n\n--------------------------------\n"
+                "OUTFIT CONSISTENCY LOCK (CRITICAL):\n"
+                "An additional reference image of the SAME model wearing the SAME outfit from the opposite view "
+                "is provided as the FIRST input image. This is the canonical outfit for this shoot.\n\n"
+                "- The companion garments, layering, footwear, and any accessories must match this reference EXACTLY: "
+                "same garment types, same colors, same wash/texture, same proportions, same shoe model.\n"
+                "- Do NOT invent a different outfit. Do NOT swap garments. Do NOT change colors. "
+                "Do NOT add or remove accessories.\n"
+                "- The product itself must still match its front/back reference images exactly.\n"
+                "- Only the camera angle and pose change; everything else stays identical.\n"
+            )
+
+        logger.info(
+            f"generate_clothes_auto_view({view_name}): input sizes - "
+            f"model_front={len(model_front or '')}, model_back={len(model_back or '')}, "
+            f"product_front={len(product_front or '')}, product_back={len(product_back or '')}, "
+            f"previous_view={len(previous_view_image or '')}"
+        )
+
+        if not all([model_front, model_back, product_front, product_back]):
+            raise HTTPException(status_code=400, detail=f"Missing input images for {view_name} view")
+
+        parts: list[types.Part] = [types.Part(text=prompt)]
+        if previous_view_image:
+            parts.append(b64_to_part(previous_view_image))
+        parts.extend([
+            b64_to_part(model_front),
+            b64_to_part(model_back),
+            b64_to_part(product_front),
+            b64_to_part(product_back),
+        ])
+
+        try:
+            response = await self._gemini_generate(
+                model=self.model,
+                contents=[types.Content(parts=parts)],
+                config=self.default_config
+            )
+        except Exception as e:
+            logger.error(f"generate_clothes_auto_view({view_name}): Gemini API error: {e}")
+            raise
+
+        if not response.candidates:
+            logger.error(f"generate_clothes_auto_view({view_name}): No candidates returned")
             raise HTTPException(status_code=500, detail=f"No response from Gemini for {view_name} view")
 
         for part in response.candidates[0].content.parts:
