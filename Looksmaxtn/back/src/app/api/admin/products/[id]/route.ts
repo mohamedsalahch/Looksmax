@@ -101,6 +101,34 @@ function normalizeReference(value: unknown) {
   return String(value || "").trim();
 }
 
+function isIncompletePendingName(value: unknown) {
+  const name = String(value || "").trim();
+  return !name || name.toLowerCase() === "pending product";
+}
+
+function validateProductApproval(product: {
+  name?: unknown;
+  categories?: unknown;
+  price?: unknown;
+  images?: unknown;
+  variants?: unknown;
+}) {
+  if (isIncompletePendingName(product.name)) return "Please add a product name before approval.";
+  if (!Array.isArray(product.categories) || product.categories.length === 0) {
+    return "Please add at least one category before approval.";
+  }
+  const price = Number(product.price || 0);
+  if (!Number.isFinite(price) || price <= 0) return "Please add a valid price before approval.";
+  if (!Array.isArray(product.images) || product.images.length < 2) {
+    return "Please keep at least two product images before approval.";
+  }
+  const variants = normalizeStoredVariants(product.variants);
+  if (variants.length === 0 || variants.every((variant) => variant.fullStock <= 0)) {
+    return "Please add product size quantities before approval.";
+  }
+  return "";
+}
+
 function getStoredVariants(product: { variants?: unknown }): StoredVariantLean[] {
   return normalizeStoredVariants(product.variants).map((v) => ({
     _id: v._id,
@@ -309,6 +337,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const product = await Product.findById(id).lean();
     if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (!canAccessProduct(session, product)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (session.role === "store_owner" && (product.approvalStatus || "approved") !== "approved") {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
 
     const variants = getStoredVariants(product);
     const totalStock = sumVariantStock(variants);
@@ -366,6 +397,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const contentType = req.headers.get("content-type") || "";
     if (contentType.includes("application/json")) {
       const body = await req.json();
+      if (session.role === "store_owner") {
+        const bodyKeys = Object.keys(body || {});
+        const isVisibilityOnlyUpdate = bodyKeys.length > 0 && bodyKeys.every((key) => key === "isActive");
+        if (!isVisibilityOnlyUpdate) {
+          return NextResponse.json({ error: "Store owners cannot edit products after submission." }, { status: 403 });
+        }
+      }
       if (session.role === "admin") {
         const allowedAdminKeys = new Set([
           "approvalStatus",
@@ -405,13 +443,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }
 
       if (session.role === "admin" && ["pending", "approved", "rejected"].includes(body.approvalStatus)) {
-        update.approvalStatus = body.approvalStatus;
-      } else if (session.role === "store_owner") {
-        const updatedKeys = Object.keys(body || {});
-        const isVisibilityOnlyUpdate = updatedKeys.length > 0 && updatedKeys.every((key) => key === "isActive");
-        if (!isVisibilityOnlyUpdate) {
-          update.approvalStatus = "pending";
+        if (body.approvalStatus === "approved") {
+          const approvalError = validateProductApproval({
+            ...existingProduct,
+            ...update,
+          });
+          if (approvalError) {
+            return NextResponse.json({ error: approvalError }, { status: 400 });
+          }
         }
+        update.approvalStatus = body.approvalStatus;
       }
 
       if (Array.isArray(body.variants)) {
@@ -500,6 +541,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     // Multipart full edit.
+    if (session.role === "store_owner") {
+      return NextResponse.json({ error: "Store owners cannot edit products after submission." }, { status: 403 });
+    }
     const formData = await req.formData();
     const existingImages = JSON.parse(String(formData.get("existingImages") || "[]")) as { url: string }[];
     const imageOrder = JSON.parse(String(formData.get("imageOrder") || "[]")) as string[];

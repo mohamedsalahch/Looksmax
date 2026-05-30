@@ -207,14 +207,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
           </h1>
         </div>
 
-        {userRole === "store_owner" ? (
-          <Link
-            href={`/dashboard/products/${product._id}/edit`}
-            className="btn-primary shrink-0"
-          >
-            Edit
-          </Link>
-        ) : userRole === "admin" ? (
+        {userRole === "admin" ? (
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <Link
               href={`/dashboard/products/${product._id}/edit`}

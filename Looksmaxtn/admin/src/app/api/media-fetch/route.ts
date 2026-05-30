@@ -18,9 +18,15 @@ function toOrigin(value?: string | null) {
   }
 }
 
-function getAllowedOrigins() {
+function getAllowedOrigins(requestOrigin = "") {
+  const currentOrigin =
+    typeof process.env.VERCEL_URL === "string" && process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL.replace(/^https?:\/\//, "")}`
+      : "";
   return new Set(
     [
+      currentOrigin,
+      requestOrigin,
       "https://looksmaxtn.com",
       "https://www.looksmaxtn.com",
       "https://store.looksmaxtn.com",
@@ -33,6 +39,14 @@ function getAllowedOrigins() {
       .map(toOrigin)
       .filter(Boolean)
   );
+}
+
+function isAllowedRemoteOrigin(target: URL, requestOrigin: string) {
+  if (getAllowedOrigins(requestOrigin).has(target.origin)) return true;
+  if (process.env.NODE_ENV !== "production") {
+    return target.hostname === "localhost" || target.hostname === "127.0.0.1";
+  }
+  return false;
 }
 
 function normalizeContentType(value?: string | null) {
@@ -86,7 +100,7 @@ export async function GET(req: NextRequest) {
   if (target.protocol !== "http:" && target.protocol !== "https:") {
     return NextResponse.json({ error: "Unsupported url protocol." }, { status: 400 });
   }
-  if (!getAllowedOrigins().has(target.origin)) {
+  if (!isAllowedRemoteOrigin(target, req.nextUrl.origin)) {
     return NextResponse.json({ error: "Remote media host is not allowed." }, { status: 403 });
   }
 
@@ -103,20 +117,25 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const contentType = normalizeContentType(response.headers.get("content-type"));
+    const responseContentType = normalizeContentType(response.headers.get("content-type"));
     const contentLength = Number(response.headers.get("content-length") || 0);
     if (contentLength > MAX_REMOTE_MEDIA_BYTES) {
       return NextResponse.json({ error: "Remote media is too large." }, { status: 413 });
-    }
-    if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
-      return NextResponse.json({ error: "Remote media type is not allowed." }, { status: 415 });
     }
 
     const buffer = Buffer.from(await response.arrayBuffer());
     if (buffer.length > MAX_REMOTE_MEDIA_BYTES) {
       return NextResponse.json({ error: "Remote media is too large." }, { status: 413 });
     }
-    if (isSvg(buffer, contentType, target.pathname) || sniffImageMime(buffer) !== contentType) {
+    const sniffedContentType = sniffImageMime(buffer);
+    const contentType = ALLOWED_CONTENT_TYPES.has(responseContentType)
+      ? responseContentType
+      : sniffedContentType;
+    if (
+      !ALLOWED_CONTENT_TYPES.has(contentType) ||
+      isSvg(buffer, responseContentType, target.pathname) ||
+      sniffedContentType !== contentType
+    ) {
       return NextResponse.json({ error: "Remote media content is invalid." }, { status: 415 });
     }
 

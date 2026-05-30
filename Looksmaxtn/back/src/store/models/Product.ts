@@ -83,7 +83,7 @@ const productVariantSchema = new Schema<IProductVariant>({
 
 const productSchema = new Schema<IProduct>(
   {
-    name: { type: String, required: true, trim: true },
+    name: { type: String, default: "", trim: true },
     price: { type: Number, required: true },
     isActive: { type: Boolean, default: true },
     approvalStatus: {

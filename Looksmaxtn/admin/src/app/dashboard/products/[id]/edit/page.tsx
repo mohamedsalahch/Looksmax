@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, use } from "react";
+import { useEffect, useMemo, useRef, useState, use, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import { getConditionStatusFromScore } from "@/lib/productCondition";
 import { generateId } from "@/lib/uuid";
@@ -22,7 +22,6 @@ import {
   getZoneRequirements,
 } from "@/lib/categoryClassification";
 import {
-  groupVariantsByColor,
   normalizeHex,
   parseApiVariants,
   toOutgoingVariant,
@@ -124,10 +123,12 @@ type Colorway = {
   enhancedBackFile: File | null;
   enhancedLeftFile: File | null;
   enhancedRightFile: File | null;
+  enhancedOtherImages: Array<{ url: string; file: File | null }>;
   sizes: SizeRow[];
   generateStatus: ColorwayEnhanceStatus;
   generateJobId: string;
   generateError: string;
+  otherImages: Array<{ url: string; file: File | null }>;
   generatedImages: Array<{ url: string; file: File | null }>;
   companionTopType: string;
   companionBottomType: string;
@@ -151,8 +152,10 @@ function createEmptyColorway(hex = ""): Colorway {
     enhancedLeftUrl: "", enhancedRightUrl: "",
     enhancedFrontFile: null, enhancedBackFile: null,
     enhancedLeftFile: null, enhancedRightFile: null,
+    enhancedOtherImages: [],
     sizes: [{ id: generateId(), size: "", stock: "", conditionScore: "10" }],
     generateStatus: "idle", generateJobId: "", generateError: "",
+    otherImages: [],
     generatedImages: [],
     companionTopType: "", companionBottomType: "", companionFootwearType: "",
     companionTopColor: null, companionBottomColor: null, companionFootwearColor: null,
@@ -707,15 +710,11 @@ function ColorwayCard({
     (view) => Boolean(colorway[fileKeyFor(view)] || colorway[previewKeyFor(view)])
   );
   const hasEnhancedResults =
-    uploadedViews.length > 0 &&
-    uploadedViews.every((view) => Boolean(colorway[enhancedUrlKeyFor(view)] || colorway[enhancedFileKeyFor(view)]));
-  const isShowingEnhanced = hasEnhancedResults && colorway.enhanceStatus === "completed";
+    colorway.enhancedOtherImages.length > 0 ||
+    uploadedViews.some((view) => Boolean(colorway[enhancedUrlKeyFor(view)] || colorway[enhancedFileKeyFor(view)]));
   const isUsingOriginal = colorway.enhanceStatus === "original";
 
-  const getDisplayedPreview = (view: ColorwayView) =>
-    isShowingEnhanced
-      ? colorway[enhancedUrlKeyFor(view)] || colorway[previewKeyFor(view)]
-      : colorway[previewKeyFor(view)];
+  const getDisplayedPreview = (view: ColorwayView) => colorway[previewKeyFor(view)];
 
   const canEnhance = enhanceRequiresAllViews ? uploadedViews.length === views.length : uploadedViews.length > 0;
 
@@ -747,6 +746,7 @@ function ColorwayCard({
           enhancedBackFile: null,
           enhancedLeftFile: null,
           enhancedRightFile: null,
+          enhancedOtherImages: [],
         };
     if (!file) {
       onUpdate({ [fileKey]: null, [previewKey]: "", ...enhanceReset } as Partial<Colorway>);
@@ -754,6 +754,183 @@ function ColorwayCard({
     }
     onUpdate({ [fileKey]: file, [previewKey]: URL.createObjectURL(file), ...enhanceReset } as Partial<Colorway>);
   };
+
+  type PictureValue = { url: string; file: File | null };
+  const pictureSlots = [
+    { kind: "view" as const, view: "front" as const },
+    { kind: "view" as const, view: "back" as const },
+    ...colorway.otherImages.map((_, index) => ({ kind: "other" as const, index })),
+  ];
+  type EnhancedPictureSlot =
+    | { kind: "enhancedView"; view: ColorwayView }
+    | { kind: "enhancedOther"; index: number };
+  const enhancedPictureSlots: EnhancedPictureSlot[] = [
+    ...views.flatMap((view) => {
+      const url = colorway[enhancedUrlKeyFor(view)];
+      return url ? [{ kind: "enhancedView" as const, view }] : [];
+    }),
+    ...colorway.enhancedOtherImages.map((_, index) => ({ kind: "enhancedOther" as const, index })),
+  ];
+  const pictureValueForSlot = (slot: (typeof pictureSlots)[number]): PictureValue => {
+    if (slot.kind === "other") {
+      const image = colorway.otherImages[slot.index];
+      return { url: image?.url || "", file: image?.file || null };
+    }
+    const fileKey = fileKeyFor(slot.view);
+    const previewKey = previewKeyFor(slot.view);
+    return {
+      url: String(colorway[previewKey] || ""),
+      file: colorway[fileKey],
+    };
+  };
+  const enhancedPictureValueForSlot = (slot: EnhancedPictureSlot): PictureValue => {
+    if (slot.kind === "enhancedOther") {
+      const image = colorway.enhancedOtherImages[slot.index];
+      return { url: image?.url || "", file: image?.file || null };
+    }
+    const urlKey = enhancedUrlKeyFor(slot.view);
+    const fileKey = enhancedFileKeyFor(slot.view);
+    return {
+      url: String(colorway[urlKey] || ""),
+      file: colorway[fileKey],
+    };
+  };
+  const enhancedPictureLabelForSlot = (slot: EnhancedPictureSlot) =>
+    slot.kind === "enhancedOther"
+      ? `Other enhanced ${slot.index + 1}`
+      : `${viewLabels?.[slot.view] || slot.view} enhanced`;
+  const applyPictureValues = (values: PictureValue[]) => {
+    const front = values[0] || { url: "", file: null };
+    const back = values[1] || { url: "", file: null };
+    onUpdate({
+      frontPreview: front.url,
+      frontFile: front.file,
+      backPreview: back.url,
+      backFile: back.file,
+      otherImages: values.slice(2).filter((value) => value.url || value.file),
+    });
+  };
+  const applyEnhancedPictureValues = (values: PictureValue[]) => {
+    const viewValues = new Map<ColorwayView, PictureValue>();
+    const otherValues: PictureValue[] = [];
+    enhancedPictureSlots.forEach((slot, index) => {
+      const value = values[index] || { url: "", file: null };
+      if (slot.kind === "enhancedView") viewValues.set(slot.view, value);
+      else if (value.url || value.file) otherValues.push(value);
+    });
+    const patch: Partial<Colorway> = {
+      enhancedOtherImages: otherValues,
+    };
+    views.forEach((view) => {
+      const value = viewValues.get(view) || { url: "", file: null };
+      Object.assign(patch, {
+        [enhancedUrlKeyFor(view)]: value.url,
+        [enhancedFileKeyFor(view)]: value.file,
+      });
+    });
+    onUpdate(patch);
+  };
+  const swapOriginalPicture = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
+    const values = pictureSlots.map(pictureValueForSlot);
+    if (!values[fromIndex] || !values[toIndex]) return;
+    [values[fromIndex], values[toIndex]] = [values[toIndex], values[fromIndex]];
+    applyPictureValues(values);
+  };
+  const swapEnhancedPicture = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
+    const values = enhancedPictureSlots.map(enhancedPictureValueForSlot);
+    if (!values[fromIndex] || !values[toIndex]) return;
+    [values[fromIndex], values[toIndex]] = [values[toIndex], values[fromIndex]];
+    applyEnhancedPictureValues(values);
+  };
+  const handleOriginalPictureDrop = (
+    event: DragEvent,
+    toIndex: number,
+    fallback?: () => void
+  ) => {
+    event.preventDefault();
+    const enhancedSourceValue = event.dataTransfer.getData("application/x-enhanced-picture-index");
+    if (enhancedSourceValue !== "") {
+      const enhancedSourceIndex = Number(enhancedSourceValue);
+      const enhancedSlot = enhancedPictureSlots[enhancedSourceIndex];
+      if (!enhancedSlot) return;
+      const enhancedValue = enhancedPictureValueForSlot(enhancedSlot);
+      if (!enhancedValue.url && !enhancedValue.file) return;
+      const originalValues = pictureSlots.map(pictureValueForSlot);
+      const enhancedValues = enhancedPictureSlots.map(enhancedPictureValueForSlot);
+      const originalTarget = originalValues[toIndex] || { url: "", file: null };
+      originalValues[toIndex] = enhancedValue;
+      enhancedValues[enhancedSourceIndex] = originalTarget;
+      applyPictureValues(originalValues);
+      applyEnhancedPictureValues(enhancedValues);
+      return;
+    }
+    const sourceValue = event.dataTransfer.getData("text/plain");
+    if (sourceValue !== "") {
+      const sourceIndex = Number(sourceValue);
+      swapOriginalPicture(sourceIndex, toIndex);
+      return;
+    }
+    fallback?.();
+  };
+  const handleEnhancedPictureDrop = (event: DragEvent, toIndex: number) => {
+    event.preventDefault();
+    const sourceValue = event.dataTransfer.getData("application/x-enhanced-picture-index");
+    if (sourceValue !== "") {
+      const sourceIndex = Number(sourceValue);
+      swapEnhancedPicture(sourceIndex, toIndex);
+      return;
+    }
+    const originalSourceValue = event.dataTransfer.getData("text/plain");
+    if (originalSourceValue !== "") {
+      const originalSourceIndex = Number(originalSourceValue);
+      const originalSlot = pictureSlots[originalSourceIndex];
+      if (!originalSlot) return;
+      const originalValue = pictureValueForSlot(originalSlot);
+      if (!originalValue.url && !originalValue.file) return;
+      const originalValues = pictureSlots.map(pictureValueForSlot);
+      const enhancedValues = enhancedPictureSlots.map(enhancedPictureValueForSlot);
+      const enhancedTarget = enhancedValues[toIndex] || { url: "", file: null };
+      enhancedValues[toIndex] = originalValue;
+      originalValues[originalSourceIndex] = enhancedTarget;
+      applyPictureValues(originalValues);
+      applyEnhancedPictureValues(enhancedValues);
+    }
+  };
+  const removeOtherPicture = (imageIndex: number) => {
+    onUpdate({
+      otherImages: colorway.otherImages.filter((_, index) => index !== imageIndex),
+      enhanceStatus: "idle",
+      enhancedFrontUrl: "",
+      enhancedBackUrl: "",
+      enhancedLeftUrl: "",
+      enhancedRightUrl: "",
+      enhancedOtherImages: [],
+    });
+  };
+  const clearEnhancedImages = () =>
+    onUpdate({
+      enhanceStatus: "idle",
+      enhanceJobId: "",
+      enhanceError: "",
+      enhancedFrontUrl: "",
+      enhancedBackUrl: "",
+      enhancedLeftUrl: "",
+      enhancedRightUrl: "",
+      enhancedFrontFile: null,
+      enhancedBackFile: null,
+      enhancedLeftFile: null,
+      enhancedRightFile: null,
+      enhancedOtherImages: [],
+    });
+  const enhancedPictures = [
+    ...enhancedPictureSlots.map((slot, imageIndex) => ({
+      ...enhancedPictureValueForSlot(slot),
+      label: enhancedPictureLabelForSlot(slot),
+      index: imageIndex,
+    })),
+  ].filter((image) => image.url || image.file);
 
   return (
     <div data-colorway-id={colorway.id} className="w-full sm:flex-none sm:w-[270px] rounded-2xl border border-border bg-bg-card p-4 space-y-4">
@@ -800,13 +977,30 @@ function ColorwayCard({
       )}
       <div className="grid grid-cols-2 gap-2">
         {views.map((slot) => {
+          const slotIndex = slot === "front" ? 0 : slot === "back" ? 1 : -1;
           const inputId = `cw-${slot}-${colorway.id}`;
           const preview = getDisplayedPreview(slot);
           return (
             <div key={slot} className="space-y-1">
               <p className="text-[9px] uppercase tracking-wider text-text-secondary">{viewLabels?.[slot] || slot}</p>
               <input id={inputId} type="file" accept="image/*" className="hidden" onChange={(e) => handleViewFile(slot, e.target.files?.[0] || null)} onClick={(e) => { e.currentTarget.value = ""; }} />
-              <div onClick={() => { if (preview) { setZoomedPreview(preview); } else { document.getElementById(inputId)?.click(); } }} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); handleViewFile(slot, e.dataTransfer.files?.[0] || null); }} className={`group relative aspect-[4/5] overflow-hidden rounded border bg-bg-secondary transition-colors flex items-center justify-center ${preview ? "border-border cursor-zoom-in hover:border-accent/60" : "border-dashed border-border cursor-pointer hover:border-accent"}`}>
+              <div
+                draggable={Boolean(preview) && slotIndex >= 0}
+                onDragStart={(e) => {
+                  if (slotIndex >= 0) e.dataTransfer.setData("text/plain", String(slotIndex));
+                }}
+                onClick={() => { if (preview) { setZoomedPreview(preview); } else { document.getElementById(inputId)?.click(); } }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  if (slotIndex >= 0) {
+                    handleOriginalPictureDrop(e, slotIndex, () => handleViewFile(slot, e.dataTransfer.files?.[0] || null));
+                    return;
+                  }
+                  e.preventDefault();
+                  handleViewFile(slot, e.dataTransfer.files?.[0] || null);
+                }}
+                className={`group relative aspect-[4/5] overflow-hidden rounded border bg-bg-secondary transition-colors flex items-center justify-center ${preview ? "border-border cursor-grab hover:border-accent/60 active:cursor-grabbing" : "border-dashed border-border cursor-pointer hover:border-accent"}`}
+              >
                 {preview ? (
                   <>
                     <img src={preview} alt={slot} className="h-full w-full object-cover" />
@@ -821,6 +1015,74 @@ function ColorwayCard({
           );
         })}
       </div>
+      {colorway.otherImages.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-[9px] uppercase tracking-wider text-text-secondary">Other pictures</p>
+          <div className="grid grid-cols-2 gap-2">
+            {colorway.otherImages.map((image, imageIndex) => {
+              const pictureIndex = imageIndex + 2;
+              return (
+                <div key={`${image.url}-${imageIndex}`} className="space-y-1">
+                  <button
+                    type="button"
+                    draggable
+                    onDragStart={(e) => e.dataTransfer.setData("text/plain", String(pictureIndex))}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      handleOriginalPictureDrop(e, pictureIndex);
+                    }}
+                    onClick={() => setZoomedPreview(image.url)}
+                    className="group relative aspect-[4/5] w-full cursor-grab overflow-hidden rounded border border-border bg-bg-secondary transition-colors hover:border-accent/60 active:cursor-grabbing"
+                  >
+                    <img src={image.url} alt={`Other picture ${imageIndex + 1}`} className="h-full w-full object-cover" />
+                    <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 translate-y-1 rounded bg-black/60 px-2 py-1 text-center text-[8px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
+                      Drag to reorder
+                    </span>
+                  </button>
+                  <button type="button" onClick={() => removeOtherPicture(imageIndex)} className="w-full border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-danger transition-colors hover:bg-danger/5">
+                    Clear
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {enhancedPictures.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[9px] uppercase tracking-wider text-text-secondary">Enhanced pictures</p>
+            <button
+              type="button"
+              onClick={clearEnhancedImages}
+              className="text-[8px] uppercase tracking-wider text-danger underline underline-offset-4 decoration-danger/40 decoration-1 transition-colors hover:decoration-danger"
+            >
+              Clear enhanced
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {enhancedPictures.map((image, imageIndex) => (
+              <button
+                key={`${image.url}-${imageIndex}`}
+                type="button"
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData("application/x-enhanced-picture-index", String(image.index));
+                }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => handleEnhancedPictureDrop(e, image.index)}
+                onClick={() => setZoomedPreview(image.url)}
+                className="group relative aspect-[4/5] cursor-grab overflow-hidden rounded border border-accent/40 bg-bg-secondary transition-colors hover:border-accent active:cursor-grabbing"
+              >
+                <img src={image.url} alt={image.label} className="h-full w-full object-cover" />
+                <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 rounded bg-black/60 px-2 py-1 text-center text-[8px] uppercase tracking-wider text-white">
+                  {image.label}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {zoomedPreview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setZoomedPreview(null)}>
           <div className="relative max-h-[92vh] w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
@@ -1120,7 +1382,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   } | null>(null);
   const allowStockEditing = true;
   const isStoreOwner = userRole === "store_owner";
-  const usesStoreOwnerEditFlow = isStoreOwner || userRole === "admin";
+  const usesStoreOwnerEditFlow = userRole === "admin";
   const isRetailStoreOwner = isStoreOwner && userStoreType === "retail";
   const isThriftStoreOwner = isStoreOwner && userStoreType === "thrift";
   const storeOwnerPayoutPrice = getStoreOwnerPayoutPrice(form.price);
@@ -1182,7 +1444,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     });
   const applyColorwayEnhancementCompletion = async (
     colorwayId: string,
-    images: Record<string, string> | undefined
+    images: Record<string, string> | undefined,
+    otherImages: Array<{ url: string; file: File | null }> = []
   ) => {
     const frontUrl = images?.front || "";
     const backUrl = images?.back || "";
@@ -1207,6 +1470,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       enhancedBackFile: backFile,
       enhancedLeftFile: leftFile,
       enhancedRightFile: rightFile,
+      enhancedOtherImages: otherImages,
     });
   };
   const applyColorwayGenerationFailure = (colorwayId: string, error: string) =>
@@ -1240,11 +1504,14 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     const cw = colorways.find((c) => c.id === colorwayId);
     if (!cw) return;
     const isShoes = selectedCategoryZone === "footwear";
+    const viewNames: OriginPictureKey[] = ["front", "back", "left", "right"];
+    const getSourceFile = (file: File | null, preview: string, label: string) =>
+      file ? Promise.resolve(file) : preview ? imageUrlToFile(preview, label) : Promise.resolve(null);
     const [frontSource, backSource, leftSource, rightSource] = await Promise.all([
-      cw.frontFile ? Promise.resolve(cw.frontFile) : cw.frontPreview ? imageUrlToFile(cw.frontPreview, "front-original") : Promise.resolve(null),
-      cw.backFile ? Promise.resolve(cw.backFile) : cw.backPreview ? imageUrlToFile(cw.backPreview, "back-original") : Promise.resolve(null),
-      cw.leftFile ? Promise.resolve(cw.leftFile) : cw.leftPreview ? imageUrlToFile(cw.leftPreview, "left-original") : Promise.resolve(null),
-      cw.rightFile ? Promise.resolve(cw.rightFile) : cw.rightPreview ? imageUrlToFile(cw.rightPreview, "right-original") : Promise.resolve(null),
+      getSourceFile(cw.frontFile, cw.frontPreview, "front-original"),
+      getSourceFile(cw.backFile, cw.backPreview, "back-original"),
+      getSourceFile(cw.leftFile, cw.leftPreview, "left-original"),
+      getSourceFile(cw.rightFile, cw.rightPreview, "right-original"),
     ]);
     const uploadedEntries = [
       ["front", frontSource],
@@ -1253,8 +1520,15 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       ["right", rightSource],
     ] as const;
     const availableEntries = uploadedEntries.filter((entry): entry is readonly [OriginPictureKey, File] => Boolean(entry[1]));
+    const otherSources = (await Promise.all(
+      cw.otherImages.map(async (image, index) => {
+        const file = image.file || (image.url ? await imageUrlToFile(image.url, `other-${index + 1}-original`) : null);
+        return file ? { file, label: `Other ${index + 1}` } : null;
+      })
+    )).filter((entry): entry is { file: File; label: string } => Boolean(entry));
+    const allAvailableCount = availableEntries.length + otherSources.length;
 
-    if (usesAccessoryImageWorkflow && availableEntries.length === 0) {
+    if (allAvailableCount === 0) {
       updateColorway(colorwayId, {
         enhanceStatus: "failed",
         enhanceError: "Please upload at least one image first.",
@@ -1271,6 +1545,27 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     }
     updateColorway(colorwayId, { enhanceStatus: "processing", enhanceError: "", enhanceJobId: "" });
     try {
+      const startEnhanceJob = async (url: string, body: FormData) => {
+        const res = await fetch(url, withAuthRequest({ method: "POST", body }));
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Unable to start enhancement.");
+        const jobId = String(data.job_id || "");
+        if (!jobId) throw new Error("Enhancement job did not start.");
+        return waitForJob(jobId);
+      };
+      const enhanceAccessoryChunk = async (files: File[]) => {
+        const body = new FormData();
+        body.append("mode", "accessory");
+        const compressed = await Promise.all(files.map((file) => compressImageFile(file)));
+        compressed.forEach((file, index) => body.append(viewNames[index], file));
+        const result = await startEnhanceJob("/api/products/enhance", body);
+        return viewNames
+          .map((view) => result.images?.[view] || "")
+          .filter(Boolean);
+      };
+      let primaryImages: Record<string, string> | undefined;
+      const enhancedOtherResults: Array<{ url: string; file: File | null }> = [];
+
       if (isShoes) {
         const [front, back, left, right] = await Promise.all([
           compressImageFile(frontSource!),
@@ -1280,31 +1575,46 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         ]);
         const body = new FormData();
         body.append("front", front); body.append("back", back); body.append("left", left); body.append("right", right);
-        const res = await fetch("/api/products/enhance-shoes", withAuthRequest({ method: "POST", body }));
-        const data = await res.json();
-        if (!res.ok) { updateColorway(colorwayId, { enhanceStatus: "failed", enhanceError: data.error || "Unable to start enhancement." }); return; }
-        updateColorway(colorwayId, { enhanceJobId: data.job_id || "", enhanceStatus: data.status || "processing" });
+        primaryImages = (await startEnhanceJob("/api/products/enhance-shoes", body)).images;
       } else if (usesAccessoryImageWorkflow) {
-        const compressedEntries = await Promise.all(
-          availableEntries.map(async ([view, file]) => [view, await compressImageFile(file)] as const)
-        );
-        const body = new FormData();
-        body.append("mode", "accessory");
-        compressedEntries.forEach(([view, file]) => body.append(view, file));
-        const res = await fetch("/api/products/enhance", withAuthRequest({ method: "POST", body }));
-        const data = await res.json();
-        if (!res.ok) { updateColorway(colorwayId, { enhanceStatus: "failed", enhanceError: data.error || "Unable to start enhancement." }); return; }
-        updateColorway(colorwayId, { enhanceJobId: data.job_id || "", enhanceStatus: data.status || "processing" });
+        if (availableEntries.length > 0) {
+          const body = new FormData();
+          body.append("mode", "accessory");
+          const compressedEntries = await Promise.all(
+            availableEntries.map(async ([view, file]) => [view, await compressImageFile(file)] as const)
+          );
+          compressedEntries.forEach(([view, file]) => body.append(view, file));
+          primaryImages = (await startEnhanceJob("/api/products/enhance", body)).images;
+        } else {
+          primaryImages = {};
+        }
       } else {
         const [front, back] = await Promise.all([compressImageFile(frontSource!), compressImageFile(backSource!)]);
         const body = new FormData();
         body.append("front", front); body.append("back", back);
-        const res = await fetch("/api/products/enhance", withAuthRequest({ method: "POST", body }));
-        const data = await res.json();
-        if (!res.ok) { updateColorway(colorwayId, { enhanceStatus: "failed", enhanceError: data.error || "Unable to start enhancement." }); return; }
-        updateColorway(colorwayId, { enhanceJobId: data.job_id || "", enhanceStatus: data.status || "processing" });
+        primaryImages = (await startEnhanceJob("/api/products/enhance", body)).images;
       }
-    } catch { updateColorway(colorwayId, { enhanceStatus: "failed", enhanceError: "Network error" }); }
+
+      const extraFiles = [
+        ...(!usesAccessoryImageWorkflow && !isShoes
+          ? availableEntries.filter(([view]) => view === "left" || view === "right").map(([, file]) => file)
+          : []),
+        ...otherSources.map((source) => source.file),
+      ];
+      for (let i = 0; i < extraFiles.length; i += viewNames.length) {
+        const urls = await enhanceAccessoryChunk(extraFiles.slice(i, i + viewNames.length));
+        const files = await Promise.all(urls.map((url, index) => imageUrlToFile(url, `other-enhanced-${i + index + 1}`)));
+        urls.forEach((url, index) => enhancedOtherResults.push({ url, file: files[index] || null }));
+      }
+
+      await applyColorwayEnhancementCompletion(colorwayId, primaryImages, enhancedOtherResults);
+    } catch (error) {
+      updateColorway(colorwayId, {
+        enhanceStatus: "failed",
+        enhanceJobId: "",
+        enhanceError: (error as Error)?.message || "Network error",
+      });
+    }
   };
 
   useEffect(() => {
@@ -1581,7 +1891,14 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         // Initialize colorways from native variants for store owners.
         if (nextVariants.length > 0) {
           const isShoesProduct = p.fashionSubtype === "shoes";
-          const colorwayMap = groupVariantsByColor(nextVariants);
+          const colorwayMap = new Map<string, { hex: string; rows: VariantRow[] }>();
+          for (const row of nextVariants) {
+            const hex = normalizeHex(row.color);
+            const key = hex || `__images:${row.images.join(",") || row._id || row.uiId}`;
+            const group = colorwayMap.get(key) || { hex, rows: [] };
+            group.rows.push(row);
+            colorwayMap.set(key, group);
+          }
           if (colorwayMap.size > 0) {
             const productImages: { url: string }[] = p.images || [];
             const originPictureUrls: Record<ColorwayView, string> = {
@@ -1597,7 +1914,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               additionalInstructions?: string;
             };
             const savedCompanion = p.companionSettings as Record<string, SavedCompanionSettings> | null;
-            const loadedColorways: Colorway[] = Array.from(colorwayMap.entries()).map(([hex, rows]) => {
+            const loadedColorways: Colorway[] = Array.from(colorwayMap.values()).map(({ hex, rows }) => {
               const indices = rows.find((row) => row.images.length > 0)?.images || [];
               const sizes = rows.map((row) => ({
                 id: generateId(),
@@ -1620,21 +1937,19 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               if (!isShoesProduct && indices.length === 1) {
                 savedViewUrls.front = productImages[indices[0]]?.url || "";
               }
+              const useOriginPictureFallback = colorwayMap.size === 1 && indices.length === 0;
               const resolvedViewUrls: Record<ColorwayView, string> = {
-                front: originPictureUrls.front || savedViewUrls.front || "",
-                back: originPictureUrls.back || savedViewUrls.back || "",
-                left: originPictureUrls.left || savedViewUrls.left || "",
-                right: originPictureUrls.right || savedViewUrls.right || "",
+                front: savedViewUrls.front || (useOriginPictureFallback ? originPictureUrls.front : ""),
+                back: savedViewUrls.back || (useOriginPictureFallback ? originPictureUrls.back : ""),
+                left: savedViewUrls.left || (useOriginPictureFallback ? originPictureUrls.left : ""),
+                right: savedViewUrls.right || (useOriginPictureFallback ? originPictureUrls.right : ""),
               };
-              const generatedImages = indices.length > colorwayViews.length
+              const otherPictures = indices.length > colorwayViews.length
                 ? indices.slice(0, -colorwayViews.length)
                     .map((i) => ({ url: productImages[i]?.url || "", file: null }))
                     .filter((g) => g.url)
                 : [];
-              const generateStatus: ColorwayEnhanceStatus = generatedImages.length > 0 ? "completed" : "idle";
-              const enhanceStatus: ColorwayEnhanceStatus = colorwayViews.every((view) =>
-                Boolean(savedViewUrls[view] || originPictureUrls[view])
-              ) ? "completed" : "idle";
+              const enhanceStatus: ColorwayEnhanceStatus = "idle";
               const normalizedHex = hex.trim().toLowerCase();
               const csEntry = savedCompanion
                 ? (savedCompanion[hex] ||
@@ -1654,12 +1969,15 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 backPreview: resolvedViewUrls.back,
                 leftPreview: resolvedViewUrls.left,
                 rightPreview: resolvedViewUrls.right,
-                enhancedFrontUrl: savedViewUrls.front || "",
-                enhancedBackUrl: savedViewUrls.back || "",
-                enhancedLeftUrl: savedViewUrls.left || "",
-                enhancedRightUrl: savedViewUrls.right || "",
+                enhancedFrontUrl: "",
+                enhancedBackUrl: "",
+                enhancedLeftUrl: "",
+                enhancedRightUrl: "",
+                enhancedOtherImages: [],
                 enhanceStatus,
-                generatedImages, generateStatus,
+                otherImages: otherPictures,
+                generatedImages: [],
+                generateStatus: "idle",
                 companionTopType: cs?.topType || "",
                 companionTopColor: cs?.topColor || null,
                 companionBottomType: cs?.bottomType || "",
@@ -2571,16 +2889,27 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       for (const cw of colorways) {
         const colorKey = normalizeHex(cw.hex);
         const indices: number[] = [];
+        for (const oi of cw.otherImages) {
+          if (oi.file) indices.push(pushNew(oi.file));
+          else if (isUploadableUrl(oi.url)) indices.push(pushExisting(oi.url));
+        }
         for (const gi of cw.generatedImages) {
           if (gi.file) indices.push(pushNew(gi.file));
           else if (isUploadableUrl(gi.url)) indices.push(pushExisting(gi.url));
         }
+        for (const ei of cw.enhancedOtherImages) {
+          if (ei.file) indices.push(pushNew(ei.file));
+          else if (isUploadableUrl(ei.url)) indices.push(pushExisting(ei.url));
+        }
         for (const view of requiredOriginPictureKeys) {
-          const imageFile = getColorwayViewInputFile(cw, view);
-          const imageUrl =
-            cw.enhanceStatus === "completed"
-              ? cw[`enhanced${view.charAt(0).toUpperCase()}${view.slice(1)}Url` as keyof Colorway] || cw[`${view}Preview` as keyof Colorway]
-              : cw[`${view}Preview` as keyof Colorway];
+          const enhancedFile = cw[`enhanced${view.charAt(0).toUpperCase()}${view.slice(1)}File` as keyof Colorway];
+          const enhancedUrl = cw[`enhanced${view.charAt(0).toUpperCase()}${view.slice(1)}Url` as keyof Colorway];
+          if (enhancedFile instanceof File) indices.push(pushNew(enhancedFile));
+          else if (typeof enhancedUrl === "string" && isUploadableUrl(enhancedUrl)) indices.push(pushExisting(enhancedUrl));
+        }
+        for (const view of requiredOriginPictureKeys) {
+          const imageFile = cw[`${view}File` as "frontFile" | "backFile" | "leftFile" | "rightFile"];
+          const imageUrl = cw[`${view}Preview` as keyof Colorway];
           if (imageFile) indices.push(pushNew(imageFile));
           else if (typeof imageUrl === "string" && isUploadableUrl(imageUrl)) indices.push(pushExisting(imageUrl));
         }
@@ -2643,6 +2972,24 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   };
 
   if (fetching) return <p className="text-xs text-text-secondary animate-pulse">Loading product...</p>;
+  if (isStoreOwner) {
+    return (
+      <div className="rounded-2xl border border-border bg-bg-card p-8 space-y-4 max-w-2xl">
+        <p className="text-xs uppercase tracking-[0.22em] text-text-secondary">Product Access</p>
+        <h1 className="text-xl font-semibold tracking-wide">Products cannot be edited after submission</h1>
+        <p className="text-sm text-text-secondary">
+          Submitted products are reviewed and completed by the admin team before they appear on the storefront.
+        </p>
+        <button
+          type="button"
+          onClick={() => router.push("/dashboard/products")}
+          className="bg-black text-white px-4 py-2 text-xs font-medium tracking-wide uppercase"
+        >
+          Back to Products
+        </button>
+      </div>
+    );
+  }
   if (usesStoreOwnerEditFlow) {
     return (
       <div className="space-y-6">

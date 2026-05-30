@@ -136,6 +136,18 @@ function rgbToHex(r: number, g: number, b: number) {
   return "#" + [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("").toUpperCase();
 }
 
+function getCanvasImageUrl(url: string) {
+  if (
+    url.startsWith("blob:") ||
+    url.startsWith("data:") ||
+    url.startsWith("/") ||
+    (!url.startsWith("http://") && !url.startsWith("https://"))
+  ) {
+    return url;
+  }
+  return `/api/media-fetch?url=${encodeURIComponent(url)}`;
+}
+
 type SamplerMode = "grid" | "canvas";
 
 export default function ColorPicker({ value, onChange, inspectorSources, label }: ColorPickerProps) {
@@ -220,7 +232,9 @@ export default function ColorPicker({ value, onChange, inspectorSources, label }
     if (!ctx) return;
     setSamplerError(null);
     const img = new Image();
-    img.crossOrigin = "anonymous";
+    if (!samplerUrl.startsWith("blob:") && !samplerUrl.startsWith("data:")) {
+      img.crossOrigin = "anonymous";
+    }
     img.onload = () => {
       const maxW = 280;
       const ratio = img.naturalHeight / Math.max(1, img.naturalWidth);
@@ -229,7 +243,7 @@ export default function ColorPicker({ value, onChange, inspectorSources, label }
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     };
     img.onerror = () => setSamplerError("Could not load image");
-    img.src = samplerUrl;
+    img.src = getCanvasImageUrl(samplerUrl);
   }, [samplerMode, samplerUrl]);
 
   const samplePixel = (clientX: number, clientY: number) => {

@@ -89,7 +89,7 @@ export default function ProductsPage() {
   const [userRole, setUserRole] = useState("");
   const deferredSearch = useDeferredValue(search);
   const canAddProducts = userRole === "store_owner";
-  const canEditProducts = userRole === "store_owner" || userRole === "admin";
+  const canEditProducts = userRole === "admin";
   const canDeleteProducts = userRole === "store_owner" || userRole === "admin";
   const canToggleVisibility = userRole === "store_owner" || userRole === "admin";
   const canFilterByStore = userRole === "admin";
@@ -451,11 +451,15 @@ export default function ProductsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {sortedProducts.map((p) => (
+              {sortedProducts.map((p) => {
+                const canOpenProduct = userRole === "admin" || (p.approvalStatus || "approved") === "approved";
+                return (
                 <tr
                   key={p._id}
-                  onClick={() => router.push(`/dashboard/products/${p._id}`)}
-                  className="cursor-pointer hover:bg-bg-hover transition-colors"
+                  onClick={() => {
+                    if (canOpenProduct) router.push(`/dashboard/products/${p._id}`);
+                  }}
+                  className={`${canOpenProduct ? "cursor-pointer hover:bg-bg-hover" : "cursor-default"} transition-colors`}
                 >
                   {(() => {
                     const status = getProductStatus(p);
@@ -576,7 +580,7 @@ export default function ProductsPage() {
                     );
                   })()}
                 </tr>
-              ))}
+              );})}
             </tbody>
           </table>
         </div>

@@ -49,6 +49,38 @@ function normalizeReference(value: unknown) {
   return String(value || "").trim();
 }
 
+function validateStoreOwnerSubmission(params: {
+  formData: FormData;
+  imageCount: number;
+  variants: RequestedVariant[];
+}) {
+  const price = Number(params.formData.get("price") || 0);
+  if (!Number.isFinite(price) || price <= 0) {
+    return "Please enter a valid product price.";
+  }
+  if (params.imageCount < 2) {
+    return "Please upload at least 2 pictures and include front and back views.";
+  }
+  if (params.variants.length === 0) {
+    return "Please add at least one colorway with size and quantity.";
+  }
+
+  for (const variant of params.variants) {
+    if (!variant.size.trim()) return "Please add a size for every colorway quantity.";
+    if (variant.fullStock <= 0) return "Please add a quantity greater than zero for every size.";
+    const images = new Set<number>();
+    for (const imageIndex of variant.images) {
+      if (imageIndex < 0 || imageIndex >= params.imageCount) {
+        return "Invalid colorway image selection.";
+      }
+      images.add(imageIndex);
+    }
+    if (images.size < 2) return "Please upload at least 2 pictures for each colorway, including front and back views.";
+  }
+
+  return "";
+}
+
 function normalizeProductType(value: string) {
   return value === "perfume" ? "perfume" : "fashion";
 }
@@ -297,6 +329,38 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Please upload at least one product image." }, { status: 400 });
     }
 
+    const rawFullStock = String(formData.get("fullStock") ?? formData.get("stock") ?? "").trim();
+    if (rawFullStock.length === 0) {
+      return NextResponse.json({ error: "Please enter a full stock value." }, { status: 400 });
+    }
+    const fullStock = Math.max(0, Number(rawFullStock));
+    const productType = session.role === "store_owner"
+      ? "fashion"
+      : normalizeProductType(String(formData.get("productType") || "fashion"));
+    const fashionSubtype =
+      productType === "fashion"
+        ? session.role === "store_owner"
+          ? "clothes"
+          : String(formData.get("fashionSubtype") || "clothes")
+        : null;
+    const explicitConditionScore =
+      productType === "perfume" ? Number(formData.get("conditionScore") || 9) : null;
+    const requestedVariants = getRequestedVariants(formData, {
+      productType,
+      fullStock,
+      explicitConditionScore,
+    });
+    if (session.role === "store_owner") {
+      const validationError = validateStoreOwnerSubmission({
+        formData,
+        imageCount: imageFiles.length,
+        variants: requestedVariants,
+      });
+      if (validationError) {
+        return NextResponse.json({ error: validationError }, { status: 400 });
+      }
+    }
+
     const imagePaths = await saveProductImages(imageFiles);
     const cloneSourceImagePath =
       cloneSourceImageFile instanceof File && cloneSourceImageFile.size > 0
@@ -322,23 +386,6 @@ export async function POST(req: NextRequest) {
     };
     const mainImageIndex = Math.max(0, Number(formData.get("mainImageIndex") ?? 0));
 
-    const productType = normalizeProductType(String(formData.get("productType") || "fashion"));
-    const fashionSubtype =
-      productType === "fashion" ? String(formData.get("fashionSubtype") || "clothes") : null;
-    const rawFullStock = String(formData.get("fullStock") ?? formData.get("stock") ?? "").trim();
-    if (rawFullStock.length === 0) {
-      return NextResponse.json({ error: "Please enter a full stock value." }, { status: 400 });
-    }
-    const fullStock = Math.max(0, Number(rawFullStock));
-    const explicitConditionScore =
-      productType === "perfume" ? Number(formData.get("conditionScore") || 9) : null;
-
-    const requestedVariants = getRequestedVariants(formData, {
-      productType,
-      fullStock,
-      explicitConditionScore,
-    });
-
     // On create there are no prior orders — stock = fullStock for each variant.
     const variants = requestedVariants.map((v) => ({
       size: v.size,
@@ -354,7 +401,7 @@ export async function POST(req: NextRequest) {
         ? explicitConditionScore
         : averageVariantConditionScore(variants);
 
-    const reference = normalizeReference(formData.get("reference"));
+    const reference = session.role === "store_owner" ? "" : normalizeReference(formData.get("reference"));
     const duplicateResponse = await ensureUniqueProductReference({
       ownerId: auditActor?.id,
       reference,
@@ -372,11 +419,11 @@ export async function POST(req: NextRequest) {
     const totalFullStock = sumVariantFullStock(variants);
 
     const product = await Product.create({
-      name: String(formData.get("name") || ""),
+      name: session.role === "store_owner" ? "" : String(formData.get("name") || ""),
       price: Number(formData.get("price") || 0),
       isActive: String(formData.get("isActive") || "true") === "true",
-      categories: parseStringArray(formData.get("categories")),
-      description: String(formData.get("description") || ""),
+      categories: session.role === "store_owner" ? [] : parseStringArray(formData.get("categories")),
+      description: session.role === "store_owner" ? "" : String(formData.get("description") || ""),
       brand: String(formData.get("brand") || ""),
       reference,
       stock: totalStock,
@@ -387,14 +434,19 @@ export async function POST(req: NextRequest) {
       productType,
       fashionSubtype,
       conditionStatus:
-        conditionScore === null ? null : getConditionStatusFromScore(conditionScore),
-      conditionScore,
-      originPictures: normalizeOriginPictures(productType, fashionSubtype, originPictures),
+        session.role === "store_owner" || conditionScore === null ? null : getConditionStatusFromScore(conditionScore),
+      conditionScore: session.role === "store_owner" ? null : conditionScore,
+      originPictures: session.role === "store_owner"
+        ? normalizeOriginPictures(productType, fashionSubtype, {
+            front: imagePaths[0] || "",
+            back: imagePaths[1] || "",
+          })
+        : normalizeOriginPictures(productType, fashionSubtype, originPictures),
       cloneSourceName: productType === "perfume" ? String(formData.get("cloneSourceName") || "") : "",
       cloneSourceImage:
         productType === "perfume" ? cloneSourceImagePath || String(formData.get("cloneSourceImage") || "") : "",
-      modelId: String(formData.get("modelId") || ""),
-      companionSettings: parseCompanionSettings(formData.get("companionSettings")),
+      modelId: session.role === "store_owner" ? "" : String(formData.get("modelId") || ""),
+      companionSettings: session.role === "store_owner" ? null : parseCompanionSettings(formData.get("companionSettings")),
       images: imagePaths.map((url, index) => ({
         url,
         isMain: index === Math.min(mainImageIndex, imagePaths.length - 1),

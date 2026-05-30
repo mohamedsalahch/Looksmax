@@ -144,7 +144,6 @@ const storeOwnerNavItems = [
   navItems[6],
   navItems[7],
   { name: "Store Details", href: "/dashboard/store-details", icon: "🏬" },
-  { name: "Credits", href: "/dashboard/credits", icon: "💳" },
   { name: "Balance", href: "/dashboard/balance", icon: "💰" },
   { name: "Transactions", href: "/dashboard/transactions", icon: "📜" },
 ];

@@ -21,6 +21,18 @@ function rgbToHex(r: number, g: number, b: number) {
   return "#" + [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("").toUpperCase();
 }
 
+function getCanvasImageUrl(url: string) {
+  if (
+    url.startsWith("blob:") ||
+    url.startsWith("data:") ||
+    url.startsWith("/") ||
+    (!url.startsWith("http://") && !url.startsWith("https://"))
+  ) {
+    return url;
+  }
+  return `/api/media-fetch?url=${encodeURIComponent(url)}`;
+}
+
 export default function ImageColorSampler({ open, onClose, onPick, sources, title = "Sample a color" }: ImageColorSamplerProps) {
   const [step, setStep] = useState<Step>("choose");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -56,7 +68,9 @@ export default function ImageColorSampler({ open, onClose, onPick, sources, titl
     if (!ctx) return;
     setError(null);
     const img = new Image();
-    img.crossOrigin = "anonymous";
+    if (!imageUrl.startsWith("blob:") && !imageUrl.startsWith("data:")) {
+      img.crossOrigin = "anonymous";
+    }
     img.onload = () => {
       const maxSide = 600;
       const ratio = img.naturalHeight / Math.max(1, img.naturalWidth);
@@ -75,8 +89,8 @@ export default function ImageColorSampler({ open, onClose, onPick, sources, titl
         // CORS — will be reported on first interaction
       }
     };
-    img.onerror = () => setError("Could not load image (CORS or network).");
-    img.src = imageUrl;
+    img.onerror = () => setError("Could not load image.");
+    img.src = getCanvasImageUrl(imageUrl);
   }, [step, imageUrl]);
 
   const sampleAtFraction = (fx: number, fy: number) => {
@@ -90,7 +104,7 @@ export default function ImageColorSampler({ open, onClose, onPick, sources, titl
       const data = ctx.getImageData(cx, cy, 1, 1).data;
       setSampledHex(rgbToHex(data[0], data[1], data[2]));
     } catch {
-      setError("Image is CORS-blocked — can't read pixels.");
+      setError("Could not read pixels from this image.");
     }
   };
 
