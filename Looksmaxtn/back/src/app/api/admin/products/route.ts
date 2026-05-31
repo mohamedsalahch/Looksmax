@@ -148,6 +148,27 @@ function serializeStoredVariants(variants: ReadonlyArray<StoredVariantLean>) {
   }));
 }
 
+function filterPublicProductMedia<I extends { isPublic?: boolean }, T extends { images: number[] }>(
+  images: I[],
+  variants: ReadonlyArray<T>,
+) {
+  const publicEntries = (images || [])
+    .map((image, imageIndex) => ({ image, imageIndex }))
+    .filter(({ image }) => image.isPublic !== false);
+  const publicIndexByOriginal = new Map(
+    publicEntries.map(({ imageIndex }, publicIndex) => [imageIndex, publicIndex])
+  );
+  return {
+    images: publicEntries.map(({ image }) => image),
+    variants: variants.map((variant) => ({
+      ...variant,
+      images: (variant.images || [])
+        .map((imageIndex) => publicIndexByOriginal.get(imageIndex))
+        .filter((imageIndex): imageIndex is number => typeof imageIndex === "number"),
+    })),
+  };
+}
+
 async function ensureUniqueProductReference(params: {
   ownerId?: string | null;
   reference: string;
@@ -276,16 +297,20 @@ export async function GET(req: NextRequest) {
         const productId = product._id.toString();
         const soldQuantity = soldQuantityMap.get(productId) || 0;
         const variants = normalizeStoredVariants(product.variants) as StoredVariantLean[];
+        const responseMedia = session.role === "store_owner"
+          ? filterPublicProductMedia(product.images || [], variants)
+          : { images: product.images, variants };
         const totalStock = sumVariantStock(variants);
         const totalFullStock = sumVariantFullStock(variants);
 
         return {
           ...product,
+          images: responseMedia.images,
           stock: totalStock,
           availableStock: totalStock,
           soldQuantity,
           fullStock: totalFullStock,
-          variants: serializeStoredVariants(variants),
+          variants: serializeStoredVariants(responseMedia.variants),
           sizes: deriveSizes(variants),
           colors: deriveColors(variants),
           availabilityStatus: getAvailabilityStatus({
@@ -450,6 +475,10 @@ export async function POST(req: NextRequest) {
       images: imagePaths.map((url, index) => ({
         url,
         isMain: index === Math.min(mainImageIndex, imagePaths.length - 1),
+        isPublic: session.role !== "store_owner",
+        source: "original",
+        color: null,
+        sourceKey: `originalOther:${index}`,
       })),
       approvalStatus: session.role === "store_owner" ? "pending" : "approved",
       createdBy: auditActor,

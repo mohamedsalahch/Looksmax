@@ -19,6 +19,27 @@ import {
   normalizeStoredVariants,
 } from "@/lib/productVariants";
 
+function filterPublicProductMedia<I extends { isPublic?: boolean }>(
+  images: I[],
+  variants: ReadonlyArray<VariantLike & { images?: number[] }>,
+) {
+  const publicEntries = (images || [])
+    .map((image, imageIndex) => ({ image, imageIndex }))
+    .filter(({ image }) => image.isPublic !== false);
+  const publicIndexByOriginal = new Map(
+    publicEntries.map(({ imageIndex }, publicIndex) => [imageIndex, publicIndex])
+  );
+  return {
+    images: publicEntries.map(({ image }) => image),
+    variants: variants.map((variant) => ({
+      ...variant,
+      images: (variant.images || [])
+        .map((imageIndex) => publicIndexByOriginal.get(imageIndex))
+        .filter((imageIndex): imageIndex is number => typeof imageIndex === "number"),
+    })) as Array<VariantLike & { images: number[] }>,
+  };
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -48,7 +69,9 @@ export async function GET(
     if (!isStoreOwnerApproved(owner)) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
-    const variants = normalizeStoredVariants(product.variants) as VariantLike[];
+    const storedVariants = normalizeStoredVariants(product.variants) as Array<VariantLike & { images: number[] }>;
+    const publicMedia = filterPublicProductMedia(product.images || [], storedVariants);
+    const variants = publicMedia.variants;
     const ownedReservationQuantity = activeReservations
       .filter((reservation) => reservation.reservationKey === reservationKey)
       .reduce((sum, reservation) => sum + Math.max(1, Number(reservation.quantity) || 1), 0);
@@ -101,6 +124,7 @@ export async function GET(
     return NextResponse.json({
       product: {
         ...product,
+        images: publicMedia.images,
         conditionScore,
         tag: effectiveTag,
         stock: displayStock,

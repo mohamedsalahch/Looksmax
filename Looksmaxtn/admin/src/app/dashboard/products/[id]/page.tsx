@@ -8,6 +8,7 @@ import { withAuthRequest } from "@/lib/authClient";
 interface ProductImage {
   url: string;
   isMain: boolean;
+  isPublic?: boolean;
 }
 
 interface AuditActor {
@@ -173,7 +174,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
     }
   };
 
-  const images = product?.images || [];
+  const images = (product?.images || []).filter((image) => image.isPublic !== false);
   const mainImage = images[selectedImageIndex] || images.find((image) => image.isMain) || images[0];
   const categories = product?.categories || [];
   const details = product?.details || [];

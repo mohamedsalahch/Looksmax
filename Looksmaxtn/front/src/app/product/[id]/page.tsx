@@ -37,7 +37,7 @@ type ProductResponse = {
     createdBy?: {
       name?: string;
     } | null;
-    images?: { url: string; isMain: boolean }[];
+    images?: { url: string; isMain: boolean; isPublic?: boolean }[];
     sizes?: string[];
     colors?: string[];
     variants?: ProductVariantPayload[];
@@ -63,6 +63,10 @@ type ProductResponse = {
     cloneSourceImage?: string;
   };
 };
+
+function getPublicImages(images: { url: string; isMain: boolean; isPublic?: boolean }[] = []) {
+  return images.filter((image) => image.isPublic !== false);
+}
 
 async function loadProduct(id: string) {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
@@ -133,7 +137,8 @@ export async function generateMetadata({
     });
   }
 
-  const image = dbProduct.images?.find((item) => item.isMain)?.url || dbProduct.images?.[0]?.url || "";
+  const publicImages = getPublicImages(dbProduct.images);
+  const image = publicImages.find((item) => item.isMain)?.url || publicImages[0]?.url || "";
   const description =
     dbProduct.description ||
     `${dbProduct.name}${dbProduct.brand ? ` by ${dbProduct.brand}` : ""} available from LOOKSMAX Tunisia.`;
@@ -166,7 +171,19 @@ export default async function ProductDetailPage({
     notFound();
   }
 
-  const variants = dbProduct.variants || [];
+  const publicImageEntries = (dbProduct.images || [])
+    .map((image, imageIndex) => ({ image, imageIndex }))
+    .filter(({ image }) => image.isPublic !== false);
+  const publicImageIndexByOriginal = new Map(
+    publicImageEntries.map(({ imageIndex }, publicIndex) => [imageIndex, publicIndex])
+  );
+  const publicImages = publicImageEntries.map(({ image }) => image);
+  const variants = (dbProduct.variants || []).map((variant) => ({
+    ...variant,
+    images: (variant.images || [])
+      .map((imageIndex) => publicImageIndexByOriginal.get(imageIndex))
+      .filter((imageIndex): imageIndex is number => typeof imageIndex === "number"),
+  }));
   const variantAvailability = dbProduct.variantAvailability || null;
   const stock = Math.max(dbProduct.stock ?? 0, 0);
   const { variantId: initialSelectedVariantId, colorHex: initialSelectedColorHex } =
@@ -183,8 +200,8 @@ export default async function ProductDetailPage({
     brand: dbProduct.brand || "",
     storeName: dbProduct.storeName || dbProduct.createdBy?.name || "",
     storeType: dbProduct.storeType || null,
-    image: dbProduct.images?.find((image) => image.isMain)?.url || dbProduct.images?.[0]?.url || "",
-    images: dbProduct.images || [],
+    image: publicImages.find((image) => image.isMain)?.url || publicImages[0]?.url || "",
+    images: publicImages,
     variants,
     variantAvailability,
     stock,

@@ -4,6 +4,10 @@ import { type IAuditActor, auditActorSchema } from "@/store/lib/audit";
 export interface IProductImage {
   url: string;
   isMain: boolean;
+  isPublic?: boolean;
+  source?: string;
+  color?: string | null;
+  sourceKey?: string;
 }
 
 export interface IOriginPictures {
@@ -58,6 +62,10 @@ const productImageSchema = new Schema<IProductImage>(
   {
     url: { type: String, required: true },
     isMain: { type: Boolean, default: false },
+    isPublic: { type: Boolean, default: true },
+    source: { type: String, default: "" },
+    color: { type: String, default: null },
+    sourceKey: { type: String, default: "" },
   },
   { _id: false }
 );

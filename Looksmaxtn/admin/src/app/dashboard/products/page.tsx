@@ -15,7 +15,7 @@ interface Category {
 
 interface Product {
   _id: string; name: string; price: number; categories: string[];
-  stock: number; availableStock?: number; soldQuantity?: number; fullStock?: number; tag: string; brand: string; reference?: string; createdAt: string; productType?: "fashion" | "perfume" | "clothing" | "shoes"; availabilityStatus?: string; isActive?: boolean; visibilityStatus?: string; approvalStatus?: "pending" | "approved" | "rejected"; images?: Array<{ url: string; isMain: boolean }>; originPictures?: { front?: string; back?: string; left?: string; right?: string }; createdBy?: { id?: string; name?: string; email?: string } | null; storeName?: string;
+  stock: number; availableStock?: number; soldQuantity?: number; fullStock?: number; tag: string; brand: string; reference?: string; createdAt: string; productType?: "fashion" | "perfume" | "clothing" | "shoes"; availabilityStatus?: string; isActive?: boolean; visibilityStatus?: string; approvalStatus?: "pending" | "approved" | "rejected"; images?: Array<{ url: string; isMain: boolean; isPublic?: boolean }>; originPictures?: { front?: string; back?: string; left?: string; right?: string }; createdBy?: { id?: string; name?: string; email?: string } | null; storeName?: string;
 }
 
 type SortKey = "name" | "_id" | "categories" | "store" | "productType" | "price" | "stock" | "status" | "approval" | "visibility" | "tag";
@@ -295,7 +295,8 @@ export default function ProductsPage() {
   }, [filteredProducts, sortDirection, sortKey]);
 
   const getProductThumbnail = (product: Product) => {
-    const mainImage = product.images?.find((image) => image.isMain)?.url || product.images?.[0]?.url;
+    const publicImages = (product.images || []).filter((image) => image.isPublic !== false);
+    const mainImage = publicImages.find((image) => image.isMain)?.url || publicImages[0]?.url;
     if (mainImage) return mainImage;
 
     if (product.productType === "shoes") {

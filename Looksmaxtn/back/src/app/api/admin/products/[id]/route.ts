@@ -160,6 +160,27 @@ function serializeStoredVariants(
   });
 }
 
+function filterPublicProductMedia<I extends { isPublic?: boolean }, T extends { images: number[] }>(
+  images: I[],
+  variants: ReadonlyArray<T>,
+) {
+  const publicEntries = (images || [])
+    .map((image, imageIndex) => ({ image, imageIndex }))
+    .filter(({ image }) => image.isPublic !== false);
+  const publicIndexByOriginal = new Map(
+    publicEntries.map(({ imageIndex }, publicIndex) => [imageIndex, publicIndex])
+  );
+  return {
+    images: publicEntries.map(({ image }) => image),
+    variants: variants.map((variant) => ({
+      ...variant,
+      images: (variant.images || [])
+        .map((imageIndex) => publicIndexByOriginal.get(imageIndex))
+        .filter((imageIndex): imageIndex is number => typeof imageIndex === "number"),
+    })),
+  };
+}
+
 async function getProtectedVariantIds(
   productId: string,
   candidateIds: mongoose.Types.ObjectId[],
@@ -356,14 +377,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       ? Object.fromEntries(product.companionSettings)
       : (product.companionSettings && typeof product.companionSettings === "object" ? product.companionSettings : null);
 
+    const responseMedia = session.role === "store_owner"
+      ? filterPublicProductMedia(product.images || [], variants)
+      : { images: product.images, variants };
+
     return NextResponse.json({
       product: {
         ...product,
+        images: responseMedia.images,
         stock: totalStock,
         availableStock: totalStock,
         soldQuantity,
         fullStock: totalFullStock,
-        variants: serializeStoredVariants(variants, soldByVariant),
+        variants: serializeStoredVariants(responseMedia.variants, soldByVariant),
         sizes: deriveSizes(variants),
         colors: deriveColors(variants),
         companionSettings: companionSettingsData,
@@ -547,6 +573,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const formData = await req.formData();
     const existingImages = JSON.parse(String(formData.get("existingImages") || "[]")) as { url: string }[];
     const imageOrder = JSON.parse(String(formData.get("imageOrder") || "[]")) as string[];
+    const imageMeta = JSON.parse(String(formData.get("imageMeta") || "{}")) as Record<string, {
+      isPublic?: boolean;
+      source?: string;
+      color?: string | null;
+      sourceKey?: string;
+    }>;
     const imageFiles = formData
       .getAll("images")
       .filter((value): value is File => value instanceof File && value.size > 0);
@@ -602,9 +634,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const mergedImages = orderedKeys
       .map((key) => {
         const url = existingImageMap.get(key) || newImageMap.get(key);
-        return url ? { url, isMain: false, key } : null;
+        return url ? { url, isMain: false, key, meta: imageMeta[key] || {} } : null;
       })
-      .filter(Boolean) as { url: string; isMain: boolean; key: string }[];
+      .filter(Boolean) as { url: string; isMain: boolean; key: string; meta: Record<string, unknown> }[];
 
     const existingProductImages = (existingProduct.images || []).filter((image) => Boolean(image && image.url));
     const nextImages =
@@ -613,6 +645,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         : existingProductImages.map((image, index) => ({
             url: image.url,
             isMain: Boolean(image.isMain),
+            meta: {
+              isPublic: image.isPublic !== false,
+              source: image.source || "",
+              color: image.color || null,
+              sourceKey: image.sourceKey || "",
+            },
             key: `existing:${image.url}:${index}`,
           }));
 
@@ -624,9 +662,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       ? mainImageKey
       : nextImages[0].key;
 
-    const images = nextImages.map(({ key, url, isMain }) => ({
+    const images = nextImages.map(({ key, url, isMain, meta }) => ({
       url,
       isMain: mergedImages.length > 0 ? key === selectedKey : Boolean(isMain),
+      isPublic: meta.isPublic !== false,
+      source: String(meta.source || ""),
+      color: meta.color ? String(meta.color) : null,
+      sourceKey: String(meta.sourceKey || ""),
     }));
 
     const removedImages = mergedImages.length > 0

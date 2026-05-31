@@ -40,6 +40,11 @@ interface Category {
 interface ProductImage {
   id?: string;
   url: string;
+  isMain?: boolean;
+  isPublic?: boolean;
+  source?: string;
+  color?: string | null;
+  sourceKey?: string;
   file?: File | null;
   existing?: boolean;
   kind?: "source" | "generated";
@@ -130,6 +135,7 @@ type Colorway = {
   generateError: string;
   otherImages: Array<{ url: string; file: File | null }>;
   generatedImages: Array<{ url: string; file: File | null }>;
+  publicImageOrder: Record<string, string>;
   companionTopType: string;
   companionBottomType: string;
   companionFootwearType: string;
@@ -157,6 +163,7 @@ function createEmptyColorway(hex = ""): Colorway {
     generateStatus: "idle", generateJobId: "", generateError: "",
     otherImages: [],
     generatedImages: [],
+    publicImageOrder: {},
     companionTopType: "", companionBottomType: "", companionFootwearType: "",
     companionTopColor: null, companionBottomColor: null, companionFootwearColor: null,
     additionalInstructions: "",
@@ -537,7 +544,7 @@ function ColorwayGenerationCard({
       </div>
       {(enhancedFrontPreview || enhancedBackPreview) && (
         <div className="space-y-1.5">
-          <p className="text-[9px] uppercase tracking-wider text-text-secondary">Enhanced</p>
+          <p className="text-[9px] uppercase tracking-wider text-text-secondary">Generation source</p>
           <div className="grid grid-cols-2 gap-1.5">
             {enhancedFrontPreview && (
               <div className="space-y-1">
@@ -615,23 +622,6 @@ function ColorwayGenerationCard({
           )}
         </div>
       )}
-      {colorway.generatedImages.length > 0 && (
-        <div className="grid grid-cols-2 gap-1.5">
-          {colorway.generatedImages.map((img, i) => (
-            <div key={i} className="space-y-1">
-              <button type="button" onClick={() => setZoomedUrl(img.url)} className="group relative aspect-[4/5] overflow-hidden rounded border border-border bg-bg-secondary cursor-zoom-in transition-colors hover:border-accent/60">
-                <img src={img.url} alt={`Generated ${i + 1}`} className="h-full w-full object-cover" />
-                <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 translate-y-1 rounded bg-black/60 px-2 py-1 text-center text-[8px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
-                  Preview
-                </span>
-              </button>
-              <button type="button" onClick={() => onUpdate({ generatedImages: [], generateStatus: "idle", generateError: "", generateJobId: "" })} className="w-full border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-danger transition-colors hover:bg-danger/5">
-                Clear
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
       <div className="space-y-1 border-t border-border pt-3">
         {colorway.generateError && (
           <div className="border border-[#BD3100] bg-[#faf3f2] px-3 py-2 text-[10px] text-[#BD3100]">
@@ -639,12 +629,9 @@ function ColorwayGenerationCard({
           </div>
         )}
         <div className="flex items-center justify-end gap-2">
-          {colorway.generateStatus === "completed" && (
-            <button type="button" onClick={onGenerate} className="text-[8px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary">Regenerate</button>
-          )}
-          <button type="button" onClick={canGenerate && colorway.generateStatus !== "completed" ? onGenerate : undefined} disabled={!canGenerate || colorway.generateStatus === "processing" || colorway.generateStatus === "completed"} className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity">
+          <button type="button" onClick={colorway.generateStatus === "processing" ? undefined : onGenerate} disabled={colorway.generateStatus === "processing"} className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity">
             {colorway.generateStatus === "processing" && <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />}
-            {colorway.generateStatus === "completed" ? "Generated" : colorway.generateStatus === "processing" ? "Generating..." : "Generate"}
+            {colorway.generateStatus === "processing" ? "Generating..." : "Generate"}
           </button>
         </div>
       </div>
@@ -676,13 +663,14 @@ function ColorwayCard({
   viewLabels?: Partial<Record<ColorwayView, string>>;
   enhanceRequiresAllViews?: boolean;
   hideSizeInput?: boolean;
-  onRemove: () => void; onUpdate: (patch: Partial<Colorway>) => void; onEnhance: () => void;
+  onRemove: () => void; onUpdate: (patch: Partial<Colorway>) => void; onEnhance: (pictureIndexes?: number[]) => void;
   onGenerate?: () => void;
   onAddSize: () => void; onRemoveSize: (sizeId: string) => void; onUpdateSize: (sizeId: string, patch: Partial<SizeRow>) => void;
 }) {
   const views: ColorwayView[] = requiredViews && requiredViews.length > 0 ? requiredViews : ["front", "back"];
   const [zoomedPreview, setZoomedPreview] = useState<string | null>(null);
   const [samplerOpen, setSamplerOpen] = useState(false);
+  const [selectedPictureIndexes, setSelectedPictureIndexes] = useState<number[]>([]);
   const hasColor = Boolean(colorway.hex.trim());
 
   const fileKeyFor = (view: ColorwayView): "frontFile" | "backFile" | "leftFile" | "rightFile" =>
@@ -712,7 +700,6 @@ function ColorwayCard({
   const hasEnhancedResults =
     colorway.enhancedOtherImages.length > 0 ||
     uploadedViews.some((view) => Boolean(colorway[enhancedUrlKeyFor(view)] || colorway[enhancedFileKeyFor(view)]));
-  const isUsingOriginal = colorway.enhanceStatus === "original";
 
   const getDisplayedPreview = (view: ColorwayView) => colorway[previewKeyFor(view)];
 
@@ -727,6 +714,12 @@ function ColorwayCard({
   });
 
   const handlePickColor = () => setSamplerOpen(true);
+  const togglePictureSelection = (pictureIndex: number) =>
+    setSelectedPictureIndexes((current) =>
+      current.includes(pictureIndex)
+        ? current.filter((index) => index !== pictureIndex)
+        : [...current, pictureIndex]
+    );
 
   const handleViewFile = (view: ColorwayView, file: File | null) => {
     const generating = colorway.generateStatus === "processing";
@@ -757,8 +750,7 @@ function ColorwayCard({
 
   type PictureValue = { url: string; file: File | null };
   const pictureSlots = [
-    { kind: "view" as const, view: "front" as const },
-    { kind: "view" as const, view: "back" as const },
+    ...views.map((view) => ({ kind: "view" as const, view })),
     ...colorway.otherImages.map((_, index) => ({ kind: "other" as const, index })),
   ];
   type EnhancedPictureSlot =
@@ -795,20 +787,74 @@ function ColorwayCard({
       file: colorway[fileKey],
     };
   };
-  const enhancedPictureLabelForSlot = (slot: EnhancedPictureSlot) =>
-    slot.kind === "enhancedOther"
-      ? `Other enhanced ${slot.index + 1}`
-      : `${viewLabels?.[slot.view] || slot.view} enhanced`;
+  const visibleOriginalPictureCount = pictureSlots.filter((slot) => {
+    const value = pictureValueForSlot(slot);
+    return Boolean(value.url || value.file);
+  }).length;
+  const visibleEnhancedPictureCount = enhancedPictureSlots.filter((slot) => {
+    const value = enhancedPictureValueForSlot(slot);
+    return Boolean(value.url || value.file);
+  }).length;
+  const visibleGeneratedPictureCount = colorway.generatedImages.filter((image) => image.url || image.file).length;
+  const publicPictureCount = visibleOriginalPictureCount + visibleEnhancedPictureCount + visibleGeneratedPictureCount;
+  const ordinalLabel = (value: number) => {
+    const mod100 = value % 100;
+    if (mod100 >= 11 && mod100 <= 13) return `${value}th`;
+    switch (value % 10) {
+      case 1:
+        return `${value}st`;
+      case 2:
+        return `${value}nd`;
+      case 3:
+        return `${value}rd`;
+      default:
+        return `${value}th`;
+    }
+  };
+  const publicOrderOptions = [
+    { value: "", label: "Hidden" },
+    { value: "main", label: "Main / front view" },
+    ...Array.from({ length: Math.max(0, publicPictureCount - 1) }, (_, optionIndex) => ({
+      value: String(optionIndex + 2),
+      label: ordinalLabel(optionIndex + 2),
+    })),
+  ];
+  const setPublicImageOrder = (key: string, value: string) => {
+    const nextOrder = { ...colorway.publicImageOrder };
+    if (value) {
+      Object.keys(nextOrder).forEach((existingKey) => {
+        if (existingKey !== key && nextOrder[existingKey] === value) {
+          nextOrder[existingKey] = "";
+        }
+      });
+    }
+    nextOrder[key] = value;
+    onUpdate({ publicImageOrder: nextOrder });
+  };
+  const renderPublicOrderSelect = (key: string) => (
+    <select
+      value={colorway.publicImageOrder[key] || ""}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => setPublicImageOrder(key, e.target.value)}
+      className="w-full border border-border bg-bg-card px-1.5 py-1 text-[8px] uppercase tracking-wider text-text-secondary outline-none transition-colors focus:border-accent"
+    >
+      {publicOrderOptions.map((option) => (
+        <option key={option.value || "hidden"} value={option.value}>{option.label}</option>
+      ))}
+    </select>
+  );
   const applyPictureValues = (values: PictureValue[]) => {
-    const front = values[0] || { url: "", file: null };
-    const back = values[1] || { url: "", file: null };
-    onUpdate({
-      frontPreview: front.url,
-      frontFile: front.file,
-      backPreview: back.url,
-      backFile: back.file,
-      otherImages: values.slice(2).filter((value) => value.url || value.file),
+    const patch: Partial<Colorway> = {
+      otherImages: values.slice(views.length).filter((value) => value.url || value.file),
+    };
+    views.forEach((view, index) => {
+      const value = values[index] || { url: "", file: null };
+      Object.assign(patch, {
+        [previewKeyFor(view)]: value.url,
+        [fileKeyFor(view)]: value.file,
+      });
     });
+    onUpdate(patch);
   };
   const applyEnhancedPictureValues = (values: PictureValue[]) => {
     const viewValues = new Map<ColorwayView, PictureValue>();
@@ -864,12 +910,14 @@ function ColorwayCard({
       enhancedValues[enhancedSourceIndex] = originalTarget;
       applyPictureValues(originalValues);
       applyEnhancedPictureValues(enhancedValues);
+      setSelectedPictureIndexes([]);
       return;
     }
     const sourceValue = event.dataTransfer.getData("text/plain");
     if (sourceValue !== "") {
       const sourceIndex = Number(sourceValue);
       swapOriginalPicture(sourceIndex, toIndex);
+      setSelectedPictureIndexes([]);
       return;
     }
     fallback?.();
@@ -896,6 +944,7 @@ function ColorwayCard({
       originalValues[originalSourceIndex] = enhancedTarget;
       applyPictureValues(originalValues);
       applyEnhancedPictureValues(enhancedValues);
+      setSelectedPictureIndexes([]);
     }
   };
   const removeOtherPicture = (imageIndex: number) => {
@@ -908,26 +957,34 @@ function ColorwayCard({
       enhancedRightUrl: "",
       enhancedOtherImages: [],
     });
+    setSelectedPictureIndexes((current) =>
+      current
+        .filter((index) => index !== imageIndex + 2)
+        .map((index) => (index > imageIndex + 2 ? index - 1 : index))
+    );
   };
-  const clearEnhancedImages = () =>
+  const removeEnhancedPicture = (slot: EnhancedPictureSlot) => {
+    if (slot.kind === "enhancedView") {
+      onUpdate({
+        [enhancedUrlKeyFor(slot.view)]: "",
+        [enhancedFileKeyFor(slot.view)]: null,
+      } as Partial<Colorway>);
+      return;
+    }
     onUpdate({
-      enhanceStatus: "idle",
-      enhanceJobId: "",
-      enhanceError: "",
-      enhancedFrontUrl: "",
-      enhancedBackUrl: "",
-      enhancedLeftUrl: "",
-      enhancedRightUrl: "",
-      enhancedFrontFile: null,
-      enhancedBackFile: null,
-      enhancedLeftFile: null,
-      enhancedRightFile: null,
-      enhancedOtherImages: [],
+      enhancedOtherImages: colorway.enhancedOtherImages.filter((_, index) => index !== slot.index),
     });
+  };
+  const removeGeneratedPicture = (imageIndex: number) => {
+    const nextGenerated = colorway.generatedImages.filter((_, index) => index !== imageIndex);
+    onUpdate({
+      generatedImages: nextGenerated,
+      ...(nextGenerated.length === 0 ? { generateStatus: "idle" as const, generateError: "", generateJobId: "" } : {}),
+    });
+  };
   const enhancedPictures = [
     ...enhancedPictureSlots.map((slot, imageIndex) => ({
       ...enhancedPictureValueForSlot(slot),
-      label: enhancedPictureLabelForSlot(slot),
       index: imageIndex,
     })),
   ].filter((image) => image.url || image.file);
@@ -977,9 +1034,11 @@ function ColorwayCard({
       )}
       <div className="grid grid-cols-2 gap-2">
         {views.map((slot) => {
-          const slotIndex = slot === "front" ? 0 : slot === "back" ? 1 : -1;
+          const slotIndex = views.indexOf(slot);
           const inputId = `cw-${slot}-${colorway.id}`;
           const preview = getDisplayedPreview(slot);
+          const selected = selectedPictureIndexes.includes(slotIndex);
+          const publicKey = `original:${slot}`;
           return (
             <div key={slot} className="space-y-1">
               <p className="text-[9px] uppercase tracking-wider text-text-secondary">{viewLabels?.[slot] || slot}</p>
@@ -1004,12 +1063,24 @@ function ColorwayCard({
                 {preview ? (
                   <>
                     <img src={preview} alt={slot} className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        togglePictureSelection(slotIndex);
+                      }}
+                      className={`absolute left-1.5 top-1.5 h-5 w-5 rounded border text-[10px] font-semibold transition-colors ${selected ? "border-accent bg-accent text-bg-primary" : "border-white/70 bg-black/45 text-white hover:border-accent"}`}
+                      aria-label={selected ? "Unselect picture" : "Select picture"}
+                    >
+                      {selected ? "✓" : ""}
+                    </button>
                     <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 translate-y-1 rounded bg-black/60 px-2 py-1 text-center text-[8px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
                       Preview
                     </span>
                   </>
                 ) : <span className="text-[8px] uppercase tracking-wider text-text-secondary/60">Upload</span>}
               </div>
+              {preview && renderPublicOrderSelect(publicKey)}
               {preview && <button type="button" onClick={() => handleViewFile(slot, null)} className="w-full border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-danger transition-colors hover:bg-danger/5">Clear</button>}
             </div>
           );
@@ -1020,7 +1091,9 @@ function ColorwayCard({
           <p className="text-[9px] uppercase tracking-wider text-text-secondary">Other pictures</p>
           <div className="grid grid-cols-2 gap-2">
             {colorway.otherImages.map((image, imageIndex) => {
-              const pictureIndex = imageIndex + 2;
+              const pictureIndex = imageIndex + views.length;
+              const selected = selectedPictureIndexes.includes(pictureIndex);
+              const publicKey = `originalOther:${imageIndex}`;
               return (
                 <div key={`${image.url}-${imageIndex}`} className="space-y-1">
                   <button
@@ -1035,10 +1108,29 @@ function ColorwayCard({
                     className="group relative aspect-[4/5] w-full cursor-grab overflow-hidden rounded border border-border bg-bg-secondary transition-colors hover:border-accent/60 active:cursor-grabbing"
                   >
                     <img src={image.url} alt={`Other picture ${imageIndex + 1}`} className="h-full w-full object-cover" />
+                    <span
+                      role="checkbox"
+                      aria-checked={selected}
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        togglePictureSelection(pictureIndex);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key !== "Enter" && e.key !== " ") return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        togglePictureSelection(pictureIndex);
+                      }}
+                      className={`absolute left-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded border text-[10px] font-semibold transition-colors ${selected ? "border-accent bg-accent text-bg-primary" : "border-white/70 bg-black/45 text-white hover:border-accent"}`}
+                    >
+                      {selected ? "✓" : ""}
+                    </span>
                     <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 translate-y-1 rounded bg-black/60 px-2 py-1 text-center text-[8px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
                       Drag to reorder
                     </span>
                   </button>
+                  {renderPublicOrderSelect(publicKey)}
                   <button type="button" onClick={() => removeOtherPicture(imageIndex)} className="w-full border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-danger transition-colors hover:bg-danger/5">
                     Clear
                   </button>
@@ -1050,35 +1142,65 @@ function ColorwayCard({
       )}
       {enhancedPictures.length > 0 && (
         <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[9px] uppercase tracking-wider text-text-secondary">Enhanced pictures</p>
-            <button
-              type="button"
-              onClick={clearEnhancedImages}
-              className="text-[8px] uppercase tracking-wider text-danger underline underline-offset-4 decoration-danger/40 decoration-1 transition-colors hover:decoration-danger"
-            >
-              Clear enhanced
-            </button>
-          </div>
+          <p className="text-[9px] uppercase tracking-wider text-text-secondary">Enhanced pictures</p>
           <div className="grid grid-cols-2 gap-2">
             {enhancedPictures.map((image, imageIndex) => (
-              <button
-                key={`${image.url}-${imageIndex}`}
-                type="button"
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData("application/x-enhanced-picture-index", String(image.index));
-                }}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => handleEnhancedPictureDrop(e, image.index)}
-                onClick={() => setZoomedPreview(image.url)}
-                className="group relative aspect-[4/5] cursor-grab overflow-hidden rounded border border-accent/40 bg-bg-secondary transition-colors hover:border-accent active:cursor-grabbing"
-              >
-                <img src={image.url} alt={image.label} className="h-full w-full object-cover" />
-                <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 rounded bg-black/60 px-2 py-1 text-center text-[8px] uppercase tracking-wider text-white">
-                  {image.label}
-                </span>
-              </button>
+              <div key={`${image.url}-${imageIndex}`} className="space-y-1">
+                <button
+                  type="button"
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData("application/x-enhanced-picture-index", String(image.index));
+                  }}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => handleEnhancedPictureDrop(e, image.index)}
+                  onClick={() => setZoomedPreview(image.url)}
+                  className="group relative aspect-[4/5] w-full cursor-grab overflow-hidden rounded border border-accent/40 bg-bg-secondary transition-colors hover:border-accent active:cursor-grabbing"
+                >
+                  <img src={image.url} alt={`Enhanced picture ${imageIndex + 1}`} className="h-full w-full object-cover" />
+                </button>
+                {renderPublicOrderSelect(
+                  enhancedPictureSlots[image.index]?.kind === "enhancedView"
+                    ? `enhanced:${(enhancedPictureSlots[image.index] as { kind: "enhancedView"; view: ColorwayView }).view}`
+                    : `enhancedOther:${(enhancedPictureSlots[image.index] as { kind: "enhancedOther"; index: number }).index}`
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const slot = enhancedPictureSlots[image.index];
+                    if (slot) removeEnhancedPicture(slot);
+                  }}
+                  className="w-full border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-danger transition-colors hover:bg-danger/5"
+                >
+                  Clear
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {colorway.generatedImages.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-[9px] uppercase tracking-wider text-text-secondary">Model generated pictures</p>
+          <div className="grid grid-cols-2 gap-2">
+            {colorway.generatedImages.map((img, imageIndex) => (
+              <div key={`${img.url}-${imageIndex}`} className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => setZoomedPreview(img.url)}
+                  className="group relative aspect-[4/5] w-full overflow-hidden rounded border border-border bg-bg-secondary transition-colors hover:border-accent/60"
+                >
+                  <img src={img.url} alt={`Generated model ${imageIndex + 1}`} className="h-full w-full object-cover" />
+                </button>
+                {renderPublicOrderSelect(`generated:${imageIndex}`)}
+                <button
+                  type="button"
+                  onClick={() => removeGeneratedPicture(imageIndex)}
+                  className="w-full border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-danger transition-colors hover:bg-danger/5"
+                >
+                  Clear
+                </button>
+              </div>
             ))}
           </div>
         </div>
@@ -1120,52 +1242,31 @@ function ColorwayCard({
           </div>
         )}
         <div className="flex items-center justify-end gap-2">
-          {hasEnhancedResults && !isUsingOriginal && canEnhance && (
+          {selectedPictureIndexes.length > 0 && (
             <button
               type="button"
-              onClick={() => onUpdate({ enhanceStatus: "original" })}
-              className="text-[8px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary"
+              onClick={() => onEnhance(selectedPictureIndexes)}
+              disabled={colorway.enhanceStatus === "processing"}
+              className="border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-text-primary transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
             >
-              Use original
-            </button>
-          )}
-          {hasEnhancedResults && isUsingOriginal && canEnhance && (
-            <button
-              type="button"
-              onClick={() => onUpdate({ enhanceStatus: "completed" })}
-              className="text-[8px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary"
-            >
-              Use enhanced
-            </button>
-          )}
-          {hasEnhancedResults && canEnhance && colorway.enhanceStatus !== "processing" && (
-            <button
-              type="button"
-              onClick={onEnhance}
-              className="text-[8px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary"
-            >
-              Re-enhance
+              Enhance selected
             </button>
           )}
           <button
             type="button"
-            onClick={colorway.enhanceStatus === "processing" || hasEnhancedResults ? undefined : onEnhance}
-            disabled={!canEnhance || colorway.enhanceStatus === "processing" || hasEnhancedResults}
+            onClick={colorway.enhanceStatus === "processing" ? undefined : () => onEnhance()}
+            disabled={!canEnhance || colorway.enhanceStatus === "processing"}
             className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity"
           >
             {colorway.enhanceStatus === "processing" && <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />}
-            {hasEnhancedResults
-              ? isUsingOriginal
-                ? "Original"
-                : "Enhanced"
-              : colorway.enhanceStatus === "processing"
+            {colorway.enhanceStatus === "processing"
               ? "Enhancing..."
-              : "Enhance"}
+              : "Enhance all"}
           </button>
         </div>
       </div>
 
-      {showGenerationPanel && (colorway.enhanceStatus === "completed" || colorway.enhanceStatus === "original" || colorway.generateStatus !== "idle") && (
+      {showGenerationPanel && (
         <div className="space-y-3 border-t border-border pt-3">
           <div className="space-y-1.5">
             <p className="text-[9px] uppercase tracking-wider text-text-secondary">Model Generation</p>
@@ -1266,31 +1367,10 @@ function ColorwayCard({
             )}
           </div>
 
-          {colorway.generatedImages.length > 0 && (
-            <div className="grid grid-cols-2 gap-1.5">
-              {colorway.generatedImages.map((img, i) => (
-                <div key={i} className="space-y-1">
-                  <button type="button" onClick={() => setZoomedPreview(img.url)} className="group relative aspect-[4/5] overflow-hidden rounded border border-border bg-bg-secondary cursor-zoom-in transition-colors hover:border-accent/60">
-                    <img src={img.url} alt={`Generated ${i + 1}`} className="h-full w-full object-cover" />
-                    <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 translate-y-1 rounded bg-black/60 px-2 py-1 text-center text-[8px] uppercase tracking-wider text-white opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
-                      Preview
-                    </span>
-                  </button>
-                  <button type="button" onClick={() => onUpdate({ generatedImages: [], generateStatus: "idle", generateError: "", generateJobId: "" })} className="w-full border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-danger transition-colors hover:bg-danger/5">
-                    Clear
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
           <div className="flex items-center justify-end gap-2">
-            {colorway.generateStatus === "completed" && canGenerate && (
-              <button type="button" onClick={onGenerate} className="text-[8px] uppercase tracking-wider text-text-secondary underline underline-offset-4 decoration-text-secondary/40 decoration-1 transition-colors hover:text-text-primary hover:decoration-text-primary">Regenerate</button>
-            )}
-            <button type="button" onClick={canGenerate && colorway.generateStatus !== "completed" ? onGenerate : undefined} disabled={!canGenerate || colorway.generateStatus === "processing" || colorway.generateStatus === "completed"} className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity">
+            <button type="button" onClick={colorway.generateStatus === "processing" ? undefined : onGenerate} disabled={colorway.generateStatus === "processing"} className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity">
               {colorway.generateStatus === "processing" && <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />}
-              {colorway.generateStatus === "completed" ? "Generated" : colorway.generateStatus === "processing" ? "Generating..." : "Generate"}
+              {colorway.generateStatus === "processing" ? "Generating..." : "Generate"}
             </button>
           </div>
         </div>
@@ -1493,14 +1573,22 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       })
     );
 
-    updateColorway(colorwayId, {
-      generateStatus: "completed",
-      generateJobId: "",
-      generateError: "",
-      generatedImages: results.filter((r): r is { url: string; file: File } => r !== null),
-    });
+    const nextResults = results.filter((r): r is { url: string; file: File } => r !== null);
+    setColorways((prev) =>
+      prev.map((cw) =>
+        cw.id === colorwayId
+          ? {
+              ...cw,
+              generateStatus: "completed",
+              generateJobId: "",
+              generateError: "",
+              generatedImages: [...cw.generatedImages, ...nextResults],
+            }
+          : cw
+      )
+    );
   };
-  const handleEnhanceColorway = async (colorwayId: string) => {
+  const handleEnhanceColorway = async (colorwayId: string, selectedPictureIndexes: number[] = []) => {
     const cw = colorways.find((c) => c.id === colorwayId);
     if (!cw) return;
     const isShoes = selectedCategoryZone === "footwear";
@@ -1519,6 +1607,12 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       ["left", leftSource],
       ["right", rightSource],
     ] as const;
+    const sourcesByView: Record<OriginPictureKey, File | null> = {
+      front: frontSource,
+      back: backSource,
+      left: leftSource,
+      right: rightSource,
+    };
     const availableEntries = uploadedEntries.filter((entry): entry is readonly [OriginPictureKey, File] => Boolean(entry[1]));
     const otherSources = (await Promise.all(
       cw.otherImages.map(async (image, index) => {
@@ -1526,6 +1620,10 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         return file ? { file, label: `Other ${index + 1}` } : null;
       })
     )).filter((entry): entry is { file: File; label: string } => Boolean(entry));
+    const originalPictureEntries = [
+      ...requiredOriginPictureKeys.map((view) => ({ kind: "view" as const, view, file: sourcesByView[view] })),
+      ...otherSources.map((source, index) => ({ kind: "other" as const, index, file: source.file })),
+    ];
     const allAvailableCount = availableEntries.length + otherSources.length;
 
     if (allAvailableCount === 0) {
@@ -1533,6 +1631,74 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         enhanceStatus: "failed",
         enhanceError: "Please upload at least one image first.",
       });
+      return;
+    }
+    const selectedIndexes = Array.from(new Set(selectedPictureIndexes)).filter(
+      (index) => index >= 0 && index < originalPictureEntries.length
+    );
+    if (selectedIndexes.length > 0) {
+      const selectedEntries = selectedIndexes
+        .map((index) => ({ index, entry: originalPictureEntries[index] }))
+        .filter((item): item is { index: number; entry: (typeof originalPictureEntries)[number] & { file: File } } => Boolean(item.entry?.file));
+      if (selectedEntries.length === 0) {
+        updateColorway(colorwayId, {
+          enhanceStatus: "failed",
+          enhanceError: "Please select pictures that have images first.",
+        });
+        return;
+      }
+      updateColorway(colorwayId, { enhanceStatus: "processing", enhanceError: "", enhanceJobId: "" });
+      try {
+        const startEnhanceJob = async (body: FormData) => {
+          const res = await fetch("/api/products/enhance", withAuthRequest({ method: "POST", body }));
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Unable to start enhancement.");
+          const jobId = String(data.job_id || "");
+          if (!jobId) throw new Error("Enhancement job did not start.");
+          return waitForJob(jobId);
+        };
+        const selectedResults: Array<{ index: number; url: string; file: File }> = [];
+        for (let i = 0; i < selectedEntries.length; i += 1) {
+          const selected = selectedEntries[i];
+          const body = new FormData();
+          body.append("mode", "accessory");
+          const compressed = await compressImageFile(selected.entry.file);
+          body.append("front", compressed);
+          const result = await startEnhanceJob(body);
+          const url = viewNames.map((view) => result.images?.[view] || "").find(Boolean) || "";
+          if (!url) continue;
+          const file = await imageUrlToFile(url, `selected-enhanced-${i + 1}`);
+          selectedResults.push({ index: selected.index, url, file });
+        }
+
+        const patch: Partial<Colorway> = {
+          enhanceStatus: "completed",
+          enhanceJobId: "",
+          enhanceError: "",
+          enhancedOtherImages: [...cw.enhancedOtherImages],
+        };
+        selectedResults.forEach((result) => {
+          const source = originalPictureEntries[result.index];
+          if (!source) return;
+          if (source.kind === "view") {
+            Object.assign(patch, {
+              [`enhanced${source.view.charAt(0).toUpperCase()}${source.view.slice(1)}Url`]: result.url,
+              [`enhanced${source.view.charAt(0).toUpperCase()}${source.view.slice(1)}File`]: result.file,
+            });
+          } else {
+            const nextOther = [...(patch.enhancedOtherImages || [])];
+            nextOther[source.index] = { url: result.url, file: result.file };
+            patch.enhancedOtherImages = nextOther.filter((image) => image?.url || image?.file);
+          }
+        });
+        updateColorway(colorwayId, patch);
+      } catch (error) {
+        updateColorway(colorwayId, {
+          enhanceStatus: "failed",
+          enhanceJobId: "",
+          enhanceError: (error as Error)?.message || "Network error",
+        });
+      }
       return;
     }
     if (!usesAccessoryImageWorkflow && (!frontSource || !backSource)) return;
@@ -1641,39 +1807,57 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const canGenerateColorway = (cw: Colorway) => {
     if (!needsModelSelection) return false;
     if (!selectedModelId) return false;
-    if (cw.enhanceStatus !== "completed" && cw.enhanceStatus !== "original") return false;
-    if (!Boolean(cw.enhancedFrontFile || cw.enhancedFrontUrl || cw.frontPreview) || !Boolean(cw.enhancedBackFile || cw.enhancedBackUrl || cw.backPreview)) return false;
+    if (!Boolean(cw.frontFile || cw.frontPreview) || !Boolean(cw.backFile || cw.backPreview)) return false;
     if (companionZones.includes("top") && (!cw.companionTopType || !cw.companionTopColor)) return false;
     if (companionZones.includes("bottom") && (!cw.companionBottomType || !cw.companionBottomColor)) return false;
     if (companionZones.includes("footwear") && (!cw.companionFootwearType || !cw.companionFootwearColor)) return false;
     return true;
   };
 
-  const getColorwayViewInputFile = (
+  const getColorwayViewInputFile = async (
     colorway: Colorway,
     side: ColorwayView
-  ): File | null => {
-    const enhancedFileKey = `enhanced${side.charAt(0).toUpperCase()}${side.slice(1)}File` as
-      | "enhancedFrontFile"
-      | "enhancedBackFile"
-      | "enhancedLeftFile"
-      | "enhancedRightFile";
+  ): Promise<File | null> => {
     const fileKey = `${side}File` as "frontFile" | "backFile" | "leftFile" | "rightFile";
-    if (colorway.enhanceStatus === "original") {
-      return colorway[fileKey];
-    }
-
-    return colorway[enhancedFileKey] || colorway[fileKey];
+    const previewKey = `${side}Preview` as "frontPreview" | "backPreview" | "leftPreview" | "rightPreview";
+    if (colorway[fileKey]) return colorway[fileKey];
+    if (colorway[previewKey]) return imageUrlToFile(colorway[previewKey], `${side}-model-source`);
+    return null;
   };
 
   const handleGenerateColorway = async (colorwayId: string) => {
     const cw = colorways.find((c) => c.id === colorwayId);
-    if (!cw || !selectedModelId || !needsModelSelection) return;
-    const frontSrc = getColorwayViewInputFile(cw, "front");
-    const backSrc = getColorwayViewInputFile(cw, "back");
-    if (!frontSrc || !backSrc) return;
-    updateColorway(colorwayId, { generateStatus: "processing", generateError: "", generateJobId: "" });
+    if (!cw) return;
+    if (!needsModelSelection) {
+      updateColorway(colorwayId, { generateStatus: "failed", generateError: "Please select a category that supports model generation." });
+      return;
+    }
+    if (!selectedModelId) {
+      updateColorway(colorwayId, { generateStatus: "failed", generateError: "Please select a model first." });
+      return;
+    }
+    if (companionZones.includes("top") && (!cw.companionTopType || !cw.companionTopColor)) {
+      updateColorway(colorwayId, { generateStatus: "failed", generateError: "Please select the top type and color first." });
+      return;
+    }
+    if (companionZones.includes("bottom") && (!cw.companionBottomType || !cw.companionBottomColor)) {
+      updateColorway(colorwayId, { generateStatus: "failed", generateError: "Please select the bottom type and color first." });
+      return;
+    }
+    if (companionZones.includes("footwear") && (!cw.companionFootwearType || !cw.companionFootwearColor)) {
+      updateColorway(colorwayId, { generateStatus: "failed", generateError: "Please select the footwear type and color first." });
+      return;
+    }
     try {
+      const [frontSrc, backSrc] = await Promise.all([
+        getColorwayViewInputFile(cw, "front"),
+        getColorwayViewInputFile(cw, "back"),
+      ]);
+      if (!frontSrc || !backSrc) {
+        updateColorway(colorwayId, { generateStatus: "failed", generateError: "Please select front and back pictures first." });
+        return;
+      }
+      updateColorway(colorwayId, { generateStatus: "processing", generateError: "", generateJobId: "" });
       const body = new FormData();
       body.append("modelId", selectedModelId);
       body.append("type", "fashion");
@@ -1900,7 +2084,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
             colorwayMap.set(key, group);
           }
           if (colorwayMap.size > 0) {
-            const productImages: { url: string }[] = p.images || [];
+            const productImages: ProductImage[] = p.images || [];
             const originPictureUrls: Record<ColorwayView, string> = {
               front: p.originPictures?.front || "",
               back: p.originPictures?.back || "",
@@ -1923,19 +2107,105 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 conditionScore: String(row.conditionScore ?? 9),
               }));
               const colorwayViews: ColorwayView[] = isShoesProduct ? FOUR_IMAGE_VIEWS : ["front", "back"];
-              const originIndexStart = indices.length >= colorwayViews.length
-                ? indices.length - colorwayViews.length
-                : indices.length;
-              const savedViewUrls = Object.fromEntries(
-                colorwayViews.map((view, offset) => [
-                  view,
-                  indices.length >= colorwayViews.length
-                    ? productImages[indices[originIndexStart + offset]]?.url || ""
-                    : "",
-                ])
-              ) as Partial<Record<ColorwayView, string>>;
-              if (!isShoesProduct && indices.length === 1) {
+              const publicOrderByImageIndex = new Map<number, string>();
+              const publicIndices = indices.length > 0
+                ? indices
+                : productImages
+                    .map((image, imageIndex) => ({ image, imageIndex }))
+                    .filter(({ image }) => image.isPublic !== false)
+                    .map(({ imageIndex }) => imageIndex);
+              publicIndices.forEach((imageIndex, orderIndex) => {
+                publicOrderByImageIndex.set(imageIndex, orderIndex === 0 ? "main" : String(orderIndex + 1));
+              });
+              const selectedIndexSet = new Set(indices);
+              const normalizedHex = hex.trim().toLowerCase();
+              const colorMatches = (value: string | null | undefined) =>
+                normalizeHex(value || "").trim().toLowerCase() === normalizedHex;
+              const imageEntries = productImages
+                .map((image, imageIndex) => ({ image, imageIndex }))
+                .filter(({ image, imageIndex }) => {
+                  if (!image?.url) return false;
+                  if (selectedIndexSet.has(imageIndex)) return true;
+                  const hasColorMeta = typeof image.color === "string" && image.color.trim().length > 0;
+                  return hasColorMeta ? colorMatches(image.color) : !normalizedHex && !selectedIndexSet.size;
+                });
+              const publicImageOrder: Record<string, string> = {};
+              const setPublicOrder = (key: string, imageIndex: number) => {
+                const order = productImages[imageIndex]?.isPublic === false
+                  ? ""
+                  : publicOrderByImageIndex.get(imageIndex) || "";
+                if (order) publicImageOrder[key] = order;
+              };
+              const savedViewUrls: Partial<Record<ColorwayView, string>> = {};
+              const savedEnhancedViewUrls: Partial<Record<ColorwayView, string>> = {};
+              const otherPictures: Array<{ url: string; file: File | null }> = [];
+              const enhancedOtherPictures: Array<{ url: string; file: File | null }> = [];
+              const generatedPictures: Array<{ url: string; file: File | null }> = [];
+              const addOtherPicture = (url: string, imageIndex: number) => {
+                const key = `originalOther:${otherPictures.length}`;
+                otherPictures.push({ url, file: null });
+                setPublicOrder(key, imageIndex);
+              };
+              const addEnhancedOtherPicture = (url: string, imageIndex: number) => {
+                const key = `enhancedOther:${enhancedOtherPictures.length}`;
+                enhancedOtherPictures.push({ url, file: null });
+                setPublicOrder(key, imageIndex);
+              };
+              const addGeneratedPicture = (url: string, imageIndex: number) => {
+                const key = `generated:${generatedPictures.length}`;
+                generatedPictures.push({ url, file: null });
+                setPublicOrder(key, imageIndex);
+              };
+              const assignedImageIndexes = new Set<number>();
+              imageEntries.forEach(({ image, imageIndex }) => {
+                const source = image.source || "";
+                const sourceKey = image.sourceKey || "";
+                if (source === "generated") {
+                  addGeneratedPicture(image.url, imageIndex);
+                  assignedImageIndexes.add(imageIndex);
+                  return;
+                }
+                if (source === "enhanced") {
+                  const enhancedView = sourceKey.startsWith("enhanced:")
+                    ? (sourceKey.split(":")[1] as ColorwayView | undefined)
+                    : undefined;
+                  if (enhancedView && colorwayViews.includes(enhancedView)) {
+                    savedEnhancedViewUrls[enhancedView] = image.url;
+                    setPublicOrder(`enhanced:${enhancedView}`, imageIndex);
+                  } else {
+                    addEnhancedOtherPicture(image.url, imageIndex);
+                  }
+                  assignedImageIndexes.add(imageIndex);
+                  return;
+                }
+                if (source === "original" || sourceKey.startsWith("original")) {
+                  const originalView = sourceKey.startsWith("original:")
+                    ? (sourceKey.split(":")[1] as ColorwayView | undefined)
+                    : undefined;
+                  if (originalView && colorwayViews.includes(originalView)) {
+                    savedViewUrls[originalView] = image.url;
+                    setPublicOrder(`original:${originalView}`, imageIndex);
+                  } else {
+                    addOtherPicture(image.url, imageIndex);
+                  }
+                  assignedImageIndexes.add(imageIndex);
+                }
+              });
+              indices.forEach((imageIndex, offset) => {
+                if (assignedImageIndexes.has(imageIndex)) return;
+                const image = productImages[imageIndex];
+                if (!image?.url) return;
+                const view = colorwayViews[offset];
+                if (view && !savedViewUrls[view]) {
+                  savedViewUrls[view] = image.url;
+                  setPublicOrder(`original:${view}`, imageIndex);
+                  return;
+                }
+                addOtherPicture(image.url, imageIndex);
+              });
+              if (!isShoesProduct && indices.length === 1 && !savedViewUrls.front) {
                 savedViewUrls.front = productImages[indices[0]]?.url || "";
+                if (savedViewUrls.front) setPublicOrder("original:front", indices[0]);
               }
               const useOriginPictureFallback = colorwayMap.size === 1 && indices.length === 0;
               const resolvedViewUrls: Record<ColorwayView, string> = {
@@ -1944,13 +2214,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 left: savedViewUrls.left || (useOriginPictureFallback ? originPictureUrls.left : ""),
                 right: savedViewUrls.right || (useOriginPictureFallback ? originPictureUrls.right : ""),
               };
-              const otherPictures = indices.length > colorwayViews.length
-                ? indices.slice(0, -colorwayViews.length)
-                    .map((i) => ({ url: productImages[i]?.url || "", file: null }))
-                    .filter((g) => g.url)
-                : [];
               const enhanceStatus: ColorwayEnhanceStatus = "idle";
-              const normalizedHex = hex.trim().toLowerCase();
               const csEntry = savedCompanion
                 ? (savedCompanion[hex] ||
                    savedCompanion[hex.toUpperCase()] ||
@@ -1969,14 +2233,15 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 backPreview: resolvedViewUrls.back,
                 leftPreview: resolvedViewUrls.left,
                 rightPreview: resolvedViewUrls.right,
-                enhancedFrontUrl: "",
-                enhancedBackUrl: "",
-                enhancedLeftUrl: "",
-                enhancedRightUrl: "",
-                enhancedOtherImages: [],
+                enhancedFrontUrl: savedEnhancedViewUrls.front || "",
+                enhancedBackUrl: savedEnhancedViewUrls.back || "",
+                enhancedLeftUrl: savedEnhancedViewUrls.left || "",
+                enhancedRightUrl: savedEnhancedViewUrls.right || "",
+                enhancedOtherImages: enhancedOtherPictures,
                 enhanceStatus,
                 otherImages: otherPictures,
-                generatedImages: [],
+                generatedImages: generatedPictures,
+                publicImageOrder,
                 generateStatus: "idle",
                 companionTopType: cs?.topType || "",
                 companionTopColor: cs?.topColor || null,
@@ -2866,55 +3131,126 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 
       const imageFiles: File[] = [];
       const imageOrder: string[] = [];
+      const imageMeta: Record<string, { isPublic: boolean; source: string; color: string | null; sourceKey: string }> = {};
       const existingImagesPayload: { url: string }[] = [];
       const existingUrlToOrderIndex = new Map<string, number>();
       const imagesByHex: Record<string, number[]> = {};
       const isUploadableUrl = (url: string) => Boolean(url) && !url.startsWith("blob:") && !url.startsWith("data:");
-      const pushExisting = (url: string): number => {
+      const applyImageMeta = (
+        orderKey: string,
+        item: { key: string; order: string; source: string },
+        colorKey: string
+      ) => {
+        imageMeta[orderKey] = {
+          isPublic: Boolean(item.order),
+          source: item.source,
+          color: colorKey || null,
+          sourceKey: item.key,
+        };
+      };
+      const pushExisting = (url: string, item?: { key: string; order: string; source: string }, colorKey = ""): number => {
         const cached = existingUrlToOrderIndex.get(url);
-        if (cached !== undefined) return cached;
+        if (cached !== undefined) {
+          const existingKey = imageOrder[cached];
+          if (item && existingKey) applyImageMeta(existingKey, item, colorKey);
+          return cached;
+        }
         const idx = imageOrder.length;
         existingImagesPayload.push({ url });
         existingUrlToOrderIndex.set(url, idx);
-        imageOrder.push(`existing:${url}`);
+        const orderKey = `existing:${url}`;
+        imageOrder.push(orderKey);
+        if (item) applyImageMeta(orderKey, item, colorKey);
         return idx;
       };
-      const pushNew = (file: File): number => {
+      const pushNew = (file: File, item?: { key: string; order: string; source: string }, colorKey = ""): number => {
         const idx = imageOrder.length;
         const newIdx = imageFiles.length;
         imageFiles.push(file);
-        imageOrder.push(`new:${newIdx}`);
+        const orderKey = `new:${newIdx}`;
+        imageOrder.push(orderKey);
+        if (item) applyImageMeta(orderKey, item, colorKey);
         return idx;
+      };
+      let mainImageKey = "";
+      type SavePictureItem = { key: string; order: string; file: File | null; url: string; source: string };
+      const orderRank = (order: string) => {
+        if (order === "main") return 0;
+        const numeric = Number(order);
+        return Number.isFinite(numeric) && numeric > 0 ? numeric : 999;
       };
       for (const cw of colorways) {
         const colorKey = normalizeHex(cw.hex);
         const indices: number[] = [];
-        for (const oi of cw.otherImages) {
-          if (oi.file) indices.push(pushNew(oi.file));
-          else if (isUploadableUrl(oi.url)) indices.push(pushExisting(oi.url));
+        const pictureItems: SavePictureItem[] = [];
+        const addPictureItem = (key: string, file: File | null, url: unknown, source: string) => {
+          const stringUrl = typeof url === "string" ? url : "";
+          if (!file && !isUploadableUrl(stringUrl)) return;
+          pictureItems.push({
+            key,
+            order: cw.publicImageOrder[key] || "",
+            file,
+            url: stringUrl,
+            source,
+          });
+        };
+        for (const view of requiredOriginPictureKeys) {
+          addPictureItem(
+            `original:${view}`,
+            cw[`${view}File` as "frontFile" | "backFile" | "leftFile" | "rightFile"],
+            cw[`${view}Preview` as keyof Colorway],
+            "original"
+          );
         }
-        for (const gi of cw.generatedImages) {
-          if (gi.file) indices.push(pushNew(gi.file));
-          else if (isUploadableUrl(gi.url)) indices.push(pushExisting(gi.url));
-        }
-        for (const ei of cw.enhancedOtherImages) {
-          if (ei.file) indices.push(pushNew(ei.file));
-          else if (isUploadableUrl(ei.url)) indices.push(pushExisting(ei.url));
-        }
+        cw.otherImages.forEach((image, imageIndex) => {
+          addPictureItem(`originalOther:${imageIndex}`, image.file, image.url, "original");
+        });
+        cw.generatedImages.forEach((image, imageIndex) => {
+          addPictureItem(`generated:${imageIndex}`, image.file, image.url, "generated");
+        });
         for (const view of requiredOriginPictureKeys) {
           const enhancedFile = cw[`enhanced${view.charAt(0).toUpperCase()}${view.slice(1)}File` as keyof Colorway];
           const enhancedUrl = cw[`enhanced${view.charAt(0).toUpperCase()}${view.slice(1)}Url` as keyof Colorway];
-          if (enhancedFile instanceof File) indices.push(pushNew(enhancedFile));
-          else if (typeof enhancedUrl === "string" && isUploadableUrl(enhancedUrl)) indices.push(pushExisting(enhancedUrl));
+          addPictureItem(
+            `enhanced:${view}`,
+            enhancedFile instanceof File ? enhancedFile : null,
+            enhancedUrl,
+            "enhanced"
+          );
         }
-        for (const view of requiredOriginPictureKeys) {
-          const imageFile = cw[`${view}File` as "frontFile" | "backFile" | "leftFile" | "rightFile"];
-          const imageUrl = cw[`${view}Preview` as keyof Colorway];
-          if (imageFile) indices.push(pushNew(imageFile));
-          else if (typeof imageUrl === "string" && isUploadableUrl(imageUrl)) indices.push(pushExisting(imageUrl));
+        cw.enhancedOtherImages.forEach((image, imageIndex) => {
+          addPictureItem(`enhancedOther:${imageIndex}`, image.file, image.url, "enhanced");
+        });
+        const hasManualPublicOrder = Object.values(cw.publicImageOrder).some(Boolean);
+        const orderedItems = hasManualPublicOrder
+          ? pictureItems
+              .filter((item) => item.order)
+              .sort((a, b) => orderRank(a.order) - orderRank(b.order))
+          : [];
+        const appendItem = (item: SavePictureItem, includeInVariant: boolean) => {
+          const beforeIndex = imageOrder.length;
+          let index: number | null = null;
+          if (item.file) index = pushNew(item.file, item, colorKey);
+          else if (isUploadableUrl(item.url)) index = pushExisting(item.url, item, colorKey);
+          if (index !== null) {
+            if (includeInVariant) indices.push(index);
+            if (!mainImageKey && (item.order === "main" || beforeIndex === 0)) {
+              mainImageKey = imageOrder[index];
+            }
+          }
+        };
+        for (const item of orderedItems) {
+          appendItem(item, true);
+        }
+        for (const item of pictureItems) {
+          if (orderedItems.includes(item)) continue;
+          appendItem(item, false);
         }
         if (indices.length > 0) imagesByHex[colorKey] = indices;
       }
+      if (!mainImageKey && imageOrder.length > 0) mainImageKey = imageOrder[0];
+      if (mainImageKey) body.append("mainImageKey", mainImageKey);
+      body.append("imageMeta", JSON.stringify(imageMeta));
       const compressedImages = await Promise.all(imageFiles.map((f) => compressImageFile(f)));
       compressedImages.forEach((f) => body.append("images", f));
 
@@ -3105,7 +3441,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               <SectionCard title="Model Pictures" description="Choose one model for all colorways, then configure each colorway's companion outfit and generate." error={sectionErrors.model}>
               <div className="space-y-2">
                 <FieldLabel>Model</FieldLabel>
-                <p className="text-[11px] text-text-secondary">Pick the model first, then enhance each colorway independently.</p>
+                <p className="text-[11px] text-text-secondary">Pick the model first, then generate from each colorway's front and back pictures.</p>
                 <div className="flex gap-3 overflow-x-auto pb-2">
                   {filteredModels.map((model) => {
                     const active = selectedModelId === model._id;
@@ -3129,7 +3465,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                       companionTypeOptions={companionTypeOptions}
                       onUpdate={(patch) => updateColorway(cw.id, patch)}
                       canGenerate={canGenerateColorway(cw)}
-                      onGenerate={() => { if (!canGenerateColorway(cw)) return; void handleGenerateColorway(cw.id); }}
+                      onGenerate={() => { void handleGenerateColorway(cw.id); }}
                     />
                   ))}
                 </div>
@@ -3158,19 +3494,13 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                   hideSizeInput={isSizelessCategory}
                   onRemove={() => removeColorway(cw.id)}
                   onUpdate={(patch) => updateColorway(cw.id, patch)}
-                  onEnhance={() => void handleEnhanceColorway(cw.id)}
-                  onGenerate={() => { if (!canGenerateColorway(cw)) return; void handleGenerateColorway(cw.id); }}
+                  onEnhance={(pictureIndexes) => void handleEnhanceColorway(cw.id, pictureIndexes)}
+                  onGenerate={() => { void handleGenerateColorway(cw.id); }}
                   onAddSize={() => addSizeRow(cw.id)}
                   onRemoveSize={(sizeId) => removeSizeRow(cw.id, sizeId)}
                   onUpdateSize={(sizeId, patch) => updateSizeRow(cw.id, sizeId, patch)}
                 />
               ))}
-              <button type="button" onClick={handleAddColorway} className="group mt-0 flex h-10 flex-none items-center gap-2 rounded border border-dashed border-border px-3 text-lg text-text-secondary transition-colors hover:border-accent hover:text-accent self-start">
-                <span className="leading-none">+</span>
-                <span className="text-[9px] font-semibold uppercase tracking-[0.22em] text-text-secondary transition-colors group-hover:text-accent">
-                  {addColorwayLabel}
-                </span>
-              </button>
             </div>
             </SectionCard>
           </div>

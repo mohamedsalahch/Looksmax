@@ -27,6 +27,27 @@ function uniqueSortedHexes(values: string[]) {
   return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
 }
 
+function filterPublicProductMedia<I extends { isPublic?: boolean }>(
+  images: I[],
+  variants: ReadonlyArray<VariantLike & { images?: number[] }>,
+) {
+  const publicEntries = (images || [])
+    .map((image, imageIndex) => ({ image, imageIndex }))
+    .filter(({ image }) => image.isPublic !== false);
+  const publicIndexByOriginal = new Map(
+    publicEntries.map(({ imageIndex }, publicIndex) => [imageIndex, publicIndex])
+  );
+  return {
+    images: publicEntries.map(({ image }) => image),
+    variants: variants.map((variant) => ({
+      ...variant,
+      images: (variant.images || [])
+        .map((imageIndex) => publicIndexByOriginal.get(imageIndex))
+        .filter((imageIndex): imageIndex is number => typeof imageIndex === "number"),
+    })) as Array<VariantLike & { images: number[] }>,
+  };
+}
+
 export async function GET(req: NextRequest) {
   try {
     await dbConnect();
@@ -120,7 +141,9 @@ export async function GET(req: NextRequest) {
       if (ownerId && !approvedOwnerIds.has(ownerId)) {
         return null;
       }
-      const variants = normalizeStoredVariants(product.variants) as VariantLike[];
+      const storedVariants = normalizeStoredVariants(product.variants) as Array<VariantLike & { images: number[] }>;
+      const publicMedia = filterPublicProductMedia(product.images || [], storedVariants);
+      const variants = publicMedia.variants;
       const stock = Math.max(product.stock ?? 0, 0);
       const reservationInfo = reservationMap.get(product._id.toString()) || {
         totalQuantity: 0,
@@ -156,6 +179,7 @@ export async function GET(req: NextRequest) {
 
       return {
         ...product,
+        images: publicMedia.images,
         conditionScore,
         stock: displayStock,
         cartCount: reservationInfo.totalQuantity,
