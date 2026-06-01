@@ -2127,7 +2127,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                   if (!image?.url) return false;
                   if (selectedIndexSet.has(imageIndex)) return true;
                   const hasColorMeta = typeof image.color === "string" && image.color.trim().length > 0;
-                  return hasColorMeta ? colorMatches(image.color) : !normalizedHex && !selectedIndexSet.size;
+                  return hasColorMeta ? colorMatches(image.color) : !normalizedHex && colorwayMap.size === 1;
                 });
               const publicImageOrder: Record<string, string> = {};
               const setPublicOrder = (key: string, imageIndex: number) => {
