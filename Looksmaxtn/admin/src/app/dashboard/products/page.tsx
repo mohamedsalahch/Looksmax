@@ -22,7 +22,7 @@ type SortKey = "name" | "_id" | "categories" | "store" | "productType" | "price"
 type SortDirection = "asc" | "desc";
 
 function getProductStoreLabel(product: Product) {
-  return product.storeName || product.createdBy?.name || product.createdBy?.email || "Unknown store";
+  return product.storeName || "Unknown store";
 }
 
 function getProductStoreKey(product: Product) {

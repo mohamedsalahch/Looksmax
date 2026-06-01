@@ -25,7 +25,7 @@ async function loadAllCategoriesData() {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
   const params = new URLSearchParams();
   params.set("includeFacets", "1");
-  params.set("limit", "24");
+  params.set("limit", "12");
 
   const response = await fetch(`${baseUrl}/api/products?${params.toString()}`, { cache: "no-store" });
   if (!response.ok) {

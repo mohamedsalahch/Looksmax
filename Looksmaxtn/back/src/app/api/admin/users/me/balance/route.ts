@@ -3,6 +3,7 @@ import dbConnect from "@/admin/lib/mongodb";
 import { getSession } from "@/admin/lib/auth";
 import {
   getBalanceSummary,
+  getBalanceSaleHistory,
   getBalanceTransactions,
   getWithdrawalsForOwner,
 } from "@/admin/lib/storeBalance";
@@ -23,12 +24,13 @@ export async function GET() {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    const [transactions, withdrawals] = await Promise.all([
+    const [transactions, withdrawals, sales] = await Promise.all([
       getBalanceTransactions(session.userId),
       getWithdrawalsForOwner(session.userId),
+      getBalanceSaleHistory(session.userId),
     ]);
 
-    return NextResponse.json({ ...summary, transactions, withdrawals });
+    return NextResponse.json({ ...summary, transactions, withdrawals, sales });
   } catch (error) {
     console.error("[me-balance] GET error", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

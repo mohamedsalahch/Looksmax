@@ -60,7 +60,7 @@ async function loadCategoryData(slug: string) {
   const params = new URLSearchParams();
   if (slug) params.set("category", slug);
   params.set("includeFacets", "1");
-  params.set("limit", "24");
+  params.set("limit", "12");
 
   const response = await fetch(`${baseUrl}/api/products?${params.toString()}`, { cache: "no-store" });
   if (!response.ok) {

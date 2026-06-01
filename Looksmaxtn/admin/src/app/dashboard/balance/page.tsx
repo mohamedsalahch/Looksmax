@@ -26,12 +26,26 @@ interface Withdrawal {
   createdAt: string;
 }
 
+interface BalanceSale {
+  _id: string;
+  order: string;
+  product: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  gross: number;
+  net: number;
+  purchasedAt: string;
+  creditedAt: string;
+}
+
 interface BalanceData {
   balance: number;
   pendingWithdrawals: number;
   available: number;
   transactions: BalanceTransaction[];
   withdrawals: Withdrawal[];
+  sales: BalanceSale[];
 }
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
@@ -112,6 +126,7 @@ export default function BalancePage() {
         available: payload.available,
         transactions: payload.transactions,
         withdrawals: payload.withdrawals,
+        sales: payload.sales || [],
       });
       setAmount("");
       setPaymentDetails("");
@@ -231,6 +246,39 @@ export default function BalancePage() {
               {submitting ? "Submitting..." : "Submit request"}
             </button>
           </form>
+
+          <div className="bg-bg-card border border-border rounded p-4 space-y-3">
+            <p className="font-medium text-text-primary text-[10px] uppercase tracking-wider">
+              Balance history
+            </p>
+            {data.sales.length === 0 ? (
+              <p className="text-xs text-text-secondary">No credited sales yet.</p>
+            ) : (
+              <div className="divide-y divide-border">
+                {data.sales.map((sale) => (
+                  <div key={sale._id} className="py-3 text-xs">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-text-primary">{sale.productName}</p>
+                        <p className="text-[10px] uppercase tracking-wider text-text-secondary">
+                          Qty {sale.quantity} · Bought {new Date(sale.purchasedAt).toLocaleString()}
+                        </p>
+                        <p className="text-[10px] text-text-secondary">
+                          Order #{sale.order.slice(-8).toUpperCase()}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium text-text-primary">{formatMoney(sale.net)}</p>
+                        <p className="text-[10px] text-text-secondary">
+                          {formatMoney(sale.gross)} before commission
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           <div className="bg-bg-card border border-border rounded p-4 space-y-3">
             <p className="font-medium text-text-primary text-[10px] uppercase tracking-wider">

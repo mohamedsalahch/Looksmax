@@ -4,6 +4,7 @@ import StoreBalanceTransaction from "@/admin/models/StoreBalanceTransaction";
 import WithdrawalRequest from "@/admin/models/WithdrawalRequest";
 import User from "@/admin/models/User";
 import Product from "@/admin/models/Product";
+import Order from "@/admin/models/Order";
 import type { IOrderItem } from "@/admin/models/Order";
 
 export const COMMISSION_RATE = 0.1;
@@ -104,6 +105,63 @@ export async function getBalanceTransactions(
     .limit(limit)
     .lean();
   return transactions.map(serializeBalanceTransaction);
+}
+
+export async function getBalanceSaleHistory(
+  storeOwnerId: string | mongoose.Types.ObjectId,
+  limit = 100
+) {
+  const ownerObjectId = new mongoose.Types.ObjectId(String(storeOwnerId));
+  const products = await Product.find({ "createdBy.id": String(storeOwnerId) })
+    .select("_id")
+    .lean();
+  const ownerProductIds = new Set(products.map((product) => product._id.toString()));
+  if (ownerProductIds.size === 0) return [];
+
+  const orderIds = await StoreBalanceTransaction.find({
+    storeOwner: ownerObjectId,
+    type: "earning",
+    order: { $ne: null },
+  })
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .select("order createdAt amount")
+    .lean();
+  const transactionByOrder = new Map(
+    orderIds.map((transaction) => [String(transaction.order), transaction])
+  );
+
+  const orders = await Order.find({ _id: { $in: [...transactionByOrder.keys()] } })
+    .select("_id items orderStatus createdAt")
+    .lean();
+
+  return orders
+    .flatMap((order) => {
+      const transaction = transactionByOrder.get(order._id.toString());
+      return (order.items || [])
+        .filter((item) => ownerProductIds.has(item.product.toString()))
+        .map((item) => {
+          const gross = round2(Number(item.price || 0) * Number(item.quantity || 0));
+          return {
+            _id: `${order._id.toString()}:${item.product.toString()}:${item.variant ? item.variant.toString() : "default"}`,
+            order: order._id.toString(),
+            product: item.product.toString(),
+            productName: String(item.name || "Product"),
+            quantity: Number(item.quantity || 0),
+            unitPrice: round2(Number(item.price || 0)),
+            gross,
+            net: round2(gross * (1 - COMMISSION_RATE)),
+            orderStatus: String(order.orderStatus || ""),
+            purchasedAt: order.createdAt instanceof Date ? order.createdAt.toISOString() : String(order.createdAt || ""),
+            creditedAt:
+              transaction?.createdAt instanceof Date
+                ? transaction.createdAt.toISOString()
+                : String(transaction?.createdAt || ""),
+          };
+        });
+    })
+    .sort((a, b) => Date.parse(b.creditedAt || b.purchasedAt) - Date.parse(a.creditedAt || a.purchasedAt))
+    .slice(0, limit);
 }
 
 export async function getWithdrawalsForOwner(

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
 import Product from "@/admin/models/Product";
+import User from "@/admin/models/User";
 import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
 import { saveProductImages } from "@/admin/lib/productUploads";
 import { getConditionStatusFromScore } from "@/admin/lib/productCondition";
@@ -290,7 +291,18 @@ export async function GET(req: NextRequest) {
 
     const products = await Product.find(filter).sort({ createdAt: -1 }).lean();
     const productIds = products.map((product) => product._id.toString());
-    const soldQuantityMap = await getSoldQuantityByProductIds(productIds);
+    const ownerIds = [...new Set(
+      products
+        .map((product) => product.createdBy?.id)
+        .filter((id): id is string => typeof id === "string" && id.length > 0)
+    )];
+    const [soldQuantityMap, owners] = await Promise.all([
+      getSoldQuantityByProductIds(productIds),
+      ownerIds.length > 0
+        ? User.find({ _id: { $in: ownerIds } }).select("_id storeName email").lean()
+        : Promise.resolve([]),
+    ]);
+    const ownerMap = new Map(owners.map((owner) => [owner._id.toString(), owner]));
 
     return NextResponse.json({
       products: products.map((product) => {
@@ -302,9 +314,11 @@ export async function GET(req: NextRequest) {
           : { images: product.images, variants };
         const totalStock = sumVariantStock(variants);
         const totalFullStock = sumVariantFullStock(variants);
+        const owner = product.createdBy?.id ? ownerMap.get(product.createdBy.id) : null;
 
         return {
           ...product,
+          storeName: String(owner?.storeName || ""),
           images: responseMedia.images,
           stock: totalStock,
           availableStock: totalStock,

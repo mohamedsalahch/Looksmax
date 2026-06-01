@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
     const priceMin = Number(searchParams.get("priceMin") || "");
     const priceMax = Number(searchParams.get("priceMax") || "");
     const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "24");
+    const limit = parseInt(searchParams.get("limit") || "12");
     const includeFacets = searchParams.get("includeFacets") === "1";
 
     const filter: Record<string, unknown> = {
