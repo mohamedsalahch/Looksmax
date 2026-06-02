@@ -5,7 +5,6 @@ import ProductMediaEnhancementJob from "@/admin/models/ProductMediaEnhancementJo
 import { saveProductMediaSourceImage } from "@/admin/lib/productMediaUploads";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
 import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
-import { consumeStoreCredit } from "@/admin/lib/storeCredits";
 
 async function fileToBase64(file: File) {
   const bytes = await file.arrayBuffer();
@@ -33,17 +32,6 @@ export async function POST(req: NextRequest) {
     }
 
     await dbConnect();
-
-    if (session.role === "store_owner") {
-      try {
-        await consumeStoreCredit({
-          storeOwnerId: new mongoose.Types.ObjectId(session.userId),
-          reason: "Shoe image enhancement",
-        });
-      } catch {
-        return NextResponse.json({ error: "Enhancement try limit reached. Contact admin for more tries." }, { status: 403 });
-      }
-    }
 
     const formData = await req.formData();
     const frontFile = formData.get("front");

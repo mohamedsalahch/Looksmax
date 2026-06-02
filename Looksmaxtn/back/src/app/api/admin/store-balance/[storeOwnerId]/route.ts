@@ -3,11 +3,7 @@ import mongoose from "mongoose";
 import dbConnect from "@/admin/lib/mongodb";
 import { getSession } from "@/admin/lib/auth";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
-import {
-  adjustStoreCredits,
-  getStoreCreditSummary,
-  getStoreCreditTransactions,
-} from "@/admin/lib/storeCredits";
+import { getBalanceSummary, resetStoreBalance } from "@/admin/lib/storeBalance";
 
 export async function GET(
   _req: NextRequest,
@@ -25,15 +21,14 @@ export async function GET(
     }
 
     await dbConnect();
-    const credits = await getStoreCreditSummary(storeOwnerId);
-    if (!credits) {
+    const summary = await getBalanceSummary(storeOwnerId);
+    if (!summary) {
       return NextResponse.json({ error: "Store owner not found" }, { status: 404 });
     }
 
-    const transactions = await getStoreCreditTransactions(storeOwnerId);
-    return NextResponse.json({ ...credits, transactions });
+    return NextResponse.json(summary);
   } catch (error) {
-    console.error("[admin-store-credits] GET error", error);
+    console.error("[admin-store-balance] GET error", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -54,23 +49,22 @@ export async function POST(
     }
 
     const body = await req.json().catch(() => null);
-    const amount = Number(body?.amount);
-    const reason = String(body?.reason || "").trim() || "Admin balance adjustment";
-
-    if (!Number.isInteger(amount) || amount === 0) {
-      return NextResponse.json({ error: "Enter a non-zero whole number of credits" }, { status: 400 });
+    const action = String(body?.action || "reset");
+    if (action !== "reset") {
+      return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }
+
+    const reason = body?.reason ? String(body.reason) : undefined;
 
     await dbConnect();
     const actor = await getAuditActorFromSession(session);
-    const credits = await adjustStoreCredits({ storeOwnerId, amount, reason, actor });
-    const transactions = await getStoreCreditTransactions(storeOwnerId);
+    const summary = await resetStoreBalance({ storeOwnerId, actor, reason });
 
-    return NextResponse.json({ ...credits, transactions });
+    return NextResponse.json(summary);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Internal server error";
-    const status = message.includes("not found") ? 404 : message.includes("Cannot") || message.includes("Enter") ? 400 : 500;
-    console.error("[admin-store-credits] POST error", error);
+    const status = message.includes("not found") ? 404 : 500;
+    console.error("[admin-store-balance] POST error", error);
     return NextResponse.json({ error: message }, { status });
   }
 }

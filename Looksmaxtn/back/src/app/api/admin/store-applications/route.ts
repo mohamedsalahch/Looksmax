@@ -105,24 +105,19 @@ export async function GET() {
     const emails = stores.map((s) => s.email.toLowerCase());
     const owners = await User.find(
       { email: { $in: emails }, role: "store_owner" },
-      { email: 1, storeOwnerStats: 1 }
+      { email: 1, balance: 1 }
     ).lean();
-    const ownerStatsByEmail = new Map(
-      owners.map((u) => [u.email, u.storeOwnerStats])
-    );
     const ownerIdByEmail = new Map(
       owners.map((u) => [u.email, u._id.toString()])
+    );
+    const ownerBalanceByEmail = new Map(
+      owners.map((u) => [u.email, Number(u.balance || 0)])
     );
 
     const normalizedStores = stores.map((store) => ({
       ...normalizeStoreApplication(store),
-      credits: ownerStatsByEmail.has(store.email)
-        ? {
-            allowed: ownerStatsByEmail.get(store.email)?.triesAllowed ?? 50,
-            used: ownerStatsByEmail.get(store.email)?.triesUsed ?? 0,
-          }
-        : null,
       storeOwnerId: ownerIdByEmail.get(store.email) || "",
+      balance: ownerBalanceByEmail.has(store.email) ? ownerBalanceByEmail.get(store.email) ?? 0 : null,
     }));
 
     return NextResponse.json({ stores: normalizedStores });

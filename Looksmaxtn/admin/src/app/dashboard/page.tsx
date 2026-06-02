@@ -5,10 +5,6 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { withAuthRequest } from "@/lib/authClient";
 
-// Credits are hidden from the store owner dashboard for now. Flip to true to re-enable
-// the "Credits Remaining" card without removing any of the underlying fetch/state code.
-const SHOW_STORE_CREDITS = false;
-
 type DashboardScope = "admin" | "store";
 type OrderStatus = "processing" | "confirmed" | "shipping" | "delivered" | "canceled" | "returned" | string;
 type ApprovalStatus = "pending" | "approved" | "rejected" | string;
@@ -58,12 +54,6 @@ interface StoreApplication {
   storeType?: string;
   status: string;
   createdAt: string;
-}
-
-interface StoreCredits {
-  allowed: number;
-  used: number;
-  remaining: number;
 }
 
 interface StoreBalance {
@@ -237,7 +227,6 @@ export default function DashboardPage() {
   const [products, setProducts] = useState<DashboardProduct[]>([]);
   const [orders, setOrders] = useState<DashboardOrder[]>([]);
   const [stores, setStores] = useState<StoreApplication[]>([]);
-  const [credits, setCredits] = useState<StoreCredits | null>(null);
   const [balance, setBalance] = useState<StoreBalance | null>(null);
   const [storeUrlCopied, setStoreUrlCopied] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -269,11 +258,10 @@ export default function DashboardPage() {
         setStats(nextStats);
 
         const scope: DashboardScope = nextStats.scope === "store" ? "store" : "admin";
-        const [productsData, ordersData, storesData, creditsData, balanceData] = await Promise.all([
+        const [productsData, ordersData, storesData, balanceData] = await Promise.all([
           fetchJson<{ products?: DashboardProduct[] }>("/api/products"),
           fetchJson<{ orders?: DashboardOrder[] }>("/api/orders"),
           scope === "admin" ? fetchJson<{ stores?: StoreApplication[] }>("/api/store-applications") : Promise.resolve(null),
-          scope === "store" ? fetchJson<StoreCredits>("/api/admin/users/me/store-credits") : Promise.resolve(null),
           scope === "store" ? fetchJson<StoreBalance>("/api/admin/users/me/balance") : Promise.resolve(null),
         ]);
 
@@ -282,7 +270,6 @@ export default function DashboardPage() {
         setProducts(productsData?.products || []);
         setOrders(ordersData?.orders || []);
         setStores(storesData?.stores || []);
-        setCredits(creditsData || null);
         setBalance(balanceData || null);
       } catch (loadError) {
         if (!active) return;
@@ -340,9 +327,6 @@ export default function DashboardPage() {
         { label: "Pending Products", value: pendingProducts.length, icon: "⏳", tone: "text-warning" },
         { label: "Orders", value: stats.totalOrders, icon: "🛒", tone: "text-text-secondary" },
         { label: "Pending Orders", value: pendingOrders.length, icon: "🔔", tone: "text-danger" },
-        ...(SHOW_STORE_CREDITS && credits
-          ? [{ label: "Credits Remaining", value: credits.remaining, icon: "💳", tone: "text-text-secondary" }]
-          : []),
       ]
     : [
         { label: "Products", value: stats.totalProducts, icon: "📦", tone: "text-text-secondary" },

@@ -7,7 +7,6 @@ import {
 } from "@/admin/lib/productMediaUploads";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
 import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
-import { consumeStoreCredit } from "@/admin/lib/storeCredits";
 
 const ALL_VIEWS = ["front", "back", "left", "right"] as const;
 type EnhancementView = typeof ALL_VIEWS[number];
@@ -45,17 +44,6 @@ export async function POST(req: NextRequest) {
     }
 
     await dbConnect();
-
-    if (session.role === "store_owner") {
-      try {
-        await consumeStoreCredit({
-          storeOwnerId: new mongoose.Types.ObjectId(session.userId),
-          reason: "Product image enhancement",
-        });
-      } catch {
-        return NextResponse.json({ error: "Enhancement try limit reached. Contact admin for more tries." }, { status: 403 });
-      }
-    }
 
     const formData = await req.formData();
     const mode = String(formData.get("mode") || "garment");

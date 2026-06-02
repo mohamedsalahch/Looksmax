@@ -42,10 +42,6 @@ interface UserDetail {
     profileImage?: string;
     gender?: string;
   };
-  storeOwnerStats?: {
-    triesAllowed: number;
-    triesUsed: number;
-  };
 }
 
 export default function UserDetailPage({ params }: { params: Promise<{ id: string }> }) {

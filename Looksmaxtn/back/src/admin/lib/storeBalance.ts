@@ -236,6 +236,39 @@ export async function creditOrderEarnings({
   return results;
 }
 
+export async function resetStoreBalance({
+  storeOwnerId,
+  actor,
+  reason,
+}: {
+  storeOwnerId: string | mongoose.Types.ObjectId;
+  actor: IAuditActor;
+  reason?: string;
+}) {
+  const user = await User.findById(storeOwnerId).select("balance role");
+  if (!user || user.role !== "store_owner") {
+    throw new Error("Store owner not found");
+  }
+
+  const before = round2(Number(user.balance || 0));
+  if (before !== 0) {
+    user.balance = 0;
+    await user.save();
+
+    await StoreBalanceTransaction.create({
+      storeOwner: user._id,
+      type: "admin_adjustment",
+      amount: round2(-before),
+      balanceBefore: before,
+      balanceAfter: 0,
+      reason: reason?.trim() || "Admin balance reset",
+      createdBy: actor,
+    });
+  }
+
+  return getBalanceSummary(user._id as mongoose.Types.ObjectId);
+}
+
 export async function createWithdrawalRequest({
   storeOwnerId,
   amount,

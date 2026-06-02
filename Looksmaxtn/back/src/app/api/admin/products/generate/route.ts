@@ -5,7 +5,6 @@ import ModelAsset from "@/admin/models/ModelAsset";
 import ProductGenerationJob from "@/admin/models/ProductGenerationJob";
 import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
 import { readModelImageAsBase64 } from "@/admin/lib/modelUploads";
-import { consumeStoreCredit } from "@/admin/lib/storeCredits";
 
 async function fileToBase64(file: File) {
   const bytes = await file.arrayBuffer();
@@ -40,17 +39,6 @@ export async function POST(req: NextRequest) {
 
     await dbConnect();
 
-    // Check and consume a try for store_owners
-    if (session.role === "store_owner") {
-      try {
-        await consumeStoreCredit({
-          storeOwnerId: new mongoose.Types.ObjectId(session.userId),
-          reason: "Model picture generation",
-        });
-      } catch {
-        return NextResponse.json({ error: "Generation try limit reached. Contact admin for more tries." }, { status: 403 });
-      }
-    }
     const formData = await req.formData();
     const modelId = String(formData.get("modelId") || "");
     const type = String(formData.get("type") || "fashion");

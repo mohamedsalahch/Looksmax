@@ -30,11 +30,6 @@ export interface IOutfitStudioStats {
   triesUsed: number;
 }
 
-export interface IStoreOwnerStats {
-  triesAllowed: number;
-  triesUsed: number;
-}
-
 export interface IUser extends Document {
   name: string;
   storeName?: string;
@@ -57,7 +52,6 @@ export interface IUser extends Document {
   address?: IAddress;
   bodyProfile?: IBodyProfile;
   outfitStudioStats?: IOutfitStudioStats;
-  storeOwnerStats?: IStoreOwnerStats;
   balance?: number;
   createdAt: Date;
   updatedAt: Date;
@@ -102,14 +96,6 @@ const outfitStudioStatsSchema = new Schema<IOutfitStudioStats>(
   { _id: false }
 );
 
-const storeOwnerStatsSchema = new Schema<IStoreOwnerStats>(
-  {
-    triesAllowed: { type: Number, default: 50 },
-    triesUsed: { type: Number, default: 0 },
-  },
-  { _id: false }
-);
-
 const userSchema = new Schema<IUser>(
   {
     name: { type: String, required: true, trim: true },
@@ -133,7 +119,6 @@ const userSchema = new Schema<IUser>(
     address: { type: addressSchema, default: () => ({}) },
     bodyProfile: { type: bodyProfileSchema, default: () => ({}) },
     outfitStudioStats: { type: outfitStudioStatsSchema, default: () => ({ initialTries: 5, triesUsed: 0 }) },
-    storeOwnerStats: { type: storeOwnerStatsSchema, default: () => ({ triesAllowed: 50, triesUsed: 0 }) },
     balance: { type: Number, default: 0 },
   },
   { timestamps: true }
