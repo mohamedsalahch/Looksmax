@@ -5,6 +5,10 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { withAuthRequest } from "@/lib/authClient";
 
+// Credits are hidden from the store owner dashboard for now. Flip to true to re-enable
+// the "Credits Remaining" card without removing any of the underlying fetch/state code.
+const SHOW_STORE_CREDITS = false;
+
 type DashboardScope = "admin" | "store";
 type OrderStatus = "processing" | "confirmed" | "shipping" | "delivered" | "canceled" | "returned" | string;
 type ApprovalStatus = "pending" | "approved" | "rejected" | string;
@@ -336,7 +340,7 @@ export default function DashboardPage() {
         { label: "Pending Products", value: pendingProducts.length, icon: "⏳", tone: "text-warning" },
         { label: "Orders", value: stats.totalOrders, icon: "🛒", tone: "text-text-secondary" },
         { label: "Pending Orders", value: pendingOrders.length, icon: "🔔", tone: "text-danger" },
-        ...(credits
+        ...(SHOW_STORE_CREDITS && credits
           ? [{ label: "Credits Remaining", value: credits.remaining, icon: "💳", tone: "text-text-secondary" }]
           : []),
       ]
