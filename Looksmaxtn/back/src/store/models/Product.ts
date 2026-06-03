@@ -8,6 +8,7 @@ export interface IProductImage {
   source?: string;
   color?: string | null;
   sourceKey?: string;
+  gender?: "men" | "women" | null;
 }
 
 export interface IOriginPictures {
@@ -36,6 +37,7 @@ export interface IProduct extends Document {
   isActive: boolean;
   approvalStatus: ProductApprovalStatus;
   categories: string[];
+  gender?: "men" | "women" | "children" | "unisex" | null;
   description: string;
   stock: number;
   fullStock: number;
@@ -66,6 +68,7 @@ const productImageSchema = new Schema<IProductImage>(
     source: { type: String, default: "" },
     color: { type: String, default: null },
     sourceKey: { type: String, default: "" },
+    gender: { type: String, enum: ["men", "women"], default: null },
   },
   { _id: false }
 );
@@ -100,6 +103,11 @@ const productSchema = new Schema<IProduct>(
       default: "approved",
     },
     categories: [{ type: String, lowercase: true, trim: true }],
+    gender: {
+      type: String,
+      enum: ["men", "women", "children", "unisex"],
+      default: null,
+    },
     description: { type: String, default: "" },
     stock: { type: Number, default: 0, min: 0 },
     fullStock: { type: Number, default: 0, min: 0 },
