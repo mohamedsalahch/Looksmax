@@ -17,22 +17,25 @@ logger = logging.getLogger(__name__)
 
 _generator: ImageGenerator | None = None
 _DESCRIBE_MODEL = "gemini-3-flash-preview"
-DESCRIBE_PRODUCT_PROMPT_VERSION = "describe_product/v1"
+DESCRIBE_PRODUCT_PROMPT_VERSION = "describe_product/v2"
 
 DESCRIBE_PRODUCT_PROMPT = """You are a product cataloging assistant for a Tunisian fashion & perfume marketplace.
 You receive 1-4 photos of a single product plus the target customer gender and the
 exhaustive list of allowed category slugs for that gender.
 
 Your job: return ONLY a JSON object with two fields:
-  - "name":     a concise, retail-ready product name (3-8 words, Title Case, no emojis,
-                no brand guessing unless a brand is clearly visible on the product, no
-                price, no size, no quantity).
+  - "name":     a concise, retail-ready product name. Keep it to AT MOST 4 words; only
+                exceed 4 words if it is absolutely necessary to identify the product.
+                Title Case, no emojis, no brand guessing unless a brand is clearly
+                visible on the product, no price, no size, no quantity, and NEVER mention
+                the product's color.
   - "category": exactly one slug copied verbatim from the provided list. Do not invent
                 slugs, do not translate, do not modify casing.
 
 Rules:
 - If the photos are ambiguous, choose the closest valid category - never leave it blank.
 - Never include the gender word in the name (the gender is already known to the system).
+- Never include any color word in the name (e.g. "Black", "Navy", "Red").
 - Output strictly: {"name": "...", "category": "..."} - no prose, no markdown, no code fences."""
 
 
