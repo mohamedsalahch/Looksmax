@@ -143,6 +143,7 @@ type Colorway = {
   companionBottomColor: PaletteColor | null;
   companionFootwearColor: PaletteColor | null;
   additionalInstructions: string;
+  generationMode: "auto" | "manual";
 };
 
 function createEmptyColorway(hex = ""): Colorway {
@@ -167,6 +168,7 @@ function createEmptyColorway(hex = ""): Colorway {
     companionTopType: "", companionBottomType: "", companionFootwearType: "",
     companionTopColor: null, companionBottomColor: null, companionFootwearColor: null,
     additionalInstructions: "",
+    generationMode: "auto",
   };
 }
 
@@ -672,6 +674,7 @@ function ColorwayCard({
   const [samplerOpen, setSamplerOpen] = useState(false);
   const [selectedPictureIndexes, setSelectedPictureIndexes] = useState<number[]>([]);
   const hasColor = Boolean(colorway.hex.trim());
+  const generationMode = colorway.generationMode === "manual" ? "manual" : "auto";
 
   const fileKeyFor = (view: ColorwayView): "frontFile" | "backFile" | "leftFile" | "rightFile" =>
     `${view}File` as "frontFile" | "backFile" | "leftFile" | "rightFile";
@@ -1269,8 +1272,29 @@ function ColorwayCard({
       {showGenerationPanel && (
         <div className="space-y-3 border-t border-border pt-3">
           <div className="space-y-1.5">
-            <p className="text-[9px] uppercase tracking-wider text-text-secondary">Model Generation</p>
-            {companionZones && companionZones.length > 0 ? (
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[9px] uppercase tracking-wider text-text-secondary">Model Generation</p>
+              <div className="flex items-center gap-0.5 rounded-full border border-border p-0.5">
+                {(["auto", "manual"] as const).map((mode) => {
+                  const active = generationMode === mode;
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => onUpdate({ generationMode: mode })}
+                      className={`rounded-full px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wider transition-colors ${active ? "bg-accent text-bg-primary" : "text-text-secondary hover:text-text-primary"}`}
+                    >
+                      {mode}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {generationMode === "auto" ? (
+              <p className="text-[10px] text-text-secondary">
+                The AI styles a companion outfit automatically and keeps the product as the hero. Only the selected model and this colorway&apos;s front and back pictures are used.
+              </p>
+            ) : companionZones && companionZones.length > 0 ? (
               <div className="space-y-3">
                 {companionZones.includes("top") && (
                   <div className="space-y-2">
@@ -1336,7 +1360,7 @@ function ColorwayCard({
             ) : (
               <p className="text-[10px] text-text-secondary">No companion zones available for this category.</p>
             )}
-            {colorway.additionalInstructions ? (
+            {generationMode === "manual" && (colorway.additionalInstructions ? (
               <div className="space-y-1.5 pt-2">
                 <div className="flex items-center justify-between">
                   <p className="text-[9px] uppercase tracking-wider text-text-secondary">Additional instructions</p>
@@ -1364,7 +1388,7 @@ function ColorwayCard({
               >
                 + Add custom instructions
               </button>
-            )}
+            ))}
           </div>
 
           <div className="flex items-center justify-end gap-2">
@@ -1808,6 +1832,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     if (!needsModelSelection) return false;
     if (!selectedModelId) return false;
     if (!Boolean(cw.frontFile || cw.frontPreview) || !Boolean(cw.backFile || cw.backPreview)) return false;
+    // Auto mode lets the AI pick the companion outfit — only model + front/back are required.
+    if (cw.generationMode !== "manual") return true;
     if (companionZones.includes("top") && (!cw.companionTopType || !cw.companionTopColor)) return false;
     if (companionZones.includes("bottom") && (!cw.companionBottomType || !cw.companionBottomColor)) return false;
     if (companionZones.includes("footwear") && (!cw.companionFootwearType || !cw.companionFootwearColor)) return false;
@@ -1836,6 +1862,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       updateColorway(colorwayId, { generateStatus: "failed", generateError: "Please select a model first." });
       return;
     }
+    const isAutoMode = cw.generationMode !== "manual";
+    if (!isAutoMode) {
     if (companionZones.includes("top") && (!cw.companionTopType || !cw.companionTopColor)) {
       updateColorway(colorwayId, { generateStatus: "failed", generateError: "Please select the top type and color first." });
       return;
@@ -1847,6 +1875,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     if (companionZones.includes("footwear") && (!cw.companionFootwearType || !cw.companionFootwearColor)) {
       updateColorway(colorwayId, { generateStatus: "failed", generateError: "Please select the footwear type and color first." });
       return;
+    }
     }
     try {
       const [frontSrc, backSrc] = await Promise.all([
@@ -1862,6 +1891,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       body.append("modelId", selectedModelId);
       body.append("type", "fashion");
       body.append("fashionSubtype", form.fashionSubtype || savedFashionSubtype || "clothes");
+      body.append("mode", isAutoMode ? "auto" : "manual");
+      if (!isAutoMode) {
       body.append("generationTarget", generationRequirements.generationTarget);
       body.append("garmentZone", generationRequirements.generationTarget === "bottom" ? "bottom" : "top");
       if (companionZones.includes("top") && cw.companionTopType) body.append("companionTopType", cw.companionTopType);
@@ -1872,6 +1903,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       if (companionZones.includes("footwear") && cw.companionFootwearColor) { body.append("shoesColorName", cw.companionFootwearColor.name); body.append("shoesColorHex", cw.companionFootwearColor.hex); }
       if (cw.additionalInstructions && cw.additionalInstructions.trim()) {
         body.append("additionalInstructions", cw.additionalInstructions.trim());
+      }
       }
       const [frontFile, backFile] = await Promise.all([compressImageFile(frontSrc), compressImageFile(backSrc)]);
       body.append("front", frontFile); body.append("back", backFile);

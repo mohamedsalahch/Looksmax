@@ -1362,6 +1362,7 @@ export default function NewProductPage() {
   const [cloneSourceImageFile, setCloneSourceImageFile] = useState<File | null>(null);
   const [zoomedImage, setZoomedImage] = useState<ProductImage | null>(null);
   const [selectedModelId, setSelectedModelId] = useState("");
+  const [storeOwnerGender, setStoreOwnerGender] = useState<"" | "men" | "women" | "children">("");
   const [generationTarget, setGenerationTarget] = useState<GenerationTarget>("");
   const [companionTopType, setCompanionTopType] = useState<CompanionTopType>("");
   const [companionBottomType, setCompanionBottomType] = useState<CompanionBottomType>("");
@@ -2732,6 +2733,7 @@ export default function NewProductPage() {
     if (isStoreOwner) {
       const nextFieldErrors: Record<string, string> = {};
       if (!form.price.trim()) nextFieldErrors.price = "Price is required.";
+      if (!storeOwnerGender) nextFieldErrors.gender = "Gender is required.";
       if (Object.keys(nextFieldErrors).length > 0) {
         setFieldErrors(nextFieldErrors);
         scrollToElement(productBasicsRef.current);
@@ -2815,6 +2817,7 @@ export default function NewProductPage() {
         const body = new FormData();
         body.append("price", form.price);
         body.append("brand", form.brand);
+        body.append("gender", storeOwnerGender);
         body.append("stock", String(totalStock));
         body.append("fullStock", String(totalStock));
         body.append("variants", JSON.stringify(variantsPayload));
@@ -2913,6 +2916,23 @@ export default function NewProductPage() {
                     placeholder="Optional"
                   />
                   <FieldError message={fieldErrors.brand} />
+                </div>
+              )}
+              {isStoreOwner && (
+                <div>
+                  <FieldLabel>Gender</FieldLabel>
+                  <select
+                    required
+                    value={storeOwnerGender}
+                    onChange={(e) => setStoreOwnerGender(e.target.value as typeof storeOwnerGender)}
+                    className="input-line"
+                  >
+                    <option value="">Select gender</option>
+                    <option value="men">Men</option>
+                    <option value="women">Women</option>
+                    <option value="children">Children</option>
+                  </select>
+                  <FieldError message={fieldErrors.gender} />
                 </div>
               )}
               <div>

@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
 import Product from "@/admin/models/Product";
 import User from "@/admin/models/User";
 import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
 import { saveProductImages } from "@/admin/lib/productUploads";
+import { inferNameAndCategory } from "@/admin/lib/productInference";
 import { getConditionStatusFromScore } from "@/admin/lib/productCondition";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 import { broadcastAdminEvent } from "@/admin/lib/adminEvents";
@@ -389,6 +390,7 @@ export async function POST(req: NextRequest) {
       fullStock,
       explicitConditionScore,
     });
+    const inferenceGender = String(formData.get("gender") || "").trim().toLowerCase();
     if (session.role === "store_owner") {
       const validationError = validateStoreOwnerSubmission({
         formData,
@@ -398,7 +400,19 @@ export async function POST(req: NextRequest) {
       if (validationError) {
         return NextResponse.json({ error: validationError }, { status: 400 });
       }
+      if (!["men", "women", "children"].includes(inferenceGender)) {
+        return NextResponse.json(
+          { error: "Please select a gender (men, women, or children)." },
+          { status: 400 }
+        );
+      }
     }
+
+    // Capture the first picture as base64 for background name/category inference.
+    const inferenceImageB64 =
+      session.role === "store_owner" && imageFiles[0]
+        ? Buffer.from(await imageFiles[0].arrayBuffer()).toString("base64")
+        : "";
 
     const imagePaths = await saveProductImages(imageFiles);
     const cloneSourceImagePath =
@@ -499,7 +513,31 @@ export async function POST(req: NextRequest) {
       updatedBy: auditActor,
     });
     if (session.role === "store_owner") {
-      await notifyAdminProductCreated(req, product.toObject());
+      // Submit returns immediately. Name/category are inferred in the background;
+      // the admin notification is sent once inference finishes (or fails).
+      const productId = String(product._id);
+      after(async () => {
+        try {
+          const inferred = await inferNameAndCategory({
+            gender: inferenceGender,
+            imageB64: inferenceImageB64,
+          });
+          if (inferred) {
+            await Product.findByIdAndUpdate(productId, {
+              name: inferred.name,
+              categories: [inferred.category],
+            });
+          }
+        } catch (error) {
+          console.error("[admin.products.post] inference failed:", error);
+        }
+        try {
+          const fresh = await Product.findById(productId).lean();
+          if (fresh) await notifyAdminProductCreated(req, fresh);
+        } catch (error) {
+          console.error("[admin.products.post] notify failed:", error);
+        }
+      });
     }
     return NextResponse.json({ product }, { status: 201 });
   } catch (error) { logRequestError("admin.products.post", req, error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }

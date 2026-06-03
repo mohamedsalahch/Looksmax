@@ -22,7 +22,7 @@ load_service_env()
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
-from app.api import clothes, enhance, outfit, proxy, shoes, validation
+from app.api import clothes, clothes_auto, description, enhance, outfit, proxy, shoes, validation
 from app.services.generator import ImageGenerator
 
 # Configure logging
@@ -52,6 +52,8 @@ enhance.set_generator(generator)
 outfit.set_generator(generator)
 proxy.set_generator(generator)
 validation.set_generator(generator)
+description.set_generator(generator)
+clothes_auto.set_generator(generator)
 
 
 # Include routers
@@ -61,6 +63,8 @@ app.include_router(enhance.router)
 app.include_router(outfit.router)
 app.include_router(proxy.router)
 app.include_router(validation.router)
+app.include_router(description.router)
+app.include_router(clothes_auto.router)
 
 
 @app.get("/health")
@@ -85,6 +89,8 @@ async def root():
             "proxy": "/api/proxy",
             "validate-photo": "/api/validate-photo",
             "compare-front-back": "/api/compare-front-back",
+            "describe-product": "/api/describe-product",
+            "generate-clothes-auto": "/api/generate-clothes-auto",
         }
     }
 

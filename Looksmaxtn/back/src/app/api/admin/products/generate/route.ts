@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
     const modelId = String(formData.get("modelId") || "");
     const type = String(formData.get("type") || "fashion");
     const fashionSubtype = String(formData.get("fashionSubtype") || "clothes");
+    const mode = String(formData.get("mode") || "manual");
     const generationTarget = String(formData.get("generationTarget") || "");
     const garmentZone = String(formData.get("garmentZone") || "top");
     const companionTopType = String(formData.get("companionTopType") || "");
@@ -56,6 +57,7 @@ export async function POST(req: NextRequest) {
     const shoesColorHex = String(formData.get("shoesColorHex") || "");
     const additionalInstructions = String(formData.get("additionalInstructions") || "");
     const normalizedType = normalizeType(type, fashionSubtype);
+    const isAuto = mode === "auto" && normalizedType === "clothes";
     const model =
       normalizedType === "clothes" ? await ModelAsset.findById(modelId).lean() : null;
 
@@ -88,7 +90,22 @@ export async function POST(req: NextRequest) {
     });
 
     const payload =
-      normalizedType === "shoes"
+      isAuto
+        ? {
+            job_id: job._id,
+            webhook_url: webhookUrl,
+            model_pictures: {
+              front: await readModelImageAsBase64(model?.frontImage || model?.images?.[0] || ""),
+              back: await readModelImageAsBase64(
+                model?.backImage || model?.images?.[1] || model?.images?.[0] || ""
+              ),
+            },
+            product_pictures: {
+              front: await fileToBase64(front as File),
+              back: await fileToBase64(back as File),
+            },
+          }
+        : normalizedType === "shoes"
         ? {
             job_id: job._id,
             webhook_url: webhookUrl,
@@ -135,7 +152,11 @@ export async function POST(req: NextRequest) {
           };
 
     const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
-    const endpoint = normalizedType === "shoes" ? `${normalizedBaseUrl}/api/generate-shoes` : `${normalizedBaseUrl}/api/generate`;
+    const endpoint = isAuto
+      ? `${normalizedBaseUrl}/api/generate-clothes-auto`
+      : normalizedType === "shoes"
+      ? `${normalizedBaseUrl}/api/generate-shoes`
+      : `${normalizedBaseUrl}/api/generate`;
 
     // 2. Trigger Python (Async)
     const triggerResponse = await fetch(endpoint, {

@@ -15,6 +15,7 @@ GARMENT_ENHANCE_PROMPT_VERSION = "garment_enhance/v1"
 ACCESSORY_ENHANCE_PROMPT_VERSION = "accessory_enhance/v1"
 PHOTO_VALIDATION_PROMPT_VERSION = "photo_validation/v1"
 COMPARE_FRONT_BACK_PROMPT_VERSION = "compare_front_back/v1"
+CLOTHES_AUTO_PROMPT_VERSION = "clothes_auto/v1"
 
 CLOTHES_TOP_PROMPT_TEMPLATE = """
 You are a professional fashion photography generator.
@@ -297,6 +298,334 @@ STRICT CONSTRAINTS:
 --------------------------------
 FINAL REQUIREMENT:
 portrait orientation, exact 9:16 aspect ratio, full-body framing, model centered, feet visible, consistent margins, studio composition
+"""
+
+CLOTHES_AUTO_PROMPT_TEMPLATE = """
+You are a professional fashion photography generator.
+
+Your task is to generate a high-end, photorealistic image of a model wearing the provided clothing item.
+
+The PRODUCT (provided in front and back reference images) is the HERO of the shot. Everything else in the outfit should support and elevate the product while maintaining a premium editorial streetwear aesthetic.
+
+MODEL REFERENCE:
+Two images of the same model are provided (front and back views).
+
+STRICT REQUIREMENTS:
+
+Preserve identity exactly:
+Face
+Hair
+Skin tone
+Body shape
+Height proportions
+The person must remain identical across generations.
+Do not beautify, stylize, or alter facial structure.
+Maintain realistic anatomy and natural proportions.
+
+PRODUCT (HERO):
+The clothing item is provided in front and back views.
+
+STRICT REQUIREMENTS:
+
+Match the garment EXACTLY:
+Color
+Fabric
+Texture
+Fit
+Silhouette
+Length
+Stitching
+Seams
+Panels
+Wash
+Distressing
+Logos
+Graphics
+Hardware
+Pocket placement
+Hem shape
+Sleeve construction
+Reconstruct the full garment accurately using the front and back references, logically inferring side construction.
+Respect realistic fabric behavior:
+drape
+folds
+tension
+compression
+thickness
+weight
+Do NOT redesign or reinterpret the product.
+Do NOT add details not visible in the references.
+
+INFER PRODUCT TYPE:
+First determine the garment category from the product references:
+
+TOP
+(t-shirt, hoodie, sweater, jacket, shirt, knit, coat, etc.)
+BOTTOM
+(pants, jeans, cargos, shorts, skirt, etc.)
+FULL-BODY
+(dress, jumpsuit, coordinated set, etc.)
+
+Use this inference to determine:
+
+styling balance
+visual hierarchy
+framing emphasis
+pose direction
+
+The product must always remain the primary visual focus.
+
+COMPANION OUTFIT (EDITORIAL STREETWEAR STYLING)
+
+Style the remaining outfit as elevated contemporary streetwear with believable premium fashion styling.
+
+The outfit should feel professionally styled and editorial while keeping the PRODUCT as the clear focal point.
+
+Visual direction references:
+
+Acne Studios
+Fear of God Essentials
+Aime Leon Dore
+Stüssy
+Represent
+COS
+Arket
+Zara premium editorials
+
+STYLING PRINCIPLES
+
+Build a cohesive outfit around the product.
+Companion garments should enhance the product through silhouette, proportion, layering, and tonal harmony.
+Styling should feel modern, fashion-aware, and realistic.
+Avoid sterile “basic mannequin” styling.
+
+You MAY use:
+
+oversized silhouettes
+relaxed tailoring
+stacked pants
+cropped outerwear
+utility styling
+cargos
+tonal layering
+premium washed fabrics
+subtle texture contrast
+heavyweight garments
+clean technical wear
+monochrome styling
+contemporary proportions
+
+Companion garments may include:
+
+subtle seams
+garment washes
+premium construction details
+understated texture variation
+
+BUT:
+
+the product must remain dominant
+companion garments must never visually overpower the product
+
+COLOR SYSTEM
+
+The product color must remain the dominant visual color.
+Companion garments should support the product using:
+neutrals
+earth tones
+monochromes
+muted palettes
+washed/desaturated tones
+
+Avoid:
+
+neon colors
+loud contrast blocking
+competing saturated colors
+visually distracting palettes
+
+The overall outfit should feel cohesive and premium.
+
+PRODUCT-TYPE STYLING RULES
+
+IF THE PRODUCT IS A TOP OR OUTERWEAR:
+
+Pair with fashion-forward streetwear bottoms.
+Bottoms may be:
+relaxed trousers
+cargos
+clean denim
+stacked pants
+tailored loose-fit pants
+minimalist shorts
+Layering is allowed ONLY if the product remains fully visible and dominant.
+Additional layers must remain visually secondary.
+
+IF THE PRODUCT IS A BOTTOM:
+
+Pair with elevated streetwear tops such as:
+heavyweight tees
+hoodies
+knits
+overshirts
+minimalist jackets
+Styling should naturally direct attention toward the bottom garment.
+Tucking, cropping, layering, and proportion play are encouraged if tasteful.
+
+IF THE PRODUCT IS A FULL-BODY GARMENT:
+
+Keep styling minimal and elegant.
+Light layering is allowed only if it enhances realism without covering the product silhouette.
+
+ACCESSORIES
+
+Accessories are OPTIONAL and must remain subtle.
+
+Allowed:
+
+minimal chain
+understated rings
+simple sunglasses
+tonal shoulder bag
+clean cap
+beanie
+
+Accessories must:
+
+remain secondary
+not draw focus away from the product
+avoid large logos or loud design
+
+Avoid:
+
+flashy jewelry
+luxury flex styling
+statement accessories
+exaggerated runway styling
+
+FOOTWEAR
+
+Use premium contemporary footwear appropriate to the outfit:
+
+minimalist sneakers
+clean leather sneakers
+understated boots
+loafers
+skate-inspired silhouettes
+tonal trainers
+
+Footwear must:
+
+support the outfit
+remain visually secondary
+avoid loud branding
+avoid bright colors
+avoid distracting design elements
+
+BACKGROUND
+
+Minimalist seamless studio backdrop.
+Warm off-white background (#F2EFEA).
+Seamless floor transition.
+No visible horizon line.
+No props.
+No environmental objects.
+No furniture.
+No texture-heavy background elements.
+
+LIGHTING
+
+Soft diffused studio lighting.
+Premium e-commerce/editorial lighting quality.
+Even exposure.
+Gentle emphasis around the product area.
+Very soft shadows.
+No harsh contrast.
+No dramatic spotlighting.
+No colored lighting.
+No overexposed highlights.
+
+POSE
+
+Choose a natural premium fashion pose.
+
+Requirements:
+
+modern fashion body language
+realistic stance
+believable editorial energy
+relaxed confidence
+
+Vary naturally across generations:
+
+weight distribution
+shoulder angle
+head tilt
+hand placement
+hip direction
+stance width
+
+STRICT:
+
+hands and arms must NEVER block the product
+pose must not distort garment shape
+avoid exaggerated runway poses
+avoid awkward limb positioning
+
+CAMERA & FRAMING
+
+Portrait orientation
+Exact 9:16 aspect ratio
+Full-body framing
+Feet fully visible
+Model centered
+Consistent margins
+Eye-level camera angle
+(slightly lower only for bottom-focused products)
+50mm lens look
+Premium sharpness around product area
+Realistic depth and perspective
+
+IMAGE STYLE
+
+Photorealistic
+Premium fashion campaign quality
+Luxury e-commerce aesthetic
+Editorial streetwear styling
+Clean studio composition
+Natural skin texture
+Realistic textile rendering
+
+TARGET VIEW:
+{VIEW}
+
+FRONT:
+
+clearly showcase the front of the product
+
+BACK:
+
+clearly showcase the back of the product
+maintain same model and same outfit
+
+STRICT GLOBAL CONSTRAINTS
+
+Do NOT alter the product design in any way.
+Do NOT change product color, fit, fabric, or proportions.
+Do NOT add fantasy fashion elements.
+Do NOT generate extra garments not implied by the styling.
+Do NOT use loud graphics or oversized branding.
+Do NOT distract from the product.
+Do NOT crop the feet.
+Do NOT generate unnatural anatomy.
+Do NOT generate low-fashion “catalog mannequin” energy.
+Do NOT create an over-styled luxury campaign that overwhelms the garment.
+
+FINAL REQUIREMENT
+
+The final image must feel like a premium modern streetwear editorial/e-commerce hybrid.
+
+The outfit should feel genuinely stylish and fashion-aware while keeping the PRODUCT unmistakably as the hero of the image.
 """
 
 SHOES_PROMPT_TEMPLATE = """
