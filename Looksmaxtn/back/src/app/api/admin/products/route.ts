@@ -253,7 +253,10 @@ async function notifyAdminProductCreated(req: NextRequest, product: {
   const payload = buildAdminProductEventPayload(product, "created");
 
   try {
-    const webhookUrl = new URL("/api/admin/notifications/webhook", req.url);
+    // Prefer the explicitly configured base; `req.url` can be https on prod while
+    // the internal server only speaks http (ERR_SSL_WRONG_VERSION_NUMBER).
+    const webhookBaseUrl = (process.env.OUTFIT_WEBHOOK_BASE_URL || req.nextUrl.origin).replace(/\/$/, "");
+    const webhookUrl = `${webhookBaseUrl}/api/admin/notifications/webhook`;
     const response = await fetch(webhookUrl, {
       method: "POST",
       headers: {
