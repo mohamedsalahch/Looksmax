@@ -1362,7 +1362,7 @@ export default function NewProductPage() {
   const [cloneSourceImageFile, setCloneSourceImageFile] = useState<File | null>(null);
   const [zoomedImage, setZoomedImage] = useState<ProductImage | null>(null);
   const [selectedModelId, setSelectedModelId] = useState("");
-  const [storeOwnerGender, setStoreOwnerGender] = useState<"" | "men" | "women" | "children">("");
+  const [storeOwnerGender, setStoreOwnerGender] = useState<"" | "men" | "women" | "children" | "unisex">("");
   const [generationTarget, setGenerationTarget] = useState<GenerationTarget>("");
   const [companionTopType, setCompanionTopType] = useState<CompanionTopType>("");
   const [companionBottomType, setCompanionBottomType] = useState<CompanionBottomType>("");
@@ -2931,6 +2931,7 @@ export default function NewProductPage() {
                     <option value="men">Men</option>
                     <option value="women">Women</option>
                     <option value="children">Children</option>
+                    <option value="unisex">Unisex</option>
                   </select>
                   <FieldError message={fieldErrors.gender} />
                 </div>

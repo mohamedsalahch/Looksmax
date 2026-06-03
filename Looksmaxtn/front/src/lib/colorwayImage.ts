@@ -3,11 +3,31 @@ type VariantSummary = {
   images?: number[];
 };
 
+export type ViewGender = "men" | "women" | null | undefined;
+
+type ColorwayImage = { url: string; isMain: boolean; gender?: "men" | "women" | null };
+
 type ColorwayImageSource = {
   image?: string;
-  images?: { url: string; isMain: boolean }[];
+  images?: ColorwayImage[];
   variants?: ReadonlyArray<VariantSummary> | null;
 };
+
+/**
+ * For unisex products each model picture is tagged with a gender. When a browse
+ * gender is supplied and the product has pictures for it, restrict the candidate
+ * indices to that gender so Men shows the male model and Women the female model.
+ * Non-unisex products (no gendered images) are left untouched.
+ */
+function restrictIndicesToGender(
+  indices: number[],
+  images: ColorwayImage[],
+  viewGender: ViewGender
+): number[] {
+  if (!viewGender) return indices;
+  const matching = indices.filter((i) => images[i]?.gender === viewGender);
+  return matching.length > 0 ? matching : indices;
+}
 
 type EnhancedFrontImageSource = ColorwayImageSource & {
   color?: string | null;
@@ -34,31 +54,35 @@ function getIndicesForHex(hex: string | null | undefined, source: ColorwayImageS
 export function getColorwayEnhancedFrontImage(
   hex: string | null | undefined,
   source: ColorwayImageSource,
-  fallback = ""
+  fallback = "",
+  viewGender: ViewGender = null
 ) {
-  return getColorwayViewImage(hex, source, "front", fallback);
+  return getColorwayViewImage(hex, source, "front", fallback, viewGender);
 }
 
 export function getColorwayEnhancedLeftImage(
   hex: string | null | undefined,
   source: ColorwayImageSource,
-  fallback = ""
+  fallback = "",
+  viewGender: ViewGender = null
 ) {
-  return getColorwayViewImage(hex, source, "left", fallback);
+  return getColorwayViewImage(hex, source, "left", fallback, viewGender);
 }
 
 function getColorwayViewImage(
   hex: string | null | undefined,
   source: ColorwayImageSource,
   view: "front" | "back" | "left" | "right",
-  fallback = ""
+  fallback = "",
+  viewGender: ViewGender = null
 ) {
   if (!source.images || source.images.length === 0) {
     return fallback;
   }
 
   const indices = hex ? getIndicesForHex(hex, source) : [];
-  const effective = indices.length > 0 ? indices : source.images.map((_, index) => index);
+  const effectiveRaw = indices.length > 0 ? indices : source.images.map((_, index) => index);
+  const effective = restrictIndicesToGender(effectiveRaw, source.images, viewGender);
   const sortedIndices = [...effective].sort((a, b) => a - b);
   if (sortedIndices.length === 0) {
     return fallback;
@@ -80,17 +104,19 @@ function getColorwayViewImage(
 export function getColorwayMainImage(
   hex: string | null | undefined,
   source: ColorwayImageSource,
-  fallback = ""
+  fallback = "",
+  viewGender: ViewGender = null
 ) {
   if (!hex || !source.images || source.images.length === 0) {
     return fallback;
   }
 
-  const indices = getIndicesForHex(hex, source);
-  if (indices.length === 0) {
+  const rawIndices = getIndicesForHex(hex, source);
+  if (rawIndices.length === 0) {
     return fallback;
   }
 
+  const indices = restrictIndicesToGender(rawIndices, source.images, viewGender);
   const mainIndex = [...indices].sort((a, b) => a - b)[0];
   return source.images[mainIndex]?.url || fallback;
 }

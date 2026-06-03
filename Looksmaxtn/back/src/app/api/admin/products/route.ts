@@ -400,9 +400,9 @@ export async function POST(req: NextRequest) {
       if (validationError) {
         return NextResponse.json({ error: validationError }, { status: 400 });
       }
-      if (!["men", "women", "children"].includes(inferenceGender)) {
+      if (!["men", "women", "children", "unisex"].includes(inferenceGender)) {
         return NextResponse.json(
-          { error: "Please select a gender (men, women, or children)." },
+          { error: "Please select a gender (men, women, children, or unisex)." },
           { status: 400 }
         );
       }
@@ -476,6 +476,7 @@ export async function POST(req: NextRequest) {
       price: Number(formData.get("price") || 0),
       isActive: String(formData.get("isActive") || "true") === "true",
       categories: session.role === "store_owner" ? [] : parseStringArray(formData.get("categories")),
+      gender: session.role === "store_owner" ? inferenceGender : null,
       description: session.role === "store_owner" ? "" : String(formData.get("description") || ""),
       brand: String(formData.get("brand") || ""),
       reference,
@@ -525,7 +526,7 @@ export async function POST(req: NextRequest) {
           if (inferred) {
             await Product.findByIdAndUpdate(productId, {
               name: inferred.name,
-              categories: [inferred.category],
+              categories: inferred.categories,
             });
           }
         } catch (error) {

@@ -19,7 +19,9 @@ import {
   getCategoryZone,
   getCompanionZonesForCategory,
   getLeavesForZone,
+  getSharedLeaves,
   getZoneRequirements,
+  mapLeafAcrossGenders,
 } from "@/lib/categoryClassification";
 import {
   normalizeHex,
@@ -45,6 +47,7 @@ interface ProductImage {
   source?: string;
   color?: string | null;
   sourceKey?: string;
+  gender?: "men" | "women" | null;
   file?: File | null;
   existing?: boolean;
   kind?: "source" | "generated";
@@ -132,9 +135,11 @@ type Colorway = {
   sizes: SizeRow[];
   generateStatus: ColorwayEnhanceStatus;
   generateJobId: string;
+  /** Second generation job for unisex (the female-model pass). */
+  altGenerateJobId: string;
   generateError: string;
   otherImages: Array<{ url: string; file: File | null }>;
-  generatedImages: Array<{ url: string; file: File | null }>;
+  generatedImages: Array<{ url: string; file: File | null; gender?: "men" | "women" | null }>;
   publicImageOrder: Record<string, string>;
   companionTopType: string;
   companionBottomType: string;
@@ -161,7 +166,7 @@ function createEmptyColorway(hex = ""): Colorway {
     enhancedLeftFile: null, enhancedRightFile: null,
     enhancedOtherImages: [],
     sizes: [{ id: generateId(), size: "", stock: "", conditionScore: "10" }],
-    generateStatus: "idle", generateJobId: "", generateError: "",
+    generateStatus: "idle", generateJobId: "", altGenerateJobId: "", generateError: "",
     otherImages: [],
     generatedImages: [],
     publicImageOrder: {},
@@ -846,6 +851,30 @@ function ColorwayCard({
       ))}
     </select>
   );
+  // Unisex generated pictures get a per-gender front/back on their own dedicated
+  // tokens, so they never clash with each other or with the product pictures'
+  // "main" — and they always sort ahead of the product pictures (see orderRank).
+  const renderGeneratedOrderSelect = (key: string, gender?: "men" | "women" | null) => {
+    if (gender !== "men" && gender !== "women") return renderPublicOrderSelect(key);
+    const isWomen = gender === "women";
+    const options = [
+      { value: "", label: "Hidden" },
+      { value: isWomen ? "model-women-front" : "model-men-front", label: "Front view" },
+      { value: isWomen ? "model-women-back" : "model-men-back", label: "Back view (2nd)" },
+    ];
+    return (
+      <select
+        value={colorway.publicImageOrder[key] || ""}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => setPublicImageOrder(key, e.target.value)}
+        className="w-full border border-border bg-bg-card px-1.5 py-1 text-[8px] uppercase tracking-wider text-text-secondary outline-none transition-colors focus:border-accent"
+      >
+        {options.map((option) => (
+          <option key={option.value || "hidden"} value={option.value}>{option.label}</option>
+        ))}
+      </select>
+    );
+  };
   const applyPictureValues = (values: PictureValue[]) => {
     const patch: Partial<Colorway> = {
       otherImages: values.slice(views.length).filter((value) => value.url || value.file),
@@ -1194,8 +1223,13 @@ function ColorwayCard({
                   className="group relative aspect-[4/5] w-full overflow-hidden rounded border border-border bg-bg-secondary transition-colors hover:border-accent/60"
                 >
                   <img src={img.url} alt={`Generated model ${imageIndex + 1}`} className="h-full w-full object-cover" />
+                  {(img.gender === "men" || img.gender === "women") && (
+                    <span className="absolute top-1 left-1 bg-black px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-white">
+                      {img.gender === "women" ? "Women" : "Men"}
+                    </span>
+                  )}
                 </button>
-                {renderPublicOrderSelect(`generated:${imageIndex}`)}
+                {renderGeneratedOrderSelect(`generated:${imageIndex}`, img.gender)}
                 <button
                   type="button"
                   onClick={() => removeGeneratedPicture(imageIndex)}
@@ -1441,8 +1475,10 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const [cloneSourceImageFile, setCloneSourceImageFile] = useState<File | null>(null);
   const [zoomedImage, setZoomedImage] = useState<ProductImage | null>(null);
   const [initialCategorySlugs, setInitialCategorySlugs] = useState<string[]>([]);
+  const [productGender, setProductGender] = useState<"men" | "women" | "children" | "unisex" | null>(null);
   const [savedFashionSubtype, setSavedFashionSubtype] = useState<FashionSubtype>("");
   const [selectedModelId, setSelectedModelId] = useState("");
+  const [selectedFemaleModelId, setSelectedFemaleModelId] = useState("");
   const [generationTarget, setGenerationTarget] = useState<GenerationTarget>("");
   const [companionTopType, setCompanionTopType] = useState<CompanionTopType>("");
   const [companionBottomType, setCompanionBottomType] = useState<CompanionBottomType>("");
@@ -1582,34 +1618,42 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       generateStatus: "failed",
       generateError: error,
       generateJobId: "",
+      altGenerateJobId: "",
     });
   const applyColorwayGenerationCompletion = async (
     colorwayId: string,
     viewList: string[],
-    images: Record<string, string> | undefined
+    images: Record<string, string> | undefined,
+    opts: { gender: "men" | "women" | null; jobField: "generateJobId" | "altGenerateJobId" } = {
+      gender: null,
+      jobField: "generateJobId",
+    }
   ) => {
     const results = await Promise.all(
       viewList.map(async (view, i) => {
         const image = images?.[view];
         if (!image) return null;
         const file = await generatedResultToFile(image, i);
-        return { url: URL.createObjectURL(file), file };
+        return { url: URL.createObjectURL(file), file, gender: opts.gender };
       })
     );
 
-    const nextResults = results.filter((r): r is { url: string; file: File } => r !== null);
+    const nextResults = results.filter(
+      (r): r is { url: string; file: File; gender: "men" | "women" | null } => r !== null
+    );
     setColorways((prev) =>
-      prev.map((cw) =>
-        cw.id === colorwayId
-          ? {
-              ...cw,
-              generateStatus: "completed",
-              generateJobId: "",
-              generateError: "",
-              generatedImages: [...cw.generatedImages, ...nextResults],
-            }
-          : cw
-      )
+      prev.map((cw) => {
+        if (cw.id !== colorwayId) return cw;
+        const cleared = { ...cw, [opts.jobField]: "" };
+        // A unisex colorway runs two passes; stay "processing" until both finish.
+        const otherJob = opts.jobField === "generateJobId" ? cleared.altGenerateJobId : cleared.generateJobId;
+        return {
+          ...cleared,
+          generateStatus: otherJob ? "processing" : "completed",
+          generateError: "",
+          generatedImages: [...cw.generatedImages, ...nextResults],
+        };
+      })
     );
   };
   const handleEnhanceColorway = async (colorwayId: string, selectedPictureIndexes: number[] = []) => {
@@ -1831,6 +1875,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const canGenerateColorway = (cw: Colorway) => {
     if (!needsModelSelection) return false;
     if (!selectedModelId) return false;
+    if (isUnisex && !selectedFemaleModelId) return false;
     if (!Boolean(cw.frontFile || cw.frontPreview) || !Boolean(cw.backFile || cw.backPreview)) return false;
     // Auto mode lets the AI pick the companion outfit — only model + front/back are required.
     if (cw.generationMode !== "manual") return true;
@@ -1862,6 +1907,10 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       updateColorway(colorwayId, { generateStatus: "failed", generateError: "Please select a model first." });
       return;
     }
+    if (isUnisex && !selectedFemaleModelId) {
+      updateColorway(colorwayId, { generateStatus: "failed", generateError: "Please select a female model first." });
+      return;
+    }
     const isAutoMode = cw.generationMode !== "manual";
     if (!isAutoMode) {
     if (companionZones.includes("top") && (!cw.companionTopType || !cw.companionTopColor)) {
@@ -1886,48 +1935,98 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         updateColorway(colorwayId, { generateStatus: "failed", generateError: "Please select front and back pictures first." });
         return;
       }
-      updateColorway(colorwayId, { generateStatus: "processing", generateError: "", generateJobId: "" });
-      const body = new FormData();
-      body.append("modelId", selectedModelId);
-      body.append("type", "fashion");
-      body.append("fashionSubtype", form.fashionSubtype || savedFashionSubtype || "clothes");
-      body.append("mode", isAutoMode ? "auto" : "manual");
-      if (!isAutoMode) {
-      body.append("generationTarget", generationRequirements.generationTarget);
-      body.append("garmentZone", generationRequirements.generationTarget === "bottom" ? "bottom" : "top");
-      if (companionZones.includes("top") && cw.companionTopType) body.append("companionTopType", cw.companionTopType);
-      if (companionZones.includes("bottom") && cw.companionBottomType) body.append("companionBottomType", cw.companionBottomType);
-      if (companionZones.includes("footwear") && cw.companionFootwearType) body.append("footwearType", cw.companionFootwearType);
-      if (companionZones.includes("top") && cw.companionTopColor) { body.append("topColorName", cw.companionTopColor.name); body.append("topColorHex", cw.companionTopColor.hex); }
-      if (companionZones.includes("bottom") && cw.companionBottomColor) { body.append("bottomColorName", cw.companionBottomColor.name); body.append("bottomColorHex", cw.companionBottomColor.hex); }
-      if (companionZones.includes("footwear") && cw.companionFootwearColor) { body.append("shoesColorName", cw.companionFootwearColor.name); body.append("shoesColorHex", cw.companionFootwearColor.hex); }
-      if (cw.additionalInstructions && cw.additionalInstructions.trim()) {
-        body.append("additionalInstructions", cw.additionalInstructions.trim());
-      }
-      }
+      updateColorway(colorwayId, { generateStatus: "processing", generateError: "", generateJobId: "", altGenerateJobId: "" });
       const [frontFile, backFile] = await Promise.all([compressImageFile(frontSrc), compressImageFile(backSrc)]);
-      body.append("front", frontFile); body.append("back", backFile);
-      const res = await fetch("/api/products/generate", withAuthRequest({ method: "POST", body }));
-      const data = await res.json();
-      if (!res.ok) { updateColorway(colorwayId, { generateStatus: "failed", generateError: data.error || "Unable to start generation." }); return; }
-      updateColorway(colorwayId, { generateJobId: data.job_id || "", generateStatus: "processing" });
-    } catch { updateColorway(colorwayId, { generateStatus: "failed", generateError: "Network error" }); }
+      // A fresh FormData per call (File objects can be reused across bodies).
+      const buildBody = (modelId: string) => {
+        const body = new FormData();
+        body.append("modelId", modelId);
+        body.append("type", "fashion");
+        body.append("fashionSubtype", form.fashionSubtype || savedFashionSubtype || "clothes");
+        body.append("mode", isAutoMode ? "auto" : "manual");
+        if (!isAutoMode) {
+          body.append("generationTarget", generationRequirements.generationTarget);
+          body.append("garmentZone", generationRequirements.generationTarget === "bottom" ? "bottom" : "top");
+          if (companionZones.includes("top") && cw.companionTopType) body.append("companionTopType", cw.companionTopType);
+          if (companionZones.includes("bottom") && cw.companionBottomType) body.append("companionBottomType", cw.companionBottomType);
+          if (companionZones.includes("footwear") && cw.companionFootwearType) body.append("footwearType", cw.companionFootwearType);
+          if (companionZones.includes("top") && cw.companionTopColor) { body.append("topColorName", cw.companionTopColor.name); body.append("topColorHex", cw.companionTopColor.hex); }
+          if (companionZones.includes("bottom") && cw.companionBottomColor) { body.append("bottomColorName", cw.companionBottomColor.name); body.append("bottomColorHex", cw.companionBottomColor.hex); }
+          if (companionZones.includes("footwear") && cw.companionFootwearColor) { body.append("shoesColorName", cw.companionFootwearColor.name); body.append("shoesColorHex", cw.companionFootwearColor.hex); }
+          if (cw.additionalInstructions && cw.additionalInstructions.trim()) {
+            body.append("additionalInstructions", cw.additionalInstructions.trim());
+          }
+        }
+        body.append("front", frontFile); body.append("back", backFile);
+        return body;
+      };
+      const startJob = async (modelId: string): Promise<string> => {
+        const res = await fetch("/api/products/generate", withAuthRequest({ method: "POST", body: buildBody(modelId) }));
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Unable to start generation.");
+        return String(data.job_id || "");
+      };
+
+      if (isUnisex) {
+        // Fire the male and female model passes in parallel.
+        const [menJob, womenJob] = await Promise.all([
+          startJob(selectedModelId),
+          startJob(selectedFemaleModelId),
+        ]);
+        updateColorway(colorwayId, { generateJobId: menJob, altGenerateJobId: womenJob, generateStatus: "processing" });
+      } else {
+        const job = await startJob(selectedModelId);
+        updateColorway(colorwayId, { generateJobId: job, generateStatus: "processing" });
+      }
+    } catch (error) {
+      updateColorway(colorwayId, { generateStatus: "failed", generateError: error instanceof Error ? error.message : "Network error" });
+    }
   };
 
   useEffect(() => {
-    const processing = colorways.filter((c) => c.generateStatus === "processing" && c.generateJobId);
-    if (processing.length === 0) return;
+    // One subscription per active generation job. Unisex colorways have two
+    // (a male and a female pass); each tags its results with the right gender.
+    type JobSub = {
+      colorwayId: string;
+      jobId: string;
+      jobField: "generateJobId" | "altGenerateJobId";
+      gender: "men" | "women" | null;
+    };
+    const jobs: JobSub[] = [];
+    for (const cw of colorways) {
+      if (cw.generateStatus !== "processing") continue;
+      if (cw.generateJobId) {
+        jobs.push({
+          colorwayId: cw.id,
+          jobId: cw.generateJobId,
+          jobField: "generateJobId",
+          gender: isUnisex ? "men" : null,
+        });
+      }
+      if (cw.altGenerateJobId) {
+        jobs.push({
+          colorwayId: cw.id,
+          jobId: cw.altGenerateJobId,
+          jobField: "altGenerateJobId",
+          gender: "women",
+        });
+      }
+    }
+    if (jobs.length === 0) return;
 
-    const unsubscribers = processing.map((cw) =>
-      subscribeToJob(cw.generateJobId, (update) => {
+    const unsubscribers = jobs.map((job) =>
+      subscribeToJob(job.jobId, (update) => {
         if (update.status === "failed") {
-          applyColorwayGenerationFailure(cw.id, update.error || "Generation failed.");
+          applyColorwayGenerationFailure(job.colorwayId, update.error || "Generation failed.");
           return;
         }
         if (update.status !== "completed") return;
         const subtype = form.fashionSubtype || savedFashionSubtype || "clothes";
         const viewList = subtype === "shoes" ? ["front", "back", "left", "right"] : ["front", "back"];
-        void applyColorwayGenerationCompletion(cw.id, viewList, update.images);
+        void applyColorwayGenerationCompletion(job.colorwayId, viewList, update.images, {
+          gender: job.gender,
+          jobField: job.jobField,
+        });
       })
     );
 
@@ -2103,6 +2202,9 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         setSoldQuantity(Math.max(Number(p.soldQuantity ?? 0), 0));
         setSavedFashionSubtype(p.fashionSubtype || "clothes");
         setInitialCategorySlugs(p.categories || []);
+        setProductGender(
+          ["men", "women", "children", "unisex"].includes(p.gender) ? p.gender : null
+        );
 
         // Initialize colorways from native variants for store owners.
         if (nextVariants.length > 0) {
@@ -2172,7 +2274,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               const savedEnhancedViewUrls: Partial<Record<ColorwayView, string>> = {};
               const otherPictures: Array<{ url: string; file: File | null }> = [];
               const enhancedOtherPictures: Array<{ url: string; file: File | null }> = [];
-              const generatedPictures: Array<{ url: string; file: File | null }> = [];
+              const generatedPictures: Array<{ url: string; file: File | null; gender?: "men" | "women" | null }> = [];
               const addOtherPicture = (url: string, imageIndex: number) => {
                 const key = `originalOther:${otherPictures.length}`;
                 otherPictures.push({ url, file: null });
@@ -2183,17 +2285,31 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 enhancedOtherPictures.push({ url, file: null });
                 setPublicOrder(key, imageIndex);
               };
-              const addGeneratedPicture = (url: string, imageIndex: number) => {
+              // Track per-gender model pics so the first one seen (saved front-first)
+              // restores as the Front view and the next as Back view.
+              let menGenSeen = 0;
+              let womenGenSeen = 0;
+              const addGeneratedPicture = (url: string, imageIndex: number, gender?: "men" | "women" | null) => {
                 const key = `generated:${generatedPictures.length}`;
-                generatedPictures.push({ url, file: null });
-                setPublicOrder(key, imageIndex);
+                generatedPictures.push({ url, file: null, gender: gender ?? null });
+                if ((gender === "men" || gender === "women") && productImages[imageIndex]?.isPublic !== false) {
+                  const isFront = (gender === "men" ? menGenSeen : womenGenSeen) === 0;
+                  if (gender === "men") menGenSeen += 1;
+                  else womenGenSeen += 1;
+                  publicImageOrder[key] =
+                    gender === "women"
+                      ? isFront ? "model-women-front" : "model-women-back"
+                      : isFront ? "model-men-front" : "model-men-back";
+                } else {
+                  setPublicOrder(key, imageIndex);
+                }
               };
               const assignedImageIndexes = new Set<number>();
               imageEntries.forEach(({ image, imageIndex }) => {
                 const source = image.source || "";
                 const sourceKey = image.sourceKey || "";
                 if (source === "generated") {
-                  addGeneratedPicture(image.url, imageIndex);
+                  addGeneratedPicture(image.url, imageIndex, image.gender);
                   assignedImageIndexes.add(imageIndex);
                   return;
                 }
@@ -2358,17 +2474,33 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 
   useEffect(() => {
     if (categories.length === 0 || initialCategorySlugs.length === 0) return;
-    const path = getCategoryPath(categories, initialCategorySlugs);
+    // For unisex the product carries both gendered chains; collapse to the
+    // men-side leaf as the canonical selection so the picker shows one entry.
+    const syncSlugs =
+      productGender === "unisex"
+        ? (() => {
+            const menLeaf = initialCategorySlugs.find(
+              (slug) => mapLeafAcrossGenders(slug, categories)?.men === slug
+            );
+            return menLeaf ? [menLeaf] : initialCategorySlugs;
+          })()
+        : initialCategorySlugs;
+    const path = getCategoryPath(categories, syncSlugs);
     setSelectedParentSlug(path.parent);
     setSelectedChildSlug(path.child);
     setSelectedGrandchildSlug(path.grandchild);
     setSelectedGreatGrandchildSlug(path.greatGrandchild || "");
     const leafSlug = path.greatGrandchild || path.grandchild || path.child || path.parent;
     const leaf = categories.find((c) => c.slug === leafSlug);
-    if (leaf) setCategorySearch(getCategoryPathLabel(categories, leaf));
+    if (leaf) {
+      setCategorySearch(
+        productGender === "unisex" ? leaf.name : getCategoryPathLabel(categories, leaf)
+      );
+    }
     hasSyncedInitialCategoriesRef.current = true;
-  }, [categories, initialCategorySlugs]);
+  }, [categories, initialCategorySlugs, productGender]);
 
+  const isUnisex = productGender === "unisex";
   const selectedCategorySlug =
     selectedGreatGrandchildSlug || selectedGrandchildSlug || selectedChildSlug || selectedParentSlug;
   const selectedCategoryZone = useMemo(
@@ -2410,6 +2542,14 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     [categories, selectedCategoryGender]
   );
   const categoryOptions = useMemo(() => {
+    // Unisex products choose from the leaves shared by Men and Women; the
+    // men-side slug is the canonical pick and the label is gender-neutral.
+    if (isUnisex) {
+      return getSharedLeaves(categories).map((shared) => ({
+        slug: shared.men,
+        label: shared.name,
+      }));
+    }
     const visible = usesStoreOwnerEditFlow
       ? categories.filter(
         (category) => !categories.some((other) => other.parentSlug === category.slug)
@@ -2419,7 +2559,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       slug: category.slug,
       label: getCategoryPathLabel(categories, category),
     }));
-  }, [categories, usesStoreOwnerEditFlow]);
+  }, [categories, usesStoreOwnerEditFlow, isUnisex]);
   const filteredCategoryOptions = useMemo(() => {
     const term = categorySearch.trim().toLowerCase();
     if (!term) return categoryOptions;
@@ -2442,6 +2582,11 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
             (model) => model.gender === selectedModelGender || model.gender === "child"
           ),
     [models, selectedModelGender]
+  );
+  // For unisex we need a female model in addition to the (male) primary picker.
+  const femaleModels = useMemo(
+    () => models.filter((model) => model.gender === "female" || model.gender === "child"),
+    [models]
   );
   const selectedModel = filteredModels.find((model) => model._id === selectedModelId);
 
@@ -3117,7 +3262,23 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     }
 
     try {
-      const productCategories = [selectedParentSlug, selectedChildSlug, selectedGrandchildSlug, selectedGreatGrandchildSlug].filter(Boolean);
+      // For unisex, expand the chosen leaf to both gendered chains so the
+      // product lists under Men and Women; otherwise save the single chain.
+      let productCategories: string[];
+      if (isUnisex && selectedCategorySlug) {
+        const pair = mapLeafAcrossGenders(selectedCategorySlug, categories);
+        if (pair) {
+          const chainSlugs = (slug: string) =>
+            getCategoryAncestors(categories, slug).map((c) => c.slug);
+          productCategories = Array.from(
+            new Set([...chainSlugs(pair.men), ...chainSlugs(pair.women)])
+          );
+        } else {
+          productCategories = [selectedParentSlug, selectedChildSlug, selectedGrandchildSlug, selectedGreatGrandchildSlug].filter(Boolean);
+        }
+      } else {
+        productCategories = [selectedParentSlug, selectedChildSlug, selectedGrandchildSlug, selectedGreatGrandchildSlug].filter(Boolean);
+      }
       type VariantEntry = { size: string; color: string; stock: number; conditionScore: number };
       const allVariants: VariantEntry[] = [];
       for (const cw of colorways) {
@@ -3143,6 +3304,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       body.append("stock", String(totalStock));
       body.append("fullStock", String(totalStock));
       body.append("categories", JSON.stringify(productCategories));
+      if (productGender) body.append("gender", productGender);
       body.append("mainImageIndex", "0");
       if (selectedModelId) body.append("modelId", selectedModelId);
 
@@ -3163,14 +3325,14 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 
       const imageFiles: File[] = [];
       const imageOrder: string[] = [];
-      const imageMeta: Record<string, { isPublic: boolean; source: string; color: string | null; sourceKey: string }> = {};
+      const imageMeta: Record<string, { isPublic: boolean; source: string; color: string | null; sourceKey: string; gender: "men" | "women" | null }> = {};
       const existingImagesPayload: { url: string }[] = [];
       const existingUrlToOrderIndex = new Map<string, number>();
       const imagesByHex: Record<string, number[]> = {};
       const isUploadableUrl = (url: string) => Boolean(url) && !url.startsWith("blob:") && !url.startsWith("data:");
       const applyImageMeta = (
         orderKey: string,
-        item: { key: string; order: string; source: string },
+        item: { key: string; order: string; source: string; gender?: "men" | "women" | null },
         colorKey: string
       ) => {
         imageMeta[orderKey] = {
@@ -3178,9 +3340,10 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           source: item.source,
           color: colorKey || null,
           sourceKey: item.key,
+          gender: item.gender ?? null,
         };
       };
-      const pushExisting = (url: string, item?: { key: string; order: string; source: string }, colorKey = ""): number => {
+      const pushExisting = (url: string, item?: { key: string; order: string; source: string; gender?: "men" | "women" | null }, colorKey = ""): number => {
         const cached = existingUrlToOrderIndex.get(url);
         if (cached !== undefined) {
           const existingKey = imageOrder[cached];
@@ -3195,7 +3358,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         if (item) applyImageMeta(orderKey, item, colorKey);
         return idx;
       };
-      const pushNew = (file: File, item?: { key: string; order: string; source: string }, colorKey = ""): number => {
+      const pushNew = (file: File, item?: { key: string; order: string; source: string; gender?: "men" | "women" | null }, colorKey = ""): number => {
         const idx = imageOrder.length;
         const newIdx = imageFiles.length;
         imageFiles.push(file);
@@ -3205,8 +3368,13 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         return idx;
       };
       let mainImageKey = "";
-      type SavePictureItem = { key: string; order: string; file: File | null; url: string; source: string };
+      type SavePictureItem = { key: string; order: string; file: File | null; url: string; source: string; gender: "men" | "women" | null };
       const orderRank = (order: string) => {
+        // Model front/back (unisex) always come before the product pictures.
+        if (order === "model-men-front") return -4;
+        if (order === "model-women-front") return -3;
+        if (order === "model-men-back") return -2;
+        if (order === "model-women-back") return -1;
         if (order === "main") return 0;
         const numeric = Number(order);
         return Number.isFinite(numeric) && numeric > 0 ? numeric : 999;
@@ -3215,7 +3383,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         const colorKey = normalizeHex(cw.hex);
         const indices: number[] = [];
         const pictureItems: SavePictureItem[] = [];
-        const addPictureItem = (key: string, file: File | null, url: unknown, source: string) => {
+        const addPictureItem = (key: string, file: File | null, url: unknown, source: string, gender: "men" | "women" | null = null) => {
           const stringUrl = typeof url === "string" ? url : "";
           if (!file && !isUploadableUrl(stringUrl)) return;
           pictureItems.push({
@@ -3224,6 +3392,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
             file,
             url: stringUrl,
             source,
+            gender,
           });
         };
         for (const view of requiredOriginPictureKeys) {
@@ -3238,7 +3407,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           addPictureItem(`originalOther:${imageIndex}`, image.file, image.url, "original");
         });
         cw.generatedImages.forEach((image, imageIndex) => {
-          addPictureItem(`generated:${imageIndex}`, image.file, image.url, "generated");
+          addPictureItem(`generated:${imageIndex}`, image.file, image.url, "generated", image.gender ?? null);
         });
         for (const view of requiredOriginPictureKeys) {
           const enhancedFile = cw[`enhanced${view.charAt(0).toUpperCase()}${view.slice(1)}File` as keyof Colorway];
@@ -3417,7 +3586,19 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 <FieldError message={fieldErrors.price} />
               </div>
               <div className={isThriftStoreOwner ? "" : "sm:col-span-2 xl:col-span-3"}>
-                <FieldLabel>Category</FieldLabel>
+                <div className="flex items-center gap-2">
+                  <FieldLabel>Category</FieldLabel>
+                  {isUnisex && (
+                    <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent">
+                      Unisex
+                    </span>
+                  )}
+                </div>
+                {isUnisex && (
+                  <p className="mb-1 text-[11px] text-text-secondary">
+                    Pick one category — it&apos;s saved for both Men and Women.
+                  </p>
+                )}
                 <div className="relative">
                   <input
                     ref={categorySelectRef}
@@ -3472,8 +3653,12 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
             <div ref={modelPicturesSectionRef}>
               <SectionCard title="Model Pictures" description="Choose one model for all colorways, then configure each colorway's companion outfit and generate." error={sectionErrors.model}>
               <div className="space-y-2">
-                <FieldLabel>Model</FieldLabel>
-                <p className="text-[11px] text-text-secondary">Pick the model first, then generate from each colorway's front and back pictures.</p>
+                <FieldLabel>{isUnisex ? "Male model" : "Model"}</FieldLabel>
+                <p className="text-[11px] text-text-secondary">
+                  {isUnisex
+                    ? "Unisex products generate a male and a female model set. Pick one model for each."
+                    : "Pick the model first, then generate from each colorway's front and back pictures."}
+                </p>
                 <div className="flex gap-3 overflow-x-auto pb-2">
                   {filteredModels.map((model) => {
                     const active = selectedModelId === model._id;
@@ -3486,6 +3671,23 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                   })}
                 </div>
               </div>
+              {isUnisex && (
+                <div className="mt-4 space-y-2">
+                  <FieldLabel>Female model</FieldLabel>
+                  <p className="text-[11px] text-text-secondary">Shown to shoppers browsing the Women category.</p>
+                  <div className="flex gap-3 overflow-x-auto pb-2">
+                    {femaleModels.map((model) => {
+                      const active = selectedFemaleModelId === model._id;
+                      return (
+                        <button key={model._id} type="button" onClick={() => setSelectedFemaleModelId(model._id)} className={`flex-none w-[288px] overflow-hidden rounded border text-left transition-colors ${active ? "border-accent" : "border-border hover:border-accent"}`}>
+                          <div className="aspect-[4/5] bg-bg-secondary"><img src={model.frontImage || model.images?.[0] || ""} alt={model.name} className="h-full w-full object-cover" /></div>
+                          <div className="p-1.5"><p className="truncate text-[9px] font-medium">{model.name}</p></div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               {selectedModelId && !usesStoreOwnerEditFlow && (
                 <div className="mt-4 flex flex-col sm:flex-row sm:items-start gap-3 sm:overflow-x-auto pb-2">
                   {colorways.map((cw, cwIndex) => (

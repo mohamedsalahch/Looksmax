@@ -53,8 +53,10 @@ interface ProductCardProps {
   cloneSourceName?: string;
   cloneSourceImage?: string;
   storeType?: "thrift" | "retail" | null;
-  images?: { url: string; isMain: boolean }[];
+  images?: { url: string; isMain: boolean; gender?: "men" | "women" | null }[];
   preferCollectionLeftImage?: boolean;
+  /** Browse gender context — picks the male/female model for unisex products. */
+  viewGender?: "men" | "women" | null;
 }
 
 const CLONE_PREVIEW_WIDTH = 184;
@@ -84,6 +86,7 @@ export default function ProductCard({
   storeType,
   images = [],
   preferCollectionLeftImage = false,
+  viewGender = null,
 }: ProductCardProps) {
   const { addItem } = useCart();
   const router = useRouter();
@@ -120,10 +123,10 @@ export default function ProductCard({
     defaultSelectableVariant?.color || colorwayColors[0] || null,
   );
 
-  const selectedCartImage = getColorwayMainImage(activeColorHex, { image, images, variants }, image);
-  const selectedStoreImage = getColorwayEnhancedFrontImage(activeColorHex, { image, images, variants }, image);
+  const selectedCartImage = getColorwayMainImage(activeColorHex, { image, images, variants }, image, viewGender);
+  const selectedStoreImage = getColorwayEnhancedFrontImage(activeColorHex, { image, images, variants }, image, viewGender);
   const selectedCollectionImage = preferCollectionLeftImage && fashionSubtype === "shoes"
-    ? getColorwayEnhancedLeftImage(activeColorHex, { image, images, variants }, image)
+    ? getColorwayEnhancedLeftImage(activeColorHex, { image, images, variants }, image, viewGender)
     : "";
   const displayImage = selectedCollectionImage || selectedCartImage || image;
   const normalizedConditionScore = conditionScore ?? 0;
@@ -180,9 +183,11 @@ export default function ProductCard({
   const cardHref = !isPerfume && isMounted && selectedVariant?.size
     ? {
         pathname: `/product/${id}`,
-        query: { size: selectedVariant.size, color: activeColorHex || undefined },
+        query: { size: selectedVariant.size, color: activeColorHex || undefined, g: viewGender || undefined },
       }
-    : `/product/${id}`;
+    : viewGender
+      ? { pathname: `/product/${id}`, query: { g: viewGender } }
+      : `/product/${id}`;
 
   useEffect(() => {
     setIsMounted(true);

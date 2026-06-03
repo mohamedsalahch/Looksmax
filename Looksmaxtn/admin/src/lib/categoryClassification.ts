@@ -116,6 +116,52 @@ export function getLeavesForZone<T extends ClassifiableCategory>(
   });
 }
 
+export type SharedLeaf = {
+  /** Display name (taken from the men-side leaf). */
+  name: string;
+  men: string;
+  women: string;
+};
+
+/**
+ * Leaves whose (normalized) name exists under BOTH the Men and Women roots.
+ * Used to scope unisex products to categories that have a clean counterpart in
+ * each gender. Strict exact-name match (so "Sweaters / Knitwear" vs "Sweaters"
+ * is intentionally excluded).
+ */
+export function getSharedLeaves<T extends ClassifiableCategory>(categories: T[]): SharedLeaf[] {
+  const isLeaf = (category: T) =>
+    !categories.some((other) => other.parentSlug === category.slug);
+
+  const menByName = new Map<string, T>();
+  const womenByName = new Map<string, T>();
+  for (const category of categories) {
+    if (!isLeaf(category)) continue;
+    const key = category.name.trim().toLowerCase();
+    if (!key) continue;
+    const gender = getCategoryGender(categories, category.slug);
+    if (gender === "men" && !menByName.has(key)) menByName.set(key, category);
+    else if (gender === "women" && !womenByName.has(key)) womenByName.set(key, category);
+  }
+
+  const shared: SharedLeaf[] = [];
+  for (const [key, menLeaf] of menByName) {
+    const womenLeaf = womenByName.get(key);
+    if (!womenLeaf) continue;
+    shared.push({ name: menLeaf.name, men: menLeaf.slug, women: womenLeaf.slug });
+  }
+  return shared;
+}
+
+/** Map any shared leaf slug to its men/women counterpart pair, or null. */
+export function mapLeafAcrossGenders<T extends ClassifiableCategory>(
+  slug: string,
+  categories: T[]
+): { men: string; women: string } | null {
+  const shared = getSharedLeaves(categories);
+  return shared.find((s) => s.men === slug || s.women === slug) ?? null;
+}
+
 export interface ZoneRequirements {
   generationTarget: "" | "outerwear" | "top" | "bottom" | "dress";
   fashionSubtype: "clothes" | "shoes" | "";

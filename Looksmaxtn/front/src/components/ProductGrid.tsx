@@ -3,12 +3,27 @@
 import { useEffect, useRef, useState } from "react";
 import ProductCard from "./ProductCard";
 import { getStoredReservationKey } from "@/lib/reservations";
-import { getColorwayEnhancedLeftImage } from "@/lib/colorwayImage";
+import {
+  getColorwayEnhancedFrontImage,
+  getColorwayEnhancedLeftImage,
+  type ViewGender,
+} from "@/lib/colorwayImage";
 import type { VariantAvailabilityMap } from "@/lib/variantAvailability";
 
 interface ProductImage {
   url: string;
   isMain: boolean;
+  gender?: "men" | "women" | null;
+}
+
+/**
+ * Derive the browse gender from a category slug so unisex products show the
+ * matching model. Falls back to "men" when there is no gender context (e.g.
+ * "all categories"), per product requirements.
+ */
+function deriveViewGender(category?: string): ViewGender {
+  if (category === "women" || category?.endsWith("-women")) return "women";
+  return "men";
 }
 
 type ProductVariant = {
@@ -51,6 +66,7 @@ interface Product {
   cloneSourceName?: string;
   cloneSourceImage?: string;
   storeType?: "thrift" | "retail" | null;
+  gender?: "men" | "women" | "children" | "unisex" | null;
 }
 
 interface Facets {
@@ -70,14 +86,29 @@ function getMainImage(images?: ProductImage[]): string | undefined {
   return main?.url || images[0]?.url;
 }
 
-function getCollectionCardImage(product: Product): string | undefined {
+function getCollectionCardImage(product: Product, viewGender: ViewGender): string | undefined {
   if (product.fashionSubtype === "shoes") {
-    const enhancedLeft = getColorwayEnhancedLeftImage(null, {
-      images: product.images,
-      variants: product.variants,
-    });
+    const enhancedLeft = getColorwayEnhancedLeftImage(
+      null,
+      { images: product.images, variants: product.variants },
+      "",
+      viewGender
+    );
     if (enhancedLeft) {
       return enhancedLeft;
+    }
+  }
+
+  // Unisex products carry per-gender model pictures; pick the one for this view.
+  if (product.gender === "unisex") {
+    const genderedFront = getColorwayEnhancedFrontImage(
+      null,
+      { images: product.images, variants: product.variants },
+      "",
+      viewGender
+    );
+    if (genderedFront) {
+      return genderedFront;
     }
   }
 
@@ -555,7 +586,6 @@ export default function ProductGrid({
                   ownedReservation={product.ownedReservation}
                   blockedByOrder={product.blockedByOrder}
                   tag={product.tag}
-                  image={getCollectionCardImage(product)}
                   conditionScore={product.conditionScore}
                   conditionStatus={product.conditionStatus}
                   productType={product.productType}
@@ -565,6 +595,8 @@ export default function ProductGrid({
                   cloneSourceImage={product.cloneSourceImage}
                   storeType={product.storeType}
                   images={product.images}
+                  viewGender={deriveViewGender(category)}
+                  image={getCollectionCardImage(product, deriveViewGender(category))}
                   preferCollectionLeftImage
                 />
               ))}

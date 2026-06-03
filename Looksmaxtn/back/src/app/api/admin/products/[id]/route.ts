@@ -578,6 +578,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       source?: string;
       color?: string | null;
       sourceKey?: string;
+      gender?: "men" | "women" | null;
     }>;
     const imageFiles = formData
       .getAll("images")
@@ -650,6 +651,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
               source: image.source || "",
               color: image.color || null,
               sourceKey: image.sourceKey || "",
+              gender: image.gender || null,
             },
             key: `existing:${image.url}:${index}`,
           }));
@@ -669,6 +671,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       source: String(meta.source || ""),
       color: meta.color ? String(meta.color) : null,
       sourceKey: String(meta.sourceKey || ""),
+      gender: meta.gender === "men" || meta.gender === "women" ? meta.gender : null,
     }));
 
     const removedImages = mergedImages.length > 0
@@ -716,6 +719,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         ? String(formData.get("isActive") || "true") === "true"
         : existingProduct.isActive !== false,
       categories: parseStringArray(formData.get("categories")),
+      ...(["men", "women", "children", "unisex"].includes(
+        String(formData.get("gender") || "")
+      )
+        ? { gender: String(formData.get("gender")) }
+        : {}),
       description: String(formData.get("description") || ""),
       brand: String(formData.get("brand") || "LOOKSMAX"),
       reference,

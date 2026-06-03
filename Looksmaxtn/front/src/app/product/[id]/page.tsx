@@ -37,7 +37,8 @@ type ProductResponse = {
     createdBy?: {
       name?: string;
     } | null;
-    images?: { url: string; isMain: boolean; isPublic?: boolean }[];
+    images?: { url: string; isMain: boolean; isPublic?: boolean; gender?: "men" | "women" | null }[];
+    gender?: "men" | "women" | "children" | "unisex" | null;
     sizes?: string[];
     colors?: string[];
     variants?: ProductVariantPayload[];
@@ -156,7 +157,7 @@ export default async function ProductDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ size?: string; color?: string }>;
+  searchParams?: Promise<{ size?: string; color?: string; g?: string }>;
 }) {
   const { id } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
@@ -171,9 +172,14 @@ export default async function ProductDetailPage({
     notFound();
   }
 
+  // For unisex products show one gender's model set (default male, per the
+  // "all categories" rule); neutral originals are always kept.
+  const isUnisexProduct = dbProduct.gender === "unisex";
+  const viewGender: "men" | "women" = resolvedSearchParams?.g === "women" ? "women" : "men";
   const publicImageEntries = (dbProduct.images || [])
     .map((image, imageIndex) => ({ image, imageIndex }))
-    .filter(({ image }) => image.isPublic !== false);
+    .filter(({ image }) => image.isPublic !== false)
+    .filter(({ image }) => !isUnisexProduct || !image.gender || image.gender === viewGender);
   const publicImageIndexByOriginal = new Map(
     publicImageEntries.map(({ imageIndex }, publicIndex) => [imageIndex, publicIndex])
   );
