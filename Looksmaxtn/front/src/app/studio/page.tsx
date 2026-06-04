@@ -96,7 +96,7 @@ const BODY_ZONES = [
     {id: "dress", label: "Dress"},
     {id: "top", label: "Pull / Top"},
     {id: "bottom", label: "Jeans / Bottom"},
-    {id: "footwear", label: "Shoes"},
+    {id: "footwear", label: "Footwear"},
 ] as const;
 
 const ZONE_BUTTON_LABELS: Record<(typeof BODY_ZONES)[number]["id"], string> = {
@@ -105,7 +105,7 @@ const ZONE_BUTTON_LABELS: Record<(typeof BODY_ZONES)[number]["id"], string> = {
     dress: "Dress / Set",
     top: "Top",
     bottom: "Bottom",
-    footwear: "Shoes",
+    footwear: "Footwear",
 };
 
 const ZONE_PREVIEW_POSITIONS: Record<
@@ -134,7 +134,7 @@ const ZONE_PREVIEW_POSITIONS: Record<
     },
     footwear: {
         className: "left-1/2 top-[350px] -translate-x-1/2",
-        label: "Shoes",
+        label: "Footwear",
     },
 };
 
@@ -178,7 +178,7 @@ const ZONE_DETAILS: Record<
         care: "Front and back views",
     },
     footwear: {
-        title: "Shoes",
+        title: "Footwear",
         type: "Footwear",
         fit: "Grounding piece",
         season: "All seasons",
@@ -790,9 +790,9 @@ export default function OutfitStudioPage() {
             .then((res) => res.json())
             .then((data) => {
                 setOutfitStudioStats({
-                    totalTries: data.totalTries || 5,
-                    triesUsed: data.triesUsed || 0,
-                    triesRemaining: data.triesRemaining || 5,
+                    totalTries: data.totalTries ?? 5,
+                    triesUsed: data.triesUsed ?? 0,
+                    triesRemaining: data.triesRemaining ?? 5,
                     isAdmin: data.isAdmin || false,
                 });
             })
@@ -1702,10 +1702,18 @@ export default function OutfitStudioPage() {
             if (cancelled) return;
             pollJob();
         });
+        // Polling fallback: SSE events aren't buffered/replayed, so a "completed"/"failed"
+        // event dropped during a reconnect (slow or flaky internet) would otherwise leave
+        // the studio stuck on "generating" until a manual refresh. Poll so it self-heals.
+        const interval = window.setInterval(() => {
+            if (cancelled) return;
+            pollJob();
+        }, 5000);
 
         return () => {
             cancelled = true;
             unsubscribe();
+            window.clearInterval(interval);
             outfitGenerationPollAbortRef.current?.abort();
         };
     }, [generatedOutfitJobId, generatingOutfit]);

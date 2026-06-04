@@ -8,6 +8,7 @@ import {
   saveBodyProfileImageBuffer,
 } from "@/store/lib/bodyProfileUploads";
 import { loadImageAsBase64 } from "@/lib/imageSource";
+import { publishStoreUserEvent } from "@/store/lib/storeUserEvents";
 
 const STUDIO_PORTRAIT_PROMPT = `Transform this image into a professional studio portrait.
 
@@ -155,6 +156,13 @@ export async function clearFailedBodyProfileImage(userId: string, reason: string
   } catch (err) {
     console.error("[profile-photo] Failed to clear failed image:", err);
   }
+
+  // Notify the client so the "Enhancing..." spinner clears without a manual refresh.
+  publishStoreUserEvent(userId, {
+    type: "body-profile:update",
+    status: "failed",
+    errorMessage: reason,
+  });
 }
 
 export async function markEnhancingDone(userId: string) {

@@ -8,11 +8,14 @@ import { formatRemainingTime } from "@/lib/reservations";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { getCartItemProductId } from "@/lib/cartItem";
 import { getEnhancedFrontDisplayImage } from "@/lib/colorwayImage";
-import { queueStudioAssignment } from "@/lib/studioAssignment";
+import { writeStudioSessionState } from "@/lib/studioSession";
+import { consumeStudioAssignments } from "@/lib/studioAssignment";
+import { useAuth } from "@/providers/AuthContext";
 
 export default function CartPanel() {
   const { items, isOpen, openCart, closeCart, removeItem, updateQuantity, totalItems, totalPrice } =
     useCart();
+  const { user } = useAuth();
   const router = useRouter();
   const hasUnavailableItems = items.some((item) => item.isUnavailable);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -275,24 +278,17 @@ export default function CartPanel() {
             <button
               type="button"
               onClick={() => {
-                const firstTryOnItem = items.find((item) => item.productType !== "perfume");
-                if (!firstTryOnItem) return;
-
-                queueStudioAssignment({
-                  id: firstTryOnItem.id,
-                  name: firstTryOnItem.name,
-                  categories: firstTryOnItem.categories,
-                  image: firstTryOnItem.image,
-                  color: firstTryOnItem.color,
-                  price: firstTryOnItem.price,
-                  brand: firstTryOnItem.brand,
-                  quantity: firstTryOnItem.quantity,
-                  maxStock: firstTryOnItem.maxStock,
-                  productType: firstTryOnItem.productType,
-                  fashionSubtype: firstTryOnItem.fashionSubtype,
-                  size: firstTryOnItem.size,
-                  originPictures: firstTryOnItem.originPictures,
-                });
+                // Open the studio with nothing equipped, defaulting to the "ALL" view
+                // so the user can pick which zone to try on themselves. Flush any
+                // pending single-item assignments so they don't get auto-equipped.
+                consumeStudioAssignments();
+                if (user?.id) {
+                  writeStudioSessionState(user.id, {
+                    selectedZoneId: "",
+                    showAllSelectedItems: true,
+                    zoneOverrides: {},
+                  });
+                }
                 closeCart();
                 router.push("/studio");
               }}

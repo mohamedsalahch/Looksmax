@@ -19,16 +19,12 @@ export async function POST(req: NextRequest) {
     // Handle error from generation service
     if (typeof body.error === "string" && body.error) {
       if (userId) {
+        // clearFailedBodyProfileImage publishes the "failed" SSE event itself.
         await clearFailedBodyProfileImage(userId, "Photo enhancement failed. Please upload another photo.");
         if (imagePath) {
           await deleteBodyProfileImage(imagePath);
         }
         console.warn(`[enhance-webhook] Generation service reported error for user ${userId}: ${body.error}`);
-        publishStoreUserEvent(userId, {
-          type: "body-profile:update",
-          status: "failed",
-          errorMessage: "Photo enhancement failed. Please upload another photo.",
-        });
       }
       return NextResponse.json({ ok: true, error: true });
     }

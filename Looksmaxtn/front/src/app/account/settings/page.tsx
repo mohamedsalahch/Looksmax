@@ -61,6 +61,7 @@ export default function SettingsPage() {
   const enhanceCancelledRef = useRef(false);
   const handledEnhanceErrorRef = useRef("");
   const uploadInFlightRef = useRef(false);
+  const formHydratedRef = useRef(false);
   const openZoom = useCallback((src: string, alt: string) => {
     setZoomedImage({ src, alt });
   }, []);
@@ -114,9 +115,9 @@ export default function SettingsPage() {
       .then((res) => res.json())
       .then((data) => {
         setOutfitStudioStats({
-          totalTries: data.totalTries || 5,
-          triesUsed: data.triesUsed || 0,
-          triesRemaining: data.triesRemaining || 5,
+          totalTries: data.totalTries ?? 5,
+          triesUsed: data.triesUsed ?? 0,
+          triesRemaining: data.triesRemaining ?? 5,
           isAdmin: data.isAdmin || false,
         });
       })
@@ -133,20 +134,41 @@ export default function SettingsPage() {
     const validationError = user?.bodyProfile?.profileImageValidationError || "";
     const cancelledPendingEnhancement = enhanceCancelledRef.current && nextEnhancing && !nextEnhancedImage;
 
-    setBodyProfile({
-      heightCm: user?.bodyProfile?.heightCm || "",
-      weightKg: user?.bodyProfile?.weightKg || "",
-      topSize: user?.bodyProfile?.topSize || "",
-      bottomSize: user?.bodyProfile?.bottomSize || "",
-      shoeSize: user?.bodyProfile?.shoeSize || "",
-      profileImage: cancelledPendingEnhancement ? "" : user?.bodyProfile?.profileImage || "",
-      profileImageUploadCount: Number(user?.bodyProfile?.profileImageUploadCount || 0),
-      outfitGenerationCount: Number(user?.bodyProfile?.outfitGenerationCount || 0),
-      gender: normalizeGender(user?.bodyProfile?.gender),
-      profileImageRequiresGeneration: cancelledPendingEnhancement
-        ? false
-        : Boolean(user?.bodyProfile?.profileImageRequiresGeneration),
+    setBodyProfile((prev) => {
+      // Hydrate the user-editable fields from the saved profile only on first load.
+      // On later refreshes (e.g. the periodic refreshUser while a photo is enhancing)
+      // keep whatever the user has typed but not yet saved, so their inputs aren't reset.
+      const editable = formHydratedRef.current
+        ? {
+            heightCm: prev.heightCm,
+            weightKg: prev.weightKg,
+            topSize: prev.topSize,
+            bottomSize: prev.bottomSize,
+            shoeSize: prev.shoeSize,
+            gender: prev.gender,
+          }
+        : {
+            heightCm: user?.bodyProfile?.heightCm || "",
+            weightKg: user?.bodyProfile?.weightKg || "",
+            topSize: user?.bodyProfile?.topSize || "",
+            bottomSize: user?.bodyProfile?.bottomSize || "",
+            shoeSize: user?.bodyProfile?.shoeSize || "",
+            gender: normalizeGender(user?.bodyProfile?.gender),
+          };
+
+      return {
+        ...editable,
+        profileImage: cancelledPendingEnhancement ? "" : user?.bodyProfile?.profileImage || "",
+        profileImageUploadCount: Number(user?.bodyProfile?.profileImageUploadCount || 0),
+        outfitGenerationCount: Number(user?.bodyProfile?.outfitGenerationCount || 0),
+        profileImageRequiresGeneration: cancelledPendingEnhancement
+          ? false
+          : Boolean(user?.bodyProfile?.profileImageRequiresGeneration),
+      };
     });
+    if (user?.id) {
+      formHydratedRef.current = true;
+    }
     if (cancelledPendingEnhancement) {
       setImageEnhancing(false);
     } else {
@@ -187,7 +209,16 @@ export default function SettingsPage() {
     const unsubscribe = subscribeToBodyProfile(() => {
       refreshUser();
     });
-    return () => unsubscribe();
+    // Polling fallback: SSE events aren't buffered/replayed, so a "completed"/"failed"
+    // event dropped during a reconnect (slow or flaky internet) would otherwise leave
+    // the spinner stuck forever. Periodically re-fetch so the state self-heals.
+    const interval = window.setInterval(() => {
+      refreshUser();
+    }, 4000);
+    return () => {
+      unsubscribe();
+      window.clearInterval(interval);
+    };
   }, [imageEnhancing, refreshUser]);
 
   const hasOriginal = Boolean(bodyProfile.profileImage);
