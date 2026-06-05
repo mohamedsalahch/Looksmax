@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {useAuth} from "@/providers/AuthContext";
 import { useCart } from "@/providers/CartContext";
@@ -783,7 +783,7 @@ export default function OutfitStudioPage() {
         setStudioStateHydrated(true);
     }, [user?.id]);
 
-    useEffect(() => {
+    const refreshOutfitStudioStats = useCallback(() => {
         if (!user?.id) return;
 
         fetch("/api/users/me/outfit-studio", withAuthRequest({ method: "GET" }))
@@ -800,6 +800,10 @@ export default function OutfitStudioPage() {
                 setOutfitStudioStats({ totalTries: 5, triesUsed: 0, triesRemaining: 5, isAdmin: false });
             });
     }, [user?.id]);
+
+    useEffect(() => {
+        refreshOutfitStudioStats();
+    }, [refreshOutfitStudioStats]);
 
     useEffect(() => {
         fetch("/api/categories")
@@ -1456,6 +1460,9 @@ export default function OutfitStudioPage() {
 
             setGeneratedOutfitJobId(String(data.jobId || ""));
             setNeedsGenerationRecovery(false);
+            // Backend increments triesUsed on a successful generation request, so
+            // refetch stats to keep the displayed counter in sync.
+            refreshOutfitStudioStats();
             if (user?.id) {
                 writeStoredGenerationState(user.id, {
                     jobId: String(data.jobId || ""),

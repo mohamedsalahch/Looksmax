@@ -36,15 +36,35 @@ class ImageGenerator:
         """
         self.client = genai.Client(api_key=api_key)
         self.model = "gemini-3.1-flash-image-preview"
+        # Output resolution tier. Defaults to "1K" (the SDK's documented floor),
+        # but the field is a free-form string forwarded to the API, so "512" can
+        # be tried for lower cost — verify it's accepted via the usage logs.
+        image_size = os.getenv("GEMINI_IMAGE_SIZE", "1K")
         self.default_config = types.GenerateContentConfig(
             response_modalities=["IMAGE"],
-            image_config=types.ImageConfig(aspect_ratio="9:16"),
+            image_config=types.ImageConfig(aspect_ratio="9:16", image_size=image_size),
         )
         self._gemini_sem = asyncio.Semaphore(int(os.getenv("GEMINI_MAX_CONCURRENCY", "8")))
 
     async def _gemini_generate(self, **kwargs):
         async with self._gemini_sem:
-            return await self.client.aio.models.generate_content(**kwargs)
+            response = await self.client.aio.models.generate_content(**kwargs)
+        self._log_usage(response, kwargs.get("model", self.model))
+        return response
+
+    @staticmethod
+    def _log_usage(response, model: str):
+        """Log Gemini token usage for a single generate_content call."""
+        usage = getattr(response, "usage_metadata", None)
+        if usage is None:
+            return
+        logger.info(
+            "[gemini usage] model=%s input=%s output=%s total=%s",
+            model,
+            getattr(usage, "prompt_token_count", None),
+            getattr(usage, "candidates_token_count", None),
+            getattr(usage, "total_token_count", None),
+        )
 
     async def generate_clothes_view(
         self,
