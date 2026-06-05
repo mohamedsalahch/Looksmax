@@ -36,14 +36,18 @@ class ImageGenerator:
         """
         self.client = genai.Client(api_key=api_key)
         self.model = "gemini-3.1-flash-image-preview"
-        # Output resolution tier. Defaults to "1K" (the SDK's documented floor),
-        # but the field is a free-form string forwarded to the API, so "512" can
-        # be tried for lower cost — verify it's accepted via the usage logs.
-        image_size = os.getenv("GEMINI_IMAGE_SIZE", "1K")
-        self.default_config = types.GenerateContentConfig(
-            response_modalities=["IMAGE"],
-            image_config=types.ImageConfig(aspect_ratio="9:16", image_size=image_size),
-        )
+
+        def _make_config(env_var: str) -> types.GenerateContentConfig:
+            size = os.getenv(env_var, "1K")
+            return types.GenerateContentConfig(
+                response_modalities=["IMAGE"],
+                image_config=types.ImageConfig(aspect_ratio="9:16", image_size=size),
+            )
+
+        # Per-feature resolution — set the env var to "512", "1K", "2K", or "4K".
+        self.product_config = _make_config("GEMINI_PRODUCT_IMAGE_SIZE")
+        self.outfit_config = _make_config("GEMINI_OUTFIT_IMAGE_SIZE")
+        self.profile_config = _make_config("GEMINI_PROFILE_IMAGE_SIZE")
         self._gemini_sem = asyncio.Semaphore(int(os.getenv("GEMINI_MAX_CONCURRENCY", "8")))
 
     async def _gemini_generate(self, **kwargs):
@@ -183,7 +187,7 @@ class ImageGenerator:
             response = await self._gemini_generate(
                 model=self.model,
                 contents=[types.Content(parts=parts)],
-                config=self.default_config
+                config=self.product_config
             )
         except Exception as e:
             logger.error(f"generate_clothes_view({view_name}): Gemini API error: {e}")
@@ -259,7 +263,7 @@ class ImageGenerator:
             response = await self._gemini_generate(
                 model=self.model,
                 contents=[types.Content(parts=parts)],
-                config=self.default_config
+                config=self.product_config
             )
         except Exception as e:
             logger.error(f"generate_clothes_auto_view({view_name}): Gemini API error: {e}")
@@ -314,7 +318,7 @@ class ImageGenerator:
             response = await self._gemini_generate(
                 model=self.model,
                 contents=[types.Content(parts=parts)],
-                config=self.default_config
+                config=self.product_config
             )
         except Exception as e:
             logger.error(f"generate_shoes_view({view_name}): Gemini API error: {e}")
@@ -353,7 +357,7 @@ class ImageGenerator:
             response = await self._gemini_generate(
                 model=self.model,
                 contents=[types.Content(parts=parts)],
-                config=self.default_config,
+                config=self.product_config,
             )
         except Exception as e:
             logger.error(f"enhance_garment_view({view_name}): Gemini API error: {e}")
@@ -390,7 +394,7 @@ class ImageGenerator:
             response = await self._gemini_generate(
                 model=self.model,
                 contents=[types.Content(parts=parts)],
-                config=self.default_config,
+                config=self.product_config,
             )
         except Exception as e:
             logger.error(f"enhance_accessory_view({view_name}): Gemini API error: {e}")
@@ -469,7 +473,7 @@ class ImageGenerator:
             response = await self._gemini_generate(
                 model=self.model,
                 contents=[types.Content(parts=parts)],
-                config=self.default_config,
+                config=self.outfit_config,
             )
         except Exception as e:
             logger.error(f"generate_front_view: Gemini API exception: {type(e).__name__}: {e}")
@@ -522,7 +526,7 @@ class ImageGenerator:
             response = await self._gemini_generate(
                 model=self.model,
                 contents=[types.Content(parts=parts)],
-                config=self.default_config,
+                config=self.outfit_config,
             )
         except Exception as e:
             logger.error(f"generate_back_view: Gemini API exception: {type(e).__name__}: {e}")
@@ -565,7 +569,7 @@ class ImageGenerator:
         response = await self._gemini_generate(
             model=self.model,
             contents=[types.Content(parts=parts)],
-            config=self.default_config
+            config=self.profile_config
         )
 
         for part in response.candidates[0].content.parts:
