@@ -16,6 +16,8 @@ const initialForm = {
   address: "",
   phoneNumber: "",
   additionalInformation: "",
+  instagramUrl: "",
+  facebookUrl: "",
 };
 
 export default function CreateStorePage() {
@@ -199,6 +201,33 @@ export default function CreateStorePage() {
                     onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
                     className={fieldClass}
                     placeholder="+216 00 000 000"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
+                    Instagram <span className="normal-case tracking-normal">(optional)</span>
+                  </label>
+                  <input
+                    type="url"
+                    value={form.instagramUrl}
+                    onChange={(e) => setForm({ ...form, instagramUrl: e.target.value })}
+                    className={fieldClass}
+                    placeholder="https://instagram.com/yourstore"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-text-secondary uppercase tracking-wider mb-1.5">
+                    Facebook <span className="normal-case tracking-normal">(optional)</span>
+                  </label>
+                  <input
+                    type="url"
+                    value={form.facebookUrl}
+                    onChange={(e) => setForm({ ...form, facebookUrl: e.target.value })}
+                    className={fieldClass}
+                    placeholder="https://facebook.com/yourstore"
                   />
                 </div>
               </div>

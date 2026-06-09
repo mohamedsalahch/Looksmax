@@ -14,6 +14,8 @@ export interface IStoreApplication extends Document {
   address: string;
   phoneNumber: string;
   additionalInformation?: string;
+  instagramUrl?: string;
+  facebookUrl?: string;
   status: StoreApplicationStatus;
   reviewedAt?: Date | null;
   createdAt: Date;
@@ -44,6 +46,8 @@ const storeApplicationSchema = new Schema<IStoreApplication>(
     address: { type: String, required: true, trim: true },
     phoneNumber: { type: String, required: true, trim: true },
     additionalInformation: { type: String, default: "", trim: true },
+    instagramUrl: { type: String, default: "", trim: true },
+    facebookUrl: { type: String, default: "", trim: true },
     status: {
       type: String,
       enum: ["pending", "approved", "rejected"],

@@ -18,6 +18,8 @@ interface StoreApplication {
   address: string;
   phoneNumber: string;
   additionalInformation?: string;
+  instagramUrl?: string;
+  facebookUrl?: string;
   status: StoreStatus;
   reviewedAt?: string | null;
   createdAt: string;
@@ -341,6 +343,22 @@ export default function StoresPage() {
                           {store.additionalInformation?.trim() ? store.additionalInformation : "Not provided"}
                         </p>
                     </div>
+                    {(store.instagramUrl || store.facebookUrl) && (
+                      <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {store.instagramUrl && (
+                          <div>
+                            <p className="mb-1 text-[10px] uppercase tracking-wider text-text-secondary">Instagram</p>
+                            <a href={store.instagramUrl} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline text-sm break-all">{store.instagramUrl}</a>
+                          </div>
+                        )}
+                        {store.facebookUrl && (
+                          <div>
+                            <p className="mb-1 text-[10px] uppercase tracking-wider text-text-secondary">Facebook</p>
+                            <a href={store.facebookUrl} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline text-sm break-all">{store.facebookUrl}</a>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <div>
                       <p className="mb-1 text-[10px] uppercase tracking-wider text-text-secondary">Submitted</p>
                       <p className="text-text-primary">{new Date(store.createdAt).toLocaleString()}</p>

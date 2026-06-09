@@ -87,6 +87,8 @@ export async function POST(req: NextRequest) {
     const address = String(body?.address || "").trim();
     const phoneNumber = String(body?.phoneNumber || "").trim();
     const additionalInformation = String(body?.additionalInformation || "").trim();
+    const instagramUrl = String(body?.instagramUrl || "").trim();
+    const facebookUrl = String(body?.facebookUrl || "").trim();
 
     if (!name || !storeName || !email || categories.length === 0 || !address || !phoneNumber) {
       return NextResponse.json({ error: "All required fields must be completed" }, { status: 400 });
@@ -151,6 +153,8 @@ export async function POST(req: NextRequest) {
       address,
       phoneNumber,
       additionalInformation,
+      instagramUrl,
+      facebookUrl,
     });
 
     broadcastAdminEvent({

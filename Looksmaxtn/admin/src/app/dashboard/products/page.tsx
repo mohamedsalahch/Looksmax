@@ -84,8 +84,10 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [togglingVisibilityId, setTogglingVisibilityId] = useState("");
   const [deletingProductId, setDeletingProductId] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortKey, setSortKey] = useState<SortKey>("_id");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 10;
   const [userRole, setUserRole] = useState("");
   const deferredSearch = useDeferredValue(search);
   const canAddProducts = userRole === "store_owner";
@@ -206,6 +208,8 @@ export default function ProductsPage() {
     });
   }, [approvalFilter, canFilterByStore, categoryFilter, deferredSearch, products, storeFilter, visibilityFilter]);
 
+  useEffect(() => { setCurrentPage(1); }, [filteredProducts, sortKey, sortDirection]);
+
   const categoryOptions = useMemo(() => {
     const bySlug = new Map(categories.map((category) => [category.slug, category]));
     const buildLabel = (category: Category) => {
@@ -294,9 +298,12 @@ export default function ProductsPage() {
     return items;
   }, [filteredProducts, sortDirection, sortKey]);
 
+  const totalPages = Math.max(1, Math.ceil(sortedProducts.length / PAGE_SIZE));
+  const pagedProducts = sortedProducts.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
   const getProductThumbnail = (product: Product) => {
-    const publicImages = (product.images || []).filter((image) => image.isPublic !== false);
-    const mainImage = publicImages.find((image) => image.isMain)?.url || publicImages[0]?.url;
+    const allImages = product.images || [];
+    const mainImage = allImages.find((image) => image.isMain)?.url || allImages[0]?.url;
     if (mainImage) return mainImage;
 
     if (product.productType === "shoes") {
@@ -398,6 +405,7 @@ export default function ProductsPage() {
           <p className="text-sm text-text-secondary">No products found</p>
         </div>
       ) : (
+        <>
         <div className="overflow-x-auto border border-border rounded-none">
           <table className="min-w-[900px] w-full text-left">
             <thead className="bg-bg-secondary">
@@ -452,8 +460,8 @@ export default function ProductsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {sortedProducts.map((p) => {
-                const canOpenProduct = userRole === "admin" || (p.approvalStatus || "approved") === "approved";
+              {pagedProducts.map((p) => {
+                const canOpenProduct = userRole === "admin" || userRole === "store_owner" || (p.approvalStatus || "approved") === "approved";
                 return (
                 <tr
                   key={p._id}
@@ -585,6 +593,32 @@ export default function ProductsPage() {
             </tbody>
           </table>
         </div>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between border-t border-border px-4 py-3">
+            <span className="text-[10px] text-text-secondary uppercase tracking-wider">
+              Page {currentPage} of {totalPages} &mdash; {sortedProducts.length} products
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] border border-border text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                ← Prev
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] border border-border text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+        )}
+        </>
       )}
     </div>
   );

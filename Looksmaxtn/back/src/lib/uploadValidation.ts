@@ -1,4 +1,5 @@
 import path from "path";
+import sharp from "sharp";
 
 export const MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const MAX_HOMEPAGE_MEDIA_UPLOAD_BYTES = 50 * 1024 * 1024;
@@ -90,6 +91,14 @@ function sniffMime(buffer: Buffer) {
   if (buffer.length >= 2 && buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0) {
     return "audio/mpeg";
   }
+  // TIFF little-endian (II) and big-endian (MM) — covers DNG, TIFF, CR2, NEF, ARW, etc.
+  if (
+    buffer.length >= 4 &&
+    ((buffer[0] === 0x49 && buffer[1] === 0x49 && buffer[2] === 0x2a && buffer[3] === 0x00) ||
+     (buffer[0] === 0x4d && buffer[1] === 0x4d && buffer[2] === 0x00 && buffer[3] === 0x2a))
+  ) {
+    return "image/tiff";
+  }
   return "";
 }
 
@@ -166,10 +175,22 @@ export async function readValidatedUploadFile(
   options: Omit<UploadValidationOptions, "filename" | "declaredType"> = {}
 ) {
   const bytes = await file.arrayBuffer();
-  return validateUploadBuffer(Buffer.from(bytes), {
+  let buffer = Buffer.from(bytes);
+  let filename = file.name;
+  let declaredType = file.type;
+
+  // DNG/TIFF files can't be displayed by browsers — convert to JPEG transparently
+  const sniffed = sniffMime(buffer);
+  if (sniffed === "image/tiff") {
+    buffer = await sharp(buffer).jpeg({ quality: 92 }).toBuffer();
+    filename = filename.replace(/\.[^/.]+$/, ".jpg");
+    declaredType = "image/jpeg";
+  }
+
+  return validateUploadBuffer(buffer, {
     ...options,
-    filename: file.name,
-    declaredType: file.type,
+    filename,
+    declaredType,
   });
 }
 

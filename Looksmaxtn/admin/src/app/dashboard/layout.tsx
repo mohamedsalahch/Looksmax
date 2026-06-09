@@ -1020,7 +1020,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                     messageNotifications.length > 0 ||
                     storeNotifications.length > 0 ||
                     productNotifications.length > 0) && (
-                  <div className="absolute right-0 top-full z-20 mt-2 w-72 border border-border bg-bg-secondary/95 p-3 shadow-lg shadow-black/10">
+                  <div className="absolute right-0 top-full z-20 mt-2 w-72 border border-border bg-bg-secondary/95 p-3 shadow-lg shadow-black/10 max-h-[80vh] overflow-y-auto">
                     {productNotifications.length > 0 && (
                       <>
                         <div className="mb-2 flex items-center justify-between">

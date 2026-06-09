@@ -313,9 +313,7 @@ export async function GET(req: NextRequest) {
         const productId = product._id.toString();
         const soldQuantity = soldQuantityMap.get(productId) || 0;
         const variants = normalizeStoredVariants(product.variants) as StoredVariantLean[];
-        const responseMedia = session.role === "store_owner"
-          ? filterPublicProductMedia(product.images || [], variants)
-          : { images: product.images, variants };
+        const responseMedia = { images: product.images, variants };
         const totalStock = sumVariantStock(variants);
         const totalFullStock = sumVariantFullStock(variants);
         const owner = product.createdBy?.id ? ownerMap.get(product.createdBy.id) : null;

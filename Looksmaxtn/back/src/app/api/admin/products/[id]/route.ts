@@ -358,9 +358,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const product = await Product.findById(id).lean();
     if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (!canAccessProduct(session, product)) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    if (session.role === "store_owner" && (product.approvalStatus || "approved") !== "approved") {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
 
     const variants = getStoredVariants(product);
     const totalStock = sumVariantStock(variants);
@@ -377,9 +374,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       ? Object.fromEntries(product.companionSettings)
       : (product.companionSettings && typeof product.companionSettings === "object" ? product.companionSettings : null);
 
-    const responseMedia = session.role === "store_owner"
-      ? filterPublicProductMedia(product.images || [], variants)
-      : { images: product.images, variants };
+    const responseMedia = { images: product.images, variants };
 
     return NextResponse.json({
       product: {
