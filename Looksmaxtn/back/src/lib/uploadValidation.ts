@@ -182,7 +182,7 @@ export async function readValidatedUploadFile(
   // DNG/TIFF files can't be displayed by browsers — convert to JPEG transparently
   const sniffed = sniffMime(buffer);
   if (sniffed === "image/tiff") {
-    buffer = await sharp(buffer).jpeg({ quality: 92 }).toBuffer();
+    buffer = Buffer.from(await sharp(buffer).jpeg({ quality: 92 }).toBuffer());
     filename = filename.replace(/\.[^/.]+$/, ".jpg");
     declaredType = "image/jpeg";
   }
