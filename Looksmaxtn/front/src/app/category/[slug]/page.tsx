@@ -11,7 +11,7 @@ async function loadCategoryName(slug: string) {
 
   try {
     const baseUrl = BACKEND_URL;
-    const res = await fetch(`${baseUrl}/api/store/categories`, { next: { revalidate: 7200 } });
+    const res = await fetch(`${baseUrl}/api/store/categories`, { next: { revalidate: 60 } });
     if (!res.ok) return formatSlug(slug);
     const data = await res.json();
     const match = data.categories?.find((category: { slug: string; name: string }) => category.slug === slug);
@@ -21,7 +21,7 @@ async function loadCategoryName(slug: string) {
   }
 }
 
-export const revalidate = 7200;
+export const revalidate = 60;
 export const dynamicParams = true;
 
 export async function generateStaticParams() {
@@ -52,7 +52,7 @@ export async function generateMetadata({
 async function loadCategoryTree(): Promise<Category[]> {
   const baseUrl = BACKEND_URL;
   try {
-    const res = await fetch(`${baseUrl}/api/store/categories`, { next: { revalidate: 7200 } });
+    const res = await fetch(`${baseUrl}/api/store/categories`, { next: { revalidate: 60 } });
     if (!res.ok) return [];
     const data = await res.json();
     return data.tree || [];
@@ -76,7 +76,7 @@ async function loadCategoryData(slug: string) {
   params.set("limit", "12");
 
   try {
-    const response = await fetch(`${baseUrl}/api/store/products?${params.toString()}`, { next: { revalidate: 7200 } });
+    const response = await fetch(`${baseUrl}/api/store/products?${params.toString()}`, { next: { revalidate: 60 } });
     if (!response.ok) return { products: [], total: 0, facets: null };
     const data = await response.json();
     return {

@@ -12,7 +12,7 @@ const BACKEND_URL = (
   "http://back:3002"
 ).replace(/\/$/, "");
 
-export const revalidate = 7200;
+export const revalidate = 60;
 
 export async function generateMetadata() {
   return buildPageMetadata({
