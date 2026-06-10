@@ -14,6 +14,11 @@ import {
 } from "@/lib/seo";
 
 export const revalidate = 30;
+export const dynamicParams = true;
+
+export async function generateStaticParams() {
+  return [];
+}
 
 const BACKEND_URL = (
   process.env.BACKEND_PROXY_URL ||

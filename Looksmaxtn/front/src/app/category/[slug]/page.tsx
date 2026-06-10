@@ -22,6 +22,11 @@ async function loadCategoryName(slug: string) {
 }
 
 export const revalidate = 60;
+export const dynamicParams = true;
+
+export async function generateStaticParams() {
+  return [];
+}
 
 const BACKEND_URL = (
   process.env.BACKEND_PROXY_URL ||
