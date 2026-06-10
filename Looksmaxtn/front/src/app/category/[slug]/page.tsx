@@ -11,7 +11,7 @@ async function loadCategoryName(slug: string) {
 
   try {
     const baseUrl = BACKEND_URL;
-    const res = await fetch(`${baseUrl}/api/store/categories`, { next: { revalidate: 60 } });
+    const res = await fetch(`${baseUrl}/api/store/categories`, { next: { revalidate: 7200 } });
     if (!res.ok) return formatSlug(slug);
     const data = await res.json();
     const match = data.categories?.find((category: { slug: string; name: string }) => category.slug === slug);
@@ -21,7 +21,7 @@ async function loadCategoryName(slug: string) {
   }
 }
 
-export const revalidate = 60;
+export const revalidate = 7200;
 export const dynamicParams = true;
 
 export async function generateStaticParams() {
@@ -52,7 +52,7 @@ export async function generateMetadata({
 async function loadCategoryTree(): Promise<Category[]> {
   const baseUrl = BACKEND_URL;
   try {
-    const res = await fetch(`${baseUrl}/api/store/categories`, { next: { revalidate: 60 } });
+    const res = await fetch(`${baseUrl}/api/store/categories`, { next: { revalidate: 7200 } });
     if (!res.ok) return [];
     const data = await res.json();
     return data.tree || [];
@@ -76,7 +76,7 @@ async function loadCategoryData(slug: string) {
   params.set("limit", "12");
 
   try {
-    const response = await fetch(`${baseUrl}/api/store/products?${params.toString()}`, { next: { revalidate: 60 } });
+    const response = await fetch(`${baseUrl}/api/store/products?${params.toString()}`, { next: { revalidate: 7200 } });
     if (!response.ok) return { products: [], total: 0, facets: null };
     const data = await response.json();
     return {
@@ -101,8 +101,26 @@ export default async function CategoryPage({
   const resolvedSlug = isVirtualSlug || categoryExists(categoryTree, slug) ? slug : "";
   const initialData = await loadCategoryData(resolvedSlug);
 
+  const firstProduct = initialData.products[0];
+  const firstImageUrl = firstProduct?.images?.find((i: { isMain: boolean }) => i.isMain)?.url
+    ?? firstProduct?.images?.[0]?.url;
+  const lcpPreloadHref = firstImageUrl
+    ? `/_next/image?url=${encodeURIComponent(firstImageUrl)}&w=384&q=75`
+    : null;
+
   return (
     <div className="pt-[77px]">
+      {lcpPreloadHref && (
+        <link
+          rel="preload"
+          as="image"
+          href={lcpPreloadHref}
+          // @ts-ignore — fetchPriority is valid on <link> in React 19 / HTML spec
+          fetchPriority="high"
+          imageSrcSet={`/_next/image?url=${encodeURIComponent(firstImageUrl!)}&w=256&q=75 256w, /_next/image?url=${encodeURIComponent(firstImageUrl!)}&w=384&q=75 384w, /_next/image?url=${encodeURIComponent(firstImageUrl!)}&w=640&q=75 640w`}
+          imageSizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+        />
+      )}
       <CategoryNav activeSlug={resolvedSlug || "all-categories"} initialCategories={categoryTree} />
 
       <ProductGrid
