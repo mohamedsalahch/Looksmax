@@ -64,17 +64,18 @@ async function loadCategoryData(slug: string) {
   params.set("includeFacets", "1");
   params.set("limit", "12");
 
-  const response = await fetch(`${baseUrl}/api/products?${params.toString()}`, { next: { revalidate: 60 } });
-  if (!response.ok) {
+  try {
+    const response = await fetch(`${baseUrl}/api/products?${params.toString()}`, { next: { revalidate: 60 } });
+    if (!response.ok) return { products: [], total: 0, facets: null };
+    const data = await response.json();
+    return {
+      products: data.products || [],
+      total: data.total || 0,
+      facets: data.facets || null,
+    };
+  } catch {
     return { products: [], total: 0, facets: null };
   }
-
-  const data = await response.json();
-  return {
-    products: data.products || [],
-    total: data.total || 0,
-    facets: data.facets || null,
-  };
 }
 
 export default async function CategoryPage({
