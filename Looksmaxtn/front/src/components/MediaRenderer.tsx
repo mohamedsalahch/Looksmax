@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 const VIDEO_EXTENSIONS = [".mp4", ".webm", ".ogg", ".mov", ".m4v"];
 const AUDIO_EXTENSIONS = [".mp3", ".m4a", ".wav", ".oga", ".aac", ".flac"];
 
@@ -18,6 +20,10 @@ export default function MediaRenderer({
   videoClassName,
   audioClassName,
   showControls = false,
+  priority = false,
+  sizes = "100vw",
+  width = 800,
+  height = 1067,
 }: {
   src: string;
   alt: string;
@@ -26,6 +32,10 @@ export default function MediaRenderer({
   videoClassName?: string;
   audioClassName?: string;
   showControls?: boolean;
+  priority?: boolean;
+  sizes?: string;
+  width?: number;
+  height?: number;
 }) {
   const kind = getMediaKind(src);
 
@@ -58,12 +68,14 @@ export default function MediaRenderer({
   }
 
   return (
-    <img
+    <Image
       src={src}
       alt={alt}
+      width={width}
+      height={height}
       className={imageClassName || className}
-      loading="eager"
-      fetchPriority="high"
+      priority={priority}
+      sizes={sizes}
       decoding="async"
     />
   );

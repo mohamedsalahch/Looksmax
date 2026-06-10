@@ -571,9 +571,10 @@ export default function ProductGrid({
                 filtersOpen ? "lg:grid-cols-3" : "lg:grid-cols-4"
               }`}
             >
-              {products.map((product) => (
+              {products.map((product, index) => (
                 <ProductCard
                   key={product._id}
+                  priority={index < 2}
                   id={product._id}
                   name={product.name}
                   categories={product.categories}

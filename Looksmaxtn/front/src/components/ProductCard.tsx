@@ -57,6 +57,7 @@ interface ProductCardProps {
   preferCollectionLeftImage?: boolean;
   /** Browse gender context — picks the male/female model for unisex products. */
   viewGender?: "men" | "women" | null;
+  priority?: boolean;
 }
 
 const CLONE_PREVIEW_WIDTH = 184;
@@ -87,6 +88,7 @@ export default function ProductCard({
   images = [],
   preferCollectionLeftImage = false,
   viewGender = null,
+  priority = false,
 }: ProductCardProps) {
   const { addItem } = useCart();
   const router = useRouter();
@@ -457,6 +459,8 @@ export default function ProductCard({
             imageClassName="block w-full h-auto object-contain"
             videoClassName="block w-full h-auto object-contain"
             audioClassName="block w-full px-3 py-6"
+            priority={priority}
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
           />
         ) : (
           <>
