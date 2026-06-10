@@ -2,7 +2,7 @@ import CategoryNav, { type Category } from "@/components/CategoryNav";
 import ProductGrid from "@/components/ProductGrid";
 import { buildPageMetadata } from "@/lib/seo";
 
-export const revalidate = 60;
+export const revalidate = 7200;
 
 const BACKEND_URL = (
   process.env.BACKEND_PROXY_URL ||
@@ -19,7 +19,7 @@ export const metadata = buildPageMetadata({
 
 async function loadCategoryTree(): Promise<Category[]> {
   try {
-    const res = await fetch(`${BACKEND_URL}/api/store/categories`, { next: { revalidate: 60 } });
+    const res = await fetch(`${BACKEND_URL}/api/store/categories`, { next: { revalidate: 7200 } });
     if (!res.ok) return [];
     const data = await res.json();
     return data.tree || [];
@@ -35,7 +35,7 @@ async function loadAllCategoriesData() {
   params.set("limit", "12");
 
   try {
-    const response = await fetch(`${BACKEND_URL}/api/store/products?${params.toString()}`, { next: { revalidate: 60 } });
+    const response = await fetch(`${BACKEND_URL}/api/store/products?${params.toString()}`, { next: { revalidate: 7200 } });
     if (!response.ok) return { products: [], total: 0, facets: null };
     const data = await response.json();
     return {

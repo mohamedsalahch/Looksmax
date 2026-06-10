@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
@@ -111,6 +112,14 @@ async function proxy(req: NextRequest, context: { params: Promise<{ path: string
   };
 
   const response = await fetch(buildTargetUrl(req, path), requestInit);
+
+  const isMutation = !["GET", "HEAD", "OPTIONS"].includes(method);
+  const affectsCatalog = path[0] === "products" || path[0] === "categories";
+  if (isMutation && affectsCatalog && response.status < 400) {
+    revalidatePath("/category/all");
+    revalidatePath("/category/[slug]", "page");
+    revalidatePath("/", "page");
+  }
 
   const nextResponse = new NextResponse(response.body, {
     status: response.status,
