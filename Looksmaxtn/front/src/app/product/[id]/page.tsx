@@ -15,6 +15,12 @@ import {
 
 export const revalidate = 30;
 
+const BACKEND_URL = (
+  process.env.BACKEND_PROXY_URL ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  "http://back:3002"
+).replace(/\/$/, "");
+
 type ProductVariantPayload = {
   _id: string;
   size: string;
@@ -70,8 +76,7 @@ function getPublicImages(images: { url: string; isMain: boolean; isPublic?: bool
 }
 
 async function loadProduct(id: string) {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-  const response = await fetch(`${baseUrl}/api/products/${id}`, { next: { revalidate: 30 } });
+  const response = await fetch(`${BACKEND_URL}/api/store/products/${id}`, { next: { revalidate: 30 } });
   if (!response.ok) return null;
 
   const data = (await response.json()) as ProductResponse;
@@ -79,9 +84,8 @@ async function loadProduct(id: string) {
 }
 
 async function loadRelatedProducts(): Promise<RelatedProduct[]> {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
   try {
-    const response = await fetch(`${baseUrl}/api/products?limit=4`, { next: { revalidate: 60 } });
+    const response = await fetch(`${BACKEND_URL}/api/store/products?limit=4`, { next: { revalidate: 60 } });
     if (!response.ok) return [];
     const data = await response.json();
     return data.products || [];

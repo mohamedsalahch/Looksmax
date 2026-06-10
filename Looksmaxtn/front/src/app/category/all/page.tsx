@@ -4,6 +4,12 @@ import { buildPageMetadata } from "@/lib/seo";
 
 export const revalidate = 60;
 
+const BACKEND_URL = (
+  process.env.BACKEND_PROXY_URL ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  "http://back:3002"
+).replace(/\/$/, "");
+
 export const metadata = buildPageMetadata({
   title: "All Collections | LOOKSMAX Tunisia",
   description:
@@ -12,9 +18,8 @@ export const metadata = buildPageMetadata({
 });
 
 async function loadCategoryTree(): Promise<Category[]> {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
   try {
-    const res = await fetch(`${baseUrl}/api/categories`, { next: { revalidate: 60 } });
+    const res = await fetch(`${BACKEND_URL}/api/store/categories`, { next: { revalidate: 60 } });
     if (!res.ok) return [];
     const data = await res.json();
     return data.tree || [];
@@ -30,7 +35,7 @@ async function loadAllCategoriesData() {
   params.set("limit", "12");
 
   try {
-    const response = await fetch(`${baseUrl}/api/products?${params.toString()}`, { next: { revalidate: 60 } });
+    const response = await fetch(`${BACKEND_URL}/api/store/products?${params.toString()}`, { next: { revalidate: 60 } });
     if (!response.ok) return { products: [], total: 0, facets: null };
     const data = await response.json();
     return {
