@@ -39,7 +39,7 @@ type ProductInfoProduct = {
   storeName?: string;
   storeType?: "thrift" | "retail" | null;
   image?: string;
-  images?: { url: string; isMain: boolean }[];
+  images?: { url: string; isMain: boolean; gender?: "men" | "women" | null }[];
   variants: ProductVariant[];
   variantAvailability?: VariantAvailabilityMap | null;
   initialSelectedVariantId?: string;
@@ -64,6 +64,7 @@ type ProductInfoProduct = {
   };
   cloneSourceName?: string;
   cloneSourceImage?: string;
+  isUnisexProduct?: boolean;
 };
 
 export default function ProductInfo({ product }: { product: ProductInfoProduct }) {
@@ -264,6 +265,37 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
   useEffect(() => {
     setBlockedByOrder(Boolean(product.blockedByOrder));
   }, [product.blockedByOrder]);
+
+  // Apply size/color/gender URL params to initial selection after hydration.
+  // The page is ISR-cached so searchParams are not available during SSR; we
+  // read them once on mount and reconcile state without a server round-trip.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlColor = params.get("color")?.trim().toLowerCase() || "";
+    const urlSize = params.get("size")?.trim() || "";
+    const urlGender = params.get("g") || "";
+
+    if (!urlColor && !urlSize && !urlGender) return;
+
+    if (urlColor) {
+      const hex = urlColor.startsWith("#") ? urlColor : `#${urlColor}`;
+      setSelectedColorHex(hex);
+      const colorVariants = variants.filter((v) => v.color?.toLowerCase() === hex.toLowerCase());
+      const target =
+        (urlSize ? colorVariants.find((v) => v.size === urlSize) : null) ||
+        colorVariants.find((v) => (variantAvailability?.[v._id]?.stock ?? v.stock ?? 0) > 0) ||
+        colorVariants[0];
+      if (target) setSelectedVariantId(target._id);
+      window.dispatchEvent(new CustomEvent("product:gallery:filterColorway", { detail: { hex } }));
+    } else if (urlSize) {
+      const match = variants.find((v) => v.size === urlSize);
+      if (match) setSelectedVariantId(match._id);
+    }
+
+    if (product.isUnisexProduct && (urlGender === "men" || urlGender === "women")) {
+      window.dispatchEvent(new CustomEvent("product:gallery:filterGender", { detail: { gender: urlGender } }));
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!product.id) return;

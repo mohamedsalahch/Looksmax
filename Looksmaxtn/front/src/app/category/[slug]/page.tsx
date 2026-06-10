@@ -11,7 +11,7 @@ async function loadCategoryName(slug: string) {
 
   try {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-    const res = await fetch(`${baseUrl}/api/categories`, { cache: "no-store" });
+    const res = await fetch(`${baseUrl}/api/categories`, { next: { revalidate: 60 } });
     if (!res.ok) return formatSlug(slug);
     const data = await res.json();
     const match = data.categories?.find((category: { slug: string; name: string }) => category.slug === slug);
@@ -20,6 +20,8 @@ async function loadCategoryName(slug: string) {
     return formatSlug(slug);
   }
 }
+
+export const revalidate = 60;
 
 export async function generateMetadata({
   params,
@@ -39,7 +41,7 @@ export async function generateMetadata({
 async function loadCategoryTree(): Promise<Category[]> {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
   try {
-    const res = await fetch(`${baseUrl}/api/categories`, { cache: "no-store" });
+    const res = await fetch(`${baseUrl}/api/categories`, { next: { revalidate: 60 } });
     if (!res.ok) return [];
     const data = await res.json();
     return data.tree || [];
@@ -62,7 +64,7 @@ async function loadCategoryData(slug: string) {
   params.set("includeFacets", "1");
   params.set("limit", "12");
 
-  const response = await fetch(`${baseUrl}/api/products?${params.toString()}`, { cache: "no-store" });
+  const response = await fetch(`${baseUrl}/api/products?${params.toString()}`, { next: { revalidate: 60 } });
   if (!response.ok) {
     return { products: [], total: 0, facets: null };
   }

@@ -13,7 +13,7 @@ import {
   truncateDescription,
 } from "@/lib/seo";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 type ProductVariantPayload = {
   _id: string;
@@ -71,7 +71,7 @@ function getPublicImages(images: { url: string; isMain: boolean; isPublic?: bool
 
 async function loadProduct(id: string) {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-  const response = await fetch(`${baseUrl}/api/products/${id}`, { cache: "no-store" });
+  const response = await fetch(`${baseUrl}/api/products/${id}`, { next: { revalidate: 30 } });
   if (!response.ok) return null;
 
   const data = (await response.json()) as ProductResponse;
@@ -81,20 +81,13 @@ async function loadProduct(id: string) {
 async function loadRelatedProducts(): Promise<RelatedProduct[]> {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
   try {
-    const response = await fetch(`${baseUrl}/api/products?limit=4`, { cache: "no-store" });
+    const response = await fetch(`${baseUrl}/api/products?limit=4`, { next: { revalidate: 60 } });
     if (!response.ok) return [];
     const data = await response.json();
     return data.products || [];
   } catch {
     return [];
   }
-}
-
-function normalizeHexParam(value: string | undefined) {
-  if (!value) return "";
-  const trimmed = value.trim().toLowerCase();
-  if (!trimmed) return "";
-  return trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
 }
 
 function resolveInitialSelection(
@@ -154,15 +147,12 @@ export async function generateMetadata({
 
 export default async function ProductDetailPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ size?: string; color?: string; g?: string }>;
 }) {
   const { id } = await params;
-  const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const requestedSize = (resolvedSearchParams?.size || "").trim();
-  const requestedColorHex = normalizeHexParam(resolvedSearchParams?.color);
+  const requestedSize = "";
+  const requestedColorHex = "";
 
   const [dbProduct, relatedProducts] = await Promise.all([
     loadProduct(id),
@@ -172,14 +162,10 @@ export default async function ProductDetailPage({
     notFound();
   }
 
-  // For unisex products show one gender's model set (default male, per the
-  // "all categories" rule); neutral originals are always kept.
   const isUnisexProduct = dbProduct.gender === "unisex";
-  const viewGender: "men" | "women" = resolvedSearchParams?.g === "women" ? "women" : "men";
   const publicImageEntries = (dbProduct.images || [])
     .map((image, imageIndex) => ({ image, imageIndex }))
-    .filter(({ image }) => image.isPublic !== false)
-    .filter(({ image }) => !isUnisexProduct || !image.gender || image.gender === viewGender);
+    .filter(({ image }) => image.isPublic !== false);
   const publicImageIndexByOriginal = new Map(
     publicImageEntries.map(({ imageIndex }, publicIndex) => [imageIndex, publicIndex])
   );
@@ -232,6 +218,7 @@ export default async function ProductDetailPage({
     },
     cloneSourceName: dbProduct.cloneSourceName || "",
     cloneSourceImage: dbProduct.cloneSourceImage || "",
+    isUnisexProduct,
   };
   const productId = String(dbProduct._id || id);
   const productUrl = absoluteUrl(`/product/${productId}`);
@@ -297,9 +284,10 @@ export default async function ProductDetailPage({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
           <ProductImageGallery
-            images={product.images as { url: string; isMain: boolean }[]}
+            images={product.images}
             variants={product.variants}
             initialColorHex={initialSelectedColorHex}
+            defaultGender={isUnisexProduct ? "men" : null}
           />
 
           <div className="md:sticky md:top-[80px] md:self-start">

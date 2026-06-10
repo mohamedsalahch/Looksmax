@@ -2,7 +2,7 @@
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { withAuthRequest } from "@/lib/authClient";
 
 interface Category {
@@ -74,6 +74,7 @@ function getApprovalStatus(product: Product) {
 
 export default function ProductsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [search, setSearch] = useState("");
@@ -86,8 +87,20 @@ export default function ProductsPage() {
   const [deletingProductId, setDeletingProductId] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("_id");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
-  const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 10;
+  const currentPage = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
+
+  const resetPage = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("page");
+    router.replace(`/dashboard/products?${params.toString()}`, { scroll: false });
+  };
+  const setCurrentPage = (updater: number | ((prev: number) => number)) => {
+    const next = typeof updater === "function" ? updater(currentPage) : updater;
+    const params = new URLSearchParams(searchParams.toString());
+    if (next <= 1) { params.delete("page"); } else { params.set("page", String(next)); }
+    router.replace(`/dashboard/products?${params.toString()}`, { scroll: false });
+  };
   const [userRole, setUserRole] = useState("");
   const deferredSearch = useDeferredValue(search);
   const canAddProducts = userRole === "store_owner";
@@ -208,7 +221,6 @@ export default function ProductsPage() {
     });
   }, [approvalFilter, canFilterByStore, categoryFilter, deferredSearch, products, storeFilter, visibilityFilter]);
 
-  useEffect(() => { setCurrentPage(1); }, [filteredProducts, sortKey, sortDirection]);
 
   const categoryOptions = useMemo(() => {
     const bySlug = new Map(categories.map((category) => [category.slug, category]));
@@ -314,11 +326,11 @@ export default function ProductsPage() {
   };
 
   const toggleSort = (key: SortKey) => {
+    resetPage();
     if (sortKey === key) {
       setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
       return;
     }
-
     setSortKey(key);
     setSortDirection("asc");
   };
@@ -347,13 +359,13 @@ export default function ProductsPage() {
         <input
           type="text"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { setSearch(e.target.value); resetPage(); }}
           placeholder="Search by name, brand, store, tag, category, or ID..."
           className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-text-primary transition-colors"
         />
         <select
           value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
+          onChange={(e) => { setCategoryFilter(e.target.value); resetPage(); }}
           className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-text-primary transition-colors"
         >
           <option value="all">All categories</option>
@@ -366,7 +378,7 @@ export default function ProductsPage() {
         {canFilterByStore && (
           <select
             value={storeFilter}
-            onChange={(e) => setStoreFilter(e.target.value)}
+            onChange={(e) => { setStoreFilter(e.target.value); resetPage(); }}
             className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-text-primary transition-colors"
           >
             <option value="all">All store names</option>
@@ -379,7 +391,7 @@ export default function ProductsPage() {
         )}
         <select
           value={visibilityFilter}
-          onChange={(e) => setVisibilityFilter(e.target.value)}
+          onChange={(e) => { setVisibilityFilter(e.target.value); resetPage(); }}
           className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-text-primary transition-colors"
         >
           <option value="all">All visibility</option>
@@ -388,7 +400,7 @@ export default function ProductsPage() {
         </select>
         <select
           value={approvalFilter}
-          onChange={(e) => setApprovalFilter(e.target.value)}
+          onChange={(e) => { setApprovalFilter(e.target.value); resetPage(); }}
           className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-text-primary transition-colors"
         >
           <option value="all">All approvals</option>

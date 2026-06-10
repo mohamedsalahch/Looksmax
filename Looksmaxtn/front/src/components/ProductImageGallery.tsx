@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 interface ProductImage {
   url: string;
   isMain: boolean;
+  gender?: "men" | "women" | null;
 }
 
 const VIDEO_EXTENSIONS = [".mp4", ".webm", ".ogg", ".mov", ".m4v"];
@@ -221,10 +222,12 @@ export default function ProductImageGallery({
   images = [],
   variants,
   initialColorHex = null,
+  defaultGender = null,
 }: {
   images?: ProductImage[];
   variants?: GalleryVariant[] | null;
   initialColorHex?: string | null;
+  defaultGender?: "men" | "women" | null;
 }) {
   const { displayImages, originalToDisplay } = useMemo(() => {
     if (images.length === 0) return { displayImages: [{ url: "", isMain: true }], originalToDisplay: new Map<number, number>() };
@@ -236,22 +239,25 @@ export default function ProductImageGallery({
   }, [images]);
 
   const [activeColorHex, setActiveColorHex] = useState<string | null>(initialColorHex);
+  const [activeGender, setActiveGender] = useState<"men" | "women" | null>(defaultGender);
+
   const selectedColorOriginalIndices = useMemo(() => {
     const indices = getIndicesForHex(activeColorHex, variants);
     return indices.length > 0 ? [...indices].sort((a, b) => a - b) : [];
   }, [activeColorHex, variants]);
 
   const visibleImages = useMemo(() => {
+    const genderFilter = (img: ProductImage) => !img.gender || !activeGender || img.gender === activeGender;
     if (selectedColorOriginalIndices.length > 0) {
       const orderedImages = selectedColorOriginalIndices
         .map((origIdx) => images[origIdx])
-        .filter((img): img is ProductImage => Boolean(img?.url));
+        .filter((img): img is ProductImage => Boolean(img?.url) && genderFilter(img));
       if (orderedImages.length > 0) {
         return orderedImages;
       }
     }
-    return displayImages;
-  }, [displayImages, images, selectedColorOriginalIndices]);
+    return displayImages.filter(genderFilter);
+  }, [displayImages, images, selectedColorOriginalIndices, activeGender]);
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [isZoomActive, setIsZoomActive] = useState(false);
@@ -266,6 +272,18 @@ export default function ProductImageGallery({
     };
     window.addEventListener("product:gallery:filterColorway", filterHandler);
     return () => window.removeEventListener("product:gallery:filterColorway", filterHandler);
+  }, []);
+
+  useEffect(() => {
+    const genderHandler = (e: Event) => {
+      const { gender } = (e as CustomEvent<{ gender: string }>).detail;
+      if (gender === "men" || gender === "women") {
+        setActiveGender(gender);
+        setActiveIndex(0);
+      }
+    };
+    window.addEventListener("product:gallery:filterGender", genderHandler);
+    return () => window.removeEventListener("product:gallery:filterGender", genderHandler);
   }, []);
 
   useEffect(() => {

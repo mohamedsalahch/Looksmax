@@ -2,6 +2,8 @@ import CategoryNav, { type Category } from "@/components/CategoryNav";
 import ProductGrid from "@/components/ProductGrid";
 import { buildPageMetadata } from "@/lib/seo";
 
+export const revalidate = 60;
+
 export const metadata = buildPageMetadata({
   title: "All Collections | LOOKSMAX Tunisia",
   description:
@@ -12,7 +14,7 @@ export const metadata = buildPageMetadata({
 async function loadCategoryTree(): Promise<Category[]> {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
   try {
-    const res = await fetch(`${baseUrl}/api/categories`, { cache: "no-store" });
+    const res = await fetch(`${baseUrl}/api/categories`, { next: { revalidate: 60 } });
     if (!res.ok) return [];
     const data = await res.json();
     return data.tree || [];
@@ -27,7 +29,7 @@ async function loadAllCategoriesData() {
   params.set("includeFacets", "1");
   params.set("limit", "12");
 
-  const response = await fetch(`${baseUrl}/api/products?${params.toString()}`, { cache: "no-store" });
+  const response = await fetch(`${baseUrl}/api/products?${params.toString()}`, { next: { revalidate: 60 } });
   if (!response.ok) {
     return { products: [], total: 0, facets: null };
   }
