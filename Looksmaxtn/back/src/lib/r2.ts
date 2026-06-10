@@ -81,6 +81,7 @@ export async function uploadToR2(
       Key: normalizedKey,
       Body: body,
       ContentType: contentType,
+      CacheControl: "public, max-age=31536000, immutable",
     })
   );
 
