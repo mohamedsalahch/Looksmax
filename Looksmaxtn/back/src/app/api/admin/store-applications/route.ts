@@ -4,12 +4,26 @@ import type { Types } from "mongoose";
 import dbConnect from "@/admin/lib/mongodb";
 import { getSession, hashPassword } from "@/admin/lib/auth";
 import User from "@/admin/models/User";
+import Product from "@/admin/models/Product";
 import StoreApplication from "@/admin/models/StoreApplication";
 import { sendStoreApplicationStatusEmail } from "@/store/lib/mailer";
 import { broadcastAdminEvent } from "@/admin/lib/adminEvents";
 import { createUniqueStoreSlug, slugifyStoreName } from "@/lib/storeSlug";
 
 type ReviewStatus = "approved" | "rejected";
+type ProductCounts = {
+  total: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+};
+
+const emptyProductCounts: ProductCounts = {
+  total: 0,
+  pending: 0,
+  approved: 0,
+  rejected: 0,
+};
 
 function isReviewStatus(status: string): status is ReviewStatus {
   return status === "approved" || status === "rejected";
@@ -58,6 +72,42 @@ function normalizeStoreApplication(store: {
 
 function createStoreOwnerPassword() {
   return crypto.randomBytes(9).toString("base64url");
+}
+
+async function getProductCountsByOwnerIds(ownerIds: string[]) {
+  const uniqueOwnerIds = Array.from(new Set(ownerIds.filter(Boolean)));
+  if (uniqueOwnerIds.length === 0) return new Map<string, ProductCounts>();
+
+  const rows = await Product.aggregate<{ _id: { ownerId: string; status: string }; count: number }>([
+    { $match: { "createdBy.id": { $in: uniqueOwnerIds } } },
+    {
+      $group: {
+        _id: {
+          ownerId: "$createdBy.id",
+          status: { $ifNull: ["$approvalStatus", "approved"] },
+        },
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+
+  const countsByOwnerId = new Map<string, ProductCounts>();
+  for (const ownerId of uniqueOwnerIds) {
+    countsByOwnerId.set(ownerId, { ...emptyProductCounts });
+  }
+
+  for (const row of rows) {
+    const ownerId = row._id.ownerId;
+    const status = row._id.status;
+    const counts = countsByOwnerId.get(ownerId) || { ...emptyProductCounts };
+    counts.total += row.count;
+    if (status === "pending" || status === "approved" || status === "rejected") {
+      counts[status] = row.count;
+    }
+    countsByOwnerId.set(ownerId, counts);
+  }
+
+  return countsByOwnerId;
 }
 
 async function hasDuplicateStoreName(
@@ -113,11 +163,15 @@ export async function GET() {
     const ownerBalanceByEmail = new Map(
       owners.map((u) => [u.email, Number(u.balance || 0)])
     );
+    const productCountsByOwnerId = await getProductCountsByOwnerIds(
+      owners.map((owner) => owner._id.toString())
+    );
 
     const normalizedStores = stores.map((store) => ({
       ...normalizeStoreApplication(store),
       storeOwnerId: ownerIdByEmail.get(store.email) || "",
       balance: ownerBalanceByEmail.has(store.email) ? ownerBalanceByEmail.get(store.email) ?? 0 : null,
+      productCounts: productCountsByOwnerId.get(ownerIdByEmail.get(store.email) || "") || emptyProductCounts,
     }));
 
     return NextResponse.json({ stores: normalizedStores });
@@ -213,7 +267,15 @@ export async function PUT(req: NextRequest) {
       console.error("Store application status email error:", emailError);
     }
 
-    const normalizedStore = normalizeStoreApplication(store.toObject());
+    const owner = await User.findOne({ email: store.email, role: "store_owner" }, { balance: 1 }).lean();
+    const ownerId = owner?._id.toString() || "";
+    const productCountsByOwnerId = await getProductCountsByOwnerIds(ownerId ? [ownerId] : []);
+    const normalizedStore = {
+      ...normalizeStoreApplication(store.toObject()),
+      storeOwnerId: ownerId,
+      balance: owner ? Number(owner.balance || 0) : null,
+      productCounts: productCountsByOwnerId.get(ownerId) || emptyProductCounts,
+    };
     broadcastAdminEvent({
       type: "store:upsert",
       store: {

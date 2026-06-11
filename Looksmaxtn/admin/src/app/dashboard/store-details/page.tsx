@@ -15,6 +15,20 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   rejected: { label: "Rejected",       color: "var(--danger)"  },
 };
 
+type ProductCounts = {
+  total: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+};
+
+const defaultProductCounts: ProductCounts = {
+  total: 0,
+  pending: 0,
+  approved: 0,
+  rejected: 0,
+};
+
 export default function StoreDetailsPage() {
   const [form, setForm] = useState({
     name: "",
@@ -26,6 +40,7 @@ export default function StoreDetailsPage() {
   });
   const [storeCategories, setStoreCategories] = useState<string[]>([]);
   const [storeApprovalStatus, setStoreApprovalStatus] = useState<"pending" | "approved" | "rejected" | null>(null);
+  const [productCounts, setProductCounts] = useState<ProductCounts>(defaultProductCounts);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -51,6 +66,10 @@ export default function StoreDetailsPage() {
         });
         setStoreCategories(Array.isArray(store.categories) ? store.categories : []);
         setStoreApprovalStatus(store.status || user.storeApprovalStatus || null);
+        setProductCounts({
+          ...defaultProductCounts,
+          ...(data.productCounts || {}),
+        });
       })
       .catch(() => {
         if (!cancelled) setError("Failed to load store details.");
@@ -108,6 +127,12 @@ export default function StoreDetailsPage() {
 
   const statusKey = storeApprovalStatus ?? "approved";
   const status = statusConfig[statusKey] ?? statusConfig.approved;
+  const productStats = [
+    { label: "Total Products", value: productCounts.total, tone: "text-text-primary" },
+    { label: "Pending", value: productCounts.pending, tone: "text-warning" },
+    { label: "Approved", value: productCounts.approved, tone: "text-success" },
+    { label: "Rejected", value: productCounts.rejected, tone: "text-danger" },
+  ];
 
   return (
     <div className="max-w-2xl space-y-10">
@@ -131,6 +156,18 @@ export default function StoreDetailsPage() {
       </div>
 
       <div className="h-px bg-border" />
+
+      {/* ── Product status summary ── */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {productStats.map((stat) => (
+          <div key={stat.label} className="border border-border bg-bg-secondary px-4 py-3">
+            <p className="label-meta mb-2">{stat.label}</p>
+            <p className={`text-2xl font-semibold tabular-nums ${stat.tone}`}>
+              {stat.value}
+            </p>
+          </div>
+        ))}
+      </div>
 
       {/* ── Categories info card ── */}
       <div className="card">

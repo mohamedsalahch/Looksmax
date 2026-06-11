@@ -7,7 +7,7 @@ import Product from "@/store/models/Product";
 import User from "@/store/models/User";
 import OutfitGenerationJob from "@/store/models/OutfitGenerationJob";
 import { loadImageAsBase64 } from "@/lib/imageSource";
-import { calculateUserOutfitStudioTries } from "@/store/lib/outfitStudioUtils";
+import { calculateUserOutfitStudioTries, normalizeInitialOutfitStudioTries } from "@/store/lib/outfitStudioUtils";
 
 type ZonePayload = {
   status?: boolean;
@@ -148,7 +148,7 @@ export async function POST(req: NextRequest) {
 
     // Check outfit studio tries - admins have unlimited
     if (requestingUser.role !== "admin") {
-      const initialTries = requestingUser.outfitStudioStats?.initialTries || 5;
+      const initialTries = normalizeInitialOutfitStudioTries(requestingUser.outfitStudioStats?.initialTries);
       const triesUsed = requestingUser.outfitStudioStats?.triesUsed || 0;
       const { total: totalAvailableTries } = await calculateUserOutfitStudioTries(userId, initialTries);
 
@@ -276,7 +276,7 @@ export async function POST(req: NextRequest) {
 
     // Increment tries used for non-admin users
     if (requestingUser.role !== "admin") {
-      const initialTries = requestingUser.outfitStudioStats?.initialTries || 5;
+      const initialTries = normalizeInitialOutfitStudioTries(requestingUser.outfitStudioStats?.initialTries);
       const triesUsed = requestingUser.outfitStudioStats?.triesUsed || 0;
       const { total: totalAvailableTries } = await calculateUserOutfitStudioTries(userId, initialTries);
 
@@ -381,7 +381,7 @@ export async function POST(req: NextRequest) {
     const images = extractImagesFromResponse(generatorData);
     if (images.length > 0) {
       await OutfitGenerationJob.findByIdAndUpdate(job._id, {
-        status: images.length >= 2 ? "completed" : "processing",
+        status: "completed",
         images: {
           front: images[0] || "",
           back: images[1] || "",

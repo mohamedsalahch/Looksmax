@@ -21,6 +21,26 @@ interface Product {
 type SortKey = "name" | "_id" | "categories" | "store" | "productType" | "price" | "stock" | "status" | "approval" | "visibility" | "tag";
 type SortDirection = "asc" | "desc";
 
+function isSortKey(value: string | null): value is SortKey {
+  return [
+    "name",
+    "_id",
+    "categories",
+    "store",
+    "productType",
+    "price",
+    "stock",
+    "status",
+    "approval",
+    "visibility",
+    "tag",
+  ].includes(value || "");
+}
+
+function isSortDirection(value: string | null): value is SortDirection {
+  return value === "asc" || value === "desc";
+}
+
 function getProductStoreLabel(product: Product) {
   return product.storeName || "Unknown store";
 }
@@ -77,34 +97,53 @@ export default function ProductsPage() {
   const searchParams = useSearchParams();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [storeFilter, setStoreFilter] = useState("all");
-  const [visibilityFilter, setVisibilityFilter] = useState("all");
-  const [approvalFilter, setApprovalFilter] = useState("all");
+  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
+  const [categoryFilter, setCategoryFilter] = useState(() => searchParams.get("category") || "all");
+  const [storeFilter, setStoreFilter] = useState(() => searchParams.get("store") || "all");
+  const [visibilityFilter, setVisibilityFilter] = useState(() => searchParams.get("visibility") || "all");
+  const [approvalFilter, setApprovalFilter] = useState(() => searchParams.get("approval") || "all");
   const [loading, setLoading] = useState(true);
   const [togglingVisibilityId, setTogglingVisibilityId] = useState("");
   const [deletingProductId, setDeletingProductId] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("_id");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [sortKey, setSortKey] = useState<SortKey>(() => {
+    const value = searchParams.get("sort");
+    return isSortKey(value) ? value : "_id";
+  });
+  const [sortDirection, setSortDirection] = useState<SortDirection>(() => {
+    const value = searchParams.get("dir");
+    return isSortDirection(value) ? value : "desc";
+  });
   const PAGE_SIZE = 10;
   const currentPage = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
+  const currentQuery = searchParams.toString();
+  const currentListHref = `/dashboard/products${currentQuery ? `?${currentQuery}` : ""}`;
+  const productHref = (productId: string, path = "") =>
+    `/dashboard/products/${productId}${path}?returnTo=${encodeURIComponent(currentListHref)}`;
 
-  const resetPage = () => {
+  const replaceProductsParams = (mutate: (params: URLSearchParams) => void) => {
     const params = new URLSearchParams(searchParams.toString());
-    params.delete("page");
-    router.replace(`/dashboard/products?${params.toString()}`, { scroll: false });
+    mutate(params);
+    const query = params.toString();
+    router.replace(`/dashboard/products${query ? `?${query}` : ""}`, { scroll: false });
+  };
+  const setListParam = (key: string, value: string, defaultValue = "all") => {
+    replaceProductsParams((params) => {
+      if (!value || value === defaultValue) params.delete(key);
+      else params.set(key, value);
+      params.delete("page");
+    });
   };
   const setCurrentPage = (updater: number | ((prev: number) => number)) => {
     const next = typeof updater === "function" ? updater(currentPage) : updater;
-    const params = new URLSearchParams(searchParams.toString());
-    if (next <= 1) { params.delete("page"); } else { params.set("page", String(next)); }
-    router.replace(`/dashboard/products?${params.toString()}`, { scroll: false });
+    replaceProductsParams((params) => {
+      if (next <= 1) params.delete("page");
+      else params.set("page", String(next));
+    });
   };
   const [userRole, setUserRole] = useState("");
   const deferredSearch = useDeferredValue(search);
   const canAddProducts = userRole === "store_owner";
-  const canEditProducts = userRole === "admin";
+  const canEditProducts = userRole === "admin" || userRole === "store_owner";
   const canDeleteProducts = userRole === "store_owner" || userRole === "admin";
   const canToggleVisibility = userRole === "store_owner" || userRole === "admin";
   const canFilterByStore = userRole === "admin";
@@ -129,6 +168,19 @@ export default function ProductsPage() {
     fetchProducts();
     fetchCategories();
   }, []);
+
+  useEffect(() => {
+    setSearch(searchParams.get("q") ?? "");
+    setCategoryFilter(searchParams.get("category") || "all");
+    setStoreFilter(searchParams.get("store") || "all");
+    setVisibilityFilter(searchParams.get("visibility") || "all");
+    setApprovalFilter(searchParams.get("approval") || "all");
+
+    const nextSort = searchParams.get("sort");
+    const nextDirection = searchParams.get("dir");
+    setSortKey(isSortKey(nextSort) ? nextSort : "_id");
+    setSortDirection(isSortDirection(nextDirection) ? nextDirection : "desc");
+  }, [searchParams]);
 
   const handleToggleVisibility = async (product: Product) => {
     setTogglingVisibilityId(product._id);
@@ -326,13 +378,21 @@ export default function ProductsPage() {
   };
 
   const toggleSort = (key: SortKey) => {
-    resetPage();
+    const nextDirection = sortKey === key && sortDirection === "asc" ? "desc" : "asc";
     if (sortKey === key) {
-      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
-      return;
+      setSortDirection(nextDirection);
+    } else {
+      setSortKey(key);
+      setSortDirection("asc");
     }
-    setSortKey(key);
-    setSortDirection("asc");
+    replaceProductsParams((params) => {
+      if (key === "_id") params.delete("sort");
+      else params.set("sort", key);
+
+      if ((key === "_id" && nextDirection === "desc") || nextDirection === "asc") params.delete("dir");
+      else params.set("dir", nextDirection);
+      params.delete("page");
+    });
   };
 
   const renderSortIndicator = (key: SortKey) => {
@@ -345,7 +405,7 @@ export default function ProductsPage() {
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-xl font-semibold tracking-wide">Products</h1>
         {canAddProducts ? (
-          <Link href="/dashboard/products/new" className="inline-flex w-full justify-center bg-text-primary text-bg-primary px-4 py-2 text-xs font-semibold tracking-wide uppercase hover:bg-accent transition-colors sm:w-auto">
+          <Link href={`/dashboard/products/new?returnTo=${encodeURIComponent(currentListHref)}`} className="inline-flex w-full justify-center bg-text-primary text-bg-primary px-4 py-2 text-xs font-semibold tracking-wide uppercase hover:bg-accent transition-colors sm:w-auto">
             + Add Product
           </Link>
         ) : (
@@ -359,13 +419,20 @@ export default function ProductsPage() {
         <input
           type="text"
           value={search}
-          onChange={(e) => { setSearch(e.target.value); resetPage(); }}
+          onChange={(e) => {
+            const nextValue = e.target.value;
+            setSearch(nextValue);
+            setListParam("q", nextValue.trim(), "");
+          }}
           placeholder="Search by name, brand, store, tag, category, or ID..."
           className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-text-primary transition-colors"
         />
         <select
           value={categoryFilter}
-          onChange={(e) => { setCategoryFilter(e.target.value); resetPage(); }}
+          onChange={(e) => {
+            setCategoryFilter(e.target.value);
+            setListParam("category", e.target.value);
+          }}
           className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-text-primary transition-colors"
         >
           <option value="all">All categories</option>
@@ -378,7 +445,10 @@ export default function ProductsPage() {
         {canFilterByStore && (
           <select
             value={storeFilter}
-            onChange={(e) => { setStoreFilter(e.target.value); resetPage(); }}
+            onChange={(e) => {
+              setStoreFilter(e.target.value);
+              setListParam("store", e.target.value);
+            }}
             className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-text-primary transition-colors"
           >
             <option value="all">All store names</option>
@@ -391,7 +461,10 @@ export default function ProductsPage() {
         )}
         <select
           value={visibilityFilter}
-          onChange={(e) => { setVisibilityFilter(e.target.value); resetPage(); }}
+          onChange={(e) => {
+            setVisibilityFilter(e.target.value);
+            setListParam("visibility", e.target.value);
+          }}
           className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-text-primary transition-colors"
         >
           <option value="all">All visibility</option>
@@ -400,7 +473,10 @@ export default function ProductsPage() {
         </select>
         <select
           value={approvalFilter}
-          onChange={(e) => { setApprovalFilter(e.target.value); resetPage(); }}
+          onChange={(e) => {
+            setApprovalFilter(e.target.value);
+            setListParam("approval", e.target.value);
+          }}
           className="bg-bg-secondary border border-border px-4 py-2.5 text-sm text-text-primary focus:border-text-primary transition-colors"
         >
           <option value="all">All approvals</option>
@@ -478,7 +554,7 @@ export default function ProductsPage() {
                 <tr
                   key={p._id}
                   onClick={() => {
-                    if (canOpenProduct) router.push(`/dashboard/products/${p._id}`);
+                    if (canOpenProduct) router.push(productHref(p._id));
                   }}
                   className={`${canOpenProduct ? "cursor-pointer hover:bg-bg-hover" : "cursor-default"} transition-colors`}
                 >
@@ -571,7 +647,7 @@ export default function ProductsPage() {
                     <div className="flex items-center justify-end gap-2">
                       {canEditProducts && (
                         <Link
-                          href={`/dashboard/products/${p._id}/edit`}
+                          href={productHref(p._id, "/edit")}
                           onClick={(e) => e.stopPropagation()}
                           className="text-[10px] font-medium uppercase tracking-[0.2em] text-text-primary transition-colors hover:text-accent"
                         >

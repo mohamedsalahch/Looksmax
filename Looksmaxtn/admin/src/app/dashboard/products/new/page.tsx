@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { generateId } from "@/lib/uuid";
 import { withAuthRequest } from "@/lib/authClient";
 import { compressImageFile } from "@/lib/imageCompression";
@@ -1335,6 +1335,9 @@ function ColorwayCard({
 
 export default function NewProductPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const rawReturnTo = searchParams.get("returnTo");
+  const returnTo = rawReturnTo?.startsWith("/dashboard/products") ? rawReturnTo : "/dashboard/products";
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [productMediaStatus, setProductMediaStatus] = useState<ProductMediaStatus>("idle");
@@ -2836,7 +2839,7 @@ export default function NewProductPage() {
         setLoading(false);
         return;
       }
-        router.push("/dashboard/products");
+        router.push(returnTo);
       } catch {
         setError("Network error", "general");
         setLoading(false);
@@ -2863,7 +2866,7 @@ export default function NewProductPage() {
         <div className="flex gap-3">
           <button
             type="button"
-            onClick={() => router.push("/dashboard/products")}
+            onClick={() => router.push(returnTo)}
             className="bg-black text-white px-4 py-2 text-xs font-medium tracking-wide uppercase"
           >
             Back to Products
@@ -3090,7 +3093,7 @@ export default function NewProductPage() {
             </button>
             <button
               type="button"
-              onClick={() => router.back()}
+              onClick={() => router.push(returnTo)}
               className="border border-border px-6 py-3 text-xs text-text-secondary uppercase tracking-wider"
             >
               Cancel

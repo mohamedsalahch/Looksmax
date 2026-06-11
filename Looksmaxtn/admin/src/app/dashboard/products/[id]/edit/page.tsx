@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, use, type DragEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { getConditionStatusFromScore } from "@/lib/productCondition";
 import { generateId } from "@/lib/uuid";
 import { withAuthRequest } from "@/lib/authClient";
@@ -787,6 +787,23 @@ function ColorwayCard({
     onUpdate({ [fileKey]: file, [previewKey]: URL.createObjectURL(file), ...enhanceReset } as Partial<Colorway>);
   };
 
+  const handleOtherFiles = (files: FileList | null) => {
+    const nextFiles = Array.from(files || []).filter((file) => file.type.startsWith("image/"));
+    if (nextFiles.length === 0) return;
+    onUpdate({
+      otherImages: [
+        ...colorway.otherImages,
+        ...nextFiles.map((file) => ({ url: URL.createObjectURL(file), file })),
+      ],
+      enhanceStatus: "idle",
+      enhancedFrontUrl: "",
+      enhancedBackUrl: "",
+      enhancedLeftUrl: "",
+      enhancedRightUrl: "",
+      enhancedOtherImages: [],
+    });
+  };
+
   type PictureValue = { url: string; file: File | null };
   const pictureSlots = [
     ...views.map((view) => ({ kind: "view" as const, view })),
@@ -1022,8 +1039,8 @@ function ColorwayCard({
     });
     setSelectedPictureIndexes((current) =>
       current
-        .filter((index) => index !== imageIndex + 2)
-        .map((index) => (index > imageIndex + 2 ? index - 1 : index))
+        .filter((index) => index !== imageIndex + views.length)
+        .map((index) => (index > imageIndex + views.length ? index - 1 : index))
     );
   };
   const removeEnhancedPicture = (slot: EnhancedPictureSlot) => {
@@ -1149,9 +1166,9 @@ function ColorwayCard({
           );
         })}
       </div>
-      {colorway.otherImages.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-[9px] uppercase tracking-wider text-text-secondary">Other pictures</p>
+      <div className="space-y-2">
+        <p className="text-[9px] uppercase tracking-wider text-text-secondary">Other pictures</p>
+        {colorway.otherImages.length > 0 && (
           <div className="grid grid-cols-2 gap-2">
             {colorway.otherImages.map((image, imageIndex) => {
               const pictureIndex = imageIndex + views.length;
@@ -1201,8 +1218,21 @@ function ColorwayCard({
               );
             })}
           </div>
-        </div>
-      )}
+        )}
+        <label className="block cursor-pointer border border-dashed border-border px-3 py-2 text-center text-[9px] font-semibold uppercase tracking-[0.18em] text-text-secondary transition-colors hover:border-accent hover:text-accent">
+          + Add pictures
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              handleOtherFiles(e.target.files);
+              e.currentTarget.value = "";
+            }}
+          />
+        </label>
+      </div>
       {enhancedPictures.length > 0 && (
         <div className="space-y-2">
           <p className="text-[9px] uppercase tracking-wider text-text-secondary">Enhanced pictures</p>
@@ -1452,7 +1482,7 @@ function ColorwayCard({
             ) : (
               <p className="text-[10px] text-text-secondary">No companion zones available for this category.</p>
             )}
-            {generationMode === "manual" && (colorway.additionalInstructions ? (
+            {colorway.additionalInstructions ? (
               <div className="space-y-1.5 pt-2">
                 <div className="flex items-center justify-between">
                   <p className="text-[9px] uppercase tracking-wider text-text-secondary">Additional instructions</p>
@@ -1468,7 +1498,7 @@ function ColorwayCard({
                   value={colorway.additionalInstructions}
                   onChange={(e) => onUpdate({ additionalInstructions: e.target.value })}
                   rows={3}
-                  placeholder="e.g. emphasize a relaxed pose, outdoor sunset lighting, etc."
+                  placeholder="Important instructions for this generation, e.g. relaxed pose, outdoor sunset lighting, no accessories."
                   className="w-full border border-border bg-transparent px-2 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors resize-y"
                 />
               </div>
@@ -1480,7 +1510,7 @@ function ColorwayCard({
               >
                 + Add custom instructions
               </button>
-            ))}
+            )}
           </div>
 
           <div className="flex items-center justify-end gap-2">
@@ -1505,6 +1535,9 @@ function ColorwayCard({
 export default function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const rawReturnTo = searchParams.get("returnTo");
+  const returnTo = rawReturnTo?.startsWith("/dashboard/products") ? rawReturnTo : "/dashboard/products";
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -1528,6 +1561,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const [selectedGrandchildSlug, setSelectedGrandchildSlug] = useState("");
   const [selectedGreatGrandchildSlug, setSelectedGreatGrandchildSlug] = useState("");
   const [images, setImages] = useState<ProductImage[]>([]);
+  const [storeOwnerImageFiles, setStoreOwnerImageFiles] = useState<Array<{ id: string; file: File; preview: string }>>([]);
   const [originPictureFiles, setOriginPictureFiles] =
     useState<OriginPictureFiles>(emptyOriginPictureFiles);
   const [cloneSourceImageFile, setCloneSourceImageFile] = useState<File | null>(null);
@@ -2010,6 +2044,9 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         body.append("type", "fashion");
         body.append("fashionSubtype", form.fashionSubtype || savedFashionSubtype || "clothes");
         body.append("mode", isAutoMode ? "auto" : "manual");
+        if (cw.additionalInstructions && cw.additionalInstructions.trim()) {
+          body.append("additionalInstructions", cw.additionalInstructions.trim());
+        }
         if (!isAutoMode) {
           body.append("generationTarget", generationRequirements.generationTarget);
           body.append("garmentZone", generationRequirements.generationTarget === "bottom" ? "bottom" : "top");
@@ -2022,9 +2059,6 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
             if (companionZones.includes("top") && cw.companionTopColor) { body.append("topColorName", cw.companionTopColor.name); body.append("topColorHex", cw.companionTopColor.hex); }
             if (companionZones.includes("bottom") && cw.companionBottomColor) { body.append("bottomColorName", cw.companionBottomColor.name); body.append("bottomColorHex", cw.companionBottomColor.hex); }
             if (companionZones.includes("footwear") && cw.companionFootwearColor) { body.append("shoesColorName", cw.companionFootwearColor.name); body.append("shoesColorHex", cw.companionFootwearColor.hex); }
-            if (cw.additionalInstructions && cw.additionalInstructions.trim()) {
-              body.append("additionalInstructions", cw.additionalInstructions.trim());
-            }
           }
         }
         body.append("front", frontFile); body.append("back", backFile);
@@ -3246,7 +3280,10 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 
   const handleCancel = () => {
     const snap = savedSnapshot.current;
-    if (!snap) { router.back(); return; }
+    if (!snap) {
+      router.push(returnTo);
+      return;
+    }
     setForm(snap.form);
     setImages(snap.images);
     setGeneratedModelMedia(snap.generatedModelMedia);
@@ -3256,11 +3293,57 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     setError("");
   };
 
+  const handleStoreOwnerImageFiles = (files: FileList | null) => {
+    const nextFiles = Array.from(files || []).filter((file) => file.type.startsWith("image/"));
+    if (nextFiles.length === 0) return;
+    setStoreOwnerImageFiles((current) => [
+      ...current,
+      ...nextFiles.map((file) => ({ id: generateId(), file, preview: URL.createObjectURL(file) })),
+    ]);
+  };
+
+  const handleStoreOwnerSubmit = async () => {
+    const nextFieldErrors: Record<string, string> = {};
+    if (!form.name.trim()) nextFieldErrors.name = "Product name is required.";
+    if (!form.price.trim() || Number(form.price) <= 0) nextFieldErrors.price = "Valid price is required.";
+    if (Object.keys(nextFieldErrors).length > 0) {
+      setFieldErrors(nextFieldErrors);
+      scrollToElement(productBasicsRef.current);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const body = new FormData();
+      body.append("name", form.name.trim());
+      body.append("price", form.price);
+      const compressedImages = await Promise.all(storeOwnerImageFiles.map((entry) => compressImageFile(entry.file)));
+      compressedImages.forEach((file) => body.append("images", file));
+
+      const res = await fetch(`/api/products/${id}`, withAuthRequest({ method: "PUT", body }));
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Unable to save product.", "general");
+        setLoading(false);
+        return;
+      }
+      router.push(returnTo);
+    } catch {
+      setError("Network error", "general");
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setFieldErrors({});
     setLoading(true);
+
+    if (isStoreOwner) {
+      await handleStoreOwnerSubmit();
+      return;
+    }
 
     if (!usesStoreOwnerEditFlow) {
       setLoading(false);
@@ -3571,7 +3654,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         setLoading(false);
         return;
       }
-      router.back();
+      router.push(returnTo);
     } catch {
       setError("Network error", "general");
       setLoading(false);
@@ -3581,19 +3664,128 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   if (fetching) return <p className="text-xs text-text-secondary animate-pulse">Loading product...</p>;
   if (isStoreOwner) {
     return (
-      <div className="rounded-2xl border border-border bg-bg-card p-8 space-y-4 max-w-2xl">
-        <p className="text-xs uppercase tracking-[0.22em] text-text-secondary">Product Access</p>
-        <h1 className="text-xl font-semibold tracking-wide">Products cannot be edited after submission</h1>
-        <p className="text-sm text-text-secondary">
-          Submitted products are reviewed and completed by the admin team before they appear on the storefront.
-        </p>
-        <button
-          type="button"
-          onClick={() => router.push("/dashboard/products")}
-          className="bg-black text-white px-4 py-2 text-xs font-medium tracking-wide uppercase"
-        >
-          Back to Products
-        </button>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-xl font-semibold tracking-wide">Edit Product</h1>
+          <p className="mt-1 text-xs text-text-secondary">
+            Store owner edits are sent back to pending approval. Added pictures stay hidden until an admin reviews them.
+          </p>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {sectionErrors.general && (
+            <div className="border border-[#8B3520]/40 bg-[#8B3520]/5 px-4 py-3 text-xs text-[#8B3520]">
+              {sectionErrors.general}
+            </div>
+          )}
+
+          <div ref={productBasicsRef}>
+            <SectionCard
+              title="Product Basics"
+              description="Only the product name and price can be changed by the store owner."
+              error={sectionErrors.basics}
+            >
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <FieldLabel>Product Name</FieldLabel>
+                  <input
+                    type="text"
+                    required
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    className="input-line"
+                    placeholder="e.g. Oversized Linen Shirt"
+                  />
+                  <FieldError message={fieldErrors.name} />
+                </div>
+                <div>
+                  <FieldLabel>Price (TND)</FieldLabel>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    value={form.price}
+                    onChange={(e) => setForm({ ...form, price: e.target.value })}
+                    className="input-line"
+                    placeholder="0.00"
+                  />
+                  {storeOwnerPayoutPrice && (
+                    <div className="mt-2 border border-border bg-bg-secondary px-3 py-2 text-[11px] text-text-secondary">
+                      <div className="flex items-center justify-between gap-3">
+                        <span>You receive after commission</span>
+                        <span className="font-semibold text-text-primary">{storeOwnerPayoutPrice} TND</span>
+                      </div>
+                    </div>
+                  )}
+                  <FieldError message={fieldErrors.price} />
+                </div>
+                <div>
+                  <FieldLabel>Store</FieldLabel>
+                  <input
+                    type="text"
+                    readOnly
+                    value={userStoreName}
+                    className="input-line cursor-not-allowed opacity-60"
+                  />
+                </div>
+              </div>
+            </SectionCard>
+          </div>
+
+          <SectionCard
+            title="Pictures"
+            description="Existing pictures cannot be removed here. New pictures are hidden by default and reviewed by admin."
+          >
+            {images.length > 0 && (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {images.map((image, index) => (
+                  <div key={image.id || `${image.url}-${index}`} className="space-y-1">
+                    <div className="aspect-[4/5] overflow-hidden rounded border border-border bg-bg-secondary">
+                      <img src={image.url} alt={`Product picture ${index + 1}`} className="h-full w-full object-cover" />
+                    </div>
+                    <p className="text-[9px] uppercase tracking-wider text-text-secondary">
+                      {image.isPublic === false ? "Hidden" : image.isMain ? "Main" : "Current"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {storeOwnerImageFiles.length > 0 && (
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {storeOwnerImageFiles.map((image) => (
+                  <div key={image.id} className="space-y-1">
+                    <div className="aspect-[4/5] overflow-hidden rounded border border-accent/40 bg-bg-secondary">
+                      <img src={image.preview} alt="New hidden product picture" className="h-full w-full object-cover" />
+                    </div>
+                    <p className="text-[9px] uppercase tracking-wider text-text-secondary">New hidden</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            <label className="mt-4 block cursor-pointer border border-dashed border-border px-4 py-3 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary transition-colors hover:border-accent hover:text-accent">
+              + Add hidden pictures
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  handleStoreOwnerImageFiles(e.target.files);
+                  e.currentTarget.value = "";
+                }}
+              />
+            </label>
+          </SectionCard>
+
+          <div className="flex gap-3">
+            <button type="submit" disabled={loading} className="bg-text-primary px-8 py-3 text-xs font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50">
+              {loading ? "Saving..." : "Submit For Approval"}
+            </button>
+            <button type="button" onClick={() => router.push(returnTo)} className="border border-border px-6 py-3 text-xs uppercase tracking-wider text-text-secondary">
+              Cancel
+            </button>
+          </div>
+        </form>
       </div>
     );
   }
@@ -3813,7 +4005,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
             <button type="submit" disabled={loading} className="bg-text-primary text-bg-primary px-8 py-3 text-xs font-semibold tracking-wide uppercase disabled:opacity-50">
               {loading ? "Saving..." : "Save Changes"}
             </button>
-            <button type="button" onClick={() => router.back()} className="border border-border px-6 py-3 text-xs text-text-secondary uppercase tracking-wider">Cancel</button>
+            <button type="button" onClick={() => router.push(returnTo)} className="border border-border px-6 py-3 text-xs text-text-secondary uppercase tracking-wider">Cancel</button>
           </div>
         </form>
       </div>

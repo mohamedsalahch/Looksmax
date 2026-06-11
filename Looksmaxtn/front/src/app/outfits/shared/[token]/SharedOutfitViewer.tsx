@@ -37,7 +37,7 @@ export default function SharedOutfitViewer({
 
   return (
     <>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className={images.length > 1 ? "grid grid-cols-1 gap-4 md:grid-cols-2" : "grid grid-cols-1 gap-4 md:mx-auto md:max-w-2xl"}>
         {images.map((image, index) => (
           <button
             key={index}
@@ -49,7 +49,7 @@ export default function SharedOutfitViewer({
             <img
               src={image}
               alt={`${name} ${index === 0 ? "front" : "back"}`}
-              className="w-full max-h-[70vh] object-contain"
+              className="mx-auto max-h-[70vh] w-full object-contain"
             />
           </button>
         ))}

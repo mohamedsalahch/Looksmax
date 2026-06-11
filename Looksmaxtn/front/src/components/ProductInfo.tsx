@@ -9,7 +9,7 @@ import { formatTndPrice } from "@/lib/formatPrice";
 import { getConditionColor, getConditionLabel, getConditionPercent } from "@/lib/productCondition";
 import { buildCartItemId } from "@/lib/cartItem";
 import { queueStudioAssignment } from "@/lib/studioAssignment";
-import { getColorwayEnhancedFrontImage } from "@/lib/colorwayImage";
+import { getColorwayEnhancedFrontImage, getColorwayMainImage } from "@/lib/colorwayImage";
 import type { VariantAvailabilityMap } from "@/lib/variantAvailability";
 
 type TikTokWindow = Window & {
@@ -121,12 +121,19 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
   }, [isColorwayProduct, selectedColorHex, variants]);
   const hasVisibleSizeOptions = variantsForActiveColor.some((variant) => Boolean(variant.size.trim()));
 
+  const productMainImage = product.images?.find((image) => image.isMain)?.url || product.images?.[0]?.url || product.image || "";
+  const selectedMainImage = getColorwayMainImage(selectedColorHex, {
+    image: productMainImage,
+    images: product.images,
+    variants,
+  }, productMainImage);
   const selectedColorImage = getColorwayEnhancedFrontImage(selectedColorHex, {
     image: product.image,
     images: product.images,
     variants,
   }, "");
-  const cartDisplayImage = selectedColorImage || product.originPictures?.front || product.image;
+  const cartMainImage = selectedMainImage || productMainImage;
+  const studioDisplayImage = selectedColorImage || product.originPictures?.front || product.image;
 
   useEffect(() => {
     if (!selectedColorHex) return;
@@ -327,7 +334,7 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
         name: product.name,
         price: product.price,
         brand: product.brand,
-        image: cartDisplayImage,
+        image: cartMainImage,
         color: activeHex || undefined,
         categories: product.categories,
         size: selectedVariant?.size || undefined,
@@ -368,7 +375,7 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
         name: product.name,
         price: product.price,
         brand: product.brand,
-        image: cartDisplayImage,
+        image: cartMainImage,
         color: activeHex || undefined,
         categories: product.categories,
         size: selectedVariant?.size || undefined,
@@ -383,7 +390,7 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
       queueStudioAssignment({
         id: product.id || "unknown",
         name: product.name,
-        image: cartDisplayImage,
+        image: studioDisplayImage,
         color: activeHex || undefined,
         categories: product.categories,
         price: product.price,

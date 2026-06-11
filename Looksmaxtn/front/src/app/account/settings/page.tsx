@@ -9,6 +9,8 @@ import { withAuthRequest } from "@/lib/authClient";
 import { compressImageFile } from "@/lib/imageCompression";
 import { subscribeToBodyProfile } from "@/lib/storeEvents";
 
+const INITIAL_OUTFIT_STUDIO_TRIES = 3;
+
 function normalizeGender(value: string | undefined) {
   const normalized = String(value || "").trim().toLowerCase();
   if (normalized === "male" || normalized === "man" || normalized === "men") {
@@ -37,9 +39,9 @@ export default function SettingsPage() {
     profileImageRequiresGeneration: false,
   });
   const [outfitStudioStats, setOutfitStudioStats] = useState({
-    totalTries: 5,
+    totalTries: INITIAL_OUTFIT_STUDIO_TRIES,
     triesUsed: 0,
-    triesRemaining: 5,
+    triesRemaining: INITIAL_OUTFIT_STUDIO_TRIES,
     isAdmin: false,
   });
   const [bodyError, setBodyError] = useState("");
@@ -115,14 +117,19 @@ export default function SettingsPage() {
       .then((res) => res.json())
       .then((data) => {
         setOutfitStudioStats({
-          totalTries: data.totalTries ?? 5,
+          totalTries: data.totalTries ?? INITIAL_OUTFIT_STUDIO_TRIES,
           triesUsed: data.triesUsed ?? 0,
-          triesRemaining: data.triesRemaining ?? 5,
+          triesRemaining: data.triesRemaining ?? INITIAL_OUTFIT_STUDIO_TRIES,
           isAdmin: data.isAdmin || false,
         });
       })
       .catch(() => {
-        setOutfitStudioStats({ totalTries: 5, triesUsed: 0, triesRemaining: 5, isAdmin: false });
+        setOutfitStudioStats({
+          totalTries: INITIAL_OUTFIT_STUDIO_TRIES,
+          triesUsed: 0,
+          triesRemaining: INITIAL_OUTFIT_STUDIO_TRIES,
+          isAdmin: false,
+        });
       });
   }, [refreshUser]);
 

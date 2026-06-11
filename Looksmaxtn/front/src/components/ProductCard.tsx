@@ -123,7 +123,8 @@ export default function ProductCard({
     defaultSelectableVariant?.color || colorwayColors[0] || null,
   );
 
-  const selectedCartImage = getColorwayMainImage(activeColorHex, { image, images, variants }, image, viewGender);
+  const productMainImage = images.find((productImage) => productImage.isMain)?.url || images[0]?.url || image || "";
+  const selectedCartImage = getColorwayMainImage(activeColorHex, { image: productMainImage, images, variants }, productMainImage, viewGender);
   const selectedStoreImage = getColorwayEnhancedFrontImage(activeColorHex, { image, images, variants }, image, viewGender);
   const selectedCollectionImage = preferCollectionLeftImage && fashionSubtype === "shoes"
     ? getColorwayEnhancedLeftImage(activeColorHex, { image, images, variants }, image, viewGender)
@@ -299,7 +300,7 @@ export default function ProductCard({
         size: selectedVariant?.size || undefined,
         color: activeColorHex || undefined,
         maxStock: Math.max(1, selectedVariantStock),
-        image: selectedStoreImage || selectedCartImage || image,
+        image: selectedCartImage || image,
         categories,
         productType,
         fashionSubtype,
@@ -332,7 +333,7 @@ export default function ProductCard({
         size: selectedVariant?.size || undefined,
         color: activeColorHex || undefined,
         maxStock: Math.max(1, selectedVariantStock),
-        image: selectedStoreImage || selectedCartImage || image,
+        image: selectedCartImage || image,
         productType,
         fashionSubtype,
         originPictures,

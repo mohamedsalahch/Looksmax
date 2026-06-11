@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { Types } from "mongoose";
 import dbConnect from "@/admin/lib/mongodb";
 import User from "@/admin/models/User";
+import Product from "@/admin/models/Product";
 import StoreApplication from "@/admin/models/StoreApplication";
 import { getSession } from "@/admin/lib/auth";
 import { createUniqueStoreSlug, slugifyStoreName } from "@/lib/storeSlug";
@@ -22,6 +23,34 @@ function normalizeCategories(value: unknown) {
   return raw
     .map((entry) => String(entry || "").trim())
     .filter((entry): entry is "clothes" | "fragrances" | "accessories" => isValidCategory(entry));
+}
+
+async function getProductCounts(storeOwnerId: string) {
+  const rows = await Product.aggregate<{ _id: string; count: number }>([
+    { $match: { "createdBy.id": storeOwnerId } },
+    {
+      $group: {
+        _id: { $ifNull: ["$approvalStatus", "approved"] },
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+
+  const counts = {
+    total: 0,
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+  };
+
+  for (const row of rows) {
+    counts.total += row.count;
+    if (row._id === "pending" || row._id === "approved" || row._id === "rejected") {
+      counts[row._id] = row.count;
+    }
+  }
+
+  return counts;
 }
 
 async function getLatestStoreApplicationDoc(email: string) {
@@ -70,9 +99,10 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    const storeApplication = user.email
-      ? await StoreApplication.findOne({ email: user.email }).sort({ createdAt: -1 }).lean()
-      : null;
+    const [storeApplication, productCounts] = await Promise.all([
+      user.email ? StoreApplication.findOne({ email: user.email }).sort({ createdAt: -1 }).lean() : null,
+      getProductCounts(String(user._id)),
+    ]);
     const storeName = storeApplication?.storeName || user.storeName || "";
     const storeType = storeApplication?.storeType || user.storeType || null;
     const categories = normalizeCategories(storeApplication?.categories || storeApplication?.category);
@@ -100,6 +130,7 @@ export async function GET() {
         category: storeApplication?.category || null,
         status: storeApprovalStatus,
       },
+      productCounts,
     });
   } catch (error) {
     console.error("Get admin store details error:", error);

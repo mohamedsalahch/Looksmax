@@ -5,6 +5,12 @@ import { useSearchParams } from "next/navigation";
 import { withAuthRequest } from "@/lib/authClient";
 
 type StoreStatus = "pending" | "approved" | "rejected";
+type ProductCounts = {
+  total: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+};
 
 interface StoreApplication {
   _id: string;
@@ -24,6 +30,7 @@ interface StoreApplication {
   reviewedAt?: string | null;
   createdAt: string;
   balance?: number | null;
+  productCounts?: ProductCounts;
 }
 
 const categoryLabels: Record<StoreApplication["category"], string> = {
@@ -36,6 +43,13 @@ const statusClass: Record<StoreStatus, string> = {
   pending: "bg-warning/10 text-warning",
   approved: "bg-success/10 text-success",
   rejected: "bg-danger/10 text-danger",
+};
+
+const defaultProductCounts: ProductCounts = {
+  total: 0,
+  pending: 0,
+  approved: 0,
+  rejected: 0,
 };
 
 export default function StoresPage() {
@@ -55,6 +69,19 @@ export default function StoresPage() {
   };
 
   const formatValue = (value: string | null | undefined) => (value && value.trim() ? value : "Not provided");
+  const getProductCounts = (store: StoreApplication): ProductCounts => ({
+    ...defaultProductCounts,
+    ...(store.productCounts || {}),
+  });
+  const getProductStats = (store: StoreApplication) => {
+    const productCounts = getProductCounts(store);
+    return [
+      { label: "Total Products", value: productCounts.total, tone: "text-text-primary" },
+      { label: "Pending", value: productCounts.pending, tone: "text-warning" },
+      { label: "Approved", value: productCounts.approved, tone: "text-success" },
+      { label: "Rejected", value: productCounts.rejected, tone: "text-danger" },
+    ];
+  };
   const formatStoreType = (value?: string | null) => {
     if (!value) return "Retail Store";
     if (value === "thrift") return "Thrift Store";
@@ -280,6 +307,12 @@ export default function StoresPage() {
                       {store.status}
                     </span>
                     <span className="rounded bg-bg-primary px-2 py-0.5 text-[10px] text-text-secondary">
+                      {getProductCounts(store).total} products
+                    </span>
+                    <span className="rounded bg-warning/10 px-2 py-0.5 text-[10px] text-warning">
+                      {getProductCounts(store).pending} pending
+                    </span>
+                    <span className="rounded bg-bg-primary px-2 py-0.5 text-[10px] text-text-secondary">
                       {formatCategories(store)}
                     </span>
                     {store.storeType && (
@@ -299,6 +332,17 @@ export default function StoresPage() {
 
               {expanded === store._id && (
                 <div className="px-4 pb-4 border-t border-border">
+                  <div className="grid grid-cols-2 gap-3 pt-3 sm:grid-cols-4">
+                    {getProductStats(store).map((stat) => (
+                      <div key={stat.label} className="border border-border bg-bg-primary px-3 py-3">
+                        <p className="mb-2 text-[10px] uppercase tracking-wider text-text-secondary">{stat.label}</p>
+                        <p className={`text-xl font-semibold tabular-nums ${stat.tone}`}>
+                          {stat.value}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
                   <div className="grid grid-cols-1 gap-3 pt-3 text-xs md:grid-cols-2">
                     <div>
                       <p className="mb-1 text-[10px] uppercase tracking-wider text-text-secondary">Owner</p>

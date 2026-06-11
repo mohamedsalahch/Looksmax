@@ -509,3 +509,115 @@ export async function sendStoreApplicationStatusEmail({
     html,
   });
 }
+
+export async function sendProductApprovalStatusEmail({
+  to,
+  name,
+  storeName,
+  productName,
+  status,
+  reason,
+  imageUrl,
+  productUrl,
+}: {
+  to: string;
+  name: string;
+  storeName: string;
+  productName: string;
+  status: "approved" | "rejected";
+  reason?: string;
+  imageUrl?: string;
+  productUrl?: string;
+}) {
+  const { from, transporter } = createTransporter();
+  const approved = status === "approved";
+  const ownerLabel = storeName.trim() || "store";
+  const subject = approved
+    ? `Your ${ownerLabel} product was approved`
+    : `Your ${ownerLabel} product was rejected`;
+  const title = approved ? "Product approved" : "Product rejected";
+  const body = approved
+    ? `Your product "${productName}" has been approved.`
+    : `Your product "${productName}" has been reviewed and rejected.`;
+  const detail = approved
+    ? "The product can now appear on LOOKSMAX when it is active and in stock."
+    : "Please review the product details or contact the LOOKSMAX team if you need more information.";
+
+  const text = [
+    `Hi ${name},`,
+    "",
+    body,
+    detail,
+    ...(!approved && reason ? ["", `Reason: ${reason}`] : []),
+    ...(imageUrl ? ["", `Image: ${imageUrl}`] : []),
+    ...(productUrl ? ["", `Product: ${productUrl}`] : []),
+  ].join("\n");
+
+  const html = `
+    <div style="background:#f6f1e7;padding:24px">
+      <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e5dccd;border-radius:0;overflow:hidden;font-family:Arial,sans-serif;color:#1a1a1a">
+        <div style="padding:28px 28px 20px;border-bottom:1px solid #eee3d1">
+          <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#6b6258">LOOKSMAX</div>
+          <h1 style="margin:12px 0 0;font-size:24px;line-height:1.2;font-weight:700">${title}</h1>
+        </div>
+
+        <div style="padding:28px">
+          <p style="margin:0 0 16px;font-size:15px;line-height:1.7">Hi ${name},</p>
+          <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#3a332d">
+            ${body}
+          </p>
+
+          ${
+            imageUrl
+              ? `
+                <div style="margin:0 0 18px">
+                  <img src="${imageUrl}" alt="${productName}" style="display:block;width:100%;max-width:260px;height:auto;border:1px solid #eee0cc;background:#f8f5ef" />
+                </div>
+              `
+              : ""
+          }
+
+          ${
+            !approved && reason
+              ? `
+                <div style="margin:18px 0;padding:16px 18px;background:#fff7f5;border:1px solid #f0c9c1;border-radius:0">
+                  <p style="margin:0 0 6px;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#8B3520">Reason</p>
+                  <p style="margin:0;font-size:14px;line-height:1.6;color:#3a332d">${reason}</p>
+                </div>
+              `
+              : ""
+          }
+          
+          <div style="padding:16px 18px;background:#f8f5ef;border:1px solid #eee0cc;border-radius:0">
+            <p style="margin:0 0 6px;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#6b6258">Update</p>
+            <p style="margin:0;font-size:14px;line-height:1.6;color:#3a332d">${detail}</p>
+          </div>
+
+          ${
+            productUrl
+              ? `
+                <div style="margin-top:18px">
+                  <a href="${productUrl}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:14px 22px;border-radius:0;font-size:13px;font-weight:700;letter-spacing:.16em;text-transform:uppercase">
+                    View Product
+                  </a>
+                </div>
+              `
+              : ""
+          }
+        </div>
+
+        <div style="padding:18px 28px 24px;border-top:1px solid #eee3d1;font-size:11px;line-height:1.6;color:#847b70">
+          Thank you for selling with LOOKSMAX.
+        </div>
+      </div>
+    </div>
+  `;
+
+  await transporter.sendMail({
+    from,
+    to,
+    subject,
+    text,
+    html,
+  });
+}

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {useAuth} from "@/providers/AuthContext";
 import { useCart } from "@/providers/CartContext";
@@ -240,6 +241,7 @@ const WOMEN_HAND_BAG_KEYWORDS = [
 
 const WOMEN_OUTERWEAR_COLOR = "#2c3e50";
 const DRESS_CONFLICT_ZONES: StudioZoneId[] = ["top", "bottom"];
+const INITIAL_OUTFIT_STUDIO_TRIES = 3;
 const STORED_GENERATION_KEY = "looksmax-studio-generation-job";
 
 type StoredGenerationState = {
@@ -732,9 +734,9 @@ export default function OutfitStudioPage() {
     const [studioStateHydrated, setStudioStateHydrated] = useState(false);
     const [showAllSelectedItems, setShowAllSelectedItems] = useState(true);
     const [outfitStudioStats, setOutfitStudioStats] = useState({
-      totalTries: 5,
+      totalTries: INITIAL_OUTFIT_STUDIO_TRIES,
       triesUsed: 0,
-      triesRemaining: 5,
+      triesRemaining: INITIAL_OUTFIT_STUDIO_TRIES,
       isAdmin: false,
     });
     const sharedResetTimerRef = useRef<number | null>(null);
@@ -790,14 +792,19 @@ export default function OutfitStudioPage() {
             .then((res) => res.json())
             .then((data) => {
                 setOutfitStudioStats({
-                    totalTries: data.totalTries ?? 5,
+                    totalTries: data.totalTries ?? INITIAL_OUTFIT_STUDIO_TRIES,
                     triesUsed: data.triesUsed ?? 0,
-                    triesRemaining: data.triesRemaining ?? 5,
+                    triesRemaining: data.triesRemaining ?? INITIAL_OUTFIT_STUDIO_TRIES,
                     isAdmin: data.isAdmin || false,
                 });
             })
             .catch(() => {
-                setOutfitStudioStats({ totalTries: 5, triesUsed: 0, triesRemaining: 5, isAdmin: false });
+                setOutfitStudioStats({
+                    totalTries: INITIAL_OUTFIT_STUDIO_TRIES,
+                    triesUsed: 0,
+                    triesRemaining: INITIAL_OUTFIT_STUDIO_TRIES,
+                    isAdmin: false,
+                });
             });
     }, [user?.id]);
 
@@ -2151,7 +2158,7 @@ export default function OutfitStudioPage() {
                 </section>
             </div>
 
-            {isGeneratedZoomOpen && activeGeneratedOutfitImage && (
+            {isGeneratedZoomOpen && activeGeneratedOutfitImage && typeof document !== "undefined" && createPortal(
                 <div
                     className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 px-4 py-8"
                     onClick={() => setIsGeneratedZoomOpen(false)}
@@ -2195,7 +2202,8 @@ export default function OutfitStudioPage() {
                             </>
                         )}
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
         </div>

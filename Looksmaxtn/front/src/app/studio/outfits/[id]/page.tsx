@@ -144,7 +144,7 @@ export default function SavedOutfitDetailPage({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className={images.length > 1 ? "grid grid-cols-1 gap-4 md:grid-cols-2" : "grid grid-cols-1 gap-4 md:mx-auto md:max-w-2xl"}>
           {images.map((image, index) => (
             <button
               key={index}
@@ -156,7 +156,7 @@ export default function SavedOutfitDetailPage({
               <img
                 src={image}
                 alt={`${outfit.name} ${index === 0 ? "front" : "back"}`}
-                className="w-full max-h-[75vh] object-contain"
+                className="mx-auto max-h-[75vh] w-full object-contain"
               />
             </button>
           ))}

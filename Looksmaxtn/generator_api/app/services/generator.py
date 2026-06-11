@@ -246,6 +246,7 @@ class ImageGenerator:
         product_front: str,
         product_back: str,
         previous_view_image: str | None = None,
+        additional_instructions: str = "",
     ) -> str:
         """Generate a single fully-automated clothes view.
 
@@ -259,6 +260,15 @@ class ImageGenerator:
         and accessories instead of inventing a new one.
         """
         prompt = CLOTHES_AUTO_PROMPT_TEMPLATE.replace("{VIEW}", view_name.upper())
+        additional_instructions = additional_instructions.strip()
+        if additional_instructions:
+            prompt = prompt + (
+                "\n\n--------------------------------\n"
+                "IMPORTANT ADMIN INSTRUCTIONS (CRITICAL):\n"
+                f"{additional_instructions}\n\n"
+                "Follow these admin instructions as high-priority constraints while still preserving the model identity, "
+                "the product references, and the product-as-hero requirement.\n"
+            )
         if previous_view_image:
             prompt = prompt + (
                 "\n\n--------------------------------\n"

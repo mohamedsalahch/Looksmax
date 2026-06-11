@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
     };
 
     const nextStatus: "processing" | "completed" =
-      nextImages.front && nextImages.back ? "completed" : "processing";
+      nextImages.front ? "completed" : "processing";
     await OutfitGenerationJob.findByIdAndUpdate(jobId, {
       status: nextStatus,
       images: nextImages,

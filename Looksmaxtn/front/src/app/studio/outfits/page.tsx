@@ -193,7 +193,7 @@ export default function SavedOutfitsPage() {
 
               return (
                 <div key={outfit.id} className="border border-border-color p-4 space-y-4">
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className={images.length > 1 ? "grid grid-cols-2 gap-2" : "grid grid-cols-1 gap-2"}>
                     {images.map((image, index) => (
                       <Link
                         key={`${outfit.id}-${index}`}
@@ -203,7 +203,7 @@ export default function SavedOutfitsPage() {
                         <img
                           src={image}
                           alt={`${outfit.name} ${index === 0 ? "front" : "back"}`}
-                          className="h-44 w-full object-contain transition-opacity hover:opacity-90"
+                          className="mx-auto h-44 w-full object-contain transition-opacity hover:opacity-90"
                         />
                       </Link>
                     ))}

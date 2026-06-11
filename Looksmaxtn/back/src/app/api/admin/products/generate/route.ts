@@ -105,6 +105,9 @@ export async function POST(req: NextRequest) {
               front: await fileToBase64(front as File),
               back: await fileToBase64(back as File),
             },
+            secondary_colors: {
+              additional_instructions: additionalInstructions,
+            },
           }
         : normalizedType === "shoes"
         ? {

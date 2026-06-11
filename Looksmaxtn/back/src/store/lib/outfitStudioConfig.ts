@@ -1,0 +1,1 @@
+export const INITIAL_OUTFIT_STUDIO_TRIES = 3;

@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import AuditMetaCard from "@/components/AuditMetaCard";
 import { withAuthRequest } from "@/lib/authClient";
 
@@ -95,12 +96,18 @@ function getApprovalStatusBadge(approvalStatus: ProductDetail["approvalStatus"] 
 
 export default function ProductViewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const searchParams = useSearchParams();
+  const rawReturnTo = searchParams.get("returnTo");
+  const returnTo = rawReturnTo?.startsWith("/dashboard/products") ? rawReturnTo : "/dashboard/products";
+  const editHref = `/dashboard/products/${id}/edit?returnTo=${encodeURIComponent(returnTo)}`;
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [isZoomOpen, setIsZoomOpen] = useState(false);
   const [userRole, setUserRole] = useState("");
   const [updatingApproval, setUpdatingApproval] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [showRejectReason, setShowRejectReason] = useState(false);
   const [tagDraft, setTagDraft] = useState("");
   const [updatingTag, setUpdatingTag] = useState(false);
 
@@ -126,6 +133,11 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
 
   const handleApprovalUpdate = async (approvalStatus: "approved" | "rejected") => {
     if (!product || updatingApproval) return;
+    const reason = rejectReason.trim();
+    if (approvalStatus === "rejected" && !reason) {
+      setShowRejectReason(true);
+      return;
+    }
     setUpdatingApproval(true);
     try {
       const response = await fetch(
@@ -133,7 +145,10 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
         withAuthRequest({
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ approvalStatus }),
+          body: JSON.stringify({
+            approvalStatus,
+            ...(approvalStatus === "rejected" ? { rejectionReason: reason } : {}),
+          }),
         })
       );
       const data = await response.json();
@@ -141,6 +156,8 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
       setProduct((current) =>
         current ? { ...current, approvalStatus: data.product.approvalStatus || approvalStatus } : current
       );
+      setShowRejectReason(false);
+      setRejectReason("");
     } catch {
       // Leave the current state unchanged if the update fails.
     } finally {
@@ -211,7 +228,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
         {userRole === "admin" ? (
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <Link
-              href={`/dashboard/products/${product._id}/edit`}
+              href={editHref}
               className="btn-primary"
             >
               Edit
@@ -235,6 +252,42 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
           </div>
         ) : null}
       </div>
+
+      {userRole === "admin" && showRejectReason && approvalStatus !== "rejected" && (
+        <div className="border border-danger/30 bg-danger/5 p-4">
+          <label className="label-meta mb-2 block" htmlFor="product-reject-reason">
+            Rejection reason
+          </label>
+          <textarea
+            id="product-reject-reason"
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+            rows={3}
+            className="w-full border border-danger/30 bg-bg-primary px-3 py-2 text-sm text-text-primary outline-none transition-colors focus:border-danger"
+            placeholder="Tell the store owner why this product was rejected."
+          />
+          <div className="mt-3 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setShowRejectReason(false);
+                setRejectReason("");
+              }}
+              className="btn-secondary"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleApprovalUpdate("rejected")}
+              disabled={updatingApproval || !rejectReason.trim()}
+              className="border border-danger/40 bg-danger/5 px-4 py-2.5 text-xs font-medium uppercase tracking-[0.2em] text-danger transition-colors hover:bg-danger/10 disabled:opacity-40"
+            >
+              Send Rejection
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="h-px bg-border" />
 
@@ -338,6 +391,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
           {/* Identity fields */}
           <div className="space-y-4">
             {[
+              { label: "Store",      value: product.storeName || product.createdBy?.name || "—" },
               { label: "Brand",      value: product.brand },
               { label: "Reference",  value: product.reference || "—", mono: true },
               { label: "Product ID", value: product._id, mono: true, wrap: true },

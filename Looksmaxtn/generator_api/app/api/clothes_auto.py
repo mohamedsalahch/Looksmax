@@ -4,7 +4,7 @@ import logging
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 
-from app.models.requests import ModelPictures, ProductPictures
+from app.models.requests import ModelPictures, ProductPictures, SecondaryColors
 from app.models.responses import GenerationResponse, ImageResult, OutfitResponse
 from app.services.generator import ImageGenerator
 from app.services.webhook import send_webhook, send_error_webhook
@@ -26,6 +26,7 @@ class ClothesAutoRequest(BaseModel):
     webhook_url: str | None = None
     model_pictures: ModelPictures
     product_pictures: ProductPictures
+    secondary_colors: SecondaryColors | None = None
 
 
 async def _process(job_id: str, webhook_url: str, request: ClothesAutoRequest):
@@ -40,6 +41,11 @@ async def _process(job_id: str, webhook_url: str, request: ClothesAutoRequest):
             request.model_pictures.back,
             request.product_pictures.front,
             request.product_pictures.back,
+            additional_instructions=(
+                request.secondary_colors.additional_instructions
+                if request.secondary_colors is not None
+                else ""
+            ),
         )
         await send_webhook(webhook_url, job_id, "front", front_b64)
 
@@ -50,6 +56,11 @@ async def _process(job_id: str, webhook_url: str, request: ClothesAutoRequest):
             request.product_pictures.front,
             request.product_pictures.back,
             previous_view_image=front_b64,
+            additional_instructions=(
+                request.secondary_colors.additional_instructions
+                if request.secondary_colors is not None
+                else ""
+            ),
         )
         await send_webhook(webhook_url, job_id, "back", back_b64)
     except Exception as e:
@@ -79,6 +90,11 @@ async def generate_clothes_auto(request: ClothesAutoRequest, background_tasks: B
             request.model_pictures.back,
             request.product_pictures.front,
             request.product_pictures.back,
+            additional_instructions=(
+                request.secondary_colors.additional_instructions
+                if request.secondary_colors is not None
+                else ""
+            ),
         )
         back_b64 = await _generator.generate_clothes_auto_view(
             "back",
@@ -87,6 +103,11 @@ async def generate_clothes_auto(request: ClothesAutoRequest, background_tasks: B
             request.product_pictures.front,
             request.product_pictures.back,
             previous_view_image=front_b64,
+            additional_instructions=(
+                request.secondary_colors.additional_instructions
+                if request.secondary_colors is not None
+                else ""
+            ),
         )
         return GenerationResponse(images=[
             ImageResult(base64=front_b64),

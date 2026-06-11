@@ -13,8 +13,6 @@ from app.services import dataset
 from app.prompts.templates import (
     FRONT_VIEW_PROMPT_TEMPLATE,
     FRONT_VIEW_PROMPT_VERSION,
-    BACK_VIEW_PROMPT_TEMPLATE,
-    BACK_VIEW_PROMPT_VERSION,
 )
 
 router = APIRouter(prefix="/api", tags=["outfit"])
@@ -144,45 +142,6 @@ async def process_outfit_generation(
             image=front_b64
         )
 
-        # Step 2: Generate back view using front as reference
-        logger.info(f"Job {job_id}: Starting back view generation...")
-        back_b64 = await _generator.generate_back_view(
-            front_image=front_b64,
-            body_zones=body_zones
-        )
-        logger.info(f"Job {job_id}: Back view generated successfully ({len(back_b64)} chars)")
-
-        # Capture training sample (back view step)
-        back_inputs: dict[str, str | None] = {"front_view": front_b64}
-        for zone_name, zone in [
-            ("headwear", body_zones.headwear),
-            ("outerwear", body_zones.outerwear),
-            ("dress", body_zones.dress),
-            ("top", body_zones.top),
-            ("bottom", body_zones.bottom),
-            ("footwear", body_zones.footwear),
-        ]:
-            if zone.status and zone.back:
-                back_inputs[f"{zone_name}_back"] = zone.back
-        dataset.record(
-            flow="outfit",
-            model=_generator.model,
-            prompt_version=BACK_VIEW_PROMPT_VERSION,
-            prompt_text=BACK_VIEW_PROMPT_TEMPLATE,
-            inputs=back_inputs,
-            outputs={"back": back_b64},
-            job_id=job_id,
-            extra={"step": "back", "active_zones": active_zones},
-        )
-
-        # Send webhook with back image (complete)
-        logger.info(f"Job {job_id}: Sending final webhook with back image...")
-        await send_webhook(
-            webhook_url=webhook_url,
-            job_id=job_id,
-            view="back",
-            image=back_b64
-        )
         logger.info(f"Job {job_id}: === OUTFIT GENERATION COMPLETE ===")
 
     except Exception as e:
@@ -194,7 +153,7 @@ async def process_outfit_generation(
 @router.post("/generate_outfit", response_model=OutfitResponse)
 async def generate_outfit_image(request: OutfitRequest, background_tasks: BackgroundTasks):
     """
-    Generate virtual try-on images of a person wearing a complete outfit.
+    Generate a front-view virtual try-on image of a person wearing a complete outfit.
 
     **Request:**
     - job_id: unique job identifier
@@ -210,8 +169,7 @@ async def generate_outfit_image(request: OutfitRequest, background_tasks: Backgr
     - status: "processing"
 
     **Webhook updates:**
-    1. First webhook (front ready): status="processing", front_image filled
-    2. Second webhook (complete): status="completed", both images filled
+    - One webhook with the generated front image.
     """
     logger.info(f"=== OUTFIT REQUEST RECEIVED ===")
     logger.info(f"Job ID: {request.job_id}")

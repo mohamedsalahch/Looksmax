@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
+import { INITIAL_OUTFIT_STUDIO_TRIES } from "@/store/lib/outfitStudioConfig";
 
 export interface IAddress {
   street: string;
@@ -90,7 +91,7 @@ const bodyProfileSchema = new Schema<IBodyProfile>(
 
 const outfitStudioStatsSchema = new Schema<IOutfitStudioStats>(
   {
-    initialTries: { type: Number, default: 5 },
+    initialTries: { type: Number, default: INITIAL_OUTFIT_STUDIO_TRIES },
     triesUsed: { type: Number, default: 0 },
   },
   { _id: false }
@@ -118,7 +119,7 @@ const userSchema = new Schema<IUser>(
     passwordResetSentAt: { type: Date, default: null },
     address: { type: addressSchema, default: () => ({}) },
     bodyProfile: { type: bodyProfileSchema, default: () => ({}) },
-    outfitStudioStats: { type: outfitStudioStatsSchema, default: () => ({ initialTries: 5, triesUsed: 0 }) },
+    outfitStudioStats: { type: outfitStudioStatsSchema, default: () => ({ initialTries: INITIAL_OUTFIT_STUDIO_TRIES, triesUsed: 0 }) },
     balance: { type: Number, default: 0 },
   },
   { timestamps: true }

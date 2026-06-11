@@ -3,12 +3,14 @@ import mongoose from "mongoose";
 import dbConnect from "@/admin/lib/mongodb";
 import Product from "@/admin/models/Product";
 import Order from "@/admin/models/Order";
+import User from "@/admin/models/User";
 import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
 import { deleteProductImage, saveProductImages } from "@/admin/lib/productUploads";
 import { getConditionStatusFromScore } from "@/admin/lib/productCondition";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 import { broadcastAdminEvent } from "@/admin/lib/adminEvents";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
+import { sendProductApprovalStatusEmail } from "@/store/lib/mailer";
 import {
   getSoldQuantityByProductAndVariant,
   getSoldQuantityByProductIds,
@@ -127,6 +129,30 @@ function validateProductApproval(product: {
     return "Please add product size quantities before approval.";
   }
   return "";
+}
+
+function getAbsoluteUrl(pathOrUrl: string) {
+  const value = String(pathOrUrl || "").trim();
+  if (!value) return "";
+  if (/^https?:\/\//i.test(value)) return value;
+  const baseUrl = (
+    process.env.STORE_BASE_URL ||
+    process.env.NEXT_PUBLIC_STORE_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.ADMIN_BASE_URL ||
+    "http://localhost:3001"
+  ).replace(/\/$/, "");
+  return `${baseUrl}${value.startsWith("/") ? "" : "/"}${value}`;
+}
+
+function getProductEmailImageUrl(product: { images?: Array<{ url?: string; isMain?: boolean; isPublic?: boolean }> }) {
+  const images = (product.images || []).filter((image) => Boolean(image?.url));
+  const selected =
+    images.find((image) => image.isMain && image.isPublic !== false) ||
+    images.find((image) => image.isPublic !== false) ||
+    images.find((image) => image.isMain) ||
+    images[0];
+  return getAbsoluteUrl(selected?.url || "");
 }
 
 function getStoredVariants(product: { variants?: unknown }): StoredVariantLean[] {
@@ -363,9 +389,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const totalStock = sumVariantStock(variants);
     const totalFullStock = sumVariantFullStock(variants);
 
-    const [soldQuantityMap, soldByVariantMap] = await Promise.all([
+    const ownerId = product.createdBy?.id ? String(product.createdBy.id) : "";
+    const [soldQuantityMap, soldByVariantMap, owner] = await Promise.all([
       getSoldQuantityByProductIds([id]),
       getSoldQuantityByProductAndVariant([id]),
+      ownerId ? User.findById(ownerId).select("_id storeName storeType email").lean() : Promise.resolve(null),
     ]);
     const soldQuantity = soldQuantityMap.get(id) || 0;
     const soldByVariant = soldByVariantMap.get(id) || new Map<string, number>();
@@ -380,6 +408,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       product: {
         ...product,
         images: responseMedia.images,
+        storeName: String(owner?.storeName || ""),
+        storeType: owner?.storeType || null,
         stock: totalStock,
         availableStock: totalStock,
         soldQuantity,
@@ -428,6 +458,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       if (session.role === "admin") {
         const allowedAdminKeys = new Set([
           "approvalStatus",
+          "rejectionReason",
           "isActive",
           "tag",
           "reference",
@@ -461,6 +492,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           excludeProductId: id,
         });
         if (duplicateResponse) return duplicateResponse;
+      }
+
+      const previousApprovalStatus = String(existingProduct.approvalStatus || "approved");
+      const shouldNotifyProductApproval =
+        session.role === "admin" &&
+        (body.approvalStatus === "approved" || body.approvalStatus === "rejected") &&
+        body.approvalStatus !== previousApprovalStatus;
+      const rejectionReason = String(body.rejectionReason || "").trim();
+      if (session.role === "admin" && body.approvalStatus === "rejected" && !rejectionReason) {
+        return NextResponse.json({ error: "Please add a rejection reason." }, { status: 400 });
       }
 
       if (session.role === "admin" && ["pending", "approved", "rejected"].includes(body.approvalStatus)) {
@@ -538,6 +579,28 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
       const product = await Product.findByIdAndUpdate(id, update, { new: true }).lean();
       if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 });
+      if (shouldNotifyProductApproval) {
+        const recipientEmail = String(existingProduct.createdBy?.email || "").trim();
+        if (recipientEmail) {
+          try {
+            const owner = existingProduct.createdBy?.id
+              ? await User.findById(existingProduct.createdBy.id).select("storeName").lean()
+              : null;
+            await sendProductApprovalStatusEmail({
+              to: recipientEmail,
+              name: String(existingProduct.createdBy?.name || "Store owner"),
+              storeName: String(owner?.storeName || existingProduct.createdBy?.name || "Your store"),
+              productName: String(product.name || existingProduct.name || "Product"),
+              status: body.approvalStatus,
+              reason: body.approvalStatus === "rejected" ? rejectionReason : "",
+              imageUrl: getProductEmailImageUrl(product),
+              productUrl: `${(process.env.ADMIN_BASE_URL || "http://localhost:3001").replace(/\/$/, "")}/dashboard/products/${id}`,
+            });
+          } catch (emailError) {
+            console.error("Product approval status email error:", emailError);
+          }
+        }
+      }
       const variants = getStoredVariants(product);
       const updatedSoldByVariantMap = await getSoldQuantityByProductAndVariant([id]);
       const updatedSoldByVariant = updatedSoldByVariantMap.get(id) || new Map<string, number>();
@@ -561,10 +624,80 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       });
     }
 
-    // Multipart full edit.
+    // Store-owner restricted edit: name, price, and appended hidden pictures only.
     if (session.role === "store_owner") {
-      return NextResponse.json({ error: "Store owners cannot edit products after submission." }, { status: 403 });
+      const formData = await req.formData();
+      const allowedKeys = new Set(["name", "price", "images"]);
+      const hasRestrictedKeys = Array.from(formData.keys()).some((key) => !allowedKeys.has(key));
+      if (hasRestrictedKeys) {
+        return NextResponse.json({ error: "Store owners can only edit name, price, and add pictures." }, { status: 403 });
+      }
+
+      const name = String(formData.get("name") || "").trim();
+      const price = Number(formData.get("price") || 0);
+      if (!name) {
+        return NextResponse.json({ error: "Product name is required." }, { status: 400 });
+      }
+      if (!Number.isFinite(price) || price <= 0) {
+        return NextResponse.json({ error: "Please enter a valid price." }, { status: 400 });
+      }
+
+      const imageFiles = formData
+        .getAll("images")
+        .filter((value): value is File => value instanceof File && value.size > 0);
+      const newImagePaths = await saveProductImages(imageFiles);
+      const existingImages = (existingProduct.images || []).filter((image) => Boolean(image && image.url));
+      const images = [
+        ...existingImages,
+        ...newImagePaths.map((url) => ({
+          url,
+          isMain: false,
+          isPublic: false,
+          source: "store_owner_edit",
+          color: null,
+          sourceKey: "store-owner-added",
+          gender: null,
+        })),
+      ];
+
+      const product = await Product.findByIdAndUpdate(
+        id,
+        {
+          name,
+          price,
+          images,
+          approvalStatus: "pending",
+          updatedBy: auditActor,
+        },
+        { new: true }
+      ).lean();
+      if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+      const variants = getStoredVariants(product);
+      const finalSoldByVariantMap = await getSoldQuantityByProductAndVariant([id]);
+      const finalSoldByVariant = finalSoldByVariantMap.get(id) || new Map<string, number>();
+      const response = NextResponse.json({
+        product: {
+          ...product,
+          stock: sumVariantStock(variants),
+          availableStock: sumVariantStock(variants),
+          fullStock: sumVariantFullStock(variants),
+          variants: serializeStoredVariants(variants, finalSoldByVariant),
+          sizes: deriveSizes(variants),
+          colors: deriveColors(variants),
+          visibilityStatus: product.isActive === false ? "inactive" : "active",
+          availabilityStatus: getAvailabilityStatus({
+            productType: product.productType,
+            variants,
+          }),
+          approvalStatus: product.approvalStatus || "approved",
+        },
+      });
+      broadcastAdminEvent(buildAdminProductEventPayload(product, "updated"));
+      return response;
     }
+
+    // Multipart full edit.
     const formData = await req.formData();
     const existingImages = JSON.parse(String(formData.get("existingImages") || "[]")) as { url: string }[];
     const imageOrder = JSON.parse(String(formData.get("imageOrder") || "[]")) as string[];

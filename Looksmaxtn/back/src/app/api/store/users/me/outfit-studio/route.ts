@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 import dbConnect from "@/store/lib/mongodb";
 import { getSession } from "@/store/lib/auth";
 import User from "@/store/models/User";
-import { calculateUserOutfitStudioTries } from "@/store/lib/outfitStudioUtils";
+import { calculateUserOutfitStudioTries, normalizeInitialOutfitStudioTries } from "@/store/lib/outfitStudioUtils";
 
-export async function GET(_req: NextRequest) {
+export async function GET() {
   try {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -29,7 +29,7 @@ export async function GET(_req: NextRequest) {
       });
     }
 
-    const initialTries = user.outfitStudioStats?.initialTries || 5;
+    const initialTries = normalizeInitialOutfitStudioTries(user.outfitStudioStats?.initialTries);
     const triesUsed = user.outfitStudioStats?.triesUsed || 0;
     const { total: totalTries, bonusFromSpending } = await calculateUserOutfitStudioTries(userId, initialTries);
 
