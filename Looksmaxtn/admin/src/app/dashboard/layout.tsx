@@ -373,11 +373,12 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
 
-    fetch("/api/admin/auth/me", withAuthRequest())
+    fetch(`/api/admin/auth/me?ts=${Date.now()}`, withAuthRequest({ cache: "no-store" }))
       .then((r) => r.json())
       .then(async (data) => {
         if (!active) return;
         if (!data.user) {
+          clearAuthToken();
           router.push("/");
           return;
         }
