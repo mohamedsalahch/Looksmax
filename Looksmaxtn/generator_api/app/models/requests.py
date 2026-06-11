@@ -40,6 +40,7 @@ class SecondaryColors(BaseModel):
     shoes: ColorChoice | None = None
     garment: ColorChoice | None = None
     additional_instructions: str = ""
+    companion_prompt: str = ""
 
 
 class ClothesRequest(BaseModel):

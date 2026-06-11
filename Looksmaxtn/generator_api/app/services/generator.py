@@ -24,6 +24,18 @@ from app.utils.image import b64_to_part
 
 logger = logging.getLogger(__name__)
 
+_FOOTWEAR_SECTION_TEMPLATE = """--------------------------------
+FOOTWEAR (FIXED):
+The shoes MUST be identical across all generations.
+
+STRICT RULES:
+- Plain {SHOES_COLOR_NAME} {FOOTWEAR_TYPE} ONLY
+- Color: exactly {SHOES_COLOR_HEX} ({SHOES_COLOR_NAME})
+- The visible footwear color must match {SHOES_COLOR_HEX}; do not use black, white, or gray unless that exact color was selected.
+- Minimalist, low-profile silhouette
+- No logos, no patterns, no contrasting accents
+- Keep the silhouette simple, but keep the selected color clearly visible."""
+
 
 class ImageGenerator:
     """Service for generating images using Google Gemini AI."""
@@ -126,15 +138,36 @@ class ImageGenerator:
             shoes_name = "White"
             shoes_hex = "#FFFFFF"
 
-        companion_instructions = _build_companion_instructions(
-            target=target,
-            top_type=top_type,
-            top_name=top_name,
-            top_hex=top_hex,
-            bottom_type=bottom_type,
-            bottom_name=bottom_name,
-            bottom_hex=bottom_hex,
+        freewrite_prompt = (
+            secondary_colors.companion_prompt.strip()
+            if secondary_colors is not None and secondary_colors.companion_prompt
+            else ""
         )
+
+        if freewrite_prompt:
+            companion_instructions = freewrite_prompt
+            footwear_section = ""
+            # Neutral values so remaining {SHOES_COLOR_NAME}/{FOOTWEAR_TYPE} refs in
+            # the STRICT CONSTRAINTS block render sensibly.
+            shoes_name = "companion"
+            footwear_type = "footwear"
+            shoes_hex = "#000000"
+        else:
+            companion_instructions = _build_companion_instructions(
+                target=target,
+                top_type=top_type,
+                top_name=top_name,
+                top_hex=top_hex,
+                bottom_type=bottom_type,
+                bottom_name=bottom_name,
+                bottom_hex=bottom_hex,
+            )
+            footwear_section = (
+                _FOOTWEAR_SECTION_TEMPLATE
+                .replace("{FOOTWEAR_TYPE}", footwear_type)
+                .replace("{SHOES_COLOR_NAME}", shoes_name)
+                .replace("{SHOES_COLOR_HEX}", shoes_hex)
+            )
 
         additional_instructions = (
             secondary_colors.additional_instructions.strip()
@@ -152,6 +185,7 @@ class ImageGenerator:
             .replace("{VIEW}", view_name.upper())
             .replace("{GENERATION_TARGET}", target.upper())
             .replace("{COMPANION_GARMENTS_SECTION}", companion_instructions)
+            .replace("{FOOTWEAR_SECTION}", footwear_section)
             .replace("{ADDITIONAL_INSTRUCTIONS}", additional_section)
             .replace("{TOP_TYPE}", top_type)
             .replace("{BOTTOM_TYPE}", bottom_type)
