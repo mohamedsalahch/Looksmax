@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
     const shoesColorName = String(formData.get("shoesColorName") || "");
     const shoesColorHex = String(formData.get("shoesColorHex") || "");
     const additionalInstructions = String(formData.get("additionalInstructions") || "");
+    const companionPrompt = String(formData.get("companionPrompt") || "");
     const normalizedType = normalizeType(type, fashionSubtype);
     const isAuto = mode === "auto" && normalizedType === "clothes";
     const model =
@@ -148,6 +149,7 @@ export async function POST(req: NextRequest) {
                   ? { name: shoesColorName, hex: shoesColorHex }
                   : undefined,
               additional_instructions: additionalInstructions,
+              companion_prompt: companionPrompt || undefined,
             },
           };
 

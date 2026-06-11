@@ -149,6 +149,8 @@ type Colorway = {
   companionFootwearColor: PaletteColor | null;
   additionalInstructions: string;
   generationMode: "auto" | "manual";
+  companionInputMode: "structured" | "freewrite";
+  companionPrompt: string;
 };
 
 function createEmptyColorway(hex = ""): Colorway {
@@ -174,6 +176,8 @@ function createEmptyColorway(hex = ""): Colorway {
     companionTopColor: null, companionBottomColor: null, companionFootwearColor: null,
     additionalInstructions: "",
     generationMode: "auto",
+    companionInputMode: "structured",
+    companionPrompt: "",
   };
 }
 
@@ -585,47 +589,74 @@ function ColorwayGenerationCard({
       {companionZones.length > 0 && (
         <div className="space-y-3">
           <p className="text-[9px] uppercase tracking-wider text-text-secondary">Model Generation</p>
-          {companionZones.includes("top") && (
-            <div className="space-y-2">
-              <p className="text-[9px] uppercase tracking-wider text-text-secondary">Top</p>
-              <select value={colorway.companionTopType} onChange={(e) => onUpdate({ companionTopType: e.target.value })} className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors">
-                <option value="">Select type</option>
-                {companionTypeOptions.top.map((cat) => <option key={cat.slug} value={cat.slug}>{cat.name}</option>)}
-              </select>
-              <CompanionColorPicker
-                color={colorway.companionTopColor}
-                onSelect={(color) => onUpdate({ companionTopColor: color })}
-                title="Pick a custom top color"
-              />
-            </div>
-          )}
-          {companionZones.includes("bottom") && (
-            <div className="space-y-2">
-              <p className="text-[9px] uppercase tracking-wider text-text-secondary">Bottom</p>
-              <select value={colorway.companionBottomType} onChange={(e) => onUpdate({ companionBottomType: e.target.value })} className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors">
-                <option value="">Select type</option>
-                {companionTypeOptions.bottom.map((cat) => <option key={cat.slug} value={cat.slug}>{cat.name}</option>)}
-              </select>
-              <CompanionColorPicker
-                color={colorway.companionBottomColor}
-                onSelect={(color) => onUpdate({ companionBottomColor: color })}
-                title="Pick a custom bottom color"
-              />
-            </div>
-          )}
-          {companionZones.includes("footwear") && (
-            <div className="space-y-2">
-              <p className="text-[9px] uppercase tracking-wider text-text-secondary">Footwear</p>
-              <select value={colorway.companionFootwearType} onChange={(e) => onUpdate({ companionFootwearType: e.target.value })} className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors">
-                <option value="">Select type</option>
-                {companionTypeOptions.footwear.map((cat) => <option key={cat.slug} value={cat.slug}>{cat.name}</option>)}
-              </select>
-              <CompanionColorPicker
-                color={colorway.companionFootwearColor}
-                onSelect={(color) => onUpdate({ companionFootwearColor: color })}
-                title="Pick a custom footwear color"
-              />
-            </div>
+          <div className="flex items-center gap-0.5 self-start rounded-full border border-border p-0.5">
+            {(["structured", "freewrite"] as const).map((inputMode) => {
+              const active = (colorway.companionInputMode ?? "structured") === inputMode;
+              return (
+                <button
+                  key={inputMode}
+                  type="button"
+                  onClick={() => onUpdate({ companionInputMode: inputMode })}
+                  className={`rounded-full px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wider transition-colors ${active ? "bg-accent text-bg-primary" : "text-text-secondary hover:text-text-primary"}`}
+                >
+                  {inputMode}
+                </button>
+              );
+            })}
+          </div>
+          {(colorway.companionInputMode ?? "structured") === "freewrite" ? (
+            <textarea
+              value={colorway.companionPrompt}
+              onChange={(e) => onUpdate({ companionPrompt: e.target.value })}
+              rows={4}
+              placeholder="e.g. white slim-fit t-shirt, black straight-leg pants, white minimalist sneakers"
+              className="w-full border border-border bg-transparent px-2 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors resize-y"
+            />
+          ) : (
+            <>
+              {companionZones.includes("top") && (
+                <div className="space-y-2">
+                  <p className="text-[9px] uppercase tracking-wider text-text-secondary">Top</p>
+                  <select value={colorway.companionTopType} onChange={(e) => onUpdate({ companionTopType: e.target.value })} className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors">
+                    <option value="">Select type</option>
+                    {companionTypeOptions.top.map((cat) => <option key={cat.slug} value={cat.slug}>{cat.name}</option>)}
+                  </select>
+                  <CompanionColorPicker
+                    color={colorway.companionTopColor}
+                    onSelect={(color) => onUpdate({ companionTopColor: color })}
+                    title="Pick a custom top color"
+                  />
+                </div>
+              )}
+              {companionZones.includes("bottom") && (
+                <div className="space-y-2">
+                  <p className="text-[9px] uppercase tracking-wider text-text-secondary">Bottom</p>
+                  <select value={colorway.companionBottomType} onChange={(e) => onUpdate({ companionBottomType: e.target.value })} className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors">
+                    <option value="">Select type</option>
+                    {companionTypeOptions.bottom.map((cat) => <option key={cat.slug} value={cat.slug}>{cat.name}</option>)}
+                  </select>
+                  <CompanionColorPicker
+                    color={colorway.companionBottomColor}
+                    onSelect={(color) => onUpdate({ companionBottomColor: color })}
+                    title="Pick a custom bottom color"
+                  />
+                </div>
+              )}
+              {companionZones.includes("footwear") && (
+                <div className="space-y-2">
+                  <p className="text-[9px] uppercase tracking-wider text-text-secondary">Footwear</p>
+                  <select value={colorway.companionFootwearType} onChange={(e) => onUpdate({ companionFootwearType: e.target.value })} className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors">
+                    <option value="">Select type</option>
+                    {companionTypeOptions.footwear.map((cat) => <option key={cat.slug} value={cat.slug}>{cat.name}</option>)}
+                  </select>
+                  <CompanionColorPicker
+                    color={colorway.companionFootwearColor}
+                    onSelect={(color) => onUpdate({ companionFootwearColor: color })}
+                    title="Pick a custom footwear color"
+                  />
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -1330,65 +1361,92 @@ function ColorwayCard({
               </p>
             ) : companionZones && companionZones.length > 0 ? (
               <div className="space-y-3">
-                {companionZones.includes("top") && (
-                  <div className="space-y-2">
-                    <p className="text-[9px] uppercase tracking-wider text-text-secondary">Top</p>
-                    <select
-                      value={colorway.companionTopType}
-                      onChange={(e) => onUpdate({ companionTopType: e.target.value })}
-                      className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
-                    >
-                      <option value="">Select type</option>
-                      {companionTypeOptions?.top.map((cat) => (
-                        <option key={cat.slug} value={cat.slug}>{cat.name}</option>
-                      ))}
-                    </select>
-                    <CompanionColorPicker
-                      color={colorway.companionTopColor}
-                      onSelect={(color) => onUpdate({ companionTopColor: color })}
-                      title="Pick a custom top color"
-                    />
-                  </div>
-                )}
-                {companionZones.includes("bottom") && (
-                  <div className="space-y-2">
-                    <p className="text-[9px] uppercase tracking-wider text-text-secondary">Bottom</p>
-                    <select
-                      value={colorway.companionBottomType}
-                      onChange={(e) => onUpdate({ companionBottomType: e.target.value })}
-                      className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
-                    >
-                      <option value="">Select type</option>
-                      {companionTypeOptions?.bottom.map((cat) => (
-                        <option key={cat.slug} value={cat.slug}>{cat.name}</option>
-                      ))}
-                    </select>
-                    <CompanionColorPicker
-                      color={colorway.companionBottomColor}
-                      onSelect={(color) => onUpdate({ companionBottomColor: color })}
-                      title="Pick a custom bottom color"
-                    />
-                  </div>
-                )}
-                {companionZones.includes("footwear") && (
-                  <div className="space-y-2">
-                    <p className="text-[9px] uppercase tracking-wider text-text-secondary">Footwear</p>
-                    <select
-                      value={colorway.companionFootwearType}
-                      onChange={(e) => onUpdate({ companionFootwearType: e.target.value })}
-                      className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
-                    >
-                      <option value="">Select type</option>
-                      {companionTypeOptions?.footwear.map((cat) => (
-                        <option key={cat.slug} value={cat.slug}>{cat.name}</option>
-                      ))}
-                    </select>
-                    <CompanionColorPicker
-                      color={colorway.companionFootwearColor}
-                      onSelect={(color) => onUpdate({ companionFootwearColor: color })}
-                      title="Pick a custom footwear color"
-                    />
-                  </div>
+                <div className="flex items-center gap-0.5 self-start rounded-full border border-border p-0.5">
+                  {(["structured", "freewrite"] as const).map((inputMode) => {
+                    const active = (colorway.companionInputMode ?? "structured") === inputMode;
+                    return (
+                      <button
+                        key={inputMode}
+                        type="button"
+                        onClick={() => onUpdate({ companionInputMode: inputMode })}
+                        className={`rounded-full px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wider transition-colors ${active ? "bg-accent text-bg-primary" : "text-text-secondary hover:text-text-primary"}`}
+                      >
+                        {inputMode}
+                      </button>
+                    );
+                  })}
+                </div>
+                {(colorway.companionInputMode ?? "structured") === "freewrite" ? (
+                  <textarea
+                    value={colorway.companionPrompt}
+                    onChange={(e) => onUpdate({ companionPrompt: e.target.value })}
+                    rows={4}
+                    placeholder="e.g. white slim-fit t-shirt, black straight-leg pants, white minimalist sneakers"
+                    className="w-full border border-border bg-transparent px-2 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors resize-y"
+                  />
+                ) : (
+                  <>
+                    {companionZones.includes("top") && (
+                      <div className="space-y-2">
+                        <p className="text-[9px] uppercase tracking-wider text-text-secondary">Top</p>
+                        <select
+                          value={colorway.companionTopType}
+                          onChange={(e) => onUpdate({ companionTopType: e.target.value })}
+                          className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
+                        >
+                          <option value="">Select type</option>
+                          {companionTypeOptions?.top.map((cat) => (
+                            <option key={cat.slug} value={cat.slug}>{cat.name}</option>
+                          ))}
+                        </select>
+                        <CompanionColorPicker
+                          color={colorway.companionTopColor}
+                          onSelect={(color) => onUpdate({ companionTopColor: color })}
+                          title="Pick a custom top color"
+                        />
+                      </div>
+                    )}
+                    {companionZones.includes("bottom") && (
+                      <div className="space-y-2">
+                        <p className="text-[9px] uppercase tracking-wider text-text-secondary">Bottom</p>
+                        <select
+                          value={colorway.companionBottomType}
+                          onChange={(e) => onUpdate({ companionBottomType: e.target.value })}
+                          className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
+                        >
+                          <option value="">Select type</option>
+                          {companionTypeOptions?.bottom.map((cat) => (
+                            <option key={cat.slug} value={cat.slug}>{cat.name}</option>
+                          ))}
+                        </select>
+                        <CompanionColorPicker
+                          color={colorway.companionBottomColor}
+                          onSelect={(color) => onUpdate({ companionBottomColor: color })}
+                          title="Pick a custom bottom color"
+                        />
+                      </div>
+                    )}
+                    {companionZones.includes("footwear") && (
+                      <div className="space-y-2">
+                        <p className="text-[9px] uppercase tracking-wider text-text-secondary">Footwear</p>
+                        <select
+                          value={colorway.companionFootwearType}
+                          onChange={(e) => onUpdate({ companionFootwearType: e.target.value })}
+                          className="w-full border-0 border-b border-border bg-transparent px-1 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/50 focus:border-text-primary focus:outline-none transition-colors"
+                        >
+                          <option value="">Select type</option>
+                          {companionTypeOptions?.footwear.map((cat) => (
+                            <option key={cat.slug} value={cat.slug}>{cat.name}</option>
+                          ))}
+                        </select>
+                        <CompanionColorPicker
+                          color={colorway.companionFootwearColor}
+                          onSelect={(color) => onUpdate({ companionFootwearColor: color })}
+                          title="Pick a custom footwear color"
+                        />
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             ) : (
@@ -1879,6 +1937,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     if (!Boolean(cw.frontFile || cw.frontPreview) || !Boolean(cw.backFile || cw.backPreview)) return false;
     // Auto mode lets the AI pick the companion outfit — only model + front/back are required.
     if (cw.generationMode !== "manual") return true;
+    if (cw.companionInputMode === "freewrite") return Boolean(cw.companionPrompt.trim());
     if (companionZones.includes("top") && (!cw.companionTopType || !cw.companionTopColor)) return false;
     if (companionZones.includes("bottom") && (!cw.companionBottomType || !cw.companionBottomColor)) return false;
     if (companionZones.includes("footwear") && (!cw.companionFootwearType || !cw.companionFootwearColor)) return false;
@@ -1913,18 +1972,25 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     }
     const isAutoMode = cw.generationMode !== "manual";
     if (!isAutoMode) {
-    if (companionZones.includes("top") && (!cw.companionTopType || !cw.companionTopColor)) {
-      updateColorway(colorwayId, { generateStatus: "failed", generateError: "Please select the top type and color first." });
-      return;
-    }
-    if (companionZones.includes("bottom") && (!cw.companionBottomType || !cw.companionBottomColor)) {
-      updateColorway(colorwayId, { generateStatus: "failed", generateError: "Please select the bottom type and color first." });
-      return;
-    }
-    if (companionZones.includes("footwear") && (!cw.companionFootwearType || !cw.companionFootwearColor)) {
-      updateColorway(colorwayId, { generateStatus: "failed", generateError: "Please select the footwear type and color first." });
-      return;
-    }
+      if (cw.companionInputMode === "freewrite") {
+        if (!cw.companionPrompt.trim()) {
+          updateColorway(colorwayId, { generateStatus: "failed", generateError: "Please write a companion prompt first." });
+          return;
+        }
+      } else {
+        if (companionZones.includes("top") && (!cw.companionTopType || !cw.companionTopColor)) {
+          updateColorway(colorwayId, { generateStatus: "failed", generateError: "Please select the top type and color first." });
+          return;
+        }
+        if (companionZones.includes("bottom") && (!cw.companionBottomType || !cw.companionBottomColor)) {
+          updateColorway(colorwayId, { generateStatus: "failed", generateError: "Please select the bottom type and color first." });
+          return;
+        }
+        if (companionZones.includes("footwear") && (!cw.companionFootwearType || !cw.companionFootwearColor)) {
+          updateColorway(colorwayId, { generateStatus: "failed", generateError: "Please select the footwear type and color first." });
+          return;
+        }
+      }
     }
     try {
       const [frontSrc, backSrc] = await Promise.all([
@@ -1947,14 +2013,18 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         if (!isAutoMode) {
           body.append("generationTarget", generationRequirements.generationTarget);
           body.append("garmentZone", generationRequirements.generationTarget === "bottom" ? "bottom" : "top");
-          if (companionZones.includes("top") && cw.companionTopType) body.append("companionTopType", cw.companionTopType);
-          if (companionZones.includes("bottom") && cw.companionBottomType) body.append("companionBottomType", cw.companionBottomType);
-          if (companionZones.includes("footwear") && cw.companionFootwearType) body.append("footwearType", cw.companionFootwearType);
-          if (companionZones.includes("top") && cw.companionTopColor) { body.append("topColorName", cw.companionTopColor.name); body.append("topColorHex", cw.companionTopColor.hex); }
-          if (companionZones.includes("bottom") && cw.companionBottomColor) { body.append("bottomColorName", cw.companionBottomColor.name); body.append("bottomColorHex", cw.companionBottomColor.hex); }
-          if (companionZones.includes("footwear") && cw.companionFootwearColor) { body.append("shoesColorName", cw.companionFootwearColor.name); body.append("shoesColorHex", cw.companionFootwearColor.hex); }
-          if (cw.additionalInstructions && cw.additionalInstructions.trim()) {
-            body.append("additionalInstructions", cw.additionalInstructions.trim());
+          if (cw.companionInputMode === "freewrite") {
+            body.append("companionPrompt", cw.companionPrompt.trim());
+          } else {
+            if (companionZones.includes("top") && cw.companionTopType) body.append("companionTopType", cw.companionTopType);
+            if (companionZones.includes("bottom") && cw.companionBottomType) body.append("companionBottomType", cw.companionBottomType);
+            if (companionZones.includes("footwear") && cw.companionFootwearType) body.append("footwearType", cw.companionFootwearType);
+            if (companionZones.includes("top") && cw.companionTopColor) { body.append("topColorName", cw.companionTopColor.name); body.append("topColorHex", cw.companionTopColor.hex); }
+            if (companionZones.includes("bottom") && cw.companionBottomColor) { body.append("bottomColorName", cw.companionBottomColor.name); body.append("bottomColorHex", cw.companionBottomColor.hex); }
+            if (companionZones.includes("footwear") && cw.companionFootwearColor) { body.append("shoesColorName", cw.companionFootwearColor.name); body.append("shoesColorHex", cw.companionFootwearColor.hex); }
+            if (cw.additionalInstructions && cw.additionalInstructions.trim()) {
+              body.append("additionalInstructions", cw.additionalInstructions.trim());
+            }
           }
         }
         body.append("front", frontFile); body.append("back", backFile);

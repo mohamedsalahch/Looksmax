@@ -49,17 +49,7 @@ REQUIREMENTS:
 --------------------------------
 {COMPANION_GARMENTS_SECTION}
 
---------------------------------
-FOOTWEAR (FIXED):
-The shoes MUST be identical across all generations.
-
-STRICT RULES:
-- Plain {SHOES_COLOR_NAME} {FOOTWEAR_TYPE} ONLY
-- Color: exactly {SHOES_COLOR_HEX} ({SHOES_COLOR_NAME})
-- The visible footwear color must match {SHOES_COLOR_HEX}; do not use black, white, or gray unless that exact color was selected.
-- Minimalist, low-profile silhouette
-- No logos, no patterns, no contrasting accents
-- Keep the silhouette simple, but keep the selected color clearly visible.
+{FOOTWEAR_SECTION}
 
 --------------------------------
 BACKGROUND:
@@ -145,17 +135,7 @@ REQUIREMENTS:
 --------------------------------
 {COMPANION_GARMENTS_SECTION}
 
---------------------------------
-FOOTWEAR (FIXED):
-The shoes MUST be identical across all generations.
-
-STRICT RULES:
-- Plain {SHOES_COLOR_NAME} {FOOTWEAR_TYPE} ONLY
-- Color: exactly {SHOES_COLOR_HEX} ({SHOES_COLOR_NAME})
-- The visible footwear color must match {SHOES_COLOR_HEX}; do not use black, white, or gray unless that exact color was selected.
-- Minimalist, low-profile silhouette
-- No logos, no patterns, no contrasting accents
-- Keep the silhouette simple, but keep the selected color clearly visible.
+{FOOTWEAR_SECTION}
 
 --------------------------------
 BACKGROUND:
