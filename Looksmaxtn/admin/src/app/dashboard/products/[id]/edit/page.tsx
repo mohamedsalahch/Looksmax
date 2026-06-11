@@ -3501,7 +3501,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         setLoading(false);
         return;
       }
-      router.push("/dashboard/products");
+      router.back();
     } catch {
       setError("Network error", "general");
       setLoading(false);
