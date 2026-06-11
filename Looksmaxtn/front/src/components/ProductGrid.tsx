@@ -78,8 +78,6 @@ interface Facets {
   priceRange: { min: number; max: number };
 }
 
-const PRODUCTS_PER_PAGE = 12;
-
 function getMainImage(images?: ProductImage[]): string | undefined {
   if (!images || images.length === 0) return undefined;
   const main = images.find((i) => i.isMain);
@@ -135,19 +133,15 @@ export default function ProductGrid({
   category,
   storeName = "",
   initialProducts = [],
-  initialTotal = 0,
   initialFacets = null,
 }: {
   category?: string;
   storeName?: string;
   initialProducts?: Product[];
-  initialTotal?: number;
   initialFacets?: Facets | null;
 }) {
   const [products, setProducts] = useState<Product[]>(initialProducts);
-  const [total, setTotal] = useState(initialTotal);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [loaded, setLoaded] = useState(initialProducts.length > 0 || initialTotal > 0 || initialFacets !== null);
+  const [loaded, setLoaded] = useState(initialProducts.length > 0 || initialFacets !== null);
   const [facets, setFacets] = useState<Facets | null>(initialFacets);
 
   const [queryInput, setQueryInput] = useState("");
@@ -192,12 +186,10 @@ export default function ProductGrid({
   const sliderMin = priceMin !== "" ? Number(priceMin) : rangeMin;
   const sliderMax = priceMax !== "" ? Number(priceMax) : rangeMax;
   const displaySizes = facets ? getUniqueSizeOptions(facets.sizes) : [];
-  const totalPages = Math.max(1, Math.ceil(total / PRODUCTS_PER_PAGE));
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setAppliedSearch(queryInput.trim());
-      setCurrentPage(1);
     }, 250);
 
     return () => window.clearTimeout(timer);
@@ -227,8 +219,6 @@ export default function ProductGrid({
       if (appliedPriceMin) params.set("priceMin", appliedPriceMin);
       if (appliedPriceMax) params.set("priceMax", appliedPriceMax);
       params.set("includeFacets", "1");
-      params.set("page", String(currentPage));
-      params.set("limit", String(PRODUCTS_PER_PAGE));
       const rk = getStoredReservationKey();
       if (rk) params.set("rk", rk);
 
@@ -237,7 +227,6 @@ export default function ProductGrid({
         .then((data) => {
           if (cancelled) return;
           setProducts(data.products || []);
-          setTotal(Number(data.total || 0));
           if (data.facets) {
             setFacets({
               categories: data.facets.categories || [],
@@ -263,7 +252,7 @@ export default function ProductGrid({
     return () => {
       cancelled = true;
     };
-  }, [category, storeName, currentPage, appliedSearch, appliedCategory, appliedBrand, appliedStore, appliedSizes, appliedColor, appliedPriceMin, appliedPriceMax]);
+  }, [category, storeName, appliedSearch, appliedCategory, appliedBrand, appliedStore, appliedSizes, appliedColor, appliedPriceMin, appliedPriceMax]);
 
   const clearFilters = () => {
     setQueryInput("");
@@ -282,7 +271,6 @@ export default function ProductGrid({
     setAppliedColor("");
     setAppliedPriceMin("");
     setAppliedPriceMax("");
-    setCurrentPage(1);
   };
 
   const toggleSize = (size: string) => {
@@ -299,7 +287,6 @@ export default function ProductGrid({
     setAppliedColor(draftColor);
     setAppliedPriceMin(priceMin);
     setAppliedPriceMax(priceMax);
-    setCurrentPage(1);
   };
 
   if (!loaded) {
@@ -600,31 +587,6 @@ export default function ProductGrid({
                   preferCollectionLeftImage
                 />
               ))}
-            </div>
-          )}
-          {totalPages > 1 && (
-            <div className="mt-10 flex flex-col items-center justify-between gap-3 border-t border-border-color pt-5 sm:flex-row">
-              <p className="font-sans text-[11px] uppercase tracking-[0.14em] text-text-secondary">
-                Page {currentPage} of {totalPages}
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                  disabled={currentPage <= 1}
-                  className="font-sans border border-border-color px-4 py-2 text-[11px] font-medium uppercase tracking-[0.14em] text-foreground transition-colors hover:border-foreground disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Previous
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-                  disabled={currentPage >= totalPages}
-                  className="font-sans border border-border-color px-4 py-2 text-[11px] font-medium uppercase tracking-[0.14em] text-foreground transition-colors hover:border-foreground disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Next
-                </button>
-              </div>
             </div>
           )}
         </section>

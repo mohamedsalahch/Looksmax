@@ -26,7 +26,6 @@ async function loadStoreProducts(storeName: string) {
   const params = new URLSearchParams();
   params.set("store", storeName);
   params.set("includeFacets", "1");
-  params.set("limit", "24");
 
   try {
     const response = await fetch(`${baseUrl}/api/products?${params.toString()}`, { cache: "no-store" });
@@ -91,7 +90,6 @@ export default async function StorePage({
       <ProductGrid
         storeName={store.name}
         initialProducts={initialData.products}
-        initialTotal={initialData.total}
         initialFacets={initialData.facets}
       />
     </div>

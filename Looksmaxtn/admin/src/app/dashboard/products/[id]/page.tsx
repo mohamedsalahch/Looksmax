@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import AuditMetaCard from "@/components/AuditMetaCard";
 import { withAuthRequest } from "@/lib/authClient";
 
@@ -96,6 +96,7 @@ function getApprovalStatusBadge(approvalStatus: ProductDetail["approvalStatus"] 
 
 export default function ProductViewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const searchParams = useSearchParams();
   const rawReturnTo = searchParams.get("returnTo");
   const returnTo = rawReturnTo?.startsWith("/dashboard/products") ? rawReturnTo : "/dashboard/products";
@@ -110,6 +111,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
   const [showRejectReason, setShowRejectReason] = useState(false);
   const [tagDraft, setTagDraft] = useState("");
   const [updatingTag, setUpdatingTag] = useState(false);
+  const [deletingProduct, setDeletingProduct] = useState(false);
 
   useEffect(() => {
     fetch("/api/admin/auth/me", withAuthRequest())
@@ -191,12 +193,38 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
     }
   };
 
+  const handleDeleteProduct = async () => {
+    if (!product || deletingProduct) return;
+    if (!confirm(`Delete product "${product.name}"?`)) return;
+
+    setDeletingProduct(true);
+    try {
+      const response = await fetch(
+        `/api/products/${product._id}`,
+        withAuthRequest({ method: "DELETE" })
+      );
+      const data = await response.json();
+      if (!response.ok || data.error) {
+        alert(data.error || "Failed to delete product");
+        return;
+      }
+
+      router.push(returnTo);
+    } catch {
+      alert("Failed to delete product");
+    } finally {
+      setDeletingProduct(false);
+    }
+  };
+
   const images = product?.images || [];
   const mainImage = images[selectedImageIndex] || images.find((image) => image.isMain) || images[0];
   const categories = product?.categories || [];
   const details = product?.details || [];
   const isInactive = product?.isActive === false || product?.visibilityStatus === "inactive";
   const canModerateProduct = userRole === "admin";
+  const canEditProducts = userRole === "admin" || userRole === "store_owner";
+  const canDeleteProducts = userRole === "admin" || userRole === "store_owner";
 
   if (loading) return (
     <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.3em] text-text-secondary animate-pulse">
@@ -225,30 +253,46 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
           </h1>
         </div>
 
-        {userRole === "admin" ? (
+        {canEditProducts || canDeleteProducts || userRole === "admin" ? (
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <Link
-              href={editHref}
-              className="btn-primary"
-            >
-              Edit
-            </Link>
-            <button
-              type="button"
-              onClick={() => void handleApprovalUpdate("approved")}
-              disabled={!canModerateProduct || updatingApproval || approvalStatus === "approved"}
-              className="btn-secondary disabled:opacity-40"
-            >
-              Approve
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleApprovalUpdate("rejected")}
-              disabled={!canModerateProduct || updatingApproval || approvalStatus === "rejected"}
-              className="border border-danger/40 bg-danger/5 px-4 py-2.5 text-xs font-medium uppercase tracking-[0.2em] text-danger transition-colors hover:bg-danger/10 disabled:opacity-40"
-            >
-              Reject
-            </button>
+            {canEditProducts && (
+              <Link
+                href={editHref}
+                className="btn-primary"
+              >
+                Edit
+              </Link>
+            )}
+            {canDeleteProducts && (
+              <button
+                type="button"
+                onClick={() => void handleDeleteProduct()}
+                disabled={deletingProduct}
+                className="border border-danger/40 bg-danger/5 px-4 py-2.5 text-xs font-medium uppercase tracking-[0.2em] text-danger transition-colors hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {deletingProduct ? "Deleting..." : "Delete"}
+              </button>
+            )}
+            {userRole === "admin" && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void handleApprovalUpdate("approved")}
+                  disabled={!canModerateProduct || updatingApproval || approvalStatus === "approved"}
+                  className="btn-secondary disabled:opacity-40"
+                >
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleApprovalUpdate("rejected")}
+                  disabled={!canModerateProduct || updatingApproval || approvalStatus === "rejected"}
+                  className="border border-danger/40 bg-danger/5 px-4 py-2.5 text-xs font-medium uppercase tracking-[0.2em] text-danger transition-colors hover:bg-danger/10 disabled:opacity-40"
+                >
+                  Reject
+                </button>
+              </>
+            )}
           </div>
         ) : null}
       </div>

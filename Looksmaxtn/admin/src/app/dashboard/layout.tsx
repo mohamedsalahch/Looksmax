@@ -8,6 +8,7 @@ import {
   getStoredAuthToken,
   getTokenExpiryMs,
   refreshAdminAuthToken,
+  shouldRefreshAdminAuthToken,
   withAuthRequest,
 } from "@/lib/authClient";
 
@@ -384,12 +385,18 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         }
         setUser(data.user);
         try {
-          const refreshedToken = await refreshAdminAuthToken();
-          if (refreshedToken) {
+          const currentToken = getStoredAuthToken();
+          if (shouldRefreshAdminAuthToken(currentToken)) {
+            const refreshedToken = await refreshAdminAuthToken();
+            if (!refreshedToken) {
+              clearAuthToken();
+              router.push("/");
+              return;
+            }
             scheduleTokenRefresh(refreshedToken);
-          } else {
-            scheduleTokenRefresh();
+            return;
           }
+          scheduleTokenRefresh(currentToken);
         } catch {
           scheduleTokenRefresh();
         }

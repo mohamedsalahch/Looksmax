@@ -65,8 +65,10 @@ export async function GET(req: NextRequest) {
     const availability = searchParams.get("availability");
     const priceMin = Number(searchParams.get("priceMin") || "");
     const priceMax = Number(searchParams.get("priceMax") || "");
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "12");
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
+    const rawLimit = searchParams.get("limit");
+    const parsedLimit = rawLimit ? parseInt(rawLimit, 10) : 0;
+    const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 0;
     const includeFacets = searchParams.get("includeFacets") === "1";
 
     const filter: Record<string, unknown> = {
@@ -80,7 +82,7 @@ export async function GET(req: NextRequest) {
       filter.categories = category;
     }
 
-    const skip = (page - 1) * limit;
+    const skip = limit > 0 ? (page - 1) * limit : 0;
 
     const products = await Product.find(filter)
       .sort(category === "new" ? { createdAt: -1 } : { createdAt: -1 })
@@ -265,13 +267,13 @@ export async function GET(req: NextRequest) {
     });
 
     const total = sortedProducts.length;
-    const paginatedProducts = sortedProducts.slice(skip, skip + limit);
+    const returnedProducts = limit > 0 ? sortedProducts.slice(skip, skip + limit) : sortedProducts;
 
     return NextResponse.json({
-      products: paginatedProducts,
+      products: returnedProducts,
       total,
       page,
-      totalPages: Math.ceil(total / limit),
+      totalPages: limit > 0 ? Math.ceil(total / limit) : 1,
       facets,
     });
   } catch (error: unknown) {

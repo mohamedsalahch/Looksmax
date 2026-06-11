@@ -73,7 +73,6 @@ async function loadCategoryData(slug: string) {
   const params = new URLSearchParams();
   if (slug) params.set("category", slug);
   params.set("includeFacets", "1");
-  params.set("limit", "12");
 
   try {
     const response = await fetch(`${baseUrl}/api/store/products?${params.toString()}`, { next: { revalidate: 60 } });
@@ -108,7 +107,6 @@ export default async function CategoryPage({
       <ProductGrid
         category={resolvedSlug || undefined}
         initialProducts={initialData.products}
-        initialTotal={initialData.total}
         initialFacets={initialData.facets}
       />
     </div>

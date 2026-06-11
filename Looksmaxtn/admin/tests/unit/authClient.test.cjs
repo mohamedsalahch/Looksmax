@@ -6,11 +6,14 @@ const {
   clearAuthToken,
   getStoredAuthToken,
   getTokenExpiryMs,
+  refreshAdminAuthToken,
+  shouldRefreshAdminAuthToken,
   storeAuthToken,
   withAuthHeaders,
 } = jiti("../../src/lib/authClient.ts");
 
 const originalWindow = global.window;
+const originalFetch = global.fetch;
 
 function mockWindow() {
   const storage = new Map();
@@ -34,6 +37,7 @@ test.beforeEach(() => {
 
 test.afterEach(() => {
   global.window = originalWindow;
+  global.fetch = originalFetch;
 });
 
 test("storeAuthToken and getStoredAuthToken round-trip the token", () => {
@@ -60,3 +64,37 @@ test("getTokenExpiryMs returns null for invalid tokens", () => {
   assert.equal(getTokenExpiryMs("invalid"), null);
 });
 
+test("shouldRefreshAdminAuthToken only refreshes near expiry", () => {
+  const now = 1_000_000;
+  const farExpiry = Buffer.from(JSON.stringify({ exp: Math.floor((now + 10 * 60 * 1000) / 1000) }), "utf8").toString("base64url");
+  const nearExpiry = Buffer.from(JSON.stringify({ exp: Math.floor((now + 60 * 1000) / 1000) }), "utf8").toString("base64url");
+
+  assert.equal(shouldRefreshAdminAuthToken(`header.${farExpiry}.sig`, now), false);
+  assert.equal(shouldRefreshAdminAuthToken(`header.${nearExpiry}.sig`, now), true);
+  assert.equal(shouldRefreshAdminAuthToken(null, now), false);
+});
+
+test("refreshAdminAuthToken reuses an in-flight refresh request", async () => {
+  let requestCount = 0;
+  const payload = Buffer.from(JSON.stringify({ exp: 123456 }), "utf8").toString("base64url");
+  const refreshedToken = `header.${payload}.sig`;
+
+  global.fetch = async () => {
+    requestCount += 1;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    return {
+      ok: true,
+      json: async () => ({ token: refreshedToken }),
+    };
+  };
+
+  const [firstToken, secondToken] = await Promise.all([
+    refreshAdminAuthToken(),
+    refreshAdminAuthToken(),
+  ]);
+
+  assert.equal(firstToken, refreshedToken);
+  assert.equal(secondToken, refreshedToken);
+  assert.equal(requestCount, 1);
+  assert.equal(getStoredAuthToken(), refreshedToken);
+});

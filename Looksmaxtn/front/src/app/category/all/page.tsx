@@ -29,10 +29,8 @@ async function loadCategoryTree(): Promise<Category[]> {
 }
 
 async function loadAllCategoriesData() {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
   const params = new URLSearchParams();
   params.set("includeFacets", "1");
-  params.set("limit", "12");
 
   try {
     const response = await fetch(`${BACKEND_URL}/api/store/products?${params.toString()}`, { next: { revalidate: 60 } });
@@ -60,7 +58,6 @@ export default async function AllCategoriesPage() {
 
       <ProductGrid
         initialProducts={initialData.products}
-        initialTotal={initialData.total}
         initialFacets={initialData.facets}
       />
     </div>

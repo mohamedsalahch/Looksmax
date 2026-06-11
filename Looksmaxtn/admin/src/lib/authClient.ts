@@ -1,4 +1,7 @@
 const AUTH_TOKEN_STORAGE_KEY = "looksmax-admin-token";
+const TOKEN_REFRESH_LEAD_MS = 2 * 60 * 1000;
+
+let refreshTokenPromise: Promise<string | null> | null = null;
 
 export function getStoredAuthToken() {
   if (typeof window === "undefined") return null;
@@ -28,17 +31,36 @@ export function getTokenExpiryMs(token: string) {
   }
 }
 
+export function shouldRefreshAdminAuthToken(token = getStoredAuthToken(), now = Date.now()) {
+  if (!token) return false;
+
+  const expiryMs = getTokenExpiryMs(token);
+  if (!expiryMs) return true;
+
+  return expiryMs - now <= TOKEN_REFRESH_LEAD_MS;
+}
+
 export async function refreshAdminAuthToken() {
-  const response = await fetch("/api/admin/auth/refresh", withAuthRequest({ method: "POST" }));
-  if (!response.ok) return null;
+  if (refreshTokenPromise) return refreshTokenPromise;
 
-  const data = (await response.json()) as { token?: string | null };
-  if (data.token) {
-    storeAuthToken(data.token);
-    return data.token;
+  refreshTokenPromise = (async () => {
+    const response = await fetch("/api/admin/auth/refresh", withAuthRequest({ method: "POST" }));
+    if (!response.ok) return null;
+
+    const data = (await response.json()) as { token?: string | null };
+    if (data.token) {
+      storeAuthToken(data.token);
+      return data.token;
+    }
+
+    return null;
+  })();
+
+  try {
+    return await refreshTokenPromise;
+  } finally {
+    refreshTokenPromise = null;
   }
-
-  return null;
 }
 
 export function withAuthHeaders(headers?: HeadersInit) {
