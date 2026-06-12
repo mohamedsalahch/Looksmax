@@ -1,5 +1,8 @@
 "use client";
 
+import Image from "next/image";
+import { isOptimizableImageSrc } from "@/lib/imageOptimization";
+
 const VIDEO_EXTENSIONS = [".mp4", ".webm", ".ogg", ".mov", ".m4v"];
 const AUDIO_EXTENSIONS = [".mp3", ".m4a", ".wav", ".oga", ".aac", ".flac"];
 
@@ -18,6 +21,8 @@ export default function MediaRenderer({
   videoClassName,
   audioClassName,
   showControls = false,
+  priority = false,
+  sizes = "100vw",
 }: {
   src: string;
   alt: string;
@@ -26,6 +31,10 @@ export default function MediaRenderer({
   videoClassName?: string;
   audioClassName?: string;
   showControls?: boolean;
+  /** Set for the LCP image only — everything else lazy-loads. */
+  priority?: boolean;
+  /** Rendered slot width hint so the optimizer serves right-sized variants. */
+  sizes?: string;
 }) {
   const kind = getMediaKind(src);
 
@@ -57,14 +66,19 @@ export default function MediaRenderer({
     );
   }
 
+  // width/height of 0 keeps layout fully CSS-driven (same as the previous
+  // plain <img>) while still emitting a responsive srcset from `sizes`.
   return (
-    <img
+    <Image
       src={src}
       alt={alt}
+      width={0}
+      height={0}
+      sizes={sizes}
       className={imageClassName || className}
-      loading="eager"
-      fetchPriority="high"
-      decoding="async"
+      priority={priority}
+      loading={priority ? undefined : "lazy"}
+      unoptimized={!isOptimizableImageSrc(src)}
     />
   );
 }

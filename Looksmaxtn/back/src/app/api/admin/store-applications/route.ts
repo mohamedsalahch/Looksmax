@@ -9,6 +9,7 @@ import StoreApplication from "@/admin/models/StoreApplication";
 import { sendStoreApplicationStatusEmail } from "@/store/lib/mailer";
 import { broadcastAdminEvent } from "@/admin/lib/adminEvents";
 import { createUniqueStoreSlug, slugifyStoreName } from "@/lib/storeSlug";
+import { syncProductsOwnerApproved } from "@/store/lib/ownerApprovalSync";
 
 type ReviewStatus = "approved" | "rejected";
 type ProductCounts = {
@@ -269,6 +270,9 @@ export async function PUT(req: NextRequest) {
 
     const owner = await User.findOne({ email: store.email, role: "store_owner" }, { balance: 1 }).lean();
     const ownerId = owner?._id.toString() || "";
+    if (ownerId && nextStatus === "approved") {
+      await syncProductsOwnerApproved(ownerId, true);
+    }
     const productCountsByOwnerId = await getProductCountsByOwnerIds(ownerId ? [ownerId] : []);
     const normalizedStore = {
       ...normalizeStoreApplication(store.toObject()),
@@ -326,6 +330,7 @@ export async function DELETE(req: NextRequest) {
       existingUser.storeType = null;
       existingUser.sessionVersion = (existingUser.sessionVersion || 0) + 1;
       await existingUser.save();
+      await syncProductsOwnerApproved(existingUser._id.toString(), false);
     }
 
     await StoreApplication.findByIdAndDelete(id);

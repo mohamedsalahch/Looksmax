@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/admin/lib/mongodb";
 import User from "@/admin/models/User";
 import { getSession } from "@/admin/lib/auth";
+import { syncProductsOwnerApproved } from "@/store/lib/ownerApprovalSync";
 
 export async function GET() {
   try {
@@ -40,6 +41,9 @@ export async function PUT(req: NextRequest) {
       user.storeApprovalStatus = storeApprovalStatus as "pending" | "approved" | "rejected";
     }
     await user.save();
+    if (typeof storeApprovalStatus === "string" && user.role === "store_owner") {
+      await syncProductsOwnerApproved(user._id.toString(), storeApprovalStatus === "approved");
+    }
 
     return NextResponse.json({ user });
   } catch (error) { console.error(error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
@@ -54,6 +58,9 @@ export async function DELETE(req: NextRequest) {
     const id = searchParams.get("id");
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
     await User.findByIdAndDelete(id);
+    // Deleted owners no longer pass the storefront approval check; keep the
+    // denormalized flag consistent so their products stay hidden.
+    await syncProductsOwnerApproved(String(id), false);
     return NextResponse.json({ success: true });
   } catch (error) { console.error(error); return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }

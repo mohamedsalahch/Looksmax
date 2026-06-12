@@ -118,6 +118,7 @@ export default function LookbookGrid({
                     md:blur-none md:scale-100 md:group-hover:blur-sm md:group-hover:scale-[1.03]
                   `}
                   audioClassName="w-full px-4 py-8"
+                  sizes="(min-width: 768px) 33vw, 100vw"
                 />
               ) : (
                 <div className="w-full h-full placeholder-img">

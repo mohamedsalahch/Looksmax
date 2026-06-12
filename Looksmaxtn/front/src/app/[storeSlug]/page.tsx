@@ -26,6 +26,9 @@ async function loadStoreProducts(storeName: string) {
   const params = new URLSearchParams();
   params.set("store", storeName);
   params.set("includeFacets", "1");
+  // First page only — ProductGrid lazy-loads the rest via infinite scroll.
+  params.set("limit", "24");
+  params.set("page", "1");
 
   try {
     const response = await fetch(`${baseUrl}/api/products?${params.toString()}`, { cache: "no-store" });
@@ -91,6 +94,7 @@ export default async function StorePage({
         storeName={store.name}
         initialProducts={initialData.products}
         initialFacets={initialData.facets}
+        initialTotal={initialData.total}
       />
     </div>
   );

@@ -8,6 +8,7 @@ import User from "@/store/models/User";
 import OutfitGenerationJob from "@/store/models/OutfitGenerationJob";
 import { loadImageAsBase64 } from "@/lib/imageSource";
 import { calculateUserOutfitStudioTries, normalizeInitialOutfitStudioTries } from "@/store/lib/outfitStudioUtils";
+import { persistOutfitImage } from "@/store/lib/outfitImageStorage";
 
 type ZonePayload = {
   status?: boolean;
@@ -380,12 +381,14 @@ export async function POST(req: NextRequest) {
 
     const images = extractImagesFromResponse(generatorData);
     if (images.length > 0) {
+      const jobId = job._id.toString();
+      const [front, back] = await Promise.all([
+        persistOutfitImage(jobId, "front", images[0] || ""),
+        persistOutfitImage(jobId, "back", images[1] || ""),
+      ]);
       await OutfitGenerationJob.findByIdAndUpdate(job._id, {
         status: "completed",
-        images: {
-          front: images[0] || "",
-          back: images[1] || "",
-        },
+        images: { front, back },
       });
     }
 

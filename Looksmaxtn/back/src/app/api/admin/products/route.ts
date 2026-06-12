@@ -472,6 +472,14 @@ export async function POST(req: NextRequest) {
     const totalStock = sumVariantStock(variants);
     const totalFullStock = sumVariantFullStock(variants);
 
+    let ownerApproved = true;
+    if (session.role === "store_owner") {
+      const creator = await User.findById(session.userId)
+        .select("storeApprovalStatus")
+        .lean();
+      ownerApproved = !creator?.storeApprovalStatus || creator.storeApprovalStatus === "approved";
+    }
+
     const product = await Product.create({
       name: session.role === "store_owner" ? "" : String(formData.get("name") || ""),
       price: Number(formData.get("price") || 0),
@@ -511,6 +519,7 @@ export async function POST(req: NextRequest) {
         sourceKey: `originalOther:${index}`,
       })),
       approvalStatus: session.role === "store_owner" ? "pending" : "approved",
+      ownerApproved,
       createdBy: auditActor,
       updatedBy: auditActor,
     });

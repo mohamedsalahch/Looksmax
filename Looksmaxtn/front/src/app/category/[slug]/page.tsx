@@ -73,6 +73,9 @@ async function loadCategoryData(slug: string) {
   const params = new URLSearchParams();
   if (slug) params.set("category", slug);
   params.set("includeFacets", "1");
+  // First page only — ProductGrid lazy-loads the rest via infinite scroll.
+  params.set("limit", "24");
+  params.set("page", "1");
 
   try {
     const response = await fetch(`${baseUrl}/api/store/products?${params.toString()}`, { next: { revalidate: 60 } });
@@ -108,6 +111,7 @@ export default async function CategoryPage({
         category={resolvedSlug || undefined}
         initialProducts={initialData.products}
         initialFacets={initialData.facets}
+        initialTotal={initialData.total}
       />
     </div>
   );

@@ -68,6 +68,7 @@ export default function EditorialFeature({
                   : "scale-100 blur-sm"
               } md:scale-100 md:blur-none md:group-hover:scale-[1.03] md:group-hover:blur-sm`}
               audioClassName="w-full px-4 py-8"
+              sizes="(min-width: 1152px) 1152px, 100vw"
             />
           ) : (
             <div className="w-full aspect-[4/5] md:aspect-[16/10] placeholder-img">

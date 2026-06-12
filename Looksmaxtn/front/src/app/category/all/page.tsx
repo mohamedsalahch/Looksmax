@@ -31,6 +31,9 @@ async function loadCategoryTree(): Promise<Category[]> {
 async function loadAllCategoriesData() {
   const params = new URLSearchParams();
   params.set("includeFacets", "1");
+  // First page only — ProductGrid lazy-loads the rest via infinite scroll.
+  params.set("limit", "24");
+  params.set("page", "1");
 
   try {
     const response = await fetch(`${BACKEND_URL}/api/store/products?${params.toString()}`, { next: { revalidate: 60 } });
@@ -59,6 +62,7 @@ export default async function AllCategoriesPage() {
       <ProductGrid
         initialProducts={initialData.products}
         initialFacets={initialData.facets}
+        initialTotal={initialData.total}
       />
     </div>
   );

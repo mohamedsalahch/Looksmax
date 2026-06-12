@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type TouchEvent as ReactTouchEvent } from "react";
 import { createPortal } from "react-dom";
+import Image from "next/image";
+import { isOptimizableImageSrc } from "@/lib/imageOptimization";
 
 interface ProductImage {
   url: string;
@@ -22,12 +24,16 @@ function MediaPreview({
   className,
   videoClassName,
   showControls = false,
+  priority = false,
+  sizes = "100vw",
 }: {
   url: string;
   alt: string;
   className: string;
   videoClassName?: string;
   showControls?: boolean;
+  priority?: boolean;
+  sizes?: string;
 }) {
   if (isVideoUrl(url)) {
     return (
@@ -45,7 +51,19 @@ function MediaPreview({
     );
   }
 
-  return <img src={url} alt={alt} className={className} loading="eager" fetchPriority="high" decoding="async" />;
+  return (
+    <Image
+      src={url}
+      alt={alt}
+      width={0}
+      height={0}
+      sizes={sizes}
+      className={className}
+      priority={priority}
+      loading={priority ? undefined : "lazy"}
+      unoptimized={!isOptimizableImageSrc(url)}
+    />
+  );
 }
 
 function ProductLightbox({
@@ -155,6 +173,7 @@ function ProductLightbox({
                 className="w-3/5 h-auto object-cover block"
                 videoClassName="w-3/5 h-auto object-cover block"
                 showControls={isVideoUrl(img.url)}
+                sizes="60vw"
               />
             ) : (
               <div className="w-3/5 aspect-[3/4] bg-surface" />
@@ -188,6 +207,7 @@ function ProductLightbox({
                     alt={`Thumb ${i + 1}`}
                     className="w-full h-full object-cover"
                     videoClassName="w-full h-full object-cover"
+                    sizes="48px"
                   />
                 ) : (
                   <div className="w-full h-full bg-surface" />
@@ -447,6 +467,7 @@ export default function ProductImageGallery({
                     alt={`Thumbnail ${index + 1}`}
                     className="w-full h-full object-contain"
                     videoClassName="w-full h-full object-contain"
+                    sizes="80px"
                   />
                 ) : (
                   <div className="absolute inset-0 placeholder-img" />
@@ -475,6 +496,8 @@ export default function ProductImageGallery({
                 className="block max-w-full max-h-[600px] w-auto h-auto object-contain"
                 videoClassName="block max-w-full max-h-[600px] w-auto h-auto object-contain"
                 showControls
+                priority={activeIndex === 0}
+                sizes="(min-width: 768px) 50vw, 100vw"
               />
               {isDesktop && isZoomActive && !isVideoUrl(visibleImages[activeIndex].url) && (
                 <div

@@ -34,6 +34,8 @@ export default function HeroSection({
           imageClassName="w-full h-full object-cover scale-[1.01] hero-image"
           videoClassName="w-full h-full object-cover scale-[1.01] hero-image"
           audioClassName="w-full px-6"
+          priority
+          sizes="100vw"
         />
       ) : (
         <div className="w-full h-full placeholder-img">

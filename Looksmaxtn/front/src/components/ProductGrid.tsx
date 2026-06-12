@@ -129,20 +129,30 @@ function getUniqueSizeOptions(values: string[]) {
   });
 }
 
+const PAGE_SIZE = 24;
+
 export default function ProductGrid({
   category,
   storeName = "",
   initialProducts = [],
   initialFacets = null,
+  initialTotal,
 }: {
   category?: string;
   storeName?: string;
   initialProducts?: Product[];
   initialFacets?: Facets | null;
+  initialTotal?: number;
 }) {
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [loaded, setLoaded] = useState(initialProducts.length > 0 || initialFacets !== null);
   const [facets, setFacets] = useState<Facets | null>(initialFacets);
+  const [total, setTotal] = useState(initialTotal ?? initialProducts.length);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const pageRef = useRef(1);
+  const loadingMoreRef = useRef(false);
+  const filterGenerationRef = useRef(0);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   const [queryInput, setQueryInput] = useState("");
   const [draftCategory, setDraftCategory] = useState("");
@@ -195,6 +205,31 @@ export default function ProductGrid({
     return () => window.clearTimeout(timer);
   }, [queryInput]);
 
+  const buildFilterParams = () => {
+    const params = new URLSearchParams();
+    if (appliedSearch) params.set("search", appliedSearch);
+    if (category) {
+      params.set("category", category);
+    } else if (appliedCategory) {
+      params.set("category", appliedCategory);
+    }
+    if (appliedBrand) params.set("brand", appliedBrand);
+    if (storeName) params.set("store", storeName);
+    else if (appliedStore) params.set("store", appliedStore);
+    if (appliedSizes.length > 0) params.set("size", appliedSizes.join(","));
+    if (appliedColor) params.set("color", appliedColor);
+    if (appliedPriceMin) params.set("priceMin", appliedPriceMin);
+    if (appliedPriceMax) params.set("priceMax", appliedPriceMax);
+    params.set("limit", String(PAGE_SIZE));
+    const rk = getStoredReservationKey();
+    if (rk) params.set("rk", rk);
+    return params;
+  };
+  const buildFilterParamsRef = useRef(buildFilterParams);
+  useEffect(() => {
+    buildFilterParamsRef.current = buildFilterParams;
+  });
+
   useEffect(() => {
     if (skipNextFetch.current) {
       skipNextFetch.current = false;
@@ -202,31 +237,21 @@ export default function ProductGrid({
     }
 
     let cancelled = false;
+    // A new filter generation invalidates any in-flight "load more" append.
+    filterGenerationRef.current += 1;
 
     const loadProducts = () => {
-      const params = new URLSearchParams();
-      if (appliedSearch) params.set("search", appliedSearch);
-      if (category) {
-        params.set("category", category);
-      } else if (appliedCategory) {
-        params.set("category", appliedCategory);
-      }
-      if (appliedBrand) params.set("brand", appliedBrand);
-      if (storeName) params.set("store", storeName);
-      else if (appliedStore) params.set("store", appliedStore);
-      if (appliedSizes.length > 0) params.set("size", appliedSizes.join(","));
-      if (appliedColor) params.set("color", appliedColor);
-      if (appliedPriceMin) params.set("priceMin", appliedPriceMin);
-      if (appliedPriceMax) params.set("priceMax", appliedPriceMax);
+      const params = buildFilterParamsRef.current();
+      params.set("page", "1");
       params.set("includeFacets", "1");
-      const rk = getStoredReservationKey();
-      if (rk) params.set("rk", rk);
 
       fetch(`/api/products?${params}`, { cache: "no-store" })
         .then((r) => r.json())
         .then((data) => {
           if (cancelled) return;
           setProducts(data.products || []);
+          setTotal(typeof data.total === "number" ? data.total : (data.products || []).length);
+          pageRef.current = 1;
           if (data.facets) {
             setFacets({
               categories: data.facets.categories || [],
@@ -241,6 +266,8 @@ export default function ProductGrid({
         .catch(() => {
           if (cancelled) return;
           setProducts([]);
+          setTotal(0);
+          pageRef.current = 1;
         })
         .finally(() => {
           if (!cancelled) setLoaded(true);
@@ -253,6 +280,60 @@ export default function ProductGrid({
       cancelled = true;
     };
   }, [category, storeName, appliedSearch, appliedCategory, appliedBrand, appliedStore, appliedSizes, appliedColor, appliedPriceMin, appliedPriceMax]);
+
+  const hasMore = products.length < total;
+
+  const loadMore = () => {
+    if (loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+
+    const generation = filterGenerationRef.current;
+    const nextPage = pageRef.current + 1;
+    const params = buildFilterParamsRef.current();
+    params.set("page", String(nextPage));
+
+    fetch(`/api/products?${params}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data) => {
+        if (filterGenerationRef.current !== generation) return;
+        const nextProducts: Product[] = data.products || [];
+        setProducts((current) => {
+          const seen = new Set(current.map((product) => product._id));
+          return [...current, ...nextProducts.filter((product) => !seen.has(product._id))];
+        });
+        if (typeof data.total === "number") setTotal(data.total);
+        pageRef.current = nextPage;
+      })
+      .catch(() => {})
+      .finally(() => {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      });
+  };
+  const loadMoreRef = useRef(loadMore);
+  useEffect(() => {
+    loadMoreRef.current = loadMore;
+  });
+
+  // Infinite scroll: append the next server page when the sentinel nears the
+  // viewport, instead of fetching whole categories upfront.
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !hasMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          loadMoreRef.current();
+        }
+      },
+      { rootMargin: "600px 0px" }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loaded]);
 
   const clearFilters = () => {
     setQueryInput("");
@@ -558,10 +639,11 @@ export default function ProductGrid({
                 filtersOpen ? "lg:grid-cols-3" : "lg:grid-cols-4"
               }`}
             >
-              {products.map((product) => (
+              {products.map((product, index) => (
                 <ProductCard
                   key={product._id}
                   id={product._id}
+                  imagePriority={index < 4}
                   name={product.name}
                   categories={product.categories}
                   price={product.price.toFixed(2)}
@@ -587,6 +669,21 @@ export default function ProductGrid({
                   preferCollectionLeftImage
                 />
               ))}
+            </div>
+          )}
+          {hasMore && (
+            <div ref={sentinelRef} className="py-8">
+              {loadingMore && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-8">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="animate-pulse">
+                      <div className="aspect-[3/4] bg-border-color rounded" />
+                      <div className="mt-2 h-3 bg-border-color rounded w-3/4" />
+                      <div className="mt-1 h-3 bg-border-color rounded w-1/4" />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </section>

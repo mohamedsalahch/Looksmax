@@ -41,6 +41,8 @@ export interface IProduct extends Document {
   price: number;
   isActive: boolean;
   approvalStatus: ProductApprovalStatus;
+  /** Denormalized from the owner's storeApprovalStatus so storefront queries stay index-backed. */
+  ownerApproved: boolean;
   categories: string[];
   gender?: "men" | "women" | "children" | "unisex" | null;
   description: string;
@@ -117,6 +119,7 @@ const productSchema = new Schema<IProduct>(
       enum: ["pending", "approved", "rejected"],
       default: "approved",
     },
+    ownerApproved: { type: Boolean, default: true },
     categories: [{ type: String, lowercase: true, trim: true }],
     gender: {
       type: String,
@@ -172,6 +175,8 @@ const productSchema = new Schema<IProduct>(
 );
 
 productSchema.index({ categories: 1 });
+productSchema.index({ approvalStatus: 1, ownerApproved: 1, isActive: 1, createdAt: -1 });
+productSchema.index({ "createdBy.id": 1 });
 productSchema.index({ name: "text", description: "text" });
 productSchema.index({ "variants._id": 1 });
 productSchema.index({ "variants.color": 1, "variants.size": 1 });

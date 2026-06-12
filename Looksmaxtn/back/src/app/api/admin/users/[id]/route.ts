@@ -3,6 +3,7 @@ import dbConnect from "@/admin/lib/mongodb";
 import User from "@/admin/models/User";
 import Order from "@/admin/models/Order";
 import { getSession } from "@/admin/lib/auth";
+import { syncProductsOwnerApproved } from "@/store/lib/ownerApprovalSync";
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -67,6 +68,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       user.storeApprovalStatus = storeApprovalStatus as "pending" | "approved" | "rejected";
     }
     await user.save();
+    if (typeof storeApprovalStatus === "string" && user.role === "store_owner") {
+      await syncProductsOwnerApproved(user._id.toString(), storeApprovalStatus === "approved");
+    }
 
     return NextResponse.json({ user });
   } catch (error) {

@@ -416,6 +416,14 @@ function getMainImage(images?: ProductImage[]) {
     return images?.find((image) => image.isMain)?.url || images?.[0]?.url;
 }
 
+// Generated images are stored as R2 URLs; older jobs may still hold raw base64.
+function toDisplayableGeneratedImage(image: string) {
+    if (image.startsWith("data:") || image.startsWith("http") || image.startsWith("/")) {
+        return image;
+    }
+    return `data:image/png;base64,${image}`;
+}
+
 function extractGeneratedImages(data: unknown) {
     if (!data || typeof data !== "object") return [];
 
@@ -432,7 +440,7 @@ function extractGeneratedImages(data: unknown) {
 
     return candidates
         .filter((image): image is string => typeof image === "string" && image.length > 0)
-        .map((image) => (image.startsWith("data:") ? image : `data:image/png;base64,${image}`));
+        .map(toDisplayableGeneratedImage);
 }
 
 function StudioModel({
@@ -884,7 +892,7 @@ export default function OutfitStudioPage() {
 
                 const nextImages = [data.job.images?.front, data.job.images?.back]
                     .filter((image: unknown): image is string => typeof image === "string" && image.length > 0)
-                    .map((image: string) => (image.startsWith("data:") ? image : `data:image/png;base64,${image}`));
+                    .map(toDisplayableGeneratedImage);
 
                 setGeneratedOutfitJobId(String(data.job.id || ""));
                 setGeneratedOutfitImages(nextImages);
@@ -1681,7 +1689,7 @@ export default function OutfitStudioPage() {
 
                     const nextImages = [data.job.images?.front, data.job.images?.back]
                         .filter((image: unknown): image is string => typeof image === "string" && image.length > 0)
-                        .map((image: string) => (image.startsWith("data:") ? image : `data:image/png;base64,${image}`));
+                        .map(toDisplayableGeneratedImage);
 
                     if (nextImages.length > 0) {
                         setGeneratedOutfitImages(nextImages);

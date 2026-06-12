@@ -6,6 +6,7 @@ import Product from "@/admin/models/Product";
 import StoreApplication from "@/admin/models/StoreApplication";
 import { getSession } from "@/admin/lib/auth";
 import { createUniqueStoreSlug, slugifyStoreName } from "@/lib/storeSlug";
+import { syncProductsOwnerApproved } from "@/store/lib/ownerApprovalSync";
 
 const VALID_STORE_TYPES = new Set(["thrift", "retail"] as const);
 const VALID_CATEGORIES = new Set(["clothes", "fragrances", "accessories"] as const);
@@ -207,6 +208,9 @@ export async function PUT(req: NextRequest) {
     }
 
     await user.save();
+    if (changed) {
+      await syncProductsOwnerApproved(user._id.toString(), false);
+    }
 
     const refreshedStoreApplication = storeApplication
       ? await StoreApplication.findOne({ email: user.email }).sort({ createdAt: -1 }).lean()

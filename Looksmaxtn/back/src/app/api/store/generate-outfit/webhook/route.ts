@@ -3,6 +3,7 @@ import dbConnect from "@/store/lib/mongodb";
 import OutfitGenerationJob from "@/store/models/OutfitGenerationJob";
 import { requireWebhookSecret } from "@/lib/webhookAuth";
 import { publishStoreUserEvent } from "@/store/lib/storeUserEvents";
+import { persistOutfitImage } from "@/store/lib/outfitImageStorage";
 
 function normalizeWebhookImage(data: Record<string, unknown>) {
   const imageCandidates = [
@@ -76,9 +77,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 
+    const storedImage = await persistOutfitImage(jobId, view, image);
     const nextImages = {
-      front: view === "front" ? image : existingJob.images?.front || "",
-      back: view === "back" ? image : existingJob.images?.back || "",
+      front: view === "front" ? storedImage : existingJob.images?.front || "",
+      back: view === "back" ? storedImage : existingJob.images?.back || "",
     };
 
     const nextStatus: "processing" | "completed" =

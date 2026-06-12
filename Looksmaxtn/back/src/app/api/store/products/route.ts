@@ -1,23 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
+import mongoose from "mongoose";
 import dbConnect from "@/store/lib/mongodb";
 import Product from "@/store/models/Product";
 import ProductReservation from "@/store/models/ProductReservation";
 import User from "@/store/models/User";
 import { getSession } from "@/store/lib/auth";
-import { filterAndRankProducts } from "@/store/lib/productSearch";
+import { scoreProductSearch } from "@/store/lib/productSearch";
 import { getActiveOrderHoldMapByProductIds } from "@/lib/productInventory";
 import {
   buildVariantAvailability,
   getDisplayStock,
   type VariantLike,
 } from "@/lib/variantAvailability";
-import { isStoreOwnerApproved } from "@/store/lib/storeApproval";
 import {
   averageVariantConditionScore,
   deriveColors,
   deriveSizes,
   normalizeStoredVariants,
+  normalizeStoredVariantColor,
 } from "@/lib/productVariants";
+
+const DAY_MS = 86400000;
+const NEW_TAG_FALLBACK_DAYS = 3;
 
 function uniqueSortedValues(values: string[]) {
   return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -48,6 +52,56 @@ function filterPublicProductMedia<I extends { isPublic?: boolean }>(
   };
 }
 
+type TaggedDoc = { tag?: string; createdAt?: Date; newTagDurationDays?: number };
+
+function isNewTagExpired(doc: TaggedDoc, nowMs: number) {
+  if (String(doc.tag || "").toUpperCase() !== "NEW") return false;
+  const durationDays = Math.max(1, Number(doc.newTagDurationDays) || NEW_TAG_FALLBACK_DAYS);
+  const createdMs = doc.createdAt ? new Date(doc.createdAt).getTime() : 0;
+  return createdMs > 0 && nowMs - createdMs > durationDays * DAY_MS;
+}
+
+function effectiveTagRank(doc: TaggedDoc, nowMs: number) {
+  const value = String(doc.tag || "").toUpperCase();
+  if (value === "NEW" && !isNewTagExpired(doc, nowMs)) return 0;
+  if (value === "FAVORITE") return 1;
+  return 2;
+}
+
+// Aggregation twin of effectiveTagRank: NEW (not expired) → 0, FAVORITE → 1, else 2.
+const TAG_RANK_EXPR = {
+  $switch: {
+    branches: [
+      {
+        case: {
+          $and: [
+            { $eq: [{ $toUpper: { $ifNull: ["$tag", ""] } }, "NEW"] },
+            {
+              $gt: [
+                {
+                  $add: [
+                    { $ifNull: ["$createdAt", new Date(0)] },
+                    {
+                      $multiply: [
+                        { $max: [1, { $ifNull: ["$newTagDurationDays", NEW_TAG_FALLBACK_DAYS] }] },
+                        DAY_MS,
+                      ],
+                    },
+                  ],
+                },
+                "$$NOW",
+              ],
+            },
+          ],
+        },
+        then: 0,
+      },
+      { case: { $eq: [{ $toUpper: { $ifNull: ["$tag", ""] } }, "FAVORITE"] }, then: 1 },
+    ],
+    default: 2,
+  },
+};
+
 export async function GET(req: NextRequest) {
   try {
     await dbConnect();
@@ -70,48 +124,182 @@ export async function GET(req: NextRequest) {
     const parsedLimit = rawLimit ? parseInt(rawLimit, 10) : 0;
     const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 0;
     const includeFacets = searchParams.get("includeFacets") === "1";
+    const rk = searchParams.get("rk");
 
-    const filter: Record<string, unknown> = {
-      $or: [{ approvalStatus: "approved" }, { approvalStatus: { $exists: false } }],
-    };
+    const skip = limit > 0 ? (page - 1) * limit : 0;
+    const nowMs = Date.now();
+
+    // Everything below is filtered, sorted, and paginated inside MongoDB; only
+    // the returned page is hydrated and enriched with availability data.
+    const baseClauses: Record<string, unknown>[] = [
+      { $or: [{ approvalStatus: "approved" }, { approvalStatus: { $exists: false } }] },
+      { ownerApproved: { $ne: false } },
+      { isActive: { $ne: false } },
+    ];
     if (category === "new-arrivals" || category === "new") {
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
-      filter.createdAt = { $gte: weekAgo };
+      baseClauses.push({ createdAt: { $gte: weekAgo } });
     } else if (category) {
-      filter.categories = category;
+      baseClauses.push({ categories: category });
     }
 
-    const skip = limit > 0 ? (page - 1) * limit : 0;
+    // The storefront "store" value is the owner's storeName with a
+    // createdBy.name fallback, so the filter resolves owners first.
+    let storeOwnerIds: string[] = [];
+    if (store) {
+      const storeOwners = await User.find({ storeName: store }).select("_id").lean();
+      storeOwnerIds = storeOwners.map((owner) => owner._id.toString());
+    }
+    const storeClause = store
+      ? { $or: [{ "createdBy.id": { $in: storeOwnerIds } }, { "createdBy.name": store }] }
+      : null;
 
-    const products = await Product.find(filter)
-      .sort(category === "new" ? { createdAt: -1 } : { createdAt: -1 })
-      .lean();
+    const attributeClauses: Record<string, unknown>[] = [];
+    if (storeClause) attributeClauses.push(storeClause);
+    if (brand) attributeClauses.push({ brand });
+    if (sizes.length > 0) attributeClauses.push({ "variants.size": { $in: sizes } });
+    if (color) {
+      const normalized = (normalizeStoredVariantColor(color) || color).toLowerCase();
+      const colorForms = [...new Set([normalized, normalized.replace(/^#/, "")])];
+      attributeClauses.push({ "variants.color": { $in: colorForms } });
+    }
+    // Availability ignores short-lived cart reservations here; the per-page
+    // availability payload below still reflects them.
+    const inStockClause = {
+      $or: [
+        { "variants.stock": { $gt: 0 } },
+        { $and: [{ "variants.0": { $exists: false } }, { stock: { $gt: 0 } }] },
+      ],
+    };
+    if (availability === "in-stock") attributeClauses.push(inStockClause);
+    if (availability === "out-of-stock") attributeClauses.push({ $nor: [inStockClause] });
+    const priceClause: Record<string, number> = {};
+    if (Number.isFinite(priceMin)) priceClause.$gte = priceMin;
+    if (Number.isFinite(priceMax) && priceMax > 0) priceClause.$lte = priceMax;
+    if (Object.keys(priceClause).length > 0) attributeClauses.push({ price: priceClause });
+
+    const baseQuery = { $and: baseClauses };
+    const listingQuery = { $and: [...baseClauses, ...attributeClauses] };
+
+    let pageIds: string[] = [];
+    let total = 0;
+    let searchMatchedIds: unknown[] | null = null;
+
+    if (search) {
+      // Fuzzy ranking (synonyms + typo tolerance) stays in JS, but only over a
+      // light projection of the base-filtered set — never full documents.
+      const candidates = await Product.find(baseQuery)
+        .select(
+          "name brand categories description tag cloneSourceName price stock createdAt newTagDurationDays variants.size variants.color variants.stock createdBy"
+        )
+        .lean();
+      const matched = candidates
+        .map((doc) => {
+          const variants = Array.isArray(doc.variants) ? doc.variants : [];
+          return {
+            doc,
+            sizes: deriveSizes(variants),
+            colors: deriveColors(variants),
+          };
+        })
+        .filter((entry) =>
+          scoreProductSearch(
+            { ...entry.doc, _id: String(entry.doc._id), sizes: entry.sizes, colors: entry.colors },
+            search
+          ) > 0
+        );
+      searchMatchedIds = matched.map((entry) => entry.doc._id);
+
+      const storeOwnerIdSet = new Set(storeOwnerIds);
+      const normalizedColor = color ? (normalizeStoredVariantColor(color) || color).toLowerCase() : "";
+      const filtered = matched.filter(({ doc, sizes: docSizes, colors: docColors }) => {
+        if (store) {
+          const ownerId = doc.createdBy?.id || "";
+          if (!storeOwnerIdSet.has(ownerId) && doc.createdBy?.name !== store) return false;
+        }
+        if (brand && doc.brand !== brand) return false;
+        if (sizes.length > 0 && !sizes.some((value) => docSizes.includes(value))) return false;
+        if (color && !docColors.some((value) => value.toLowerCase() === normalizedColor)) return false;
+        if (availability === "in-stock" || availability === "out-of-stock") {
+          const variants = Array.isArray(doc.variants) ? doc.variants : [];
+          const inStock = variants.length > 0
+            ? variants.some((variant) => (variant.stock ?? 0) > 0)
+            : (doc.stock ?? 0) > 0;
+          if (availability === "in-stock" && !inStock) return false;
+          if (availability === "out-of-stock" && inStock) return false;
+        }
+        if (Number.isFinite(priceMin) && (doc.price ?? 0) < priceMin) return false;
+        if (Number.isFinite(priceMax) && priceMax > 0 && (doc.price ?? 0) > priceMax) return false;
+        return true;
+      });
+
+      const ranked = filtered
+        .map(({ doc }) => doc)
+        .sort((a, b) => {
+          const rankDiff = effectiveTagRank(a, nowMs) - effectiveTagRank(b, nowMs);
+          if (rankDiff !== 0) return rankDiff;
+          const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          if (bTime !== aTime) return bTime - aTime;
+          return String(b._id).localeCompare(String(a._id));
+        });
+
+      total = ranked.length;
+      const pageDocs = limit > 0 ? ranked.slice(skip, skip + limit) : ranked;
+      pageIds = pageDocs.map((doc) => String(doc._id));
+    } else {
+      const [idRows, count] = await Promise.all([
+        Product.aggregate<{ _id: mongoose.Types.ObjectId }>([
+          { $match: listingQuery },
+          { $project: { tag: 1, createdAt: 1, newTagDurationDays: 1 } },
+          { $addFields: { _tagRank: TAG_RANK_EXPR } },
+          { $sort: { _tagRank: 1, createdAt: -1, _id: -1 } },
+          ...(limit > 0 ? [{ $skip: skip }, { $limit: limit }] : []),
+          { $project: { _id: 1 } },
+        ]),
+        Product.countDocuments(listingQuery),
+      ]);
+      pageIds = idRows.map((row) => String(row._id));
+      total = count;
+    }
+
+    const pageObjectIds = pageIds.map((id) => new mongoose.Types.ObjectId(id));
+    const pageDocs = pageObjectIds.length > 0
+      ? await Product.find({ _id: { $in: pageObjectIds } }).lean()
+      : [];
+    const docsById = new Map(pageDocs.map((doc) => [String(doc._id), doc]));
+    const orderedDocs = pageIds
+      .map((id) => docsById.get(id))
+      .filter((doc): doc is NonNullable<typeof doc> => Boolean(doc));
+
     const ownerIds = [...new Set(
-      products
+      orderedDocs
         .map((product) => product.createdBy?.id)
         .filter((id): id is string => typeof id === "string" && id.length > 0)
-    )];
+    )].filter((id) => mongoose.Types.ObjectId.isValid(id));
     const owners = ownerIds.length > 0
       ? await User.find({ _id: { $in: ownerIds } })
-          .select("_id role storeApprovalStatus storeType storeName name")
+          .select("_id role storeType storeName name")
           .lean()
       : [];
-    const approvedOwnerIds = new Set(
-      owners
-        .filter((owner) => isStoreOwnerApproved(owner))
-        .map((owner) => owner._id.toString())
-    );
-    const ownerMap = new Map(owners.map((o) => [o._id.toString(), o]));
+    const ownerMap = new Map(owners.map((owner) => [owner._id.toString(), owner]));
+
+    // Reservation and order-hold lookups are scoped to the returned page only.
     const now = new Date();
-    const activeReservations = await ProductReservation.find({ reservedUntil: { $gt: now } })
-      .select("product reservationKey quantity variant")
-      .lean();
+    const activeReservations = pageObjectIds.length > 0
+      ? await ProductReservation.find({
+          product: { $in: pageObjectIds },
+          reservedUntil: { $gt: now },
+        })
+          .select("product reservationKey quantity variant")
+          .lean()
+      : [];
     const activeOrderHoldMap = await getActiveOrderHoldMapByProductIds(
-      products.map((product) => product._id.toString()),
+      pageIds,
       session?.userId || null
     );
-    const reservationKey = session?.userId ? `user:${session.userId}` : (searchParams.get("rk") || null);
+    const reservationKey = session?.userId ? `user:${session.userId}` : (rk || null);
     const reservationMap = activeReservations.reduce((map, reservation) => {
       const productId = reservation.product.toString();
       const current =
@@ -138,11 +326,8 @@ export async function GET(req: NextRequest) {
       entries: Array<{ reservationKey: string; quantity: number; variant: unknown }>;
     }>());
 
-    const productsWithAvailability = products.map((product) => {
+    const returnedProducts = orderedDocs.map((product) => {
       const ownerId = product.createdBy?.id || "";
-      if (ownerId && !approvedOwnerIds.has(ownerId)) {
-        return null;
-      }
       const storedVariants = normalizeStoredVariants(product.variants) as Array<VariantLike & { images: number[] }>;
       const publicMedia = filterPublicProductMedia(product.images || [], storedVariants);
       const variants = publicMedia.variants;
@@ -192,90 +377,84 @@ export async function GET(req: NextRequest) {
         variants,
         sizes: derivedSizes,
         colors: derivedColors,
+        tag: isNewTagExpired(product, nowMs) ? "" : product.tag,
         storeType: owner?.role === "store_owner" ? (owner as { storeType?: string }).storeType || null : null,
         storeName: (owner as { storeName?: string; name?: string } | undefined)?.storeName || product.createdBy?.name || "",
       };
     });
 
-    const visibleProducts = productsWithAvailability.filter(
-      (product): product is NonNullable<(typeof productsWithAvailability)[number]> => product !== null
-    );
-
-    const searchMatchedProducts = search
-      ? filterAndRankProducts(visibleProducts, search)
-      : visibleProducts;
-
-    const filteredProducts = searchMatchedProducts.filter((product) => {
-      if (product.isActive === false) return false;
-      if (product.approvalStatus && product.approvalStatus !== "approved") return false;
-      const stock = Math.max(product.stock ?? 0, 0);
-      const hasSelectableVariant = product.variantAvailability
-        ? Object.values(product.variantAvailability).some((entry) => entry.available)
-        : stock > 0;
-      if (store && product.storeName !== store) return false;
-      if (brand && product.brand !== brand) return false;
-      if (sizes.length > 0 && !sizes.some((sizeValue) => (product.sizes || []).includes(sizeValue))) return false;
-      if (color && !(product.colors || []).some((c) => c === color)) return false;
-      if (availability === "out-of-stock") return !hasSelectableVariant;
-      if (availability === "in-stock") return hasSelectableVariant;
-      if (Number.isFinite(priceMin) && product.price < priceMin) return false;
-      if (Number.isFinite(priceMax) && priceMax > 0 && product.price > priceMax) return false;
-      return true;
-    });
-
-    const facetsSource = store
-      ? searchMatchedProducts.filter((product) => product.storeName === store)
-      : searchMatchedProducts;
-    const facets = includeFacets
-      ? {
-          categories: uniqueSortedValues(facetsSource.flatMap((product) => product.categories || [])),
-          brands: uniqueSortedValues(facetsSource.map((product) => product.brand || "")),
-          stores: uniqueSortedValues(facetsSource.map((product) => product.storeName || "")),
-          sizes: uniqueSortedValues(facetsSource.flatMap((product) => product.sizes || [])),
-          colors: uniqueSortedHexes(facetsSource.flatMap((product) => product.colors || [])),
-          priceRange: {
-            min: facetsSource.length > 0 ? Math.min(...facetsSource.map((product) => product.price || 0)) : 0,
-            max: facetsSource.length > 0 ? Math.max(...facetsSource.map((product) => product.price || 0)) : 0,
+    let facets;
+    if (includeFacets) {
+      // Facets respect the category/search/store scope (matching the previous
+      // behavior) and are computed inside MongoDB instead of over hydrated docs.
+      const facetClauses: Record<string, unknown>[] = [...baseClauses];
+      if (searchMatchedIds) facetClauses.push({ _id: { $in: searchMatchedIds } });
+      if (storeClause) facetClauses.push(storeClause);
+      const [facetRow] = await Product.aggregate<{
+        categories: Array<{ _id: string }>;
+        brands: Array<{ _id: string }>;
+        owners: Array<{ _id: { id?: string; name?: string } | null }>;
+        sizes: Array<{ _id: string }>;
+        colors: Array<{ _id: string | null }>;
+        price: Array<{ min: number; max: number }>;
+      }>([
+        { $match: { $and: facetClauses } },
+        {
+          $facet: {
+            categories: [{ $unwind: "$categories" }, { $group: { _id: "$categories" } }],
+            brands: [{ $group: { _id: "$brand" } }],
+            owners: [{ $group: { _id: { id: "$createdBy.id", name: "$createdBy.name" } } }],
+            sizes: [{ $unwind: "$variants" }, { $group: { _id: "$variants.size" } }],
+            colors: [{ $unwind: "$variants" }, { $group: { _id: "$variants.color" } }],
+            price: [{ $group: { _id: null, min: { $min: "$price" }, max: { $max: "$price" } } }],
           },
-        }
-      : undefined;
+        },
+      ]);
 
-    const nowMs = Date.now();
-    const productsWithEffectiveTag = filteredProducts.map((product) => {
-      const rawTag = typeof product.tag === "string" ? product.tag : "";
-      if (rawTag.toUpperCase() === "NEW") {
-        const durationDays = Math.max(1, Number(product.newTagDurationDays) || 3);
-        const createdMs = product.createdAt ? new Date(product.createdAt).getTime() : 0;
-        const expired = createdMs > 0 && nowMs - createdMs > durationDays * 86400000;
-        if (expired) return { ...product, tag: "" };
-      }
-      return product;
-    });
+      const ownerPairs = (facetRow?.owners || [])
+        .map((row) => row._id)
+        .filter((pair): pair is { id?: string; name?: string } => Boolean(pair));
+      const facetOwnerIds = [...new Set(
+        ownerPairs
+          .map((pair) => pair.id)
+          .filter((id): id is string => typeof id === "string" && mongoose.Types.ObjectId.isValid(id))
+      )];
+      const facetOwners = facetOwnerIds.length > 0
+        ? await User.find({ _id: { $in: facetOwnerIds } }).select("_id storeName").lean()
+        : [];
+      const storeNameByOwnerId = new Map(
+        facetOwners.map((owner) => [owner._id.toString(), owner.storeName || ""])
+      );
 
-    const tagRank = (tag: unknown) => {
-      const value = typeof tag === "string" ? tag.toUpperCase() : "";
-      if (value === "NEW") return 0;
-      if (value === "FAVORITE") return 1;
-      return 2;
-    };
-    const sortedProducts = [...productsWithEffectiveTag].sort((a, b) => {
-      const rankDiff = tagRank(a.tag) - tagRank(b.tag);
-      if (rankDiff !== 0) return rankDiff;
-      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return bTime - aTime;
-    });
+      facets = {
+        categories: uniqueSortedValues((facetRow?.categories || []).map((row) => String(row._id || ""))),
+        brands: uniqueSortedValues((facetRow?.brands || []).map((row) => String(row._id || ""))),
+        stores: uniqueSortedValues(
+          ownerPairs.map((pair) => storeNameByOwnerId.get(pair.id || "") || pair.name || "")
+        ),
+        sizes: uniqueSortedValues((facetRow?.sizes || []).map((row) => String(row._id || "").trim())),
+        colors: uniqueSortedHexes(
+          (facetRow?.colors || []).map((row) => normalizeStoredVariantColor(row._id) || "")
+        ),
+        priceRange: {
+          min: facetRow?.price?.[0]?.min ?? 0,
+          max: facetRow?.price?.[0]?.max ?? 0,
+        },
+      };
+    }
 
-    const total = sortedProducts.length;
-    const returnedProducts = limit > 0 ? sortedProducts.slice(skip, skip + limit) : sortedProducts;
-
-    return NextResponse.json({
+    const response = NextResponse.json({
       products: returnedProducts,
       total,
       page,
       totalPages: limit > 0 ? Math.ceil(total / limit) : 1,
       facets,
     });
+    // Anonymous, reservation-free listings are generic — let the CDN absorb them.
+    if (!session && !rk) {
+      response.headers.set("Cache-Control", "public, s-maxage=60, stale-while-revalidate=300");
+    }
+    return response;
   } catch (error: unknown) {
     console.error("Get products error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

@@ -5,6 +5,7 @@ import User from "@/store/models/User";
 import { getSession } from "@/store/lib/auth";
 import StoreApplication from "@/store/models/StoreApplication";
 import { createUniqueStoreSlug, slugifyStoreName } from "@/lib/storeSlug";
+import { syncProductsOwnerApproved } from "@/store/lib/ownerApprovalSync";
 
 const VALID_STORE_TYPES = new Set(["thrift", "retail"] as const);
 
@@ -77,6 +78,9 @@ export async function PUT(req: NextRequest) {
       user.sessionVersion = (user.sessionVersion || 0) + 1;
     }
     await user.save();
+    if (changed) {
+      await syncProductsOwnerApproved(user._id.toString(), false);
+    }
 
     return NextResponse.json({
       user: {

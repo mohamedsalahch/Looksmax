@@ -57,6 +57,8 @@ interface ProductCardProps {
   preferCollectionLeftImage?: boolean;
   /** Browse gender context — picks the male/female model for unisex products. */
   viewGender?: "men" | "women" | null;
+  /** Set for above-the-fold cards so their image preloads; the rest lazy-load. */
+  imagePriority?: boolean;
 }
 
 const CLONE_PREVIEW_WIDTH = 184;
@@ -87,6 +89,7 @@ export default function ProductCard({
   images = [],
   preferCollectionLeftImage = false,
   viewGender = null,
+  imagePriority = false,
 }: ProductCardProps) {
   const { addItem } = useCart();
   const router = useRouter();
@@ -435,6 +438,7 @@ export default function ProductCard({
             imageClassName="w-full h-full object-contain"
             videoClassName="w-full h-full object-contain"
             audioClassName="w-full"
+            sizes="184px"
           />
         </div>
       )}
@@ -458,6 +462,8 @@ export default function ProductCard({
             imageClassName="block w-full h-auto object-contain"
             videoClassName="block w-full h-auto object-contain"
             audioClassName="block w-full px-3 py-6"
+            priority={imagePriority}
+            sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
           />
         ) : (
           <>
