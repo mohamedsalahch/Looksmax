@@ -141,6 +141,7 @@ interface BrowseGridCache {
   page: number;
   scrollY: number;
   anchorProductId?: string;
+  anchorViewportTop?: number;
   filters?: BrowseGridFilters;
 }
 
@@ -184,6 +185,12 @@ function readBrowseCache(category?: string, storeName = ""): BrowseGridCache | n
   }
 }
 
+function getBrowseProductElement(productId: string) {
+  if (typeof document === "undefined") return null;
+  const nodes = document.querySelectorAll<HTMLElement>("[data-browse-product-id]");
+  return Array.from(nodes).find((node) => node.dataset.browseProductId === productId) || null;
+}
+
 export default function ProductGrid({
   category,
   storeName = "",
@@ -208,7 +215,12 @@ export default function ProductGrid({
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const restoredScrollRef = useRef(false);
   const skipRestoredFilterFetchRef = useRef(false);
-  const pendingRestoreRef = useRef<{ scrollY: number; anchorProductId?: string; productCount: number } | null>(null);
+  const pendingRestoreRef = useRef<{
+    scrollY: number;
+    anchorProductId?: string;
+    anchorViewportTop?: number;
+    productCount: number;
+  } | null>(null);
 
   const [queryInput, setQueryInput] = useState("");
   const [draftCategory, setDraftCategory] = useState("");
@@ -274,6 +286,7 @@ export default function ProductGrid({
       pendingRestoreRef.current = {
         scrollY: cached.scrollY,
         anchorProductId: cached.anchorProductId,
+        anchorViewportTop: cached.anchorViewportTop,
         productCount: cached.products.length,
       };
     }
@@ -286,22 +299,45 @@ export default function ProductGrid({
     if (!pending.anchorProductId && products.length < pending.productCount) return;
 
     pendingRestoreRef.current = null;
-    if (pending.anchorProductId && typeof CSS !== "undefined" && typeof CSS.escape === "function") {
-      const selector = `[data-browse-product-id="${CSS.escape(pending.anchorProductId)}"]`;
-      const anchor = document.querySelector<HTMLElement>(selector);
-      if (anchor) {
-        anchor.scrollIntoView({ block: "center", behavior: "auto" });
-        return;
-      }
-    }
 
-    window.scrollTo({ top: pending.scrollY, behavior: "auto" });
+    const restoreScroll = () => {
+      if (pending.anchorProductId) {
+        const anchor = getBrowseProductElement(pending.anchorProductId);
+        if (anchor) {
+          const targetViewportTop =
+            typeof pending.anchorViewportTop === "number"
+              ? pending.anchorViewportTop
+              : Math.max(0, window.innerHeight / 2 - anchor.getBoundingClientRect().height / 2);
+          const nextScrollY = Math.max(
+            0,
+            window.scrollY + anchor.getBoundingClientRect().top - targetViewportTop,
+          );
+          window.scrollTo({ top: nextScrollY, behavior: "auto" });
+          return;
+        }
+      }
+
+      window.scrollTo({ top: pending.scrollY, behavior: "auto" });
+    };
+
+    restoreScroll();
+    const firstFrame = window.requestAnimationFrame(restoreScroll);
+    const secondFrame = window.requestAnimationFrame(() => window.requestAnimationFrame(restoreScroll));
+    const timeoutIds = [120, 360, 800].map((delay) => window.setTimeout(restoreScroll, delay));
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+      timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    };
   }, [products]);
 
   const saveBrowsePosition = useCallback((anchorProductId?: string) => {
     if (typeof window === "undefined") return;
 
     try {
+      const anchor = anchorProductId ? getBrowseProductElement(anchorProductId) : null;
+      const anchorViewportTop = anchor?.getBoundingClientRect().top;
       const payload: BrowseGridCache = {
         timestamp: Date.now(),
         products,
@@ -310,6 +346,7 @@ export default function ProductGrid({
         page: pageRef.current,
         scrollY: window.scrollY,
         anchorProductId,
+        anchorViewportTop,
         filters: {
           queryInput,
           draftCategory,
