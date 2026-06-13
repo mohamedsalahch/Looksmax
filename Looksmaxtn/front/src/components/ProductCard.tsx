@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
 import MediaRenderer from "@/components/MediaRenderer";
-import { getReservationKey, reserveProduct, subscribeToReservationChanges } from "@/lib/reservations";
+import { reserveProduct } from "@/lib/reservations";
 import { subscribeToAvailabilityStream } from "@/lib/availabilityStream";
 import { formatTndPrice } from "@/lib/formatPrice";
 import { getConditionColor, getConditionLabel, getConditionPercent } from "@/lib/productCondition";
@@ -96,7 +96,9 @@ export default function ProductCard({
   const { addItem } = useCart();
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
-  const [hasHydratedAvailability, setHasHydratedAvailability] = useState(false);
+  const [hasHydratedAvailability, setHasHydratedAvailability] = useState(
+    Boolean(variantAvailability) || initialReservedElsewhere || initialBlockedByOrder,
+  );
   const [variantAvailabilityState, setVariantAvailabilityState] = useState<VariantAvailabilityMap | null>(
     variantAvailability || null,
   );
@@ -229,27 +231,6 @@ export default function ProductCard({
 
   useEffect(() => {
     if (!id) return;
-    let cancelled = false;
-
-    const refresh = () => {
-      const rk = getReservationKey();
-      const url = rk
-        ? `/api/products/${id}?rk=${encodeURIComponent(rk)}`
-        : `/api/products/${id}`;
-      fetch(url, { cache: "no-store" })
-        .then((r) => r.json())
-        .then((data) => {
-          if (cancelled || !data.product) return;
-          setVariantAvailabilityState(data.product.variantAvailability || null);
-          setBlockedByOrder(Boolean(data.product.blockedByOrder));
-          setViewerBlocked(Boolean(data.product.viewerBlocked));
-          setHasHydratedAvailability(true);
-        })
-        .catch(() => {});
-    };
-
-    refresh();
-    window.addEventListener("focus", refresh);
 
     const unsubscribeSSE = subscribeToAvailabilityStream(
       (event) => {
@@ -260,20 +241,9 @@ export default function ProductCard({
           setHasHydratedAvailability(true);
         }
       },
-      refresh,
     );
 
-    const unsubscribeLocal = subscribeToReservationChanges((payload) => {
-      if (payload.productId !== id) return;
-      refresh();
-    });
-
-    return () => {
-      cancelled = true;
-      window.removeEventListener("focus", refresh);
-      unsubscribeSSE();
-      unsubscribeLocal();
-    };
+    return unsubscribeSSE;
   }, [id]);
 
   const handleColorwayClick = (e: React.MouseEvent, hex: string) => {
