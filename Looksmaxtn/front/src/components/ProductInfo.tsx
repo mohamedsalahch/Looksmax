@@ -49,7 +49,6 @@ type ProductInfoProduct = {
   description: string;
   reservationExpiresAt?: string | null;
   cartCount?: number;
-  reservedElsewhere?: boolean;
   ownedReservation?: boolean;
   blockedByOrder?: boolean;
   conditionScore?: number | null;
@@ -94,9 +93,7 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
 
   const [addedToCart, setAddedToCart] = useState(false);
   const [reservationError, setReservationError] = useState("");
-  const [hasHydratedAvailability, setHasHydratedAvailability] = useState(Boolean(product.variantAvailability));
   const [availabilityChecked, setAvailabilityChecked] = useState(!product.id);
-  const [reservedElsewhere, setReservedElsewhere] = useState(Boolean(product.reservedElsewhere));
   const [ownedReservation, setOwnedReservation] = useState(() => Boolean(product.ownedReservation));
   const [blockedByOrder, setBlockedByOrder] = useState(() => Boolean(product.blockedByOrder));
   const [selectedQuantity, setSelectedQuantity] = useState(1);
@@ -155,20 +152,9 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
     return currentStock;
   })();
 
-  const selectedVariantReservedElsewhere = (() => {
-    if (selectedVariantId && variantAvailability?.[selectedVariantId]) {
-      return variantAvailability[selectedVariantId].reservedElsewhere;
-    }
-    return reservedElsewhere;
-  })();
-
-  const showReservedElsewhere = hasHydratedAvailability
-    ? selectedVariantReservedElsewhere ||
-      (variantsForActiveColor.length === 0 && reservedElsewhere)
-    : false;
-  const isSoldOut = selectedVariantStock < 1 && !showReservedElsewhere;
+  const isSoldOut = selectedVariantStock < 1;
   const isBlocked = selectedVariantStock < 1;
-  const statusLabel = showReservedElsewhere ? "Reserved elsewhere" : "Sold Out";
+  const statusLabel = "Sold Out";
 
   const cartItemId = product.id
     ? buildCartItemId(product.id, selectedVariantId || undefined)
@@ -187,13 +173,11 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
       .then((data) => {
         if (!data.product) return;
         setCurrentStock(data.product.stock ?? 0);
-        setReservedElsewhere(Boolean(data.product.reservedElsewhere));
         setOwnedReservation(Boolean(data.product.ownedReservation));
         setBlockedByOrder(Boolean(data.product.blockedByOrder));
         if (data.product.variantAvailability) {
           setVariantAvailability(data.product.variantAvailability);
         }
-        setHasHydratedAvailability(true);
       })
       .catch(() => {})
       .finally(() => {
@@ -219,7 +203,6 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
         } else {
           setCurrentStock(event.stock);
         }
-        setHasHydratedAvailability(true);
       },
       () => {
         if (!cancelled) refreshAvailability();
@@ -559,7 +542,6 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
               const info = variantAvailability?.[variant._id];
               const stockForVariant = info ? info.stock : variant.stock ?? 0;
               const variantAvailable = stockForVariant > 0;
-              const reservedElsewhereForVariant = Boolean(info?.reservedElsewhere);
               return (
                 <button
                   key={variant._id}
@@ -577,8 +559,6 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
                   <span>{variant.size}</span>
                   {stockForVariant === 0 ? (
                     <span className="text-[9px] uppercase tracking-wide text-text-secondary">Sold out</span>
-                  ) : hasHydratedAvailability && reservedElsewhereForVariant ? (
-                    <span className="text-[9px] uppercase tracking-wide text-text-secondary">Reserved elsewhere</span>
                   ) : null}
                 </button>
               );
@@ -601,13 +581,6 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
                 : "Size selected"}
         </span>
       </div>
-
-      {showReservedElsewhere && (
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-foreground" />
-          <span className="text-xs text-text-secondary">Reserved elsewhere</span>
-        </div>
-      )}
 
       {blockedByOrder && (
         <div className="flex items-center gap-2">

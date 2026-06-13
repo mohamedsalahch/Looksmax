@@ -349,9 +349,6 @@ export async function GET(req: NextRequest) {
       const hasSelectableVariant = variantAvailability
         ? Object.values(variantAvailability).some((entry) => entry.available)
         : displayStock > 0;
-      const reservedElsewhere = variantAvailability
-        ? Object.values(variantAvailability).some((entry) => entry.reservedElsewhere)
-        : reservedByOthers > 0 && (reservedByOthers >= stock || reservedByOthers + reservationInfo.ownedQuantity > stock);
       const blockedByOrder = variantAvailability
         ? Boolean(activeOrderHold) && !hasSelectableVariant
         : Boolean(activeOrderHold) && displayStock <= 0;
@@ -371,7 +368,6 @@ export async function GET(req: NextRequest) {
         stock: displayStock,
         cartCount: reservationInfo.totalQuantity,
         blockedByOrder,
-        reservedElsewhere,
         ownedReservation: reservationInfo.ownedQuantity > 0,
         variantAvailability,
         variants,

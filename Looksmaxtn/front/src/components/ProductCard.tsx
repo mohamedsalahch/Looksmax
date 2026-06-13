@@ -37,7 +37,6 @@ interface ProductCardProps {
   image?: string;
   stock?: number;
   cartCount?: number;
-  reservedElsewhere?: boolean;
   ownedReservation?: boolean;
   blockedByOrder?: boolean;
   conditionScore?: number | null;
@@ -122,7 +121,6 @@ export default function ProductCard({
   tag,
   image,
   stock = 1,
-  reservedElsewhere: initialReservedElsewhere = false,
   blockedByOrder: initialBlockedByOrder = false,
   conditionScore = null,
   conditionStatus = null,
@@ -145,13 +143,9 @@ export default function ProductCard({
   const cardRef = useRef<HTMLAnchorElement | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [shouldPreloadDetails, setShouldPreloadDetails] = useState(false);
-  const [hasHydratedAvailability, setHasHydratedAvailability] = useState(
-    Boolean(variantAvailability) || initialReservedElsewhere || initialBlockedByOrder,
-  );
   const [variantAvailabilityState, setVariantAvailabilityState] = useState<VariantAvailabilityMap | null>(
     variantAvailability || null,
   );
-  const [viewerBlocked, setViewerBlocked] = useState<boolean>(initialReservedElsewhere);
   const isPerfume = productType === "perfume";
 
   const colorwayColors = useMemo(() => {
@@ -232,11 +226,10 @@ export default function ProductCard({
     return stock;
   })();
   const isSoldOut = !isPerfume && selectedVariantAvailability
-    ? selectedVariantAvailability.stock <= 0 && !selectedVariantAvailability.reservedElsewhere
+    ? selectedVariantAvailability.stock <= 0
     : false;
-  const showReservedElsewhere = !isPerfume && hasHydratedAvailability && viewerBlocked;
   const isBlocked = !isPerfume && selectedVariantStock <= 0;
-  const statusLabel = showReservedElsewhere ? "Reserved elsewhere" : "Sold Out";
+  const statusLabel = "Sold Out";
   const cardHref = !isPerfume && isMounted && selectedVariant?.size
     ? {
         pathname: `/product/${id}`,
@@ -345,10 +338,8 @@ export default function ProductCard({
     const unsubscribeSSE = subscribeToAvailabilityStream(
       (event) => {
         if (event.productId !== id) return;
-        setViewerBlocked(Boolean(event.viewerBlocked));
         if (event.variantAvailability !== null) {
           setVariantAvailabilityState(event.variantAvailability);
-          setHasHydratedAvailability(true);
         }
       },
     );
@@ -559,7 +550,7 @@ export default function ProductCard({
           </>
         )}
 
-        {(tag || isSoldOut || showReservedElsewhere || showNewBadge) && (
+        {(tag || isSoldOut || showNewBadge) && (
           <div className="absolute top-2 left-2 z-20 flex flex-col gap-1">
             {tag && (
               <span className="bg-foreground text-background text-[10px] px-2 py-0.5 font-medium tracking-wide">
@@ -573,10 +564,6 @@ export default function ProductCard({
             ) : initialBlockedByOrder ? (
               <span className="bg-foreground text-background text-[10px] px-2 py-0.5 font-medium tracking-wide">
                 Reserved for confirmation
-              </span>
-            ) : showReservedElsewhere ? (
-              <span className="bg-foreground text-background text-[10px] px-2 py-0.5 font-medium tracking-wide">
-                Reserved elsewhere
               </span>
             ) : showNewBadge ? (
               <span className="bg-foreground text-background text-[10px] px-2 py-0.5 font-medium tracking-wide">
@@ -658,8 +645,6 @@ export default function ProductCard({
                             <span>{variant.size}</span>
                             {stockForVariant === 0 ? (
                               <span className="text-[9px] uppercase tracking-wide text-text-secondary">Sold out</span>
-                            ) : hasHydratedAvailability && info?.reservedElsewhere ? (
-                              <span className="text-[9px] uppercase tracking-wide text-text-secondary">Reserved elsewhere</span>
                             ) : null}
                           </div>
                         );

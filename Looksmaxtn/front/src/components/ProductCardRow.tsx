@@ -26,7 +26,6 @@ export interface ProductCardRowItem {
   variants?: RowVariant[];
   variantAvailability?: VariantAvailabilityMap | null;
   cartCount?: number;
-  reservedElsewhere?: boolean;
   ownedReservation?: boolean;
   tag?: string;
   sizes?: string[];
@@ -80,7 +79,6 @@ export default function ProductCardRow({
               variants={product.variants}
               variantAvailability={product.variantAvailability}
               cartCount={product.cartCount}
-              reservedElsewhere={product.reservedElsewhere}
               ownedReservation={product.ownedReservation}
               tag={product.tag}
               image={getMainImage(product.images)}

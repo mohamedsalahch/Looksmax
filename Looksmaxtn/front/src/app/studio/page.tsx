@@ -38,7 +38,6 @@ interface StudioProduct {
     brand?: string;
     stock?: number;
     cartCount?: number;
-    reservedElsewhere?: boolean;
     ownedReservation?: boolean;
     tag?: string;
     sizes?: string[];
@@ -2143,7 +2142,6 @@ export default function OutfitStudioPage() {
                                     price={product.price.toFixed(2)}
                                     stock={product.stock}
                                     cartCount={product.cartCount}
-                                    reservedElsewhere={product.reservedElsewhere}
                                     ownedReservation={product.ownedReservation}
                                     tag={product.tag}
                                     image={getMainImage(product.images)}

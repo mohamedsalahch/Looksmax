@@ -58,7 +58,6 @@ type ProductResponse = {
     description: string;
     reservationExpiresAt?: string | null;
     cartCount?: number;
-    reservedElsewhere?: boolean;
     ownedReservation?: boolean;
     blockedByOrder?: boolean;
     conditionScore?: number | null;
@@ -212,7 +211,6 @@ export default async function ProductDetailPage({
     description: dbProduct.description || "",
     reservationExpiresAt: null,
     cartCount: dbProduct.cartCount ?? 0,
-    reservedElsewhere: Boolean(dbProduct.reservedElsewhere),
     ownedReservation: Boolean(dbProduct.ownedReservation),
     blockedByOrder: Boolean(dbProduct.blockedByOrder),
     conditionScore: dbProduct.conditionScore ?? null,

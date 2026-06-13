@@ -16,7 +16,6 @@ export type VariantAvailabilityEntry = {
   color: VariantColor;
   stock: number;
   available: boolean;
-  reservedElsewhere: boolean;
 };
 
 export type VariantAvailabilityMap = Record<string, VariantAvailabilityEntry>;
@@ -33,15 +32,14 @@ export function variantIdString(value: unknown): string {
   return String(value);
 }
 
-function qty(r: { quantity?: number }) {
-  return Math.max(1, Number(r.quantity) || 1);
-}
-
 export function buildVariantAvailability(
   variants: ReadonlyArray<VariantLike> | undefined | null,
-  reservations: ReservationLike[],
-  reservationKey: string | null,
+  _reservations: ReservationLike[],
+  _reservationKey: string | null,
 ): VariantAvailabilityMap | null {
+  void _reservations;
+  void _reservationKey;
+
   if (!variants || variants.length === 0) return null;
 
   const result: VariantAvailabilityMap = {};
@@ -50,13 +48,6 @@ export function buildVariantAvailability(
     if (!variantId) continue;
 
     const stock = Math.max(variant.stock ?? 0, 0);
-    let reservedByOthers = 0;
-    let ownedQuantity = 0;
-    for (const r of reservations) {
-      if (variantIdString(r.variant) !== variantId) continue;
-      if (r.reservationKey === reservationKey) ownedQuantity += qty(r);
-      else reservedByOthers += qty(r);
-    }
 
     result[variantId] = {
       variantId,
@@ -64,10 +55,6 @@ export function buildVariantAvailability(
       color: normalizeStoredVariantColor(variant.color),
       stock,
       available: stock > 0,
-      reservedElsewhere:
-        stock > 0 &&
-        reservedByOthers > 0 &&
-        (reservedByOthers >= stock || reservedByOthers + ownedQuantity > stock),
     };
   }
 

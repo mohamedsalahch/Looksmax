@@ -90,7 +90,6 @@ export async function POST(req: NextRequest) {
               product?.images?.[0]?.url ||
               "",
             cartCount: 0,
-            reservedElsewhere: false,
             ownedReservation: false,
             reservationExpiresAt: null,
             variantAvailability: null,
@@ -111,20 +110,9 @@ export async function POST(req: NextRequest) {
           : null;
 
         const remainingStock = Math.max(product?.stock ?? 0, 0);
-        const reservedByOthers = productReservations.reduce((sum, reservation) => {
-          if (reservation.reservationKey === key) return sum;
-          return sum + reservation.quantity;
-        }, 0);
-        const ownedQuantity = productReservations.reduce((sum, reservation) => {
-          if (reservation.reservationKey !== key) return sum;
-          return sum + reservation.quantity;
-        }, 0);
         const hasSelectableVariant = hasVariants
           ? Object.values(variantAvailability || {}).some((entry) => entry.available)
           : remainingStock > 0;
-        const reservedElsewhere = hasVariants
-          ? Object.values(variantAvailability || {}).some((entry) => entry.reservedElsewhere)
-          : reservedByOthers > 0 && (reservedByOthers >= remainingStock || reservedByOthers + ownedQuantity > remainingStock);
 
         const ownedReservationEntry = key
           ? productReservations.find((reservation) => reservation.reservationKey === key) || null
@@ -145,7 +133,6 @@ export async function POST(req: NextRequest) {
           originPictures: product?.originPictures || { front: "", back: "", left: "", right: "" },
           image: mainImage,
           cartCount: productReservations.reduce((sum, reservation) => sum + reservation.quantity, 0),
-          reservedElsewhere,
           ownedReservation: Boolean(ownedReservationEntry) || Boolean(activeOrderHold?.ownedReservation),
           reservationExpiresAt: ownedReservationEntry ? ownedReservationEntry.reservationExpiresAt : null,
           variantAvailability,

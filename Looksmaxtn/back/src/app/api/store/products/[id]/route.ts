@@ -10,7 +10,6 @@ import {
   getDisplayStock,
   type VariantLike,
 } from "@/lib/variantAvailability";
-import { computeViewerBlocked } from "@/lib/sseClients";
 import { isStoreOwnerApproved } from "@/store/lib/storeApproval";
 import {
   averageVariantConditionScore,
@@ -97,17 +96,6 @@ export async function GET(
     if (product.isActive === false || (product.approvalStatus && product.approvalStatus !== "approved")) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
-    const reservedElsewhere = hasVariants
-      ? Object.values(variantAvailability || {}).some((entry) => entry.reservedElsewhere)
-      : reservedByOthersQuantity > 0 && (reservedByOthersQuantity >= stock || reservedByOthersQuantity + ownedReservationQuantity > stock);
-
-    const viewerBlocked = computeViewerBlocked(
-      variants,
-      stock,
-      activeReservations,
-      reservationKey,
-    );
-
     let effectiveTag = typeof product.tag === "string" ? product.tag : "";
     if (effectiveTag.toUpperCase() === "NEW") {
       const durationDays = Math.max(1, Number(product.newTagDurationDays) || 3);
@@ -130,7 +118,6 @@ export async function GET(
         stock: displayStock,
         cartCount: 0,
         blockedByOrder,
-        reservedElsewhere,
         ownedReservation,
         storeName: owner?.storeName || product.createdBy?.name || "",
         storeType: owner?.role === "store_owner" ? owner?.storeType || null : null,
@@ -139,7 +126,6 @@ export async function GET(
         variants,
         sizes: deriveSizes(variants),
         colors: deriveColors(variants),
-        viewerBlocked,
       },
     });
   } catch (error: unknown) {

@@ -154,7 +154,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
           available: boolean;
           blockedByOrder?: boolean;
           ownedReservation?: boolean;
-          reservedElsewhere?: boolean;
           maxStock?: number;
           productType?: "fashion" | "perfume" | "clothing" | "shoes";
           originPictures?: {
@@ -167,7 +166,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
           image?: string;
           reservationExpiresAt?: string | null;
           cartCount?: number;
-          variantAvailability?: Record<string, { stock: number; available: boolean; reservedElsewhere: boolean }> | null;
+          variantAvailability?: Record<string, { stock: number; available: boolean }> | null;
         };
 
         const availabilityMap = new Map(

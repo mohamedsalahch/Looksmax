@@ -1,6 +1,5 @@
 import {
   buildVariantAvailability,
-  variantIdString,
   type ReservationLike,
   type VariantAvailabilityMap,
   type VariantLike,
@@ -18,7 +17,6 @@ export type SSEAvailabilityPayload = {
   cartCount: number;
   stock: number;
   variantAvailability: VariantAvailabilityMap | null;
-  viewerBlocked: boolean;
 };
 
 export type SSEBroadcastInput = {
@@ -43,56 +41,6 @@ function qty(r: { quantity?: number }) {
   return Math.max(1, Number(r.quantity) || 1);
 }
 
-export function computeViewerBlocked(
-  variants: ReadonlyArray<VariantLike> | null | undefined,
-  stock: number,
-  reservations: ReservationLike[],
-  reservationKey: string | null,
-): boolean {
-  const hasVariants = Boolean(variants && variants.length > 0);
-
-  if (!hasVariants) {
-    const others = reservations
-      .filter((r) => r.reservationKey !== reservationKey)
-      .reduce((sum, r) => sum + qty(r), 0);
-    const owned = reservationKey
-      ? reservations
-          .filter((r) => r.reservationKey === reservationKey)
-          .reduce((sum, r) => sum + qty(r), 0)
-      : 0;
-    const stockVal = Math.max(stock, 0);
-    if (owned > 0) return owned + others > stockVal;
-    return stockVal > 0 && others >= stockVal;
-  }
-
-  let hasOwnedCart = false;
-  let anyConflict = false;
-  let everyFullVariantFlagged = true;
-  let anyInStockVariant = false;
-
-  for (const variant of variants!) {
-    const variantId = variantIdString(variant._id);
-    const stockVal = Math.max(variant.stock ?? 0, 0);
-    if (stockVal <= 0) continue;
-    anyInStockVariant = true;
-
-    let owned = 0;
-    let others = 0;
-    for (const r of reservations) {
-      if (variantIdString(r.variant) !== variantId) continue;
-      if (reservationKey && r.reservationKey === reservationKey) owned += qty(r);
-      else others += qty(r);
-    }
-
-    if (owned > 0) hasOwnedCart = true;
-    if (owned + others > stockVal) anyConflict = true;
-    if (others < stockVal) everyFullVariantFlagged = false;
-  }
-
-  if (hasOwnedCart) return anyConflict;
-  return anyInStockVariant && everyFullVariantFlagged;
-}
-
 export function broadcastAvailabilityChange(input: SSEBroadcastInput) {
   if (clients.size === 0) return;
 
@@ -114,19 +62,11 @@ export function broadcastAvailabilityChange(input: SSEBroadcastInput) {
       ? input.stock
       : Math.max(input.stock - (totalReservedQty - ownedQty), 0);
 
-    const viewerBlocked = computeViewerBlocked(
-      input.variants,
-      input.stock,
-      input.reservations,
-      entry.reservationKey,
-    );
-
     const payload: SSEAvailabilityPayload = {
       productId: input.productId,
       cartCount: totalReservedQty,
       stock: broadcastStock,
       variantAvailability,
-      viewerBlocked,
     };
 
     try {

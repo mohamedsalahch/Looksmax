@@ -4,7 +4,6 @@ import Order from "@/store/models/Order";
 type SoldQuantityByProductId = Map<string, number>;
 type SoldQuantityByProductAndVariant = Map<string, Map<string, number>>;
 type ActiveOrderHoldInfo = {
-  reservedElsewhere: boolean;
   ownedReservation: boolean;
   activeOrderCount: number;
 };
@@ -116,18 +115,15 @@ export async function getActiveOrderHoldMapByProductIds(
       const productId = item.product?.toString?.() || String(item.product || "");
       if (!productId) continue;
 
-      const current =
-        map.get(productId) || {
-          reservedElsewhere: false,
-          ownedReservation: false,
-          activeOrderCount: 0,
-        };
+        const current =
+          map.get(productId) || {
+            ownedReservation: false,
+            activeOrderCount: 0,
+          };
 
       current.activeOrderCount += 1;
       if (isOwnedByCurrentUser) {
         current.ownedReservation = true;
-      } else {
-        current.reservedElsewhere = true;
       }
       map.set(productId, current);
     }

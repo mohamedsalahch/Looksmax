@@ -113,7 +113,7 @@ Around these sit high-priority operational gaps: AI jobs can hang forever and bu
 - **M6. Password policy.** Min length 6 (`signup/route.ts:40`, `reset-password:23`); no complexity/breached-password check. bcrypt cost 12 is fine. Raise to ≥8 + basic checks.
 - **M7. Backups/DR.** Only a `deploy/backup-restore.md` doc; compose has a single `mongodb_data` volume, no automated dump, no replica. Add scheduled `mongodump` to off-box/R2, test restore, and run a replica set.
 - **M8. Silent failure on storefront SSR.** `front/src/app/page.tsx:65` and category page use `catch {}` — backend outages render empty pages with no log/signal. Log and surface a soft error state.
-- **M9. Reservation abuse.** `products/[id]/reserve` and `cart/availability` are unthrottled; 30-min holds (`CART_PRESENCE_DURATION_MS`) can be scripted to keep stock "reserved elsewhere." Rate-limit and cap reservations per key.
+- **M9. Reservation abuse.** `products/[id]/reserve` and `cart/availability` are unthrottled; 30-min holds (`CART_PRESENCE_DURATION_MS`) can be scripted to keep stock unavailable. Rate-limit and cap reservations per key.
 
 ---
 
@@ -173,7 +173,7 @@ Around these sit high-priority operational gaps: AI jobs can hang forever and bu
 
 - **Skeletons everywhere the catalog loads** (home featured row, category grid, product page) — currently the 11 s TTFB shows as a blank wait; even after C1 a skeleton smooths perceived load.
 - **Filtering:** debounce filter changes; reflect filters in the URL for shareable/back-button state; show active-filter chips and result counts; the grid currently receives the whole category client-side — switch to server pagination + infinite scroll.
-- **Cart/checkout:** optimistic add-to-cart with the reservation countdown you already compute (`formatRemainingTime`); clear "sold/ reserved elsewhere" states (the data exists in `variantAvailability`).
+- **Cart/checkout:** optimistic add-to-cart with the reservation countdown you already compute (`formatRemainingTime`); clear sold states from `variantAvailability`.
 - **Store creation:** surface inline validation + a clear "pending approval" state (the data model has `storeApprovalStatus`).
 - **Outfit Studio:** explicit progress/latency UI, a per-try counter, and a graceful failure + auto-refund message tied to H1.
 - **Empty/error states:** replace silent `catch {}` with friendly empty/error components.

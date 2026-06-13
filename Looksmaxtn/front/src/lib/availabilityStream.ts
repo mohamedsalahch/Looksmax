@@ -8,7 +8,6 @@ export type AvailabilityEvent = {
   cartCount: number;
   stock: number;
   variantAvailability: VariantAvailabilityMap | null;
-  viewerBlocked: boolean;
 };
 
 type EventFn = (event: AvailabilityEvent) => void;
@@ -23,8 +22,8 @@ let connectedOnce = false;
 function buildStreamUrl() {
   // Always ensure a stable guest key exists BEFORE opening the stream, so the
   // server registers this SSE client with the same key the reserve POSTs will use.
-  // Without this, a first-time guest would open SSE with no rk, get registered as
-  // reservationKey=null, and then see their own reservations as "reservedElsewhere".
+    // Without this, a first-time guest would open SSE with no rk, then receive
+    // availability events under a different key than reserve POSTs use.
   const rk = getReservationKey();
   return rk ? `/api/products/events?rk=${encodeURIComponent(rk)}` : "/api/products/events";
 }

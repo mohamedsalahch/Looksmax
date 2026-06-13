@@ -6,7 +6,6 @@ export type VariantAvailabilityEntry = {
   color: VariantColor;
   stock: number;
   available: boolean;
-  reservedElsewhere: boolean;
 };
 
 export type VariantAvailabilityMap = Record<string, VariantAvailabilityEntry>;

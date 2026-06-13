@@ -48,7 +48,6 @@ interface Product {
   variants?: ProductVariant[];
   variantAvailability?: VariantAvailabilityMap | null;
   cartCount?: number;
-  reservedElsewhere?: boolean;
   ownedReservation?: boolean;
   blockedByOrder?: boolean;
   tag?: string;
@@ -820,7 +819,6 @@ export default function ProductGrid({
                   variants={product.variants}
                   variantAvailability={product.variantAvailability}
                   cartCount={product.cartCount}
-                  reservedElsewhere={product.reservedElsewhere}
                   ownedReservation={product.ownedReservation}
                   blockedByOrder={product.blockedByOrder}
                   tag={product.tag}
