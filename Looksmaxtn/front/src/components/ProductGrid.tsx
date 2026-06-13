@@ -140,6 +140,7 @@ interface BrowseGridCache {
   total: number;
   page: number;
   scrollY: number;
+  anchorProductId?: string;
   filters?: BrowseGridFilters;
 }
 
@@ -207,6 +208,7 @@ export default function ProductGrid({
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const restoredScrollRef = useRef(false);
   const skipRestoredFilterFetchRef = useRef(false);
+  const pendingRestoreRef = useRef<{ scrollY: number; anchorProductId?: string; productCount: number } | null>(null);
 
   const [queryInput, setQueryInput] = useState("");
   const [draftCategory, setDraftCategory] = useState("");
@@ -269,11 +271,34 @@ export default function ProductGrid({
 
     if (!restoredScrollRef.current) {
       restoredScrollRef.current = true;
-      window.scrollTo({ top: cached.scrollY, behavior: "auto" });
+      pendingRestoreRef.current = {
+        scrollY: cached.scrollY,
+        anchorProductId: cached.anchorProductId,
+        productCount: cached.products.length,
+      };
     }
   }, [category, storeName]);
 
-  const saveBrowsePosition = useCallback(() => {
+  useLayoutEffect(() => {
+    const pending = pendingRestoreRef.current;
+    if (!pending) return;
+    if (pending.anchorProductId && !products.some((product) => product._id === pending.anchorProductId)) return;
+    if (!pending.anchorProductId && products.length < pending.productCount) return;
+
+    pendingRestoreRef.current = null;
+    if (pending.anchorProductId && typeof CSS !== "undefined" && typeof CSS.escape === "function") {
+      const selector = `[data-browse-product-id="${CSS.escape(pending.anchorProductId)}"]`;
+      const anchor = document.querySelector<HTMLElement>(selector);
+      if (anchor) {
+        anchor.scrollIntoView({ block: "center", behavior: "auto" });
+        return;
+      }
+    }
+
+    window.scrollTo({ top: pending.scrollY, behavior: "auto" });
+  }, [products]);
+
+  const saveBrowsePosition = useCallback((anchorProductId?: string) => {
     if (typeof window === "undefined") return;
 
     try {
@@ -284,6 +309,7 @@ export default function ProductGrid({
         total,
         page: pageRef.current,
         scrollY: window.scrollY,
+        anchorProductId,
         filters: {
           queryInput,
           draftCategory,
@@ -808,9 +834,10 @@ export default function ProductGrid({
             >
               {products.map((product, index) => (
                 <ProductCard
-                  key={product._id}
-                  id={product._id}
-                  onProductNavigate={saveBrowsePosition}
+	                  key={product._id}
+	                  id={product._id}
+	                  onProductNavigate={() => saveBrowsePosition(product._id)}
+	                  browseProductId={product._id}
                   imagePriority={index < 4}
                   name={product.name}
                   categories={product.categories}

@@ -61,6 +61,7 @@ interface ProductCardProps {
   /** Set for above-the-fold cards so their image preloads; the rest lazy-load. */
   imagePriority?: boolean;
   onProductNavigate?: () => void;
+  browseProductId?: string;
 }
 
 const CLONE_PREVIEW_WIDTH = 184;
@@ -137,6 +138,7 @@ export default function ProductCard({
   viewGender = null,
   imagePriority = false,
   onProductNavigate,
+  browseProductId,
 }: ProductCardProps) {
   const { addItem, hydrated: cartHydrated } = useCart();
   const router = useRouter();
@@ -498,6 +500,7 @@ export default function ProductCard({
     <Link
       ref={cardRef}
       href={cardHref}
+      data-browse-product-id={browseProductId || undefined}
       className="group cursor-pointer block relative"
       onClick={onProductNavigate}
     >
