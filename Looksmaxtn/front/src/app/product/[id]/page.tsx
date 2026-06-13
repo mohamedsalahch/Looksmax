@@ -87,12 +87,14 @@ async function loadProduct(id: string) {
   return data.product || null;
 }
 
-async function loadRelatedProducts(): Promise<RelatedProduct[]> {
+async function loadRelatedProducts(currentProductId: string): Promise<RelatedProduct[]> {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/store/products?limit=4`, { next: { revalidate: 60 } });
+    const response = await fetch(`${BACKEND_URL}/api/store/products?limit=8`, { next: { revalidate: 60 } });
     if (!response.ok) return [];
     const data = await response.json();
-    return data.products || [];
+    return ((data.products || []) as RelatedProduct[])
+      .filter((product) => String(product._id) !== currentProductId)
+      .slice(0, 4);
   } catch {
     return [];
   }
@@ -164,7 +166,7 @@ export default async function ProductDetailPage({
 
   const [dbProduct, relatedProducts] = await Promise.all([
     loadProduct(id),
-    loadRelatedProducts(),
+    loadRelatedProducts(id),
   ]);
   if (!dbProduct) {
     notFound();

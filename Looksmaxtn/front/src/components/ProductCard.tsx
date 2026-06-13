@@ -69,26 +69,11 @@ const CLONE_PREVIEW_HEIGHT = 240;
 const CLONE_PREVIEW_OFFSET = 24;
 const PRODUCT_DETAIL_IMAGE_PRELOAD_LIMIT = 8;
 const VIDEO_EXTENSIONS = [".mp4", ".webm", ".ogg", ".mov", ".m4v"];
-const prefetchedProductRoutes = new Set<string>();
 const preloadedProductImageGroups = new Set<string>();
 
 function isVideoUrl(url: string) {
   const normalized = url.split("?")[0].toLowerCase();
   return VIDEO_EXTENSIONS.some((extension) => normalized.endsWith(extension));
-}
-
-function getProductHrefString(
-  id: string,
-  selectedSize?: string,
-  activeColorHex?: string | null,
-  viewGender?: "men" | "women" | null,
-) {
-  const params = new URLSearchParams();
-  if (selectedSize) params.set("size", selectedSize);
-  if (activeColorHex) params.set("color", activeColorHex);
-  if (viewGender) params.set("g", viewGender);
-  const query = params.toString();
-  return query ? `/product/${id}?${query}` : `/product/${id}`;
 }
 
 function ProductDetailImagePrefetcher({ urls }: { urls: string[] }) {
@@ -240,12 +225,6 @@ export default function ProductCard({
     : viewGender
       ? { pathname: `/product/${id}`, query: { g: viewGender } }
       : `/product/${id}`;
-  const productPrefetchHref = getProductHrefString(
-    id,
-    !isPerfume && isMounted ? selectedVariant?.size : undefined,
-    !isPerfume ? activeColorHex : null,
-    viewGender,
-  );
   const detailImagePreloadUrls = useMemo(() => {
     const seen = new Set<string>();
     const result: string[] = [];
@@ -274,11 +253,6 @@ export default function ProductCard({
     if (!node || typeof window === "undefined") return;
 
     const runPrefetch = () => {
-      if (!prefetchedProductRoutes.has(productPrefetchHref)) {
-        prefetchedProductRoutes.add(productPrefetchHref);
-        router.prefetch(productPrefetchHref);
-      }
-
       if (detailImagePreloadUrls.length > 0 && !preloadedProductImageGroups.has(detailImagePreloadKey)) {
         preloadedProductImageGroups.add(detailImagePreloadKey);
         setShouldPreloadDetails(true);
@@ -304,7 +278,7 @@ export default function ProductCard({
 
     observer.observe(node);
     return () => observer.disconnect();
-  }, [detailImagePreloadKey, detailImagePreloadUrls, productPrefetchHref, router]);
+  }, [detailImagePreloadKey, detailImagePreloadUrls]);
 
   useEffect(() => {
     if (colorwayColors.length > 0 && (!activeColorHex || !colorwayColors.some((c) => c.toLowerCase() === activeColorHex.toLowerCase()))) {
@@ -500,6 +474,7 @@ export default function ProductCard({
     <Link
       ref={cardRef}
       href={cardHref}
+      prefetch={false}
       data-browse-product-id={browseProductId || undefined}
       className="group cursor-pointer block relative"
       onClick={onProductNavigate}
