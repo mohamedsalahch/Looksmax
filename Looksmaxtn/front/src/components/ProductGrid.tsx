@@ -221,6 +221,7 @@ export default function ProductGrid({
     anchorViewportTop?: number;
     productCount: number;
   } | null>(null);
+  const scrollRetryRef = useRef<{ frames: number[]; timeouts: number[] } | null>(null);
 
   const [queryInput, setQueryInput] = useState("");
   const [draftCategory, setDraftCategory] = useState("");
@@ -292,6 +293,16 @@ export default function ProductGrid({
     }
   }, [category, storeName]);
 
+  // Cancel scroll retries on unmount only — not on every products change.
+  useEffect(() => {
+    return () => {
+      if (scrollRetryRef.current) {
+        scrollRetryRef.current.frames.forEach((id) => window.cancelAnimationFrame(id));
+        scrollRetryRef.current.timeouts.forEach((id) => window.clearTimeout(id));
+      }
+    };
+  }, []);
+
   useLayoutEffect(() => {
     const pending = pendingRestoreRef.current;
     if (!pending) return;
@@ -299,6 +310,12 @@ export default function ProductGrid({
     if (!pending.anchorProductId && products.length < pending.productCount) return;
 
     pendingRestoreRef.current = null;
+
+    // Cancel any previous retry attempt before starting a new one.
+    if (scrollRetryRef.current) {
+      scrollRetryRef.current.frames.forEach((id) => window.cancelAnimationFrame(id));
+      scrollRetryRef.current.timeouts.forEach((id) => window.clearTimeout(id));
+    }
 
     const restoreScroll = () => {
       if (pending.anchorProductId) {
@@ -320,16 +337,18 @@ export default function ProductGrid({
       window.scrollTo({ top: pending.scrollY, behavior: "auto" });
     };
 
-    restoreScroll();
-    const firstFrame = window.requestAnimationFrame(restoreScroll);
-    const secondFrame = window.requestAnimationFrame(() => window.requestAnimationFrame(restoreScroll));
-    const timeoutIds = [120, 360, 800].map((delay) => window.setTimeout(restoreScroll, delay));
+    // First attempt uses saved scrollY directly — images may not be loaded yet so
+    // anchor-based calculation would be wrong (collapsed page too short).
+    window.scrollTo({ top: pending.scrollY, behavior: "auto" });
 
-    return () => {
-      window.cancelAnimationFrame(firstFrame);
-      window.cancelAnimationFrame(secondFrame);
-      timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
-    };
+    const frames = [
+      window.requestAnimationFrame(restoreScroll),
+      window.requestAnimationFrame(() => window.requestAnimationFrame(restoreScroll)),
+    ];
+    const timeouts = [120, 360, 800].map((delay) => window.setTimeout(restoreScroll, delay));
+
+    // Store IDs in a ref so they survive loadMore firing and are only cancelled on unmount.
+    scrollRetryRef.current = { frames, timeouts };
   }, [products]);
 
   const saveBrowsePosition = useCallback((anchorProductId?: string) => {
