@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ProductCard from "./ProductCard";
 import { getStoredReservationKey } from "@/lib/reservations";
 import {
@@ -130,6 +130,37 @@ function getUniqueSizeOptions(values: string[]) {
 }
 
 const PAGE_SIZE = 24;
+const BROWSE_CACHE_PREFIX = "looksmax:browse-grid:";
+const BROWSE_CACHE_MAX_AGE = 30 * 60 * 1000;
+
+interface BrowseGridCache {
+  timestamp: number;
+  products: Product[];
+  facets: Facets | null;
+  total: number;
+  page: number;
+  scrollY: number;
+}
+
+function getBrowseCacheKey(category?: string, storeName = "") {
+  if (typeof window === "undefined") return "";
+  return `${BROWSE_CACHE_PREFIX}${window.location.pathname}${window.location.search}:category=${category || ""}:store=${storeName}`;
+}
+
+function readBrowseCache(category?: string, storeName = ""): BrowseGridCache | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.sessionStorage.getItem(getBrowseCacheKey(category, storeName));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as BrowseGridCache;
+    if (!parsed.timestamp || Date.now() - parsed.timestamp > BROWSE_CACHE_MAX_AGE) return null;
+    if (!Array.isArray(parsed.products)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
 
 export default function ProductGrid({
   category,
@@ -153,6 +184,7 @@ export default function ProductGrid({
   const loadingMoreRef = useRef(false);
   const filterGenerationRef = useRef(0);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const restoredScrollRef = useRef(false);
 
   const [queryInput, setQueryInput] = useState("");
   const [draftCategory, setDraftCategory] = useState("");
@@ -172,6 +204,46 @@ export default function ProductGrid({
   const [appliedPriceMax, setAppliedPriceMax] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const skipNextFetch = useRef(initialProducts.length > 0 || initialFacets !== null);
+
+  useEffect(() => {
+    const cached = readBrowseCache(category, storeName);
+    if (!cached || cached.products.length === 0) return;
+
+    const frameId = window.requestAnimationFrame(() => {
+      setProducts(cached.products);
+      setFacets(cached.facets);
+      setTotal(cached.total);
+      setLoaded(true);
+      pageRef.current = Math.max(1, cached.page || 1);
+
+      if (!restoredScrollRef.current) {
+        restoredScrollRef.current = true;
+        window.requestAnimationFrame(() => {
+          window.scrollTo({ top: cached.scrollY, behavior: "auto" });
+        });
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [category, storeName]);
+
+  const saveBrowsePosition = useCallback(() => {
+    if (typeof window === "undefined") return;
+
+    try {
+      const payload: BrowseGridCache = {
+        timestamp: Date.now(),
+        products,
+        facets,
+        total,
+        page: pageRef.current,
+        scrollY: window.scrollY,
+      };
+      window.sessionStorage.setItem(getBrowseCacheKey(category, storeName), JSON.stringify(payload));
+    } catch {
+      // Ignore storage failures so product navigation never gets blocked.
+    }
+  }, [category, facets, products, storeName, total]);
 
   const hasActiveFilters = Boolean(
     appliedSearch ||
@@ -643,6 +715,7 @@ export default function ProductGrid({
                 <ProductCard
                   key={product._id}
                   id={product._id}
+                  onProductNavigate={saveBrowsePosition}
                   imagePriority={index < 4}
                   name={product.name}
                   categories={product.categories}

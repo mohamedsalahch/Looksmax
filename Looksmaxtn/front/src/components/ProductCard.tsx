@@ -59,6 +59,7 @@ interface ProductCardProps {
   viewGender?: "men" | "women" | null;
   /** Set for above-the-fold cards so their image preloads; the rest lazy-load. */
   imagePriority?: boolean;
+  onProductNavigate?: () => void;
 }
 
 const CLONE_PREVIEW_WIDTH = 184;
@@ -90,6 +91,7 @@ export default function ProductCard({
   preferCollectionLeftImage = false,
   viewGender = null,
   imagePriority = false,
+  onProductNavigate,
 }: ProductCardProps) {
   const { addItem } = useCart();
   const router = useRouter();
@@ -425,6 +427,7 @@ export default function ProductCard({
     <Link
       href={cardHref}
       className="group cursor-pointer block relative"
+      onClick={onProductNavigate}
     >
       {isPerfume && cloneSourceImage && clonePreview.visible && (
         <div
