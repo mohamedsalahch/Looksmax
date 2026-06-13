@@ -140,6 +140,27 @@ interface BrowseGridCache {
   total: number;
   page: number;
   scrollY: number;
+  filters?: BrowseGridFilters;
+}
+
+interface BrowseGridFilters {
+  queryInput: string;
+  draftCategory: string;
+  draftBrand: string;
+  draftStore: string;
+  draftSizes: string[];
+  draftColor: string;
+  priceMin: string;
+  priceMax: string;
+  appliedSearch: string;
+  appliedCategory: string;
+  appliedBrand: string;
+  appliedStore: string;
+  appliedSizes: string[];
+  appliedColor: string;
+  appliedPriceMin: string;
+  appliedPriceMax: string;
+  filtersOpen: boolean;
 }
 
 function getBrowseCacheKey(category?: string, storeName = "") {
@@ -185,6 +206,7 @@ export default function ProductGrid({
   const filterGenerationRef = useRef(0);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const restoredScrollRef = useRef(false);
+  const skipRestoredFilterFetchRef = useRef(false);
 
   const [queryInput, setQueryInput] = useState("");
   const [draftCategory, setDraftCategory] = useState("");
@@ -216,6 +238,27 @@ export default function ProductGrid({
       setLoaded(true);
       pageRef.current = Math.max(1, cached.page || 1);
 
+      if (cached.filters) {
+        skipRestoredFilterFetchRef.current = true;
+        setQueryInput(cached.filters.queryInput);
+        setDraftCategory(cached.filters.draftCategory);
+        setDraftBrand(cached.filters.draftBrand);
+        setDraftStore(cached.filters.draftStore || storeName);
+        setDraftSizes(cached.filters.draftSizes);
+        setDraftColor(cached.filters.draftColor);
+        setPriceMin(cached.filters.priceMin);
+        setPriceMax(cached.filters.priceMax);
+        setAppliedSearch(cached.filters.appliedSearch);
+        setAppliedCategory(cached.filters.appliedCategory);
+        setAppliedBrand(cached.filters.appliedBrand);
+        setAppliedStore(cached.filters.appliedStore || storeName);
+        setAppliedSizes(cached.filters.appliedSizes);
+        setAppliedColor(cached.filters.appliedColor);
+        setAppliedPriceMin(cached.filters.appliedPriceMin);
+        setAppliedPriceMax(cached.filters.appliedPriceMax);
+        setFiltersOpen(cached.filters.filtersOpen);
+      }
+
       if (!restoredScrollRef.current) {
         restoredScrollRef.current = true;
         window.requestAnimationFrame(() => {
@@ -238,12 +281,54 @@ export default function ProductGrid({
         total,
         page: pageRef.current,
         scrollY: window.scrollY,
+        filters: {
+          queryInput,
+          draftCategory,
+          draftBrand,
+          draftStore,
+          draftSizes,
+          draftColor,
+          priceMin,
+          priceMax,
+          appliedSearch,
+          appliedCategory,
+          appliedBrand,
+          appliedStore,
+          appliedSizes,
+          appliedColor,
+          appliedPriceMin,
+          appliedPriceMax,
+          filtersOpen,
+        },
       };
       window.sessionStorage.setItem(getBrowseCacheKey(category, storeName), JSON.stringify(payload));
     } catch {
       // Ignore storage failures so product navigation never gets blocked.
     }
-  }, [category, facets, products, storeName, total]);
+  }, [
+    appliedBrand,
+    appliedCategory,
+    appliedColor,
+    appliedPriceMax,
+    appliedPriceMin,
+    appliedSearch,
+    appliedSizes,
+    appliedStore,
+    category,
+    draftBrand,
+    draftCategory,
+    draftColor,
+    draftSizes,
+    draftStore,
+    facets,
+    filtersOpen,
+    priceMax,
+    priceMin,
+    products,
+    queryInput,
+    storeName,
+    total,
+  ]);
 
   const hasActiveFilters = Boolean(
     appliedSearch ||
@@ -303,6 +388,11 @@ export default function ProductGrid({
   });
 
   useEffect(() => {
+    if (skipRestoredFilterFetchRef.current) {
+      skipRestoredFilterFetchRef.current = false;
+      return;
+    }
+
     if (skipNextFetch.current) {
       skipNextFetch.current = false;
       return;
