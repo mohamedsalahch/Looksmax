@@ -140,7 +140,7 @@ export default function ProductCard({
   imagePriority = false,
   onProductNavigate,
 }: ProductCardProps) {
-  const { addItem } = useCart();
+  const { addItem, hydrated: cartHydrated } = useCart();
   const router = useRouter();
   const cardRef = useRef<HTMLAnchorElement | null>(null);
   const [isMounted, setIsMounted] = useState(false);
@@ -372,7 +372,7 @@ export default function ProductCard({
   const handleQuickAdd = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (isBlocked) return;
+    if (isBlocked || !cartHydrated) return;
 
     try {
       const reservation = await reserveProduct(id, 1, selectedVariantId || null);
@@ -404,7 +404,7 @@ export default function ProductCard({
   const handleAddToTryOn = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (isBlocked || isPerfume) return;
+    if (isBlocked || isPerfume || !cartHydrated) return;
 
     try {
       const reservation = await reserveProduct(id, 1, selectedVariantId || null);
@@ -599,9 +599,9 @@ export default function ProductCard({
           <div className="absolute bottom-0 left-0 right-0 z-30 translate-y-full transition-transform duration-300 ease-out group-hover:translate-y-0">
             <button
               onClick={handleQuickAdd}
-              disabled={isBlocked}
+              disabled={isBlocked || !cartHydrated}
               className={`w-full h-10 text-[10px] uppercase font-bold tracking-widest transition-colors ${
-                isBlocked
+                isBlocked || !cartHydrated
                   ? "bg-border-color text-text-secondary cursor-not-allowed"
                   : "bg-foreground text-background hover:bg-black"
               }`}
@@ -682,10 +682,13 @@ export default function ProductCard({
                   <button
                     type="button"
                     onClick={handleQuickAdd}
+                    disabled={!cartHydrated}
                     className={`flex-1 h-full px-2 py-3 text-[10px] font-medium uppercase tracking-wide transition-all duration-300 ${
-                      addedToCart
-                        ? "bg-[#5C6A47] text-white"
-                        : "bg-foreground text-background hover:bg-accent"
+                      !cartHydrated
+                        ? "cursor-not-allowed bg-border-color text-text-secondary"
+                        : addedToCart
+                          ? "bg-[#5C6A47] text-white"
+                          : "bg-foreground text-background hover:bg-accent"
                     }`}
                   >
                     {addedToCart ? "✓ ADDED" : "ADD"}
@@ -693,7 +696,12 @@ export default function ProductCard({
                   <button
                     type="button"
                     onClick={handleAddToTryOn}
-                    className="flex-1 h-full text-[10px] uppercase font-bold tracking-widest border-l border-border-color transition-colors bg-background text-foreground hover:bg-hover"
+                    disabled={!cartHydrated}
+                    className={`flex-1 h-full text-[10px] uppercase font-bold tracking-widest border-l border-border-color transition-colors ${
+                      cartHydrated
+                        ? "bg-background text-foreground hover:bg-hover"
+                        : "cursor-not-allowed bg-border-color text-text-secondary"
+                    }`}
                   >
                     TRY
                   </button>

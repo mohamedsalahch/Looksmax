@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import ProductCard from "./ProductCard";
 import { getStoredReservationKey } from "@/lib/reservations";
+import { consumeBrowseReturnIntent, isReloadNavigation, markBrowseReturnIntent } from "@/lib/navigationState";
 import {
   getColorwayEnhancedFrontImage,
   getColorwayEnhancedLeftImage,
@@ -227,47 +228,50 @@ export default function ProductGrid({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const skipNextFetch = useRef(initialProducts.length > 0 || initialFacets !== null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (isReloadNavigation()) {
+      restoredScrollRef.current = true;
+      window.scrollTo({ top: 0, behavior: "auto" });
+      return;
+    }
+
+    const cacheKey = getBrowseCacheKey(category, storeName);
+    if (!consumeBrowseReturnIntent(cacheKey)) return;
+
     const cached = readBrowseCache(category, storeName);
     if (!cached || cached.products.length === 0) return;
 
-    const frameId = window.requestAnimationFrame(() => {
-      setProducts(cached.products);
-      setFacets(cached.facets);
-      setTotal(cached.total);
-      setLoaded(true);
-      pageRef.current = Math.max(1, cached.page || 1);
+    setProducts(cached.products);
+    setFacets(cached.facets);
+    setTotal(cached.total);
+    setLoaded(true);
+    pageRef.current = Math.max(1, cached.page || 1);
 
-      if (cached.filters) {
-        skipRestoredFilterFetchRef.current = true;
-        setQueryInput(cached.filters.queryInput);
-        setDraftCategory(cached.filters.draftCategory);
-        setDraftBrand(cached.filters.draftBrand);
-        setDraftStore(cached.filters.draftStore || storeName);
-        setDraftSizes(cached.filters.draftSizes);
-        setDraftColor(cached.filters.draftColor);
-        setPriceMin(cached.filters.priceMin);
-        setPriceMax(cached.filters.priceMax);
-        setAppliedSearch(cached.filters.appliedSearch);
-        setAppliedCategory(cached.filters.appliedCategory);
-        setAppliedBrand(cached.filters.appliedBrand);
-        setAppliedStore(cached.filters.appliedStore || storeName);
-        setAppliedSizes(cached.filters.appliedSizes);
-        setAppliedColor(cached.filters.appliedColor);
-        setAppliedPriceMin(cached.filters.appliedPriceMin);
-        setAppliedPriceMax(cached.filters.appliedPriceMax);
-        setFiltersOpen(cached.filters.filtersOpen);
-      }
+    if (cached.filters) {
+      skipRestoredFilterFetchRef.current = true;
+      setQueryInput(cached.filters.queryInput);
+      setDraftCategory(cached.filters.draftCategory);
+      setDraftBrand(cached.filters.draftBrand);
+      setDraftStore(cached.filters.draftStore || storeName);
+      setDraftSizes(cached.filters.draftSizes);
+      setDraftColor(cached.filters.draftColor);
+      setPriceMin(cached.filters.priceMin);
+      setPriceMax(cached.filters.priceMax);
+      setAppliedSearch(cached.filters.appliedSearch);
+      setAppliedCategory(cached.filters.appliedCategory);
+      setAppliedBrand(cached.filters.appliedBrand);
+      setAppliedStore(cached.filters.appliedStore || storeName);
+      setAppliedSizes(cached.filters.appliedSizes);
+      setAppliedColor(cached.filters.appliedColor);
+      setAppliedPriceMin(cached.filters.appliedPriceMin);
+      setAppliedPriceMax(cached.filters.appliedPriceMax);
+      setFiltersOpen(cached.filters.filtersOpen);
+    }
 
-      if (!restoredScrollRef.current) {
-        restoredScrollRef.current = true;
-        window.requestAnimationFrame(() => {
-          window.scrollTo({ top: cached.scrollY, behavior: "auto" });
-        });
-      }
-    });
-
-    return () => window.cancelAnimationFrame(frameId);
+    if (!restoredScrollRef.current) {
+      restoredScrollRef.current = true;
+      window.scrollTo({ top: cached.scrollY, behavior: "auto" });
+    }
   }, [category, storeName]);
 
   const saveBrowsePosition = useCallback(() => {
@@ -301,7 +305,9 @@ export default function ProductGrid({
           filtersOpen,
         },
       };
-      window.sessionStorage.setItem(getBrowseCacheKey(category, storeName), JSON.stringify(payload));
+      const cacheKey = getBrowseCacheKey(category, storeName);
+      window.sessionStorage.setItem(cacheKey, JSON.stringify(payload));
+      markBrowseReturnIntent(cacheKey);
     } catch {
       // Ignore storage failures so product navigation never gets blocked.
     }

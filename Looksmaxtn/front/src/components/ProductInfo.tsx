@@ -69,7 +69,7 @@ type ProductInfoProduct = {
 
 export default function ProductInfo({ product }: { product: ProductInfoProduct }) {
   const router = useRouter();
-  const { addItem, items, updateQuantity } = useCart();
+  const { addItem, items, updateQuantity, hydrated: cartHydrated } = useCart();
 
   const variants = useMemo(() => product.variants || [], [product.variants]);
   const variantsById = useMemo(
@@ -94,7 +94,8 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
 
   const [addedToCart, setAddedToCart] = useState(false);
   const [reservationError, setReservationError] = useState("");
-  const [hasHydratedAvailability, setHasHydratedAvailability] = useState(false);
+  const [hasHydratedAvailability, setHasHydratedAvailability] = useState(Boolean(product.variantAvailability));
+  const [availabilityChecked, setAvailabilityChecked] = useState(!product.id);
   const [reservedElsewhere, setReservedElsewhere] = useState(Boolean(product.reservedElsewhere));
   const [ownedReservation, setOwnedReservation] = useState(() => Boolean(product.ownedReservation));
   const [blockedByOrder, setBlockedByOrder] = useState(() => Boolean(product.blockedByOrder));
@@ -194,7 +195,10 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
         }
         setHasHydratedAvailability(true);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        setAvailabilityChecked(true);
+      });
   };
 
   useEffect(() => {
@@ -313,9 +317,12 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
     return unsubscribe;
   }, [product.id]);
 
+  const controlsReady = cartHydrated && availabilityChecked;
+  const actionDisabled = !controlsReady || isBlocked;
+
   const handleAddToCart = async () => {
     setReservationError("");
-    if (isBlocked) return;
+    if (actionDisabled) return;
     if (cartItemQuantity > 0) {
       setAddedToCart(true);
       setTimeout(() => setAddedToCart(false), 2000);
@@ -362,7 +369,7 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
   };
 
   const handleAddToTryOn = async () => {
-    if (isBlocked || isPerfume) return;
+    if (actionDisabled || isPerfume) return;
     try {
       const reservation = await reserveProduct(
         product.id || "unknown",
@@ -620,7 +627,7 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
           <button
             type="button"
             onClick={() => syncQuantity(selectedQuantity - 1)}
-            disabled={isBlocked}
+            disabled={actionDisabled}
             className="w-8 h-8 flex items-center justify-center text-sm hover:bg-hover transition-colors cursor-pointer"
             aria-label="Decrease quantity"
           >
@@ -632,9 +639,9 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
           <button
             type="button"
             onClick={() => syncQuantity(selectedQuantity + 1)}
-            disabled={isBlocked || selectedQuantity >= selectedVariantStock}
+            disabled={actionDisabled || selectedQuantity >= selectedVariantStock}
             className={`w-8 h-8 flex items-center justify-center text-sm transition-colors cursor-pointer ${
-              isBlocked || selectedQuantity >= selectedVariantStock ? "text-border-color cursor-not-allowed" : "hover:bg-hover"
+              actionDisabled || selectedQuantity >= selectedVariantStock ? "text-border-color cursor-not-allowed" : "hover:bg-hover"
             }`}
             aria-label="Increase quantity"
           >
@@ -643,7 +650,7 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
         </div>
       </div>
 
-      {isBlocked ? (
+      {controlsReady && isBlocked ? (
         <button
           type="button"
           disabled
@@ -655,10 +662,13 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <button
             onClick={handleAddToCart}
-            className={`w-full py-3.5 text-sm font-medium tracking-wide uppercase transition-all duration-300 cursor-pointer ${
-              addedToCart
+            disabled={!controlsReady}
+            className={`w-full py-3.5 text-sm font-medium tracking-wide uppercase transition-all duration-300 ${
+              !controlsReady
+                ? "cursor-not-allowed bg-border-color text-text-secondary"
+                : addedToCart
                 ? "bg-[#5C6A47] text-white"
-                : "bg-foreground text-background hover:bg-accent"
+                : "cursor-pointer bg-foreground text-background hover:bg-accent"
             }`}
           >
             {addedToCart ? "✓ Added to Cart" : "Add to Cart"}
@@ -667,7 +677,12 @@ export default function ProductInfo({ product }: { product: ProductInfoProduct }
             <button
               type="button"
               onClick={handleAddToTryOn}
-              className="w-full py-3.5 text-sm font-medium tracking-wide uppercase transition-all duration-300 cursor-pointer border border-border-color bg-surface/40 text-foreground hover:bg-surface/70"
+              disabled={!controlsReady}
+              className={`w-full py-3.5 text-sm font-medium tracking-wide uppercase transition-all duration-300 border border-border-color ${
+                controlsReady
+                  ? "cursor-pointer bg-surface/40 text-foreground hover:bg-surface/70"
+                  : "cursor-not-allowed bg-border-color text-text-secondary"
+              }`}
             >
               TRY ON
             </button>
