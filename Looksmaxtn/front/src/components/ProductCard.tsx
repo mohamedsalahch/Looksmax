@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import NextImage from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/providers/CartContext";
@@ -8,6 +9,7 @@ import MediaRenderer from "@/components/MediaRenderer";
 import { reserveProduct } from "@/lib/reservations";
 import { subscribeToAvailabilityStream } from "@/lib/availabilityStream";
 import { formatTndPrice } from "@/lib/formatPrice";
+import { isOptimizableImageSrc } from "@/lib/imageOptimization";
 import { getConditionColor, getConditionLabel, getConditionPercent } from "@/lib/productCondition";
 import { queueStudioAssignment } from "@/lib/studioAssignment";
 import { getColorwayEnhancedFrontImage, getColorwayEnhancedLeftImage, getColorwayMainImage } from "@/lib/colorwayImage";
@@ -65,6 +67,51 @@ interface ProductCardProps {
 const CLONE_PREVIEW_WIDTH = 184;
 const CLONE_PREVIEW_HEIGHT = 240;
 const CLONE_PREVIEW_OFFSET = 24;
+const PRODUCT_DETAIL_IMAGE_PRELOAD_LIMIT = 8;
+const VIDEO_EXTENSIONS = [".mp4", ".webm", ".ogg", ".mov", ".m4v"];
+const prefetchedProductRoutes = new Set<string>();
+const preloadedProductImageGroups = new Set<string>();
+
+function isVideoUrl(url: string) {
+  const normalized = url.split("?")[0].toLowerCase();
+  return VIDEO_EXTENSIONS.some((extension) => normalized.endsWith(extension));
+}
+
+function getProductHrefString(
+  id: string,
+  selectedSize?: string,
+  activeColorHex?: string | null,
+  viewGender?: "men" | "women" | null,
+) {
+  const params = new URLSearchParams();
+  if (selectedSize) params.set("size", selectedSize);
+  if (activeColorHex) params.set("color", activeColorHex);
+  if (viewGender) params.set("g", viewGender);
+  const query = params.toString();
+  return query ? `/product/${id}?${query}` : `/product/${id}`;
+}
+
+function ProductDetailImagePrefetcher({ urls }: { urls: string[] }) {
+  if (urls.length === 0) return null;
+
+  return (
+    <div aria-hidden="true" className="pointer-events-none absolute h-px w-px overflow-hidden opacity-0">
+      {urls.map((url) => (
+        <NextImage
+          key={url}
+          src={url}
+          alt=""
+          width={0}
+          height={0}
+          sizes="(min-width: 768px) 50vw, 100vw"
+          className="h-px w-px object-contain"
+          loading="eager"
+          unoptimized={!isOptimizableImageSrc(url)}
+        />
+      ))}
+    </div>
+  );
+}
 
 export default function ProductCard({
   id,
@@ -95,7 +142,9 @@ export default function ProductCard({
 }: ProductCardProps) {
   const { addItem } = useCart();
   const router = useRouter();
+  const cardRef = useRef<HTMLAnchorElement | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+  const [shouldPreloadDetails, setShouldPreloadDetails] = useState(false);
   const [hasHydratedAvailability, setHasHydratedAvailability] = useState(
     Boolean(variantAvailability) || initialReservedElsewhere || initialBlockedByOrder,
   );
@@ -196,10 +245,71 @@ export default function ProductCard({
     : viewGender
       ? { pathname: `/product/${id}`, query: { g: viewGender } }
       : `/product/${id}`;
+  const productPrefetchHref = getProductHrefString(
+    id,
+    !isPerfume && isMounted ? selectedVariant?.size : undefined,
+    !isPerfume ? activeColorHex : null,
+    viewGender,
+  );
+  const detailImagePreloadUrls = useMemo(() => {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    const candidates = [
+      displayImage,
+      ...images.map((productImage) => productImage.url),
+    ];
+
+    for (const candidate of candidates) {
+      if (!candidate || seen.has(candidate) || isVideoUrl(candidate)) continue;
+      seen.add(candidate);
+      result.push(candidate);
+      if (result.length >= PRODUCT_DETAIL_IMAGE_PRELOAD_LIMIT) break;
+    }
+
+    return result;
+  }, [displayImage, images]);
+  const detailImagePreloadKey = `${id}:${detailImagePreloadUrls.join("|")}`;
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  useEffect(() => {
+    const node = cardRef.current;
+    if (!node || typeof window === "undefined") return;
+
+    const runPrefetch = () => {
+      if (!prefetchedProductRoutes.has(productPrefetchHref)) {
+        prefetchedProductRoutes.add(productPrefetchHref);
+        router.prefetch(productPrefetchHref);
+      }
+
+      if (detailImagePreloadUrls.length > 0 && !preloadedProductImageGroups.has(detailImagePreloadKey)) {
+        preloadedProductImageGroups.add(detailImagePreloadKey);
+        setShouldPreloadDetails(true);
+      }
+    };
+
+    const schedulePrefetch = () => {
+      if ("requestIdleCallback" in window) {
+        window.requestIdleCallback(runPrefetch, { timeout: 1500 });
+        return;
+      }
+      globalThis.setTimeout(runPrefetch, 250);
+    };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        observer.disconnect();
+        schedulePrefetch();
+      },
+      { rootMargin: "200px 0px" },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [detailImagePreloadKey, detailImagePreloadUrls, productPrefetchHref, router]);
 
   useEffect(() => {
     if (colorwayColors.length > 0 && (!activeColorHex || !colorwayColors.some((c) => c.toLowerCase() === activeColorHex.toLowerCase()))) {
@@ -395,10 +505,12 @@ export default function ProductCard({
 
   return (
     <Link
+      ref={cardRef}
       href={cardHref}
       className="group cursor-pointer block relative"
       onClick={onProductNavigate}
     >
+      {shouldPreloadDetails && <ProductDetailImagePrefetcher urls={detailImagePreloadUrls} />}
       {isPerfume && cloneSourceImage && clonePreview.visible && (
         <div
           className="fixed z-[70] pointer-events-none h-[15rem] w-[11.5rem] overflow-hidden rounded border border-white/40 bg-background/95 p-3 shadow-2xl backdrop-blur-sm transition-opacity duration-150"
