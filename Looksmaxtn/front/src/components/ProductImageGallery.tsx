@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type TouchEvent as ReactTouchEvent } from "react";
 import { createPortal } from "react-dom";
-import Image from "next/image";
+import NextImage from "next/image";
 import { isOptimizableImageSrc } from "@/lib/imageOptimization";
 
 interface ProductImage {
@@ -52,7 +52,7 @@ function MediaPreview({
   }
 
   return (
-    <Image
+    <NextImage
       src={url}
       alt={alt}
       width={0}
@@ -63,6 +63,39 @@ function MediaPreview({
       loading={priority ? undefined : "lazy"}
       unoptimized={!isOptimizableImageSrc(url)}
     />
+  );
+}
+
+function GalleryImagePreloader({ images }: { images: ProductImage[] }) {
+  const urls = useMemo(() => {
+    const seen = new Set<string>();
+    return images
+      .map((image) => image.url)
+      .filter((url) => {
+        if (!url || isVideoUrl(url) || seen.has(url)) return false;
+        seen.add(url);
+        return true;
+      });
+  }, [images]);
+
+  if (urls.length === 0) return null;
+
+  return (
+    <div aria-hidden="true" className="pointer-events-none absolute h-px w-px overflow-hidden opacity-0">
+      {urls.map((url) => (
+        <NextImage
+          key={url}
+          src={url}
+          alt=""
+          width={0}
+          height={0}
+          sizes="(min-width: 768px) 50vw, 100vw"
+          className="h-px w-px object-contain"
+          loading="eager"
+          unoptimized={!isOptimizableImageSrc(url)}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -448,6 +481,8 @@ export default function ProductImageGallery({
   return (
     <>
       <div ref={galleryRef} className="flex flex-col-reverse md:flex-row gap-3">
+        <GalleryImagePreloader images={visibleImages} />
+
         {/* Thumbnails */}
         {visibleImages.length > 1 && (
           <div className="flex md:flex-col gap-2 overflow-x-auto md:overflow-y-auto md:max-h-[600px] scrollbar-hide">
