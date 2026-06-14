@@ -230,6 +230,14 @@ const ACCESSORY_VIEW_LABELS: Record<OriginPictureKey, string> = {
 const FOOTWEAR_VIEW_VERIFICATION_COPY =
   "Footwear verification: upload four different shoe angles: front, back, left side, and right side. Each slot is sent separately to the generator.";
 
+const isAbortError = (error: unknown) =>
+  error instanceof DOMException
+    ? error.name === "AbortError"
+    : error instanceof Error && error.name === "AbortError";
+const throwIfAborted = (signal: AbortSignal) => {
+  if (signal.aborted) throw new DOMException("aborted", "AbortError");
+};
+
 function hasAccessoryWorkflowCategory(categories: Category[], slug: string, zone: string) {
   if (!slug) return false;
   if (zone === "handbag" || zone === "headwear") return true;
@@ -530,13 +538,14 @@ function toggleColorToken(value: string, token: string) {
 }
 
 function ColorwayGenerationCard({
-  colorway, index, companionZones, companionTypeOptions, onUpdate, onGenerate, canGenerate,
+  colorway, index, companionZones, companionTypeOptions, onUpdate, onGenerate, onCancelGenerate, canGenerate,
 }: {
   colorway: Colorway; index: number;
   companionZones: CompanionZone[];
   companionTypeOptions: { top: { slug: string; name: string }[]; bottom: { slug: string; name: string }[]; footwear: { slug: string; name: string }[] };
   onUpdate: (patch: Partial<Colorway>) => void;
   onGenerate: () => void;
+  onCancelGenerate: () => void;
   canGenerate: boolean;
 }) {
   const [zoomedUrl, setZoomedUrl] = useState<string | null>(null);
@@ -667,6 +676,15 @@ function ColorwayGenerationCard({
           </div>
         )}
         <div className="flex items-center justify-end gap-2">
+          {colorway.generateStatus === "processing" && (
+            <button
+              type="button"
+              onClick={onCancelGenerate}
+              className="border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-text-secondary transition-colors hover:border-danger hover:text-danger"
+            >
+              Cancel
+            </button>
+          )}
           <button type="button" onClick={colorway.generateStatus === "processing" ? undefined : onGenerate} disabled={colorway.generateStatus === "processing"} className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity">
             {colorway.generateStatus === "processing" && <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />}
             {colorway.generateStatus === "processing" ? "Generating..." : "Generate"}
@@ -690,7 +708,7 @@ function ColorwayGenerationCard({
 type ColorwayView = "front" | "back" | "left" | "right";
 
 function ColorwayCard({
-  colorway, index, canRemove, isThrift, showGenerationPanel, companionZones, companionTypeOptions, canGenerate, requiredViews, viewLabels, enhanceRequiresAllViews = true, hideSizeInput = false, onRemove, onUpdate, onEnhance, onGenerate, onAddSize, onRemoveSize, onUpdateSize,
+  colorway, index, canRemove, isThrift, showGenerationPanel, companionZones, companionTypeOptions, canGenerate, requiredViews, viewLabels, enhanceRequiresAllViews = true, hideSizeInput = false, onRemove, onUpdate, onEnhance, onCancelEnhance, onGenerate, onCancelGenerate, onAddSize, onRemoveSize, onUpdateSize,
 }: {
   colorway: Colorway; index: number; canRemove: boolean; isThrift: boolean;
   showGenerationPanel?: boolean;
@@ -702,7 +720,9 @@ function ColorwayCard({
   enhanceRequiresAllViews?: boolean;
   hideSizeInput?: boolean;
   onRemove: () => void; onUpdate: (patch: Partial<Colorway>) => void; onEnhance: (pictureIndexes?: number[]) => void;
+  onCancelEnhance: () => void;
   onGenerate?: () => void;
+  onCancelGenerate?: () => void;
   onAddSize: () => void; onRemoveSize: (sizeId: string) => void; onUpdateSize: (sizeId: string, patch: Partial<SizeRow>) => void;
 }) {
   const views: ColorwayView[] = requiredViews && requiredViews.length > 0 ? requiredViews : ["front", "back"];
@@ -1340,6 +1360,15 @@ function ColorwayCard({
           </div>
         )}
         <div className="flex items-center justify-end gap-2">
+          {colorway.enhanceStatus === "processing" && (
+            <button
+              type="button"
+              onClick={onCancelEnhance}
+              className="border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-text-secondary transition-colors hover:border-danger hover:text-danger"
+            >
+              Cancel
+            </button>
+          )}
           {selectedPictureIndexes.length > 0 && (
             <button
               type="button"
@@ -1514,6 +1543,15 @@ function ColorwayCard({
           </div>
 
           <div className="flex items-center justify-end gap-2">
+            {colorway.generateStatus === "processing" && onCancelGenerate && (
+              <button
+                type="button"
+                onClick={onCancelGenerate}
+                className="border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-text-secondary transition-colors hover:border-danger hover:text-danger"
+              >
+                Cancel
+              </button>
+            )}
             <button type="button" onClick={colorway.generateStatus === "processing" ? undefined : onGenerate} disabled={colorway.generateStatus === "processing"} className="inline-flex items-center gap-1.5 bg-accent px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-bg-primary disabled:opacity-50 transition-opacity">
               {colorway.generateStatus === "processing" && <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-bg-primary/40 border-t-bg-primary" />}
               {colorway.generateStatus === "processing" ? "Generating..." : "Generate"}
@@ -1599,6 +1637,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const [restocking, setRestocking] = useState(false);
   const [colorways, setColorways] = useState<Colorway[]>([createEmptyColorway()]);
   const generationAbortRef = useRef<AbortController | null>(null);
+  const colorwayEnhanceAbortRefs = useRef<Record<string, AbortController | undefined>>({});
+  const colorwayGenerateAbortRefs = useRef<Record<string, AbortController | undefined>>({});
   const hasHydratedProductRef = useRef(false);
   const hasSyncedInitialCategoriesRef = useRef(false);
   const previousProductTypeRef = useRef<ProductType | null>(null);
@@ -1668,16 +1708,44 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const addSizeRow = (colorwayId: string) => setColorways((prev) => prev.map((c) => c.id === colorwayId ? { ...c, sizes: [...c.sizes, { id: generateId(), size: "", stock: "", conditionScore: "10" }] } : c));
   const removeSizeRow = (colorwayId: string, sizeId: string) => setColorways((prev) => prev.map((c) => c.id === colorwayId ? { ...c, sizes: c.sizes.length === 1 ? c.sizes : c.sizes.filter((s) => s.id !== sizeId) } : c));
   const updateSizeRow = (colorwayId: string, sizeId: string, patch: Partial<SizeRow>) => setColorways((prev) => prev.map((c) => c.id === colorwayId ? { ...c, sizes: c.sizes.map((s) => s.id === sizeId ? { ...s, ...patch } : s) } : c));
-  const applyColorwayEnhancementFailure = (colorwayId: string, error: string) =>
+  const handleCancelEnhanceColorway = (colorwayId: string) => {
+    colorwayEnhanceAbortRefs.current[colorwayId]?.abort();
+    delete colorwayEnhanceAbortRefs.current[colorwayId];
     updateColorway(colorwayId, {
-      enhanceStatus: "failed",
-      enhanceError: error,
+      enhanceStatus: "idle",
       enhanceJobId: "",
+      enhanceError: "",
     });
+  };
+  const handleCancelGenerateColorway = (colorwayId: string) => {
+    colorwayGenerateAbortRefs.current[colorwayId]?.abort();
+    delete colorwayGenerateAbortRefs.current[colorwayId];
+    updateColorway(colorwayId, {
+      generateStatus: "idle",
+      generateJobId: "",
+      altGenerateJobId: "",
+      generateError: "",
+    });
+  };
+  const applyColorwayEnhancementFailure = (colorwayId: string, error: string, jobId?: string) =>
+    setColorways((prev) =>
+      prev.map((cw) => {
+        if (cw.id !== colorwayId) return cw;
+        if (jobId && cw.enhanceJobId !== jobId) return cw;
+        if (cw.enhanceStatus !== "processing") return cw;
+        return {
+          ...cw,
+          enhanceStatus: "failed",
+          enhanceError: error,
+          enhanceJobId: "",
+        };
+      })
+    );
   const applyColorwayEnhancementCompletion = async (
     colorwayId: string,
     images: Record<string, string> | undefined,
-    otherImages: Array<{ url: string; file: File | null }> = []
+    otherImages: Array<{ url: string; file: File | null }> = [],
+    jobId?: string
   ) => {
     const frontUrl = images?.front || "";
     const backUrl = images?.back || "";
@@ -1690,33 +1758,50 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       rightUrl ? imageUrlToFile(rightUrl, "right-enhanced") : Promise.resolve(null),
     ]);
 
-    updateColorway(colorwayId, {
-      enhanceStatus: "completed",
-      enhanceJobId: "",
-      enhanceError: "",
-      enhancedFrontUrl: frontUrl,
-      enhancedBackUrl: backUrl,
-      enhancedLeftUrl: leftUrl,
-      enhancedRightUrl: rightUrl,
-      enhancedFrontFile: frontFile,
-      enhancedBackFile: backFile,
-      enhancedLeftFile: leftFile,
-      enhancedRightFile: rightFile,
-      enhancedOtherImages: otherImages,
-    });
+    setColorways((prev) =>
+      prev.map((cw) => {
+        if (cw.id !== colorwayId) return cw;
+        if (jobId && cw.enhanceJobId !== jobId) return cw;
+        if (cw.enhanceStatus !== "processing") return cw;
+        return {
+          ...cw,
+          enhanceStatus: "completed",
+          enhanceJobId: "",
+          enhanceError: "",
+          enhancedFrontUrl: frontUrl,
+          enhancedBackUrl: backUrl,
+          enhancedLeftUrl: leftUrl,
+          enhancedRightUrl: rightUrl,
+          enhancedFrontFile: frontFile,
+          enhancedBackFile: backFile,
+          enhancedLeftFile: leftFile,
+          enhancedRightFile: rightFile,
+          enhancedOtherImages: otherImages,
+        };
+      })
+    );
   };
-  const applyColorwayGenerationFailure = (colorwayId: string, error: string) =>
-    updateColorway(colorwayId, {
-      generateStatus: "failed",
-      generateError: error,
-      generateJobId: "",
-      altGenerateJobId: "",
-    });
+  const applyColorwayGenerationFailure = (colorwayId: string, error: string, jobId?: string) =>
+    setColorways((prev) =>
+      prev.map((cw) => {
+        if (cw.id !== colorwayId) return cw;
+        if (jobId && cw.generateJobId !== jobId && cw.altGenerateJobId !== jobId) return cw;
+        if (cw.generateStatus !== "processing") return cw;
+        delete colorwayGenerateAbortRefs.current[colorwayId];
+        return {
+          ...cw,
+          generateStatus: "failed",
+          generateError: error,
+          generateJobId: "",
+          altGenerateJobId: "",
+        };
+      })
+    );
   const applyColorwayGenerationCompletion = async (
     colorwayId: string,
     viewList: string[],
     images: Record<string, string> | undefined,
-    opts: { gender: "men" | "women" | null; jobField: "generateJobId" | "altGenerateJobId" } = {
+    opts: { gender: "men" | "women" | null; jobField: "generateJobId" | "altGenerateJobId"; jobId?: string } = {
       gender: null,
       jobField: "generateJobId",
     }
@@ -1736,9 +1821,12 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     setColorways((prev) =>
       prev.map((cw) => {
         if (cw.id !== colorwayId) return cw;
+        if (cw.generateStatus !== "processing") return cw;
+        if (opts.jobId && cw[opts.jobField] !== opts.jobId) return cw;
         const cleared = { ...cw, [opts.jobField]: "" };
         // A unisex colorway runs two passes; stay "processing" until both finish.
         const otherJob = opts.jobField === "generateJobId" ? cleared.altGenerateJobId : cleared.generateJobId;
+        if (!otherJob) delete colorwayGenerateAbortRefs.current[colorwayId];
         return {
           ...cleared,
           generateStatus: otherJob ? "processing" : "completed",
@@ -1807,29 +1895,37 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         });
         return;
       }
+      colorwayEnhanceAbortRefs.current[colorwayId]?.abort();
+      const controller = new AbortController();
+      colorwayEnhanceAbortRefs.current[colorwayId] = controller;
       updateColorway(colorwayId, { enhanceStatus: "processing", enhanceError: "", enhanceJobId: "" });
       try {
         const startEnhanceJob = async (body: FormData) => {
-          const res = await fetch("/api/products/enhance", withAuthRequest({ method: "POST", body }));
+          throwIfAborted(controller.signal);
+          const res = await fetch("/api/products/enhance", withAuthRequest({ method: "POST", body, signal: controller.signal }));
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "Unable to start enhancement.");
           const jobId = String(data.job_id || "");
           if (!jobId) throw new Error("Enhancement job did not start.");
-          return waitForJob(jobId);
+          return waitForJob(jobId, { signal: controller.signal });
         };
         const selectedResults: Array<{ index: number; url: string; file: File }> = [];
         for (let i = 0; i < selectedEntries.length; i += 1) {
           const selected = selectedEntries[i];
           const body = new FormData();
           body.append("mode", "accessory");
+          throwIfAborted(controller.signal);
           const compressed = await compressImageFile(selected.entry.file);
+          throwIfAborted(controller.signal);
           body.append("front", compressed);
           const result = await startEnhanceJob(body);
           const url = viewNames.map((view) => result.images?.[view] || "").find(Boolean) || "";
           if (!url) continue;
+          throwIfAborted(controller.signal);
           const file = await imageUrlToFile(url, `selected-enhanced-${i + 1}`);
           selectedResults.push({ index: selected.index, url, file });
         }
+        throwIfAborted(controller.signal);
 
         const patch: Partial<Colorway> = {
           enhanceStatus: "completed",
@@ -1853,11 +1949,21 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         });
         updateColorway(colorwayId, patch);
       } catch (error) {
+        if (isAbortError(error)) {
+          if (colorwayEnhanceAbortRefs.current[colorwayId] === controller) {
+            updateColorway(colorwayId, { enhanceStatus: "idle", enhanceJobId: "", enhanceError: "" });
+          }
+          return;
+        }
         updateColorway(colorwayId, {
           enhanceStatus: "failed",
           enhanceJobId: "",
           enhanceError: (error as Error)?.message || "Network error",
         });
+      } finally {
+        if (colorwayEnhanceAbortRefs.current[colorwayId] === controller) {
+          delete colorwayEnhanceAbortRefs.current[colorwayId];
+        }
       }
       return;
     }
@@ -1869,20 +1975,25 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       });
       return;
     }
+    colorwayEnhanceAbortRefs.current[colorwayId]?.abort();
+    const controller = new AbortController();
+    colorwayEnhanceAbortRefs.current[colorwayId] = controller;
     updateColorway(colorwayId, { enhanceStatus: "processing", enhanceError: "", enhanceJobId: "" });
     try {
       const startEnhanceJob = async (url: string, body: FormData) => {
-        const res = await fetch(url, withAuthRequest({ method: "POST", body }));
+        throwIfAborted(controller.signal);
+        const res = await fetch(url, withAuthRequest({ method: "POST", body, signal: controller.signal }));
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Unable to start enhancement.");
         const jobId = String(data.job_id || "");
         if (!jobId) throw new Error("Enhancement job did not start.");
-        return waitForJob(jobId);
+        return waitForJob(jobId, { signal: controller.signal });
       };
       const enhanceAccessoryChunk = async (files: File[]) => {
         const body = new FormData();
         body.append("mode", "accessory");
         const compressed = await Promise.all(files.map((file) => compressImageFile(file)));
+        throwIfAborted(controller.signal);
         compressed.forEach((file, index) => body.append(viewNames[index], file));
         const result = await startEnhanceJob("/api/products/enhance", body);
         return viewNames
@@ -1899,6 +2010,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           compressImageFile(leftSource!),
           compressImageFile(rightSource!),
         ]);
+        throwIfAborted(controller.signal);
         const body = new FormData();
         body.append("front", front); body.append("back", back); body.append("left", left); body.append("right", right);
         primaryImages = (await startEnhanceJob("/api/products/enhance-shoes", body)).images;
@@ -1909,6 +2021,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           const compressedEntries = await Promise.all(
             availableEntries.map(async ([view, file]) => [view, await compressImageFile(file)] as const)
           );
+          throwIfAborted(controller.signal);
           compressedEntries.forEach(([view, file]) => body.append(view, file));
           primaryImages = (await startEnhanceJob("/api/products/enhance", body)).images;
         } else {
@@ -1916,6 +2029,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         }
       } else {
         const [front, back] = await Promise.all([compressImageFile(frontSource!), compressImageFile(backSource!)]);
+        throwIfAborted(controller.signal);
         const body = new FormData();
         body.append("front", front); body.append("back", back);
         primaryImages = (await startEnhanceJob("/api/products/enhance", body)).images;
@@ -1928,18 +2042,31 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         ...otherSources.map((source) => source.file),
       ];
       for (let i = 0; i < extraFiles.length; i += viewNames.length) {
+        throwIfAborted(controller.signal);
         const urls = await enhanceAccessoryChunk(extraFiles.slice(i, i + viewNames.length));
+        throwIfAborted(controller.signal);
         const files = await Promise.all(urls.map((url, index) => imageUrlToFile(url, `other-enhanced-${i + index + 1}`)));
         urls.forEach((url, index) => enhancedOtherResults.push({ url, file: files[index] || null }));
       }
 
+      throwIfAborted(controller.signal);
       await applyColorwayEnhancementCompletion(colorwayId, primaryImages, enhancedOtherResults);
     } catch (error) {
+      if (isAbortError(error)) {
+        if (colorwayEnhanceAbortRefs.current[colorwayId] === controller) {
+          updateColorway(colorwayId, { enhanceStatus: "idle", enhanceJobId: "", enhanceError: "" });
+        }
+        return;
+      }
       updateColorway(colorwayId, {
         enhanceStatus: "failed",
         enhanceJobId: "",
         enhanceError: (error as Error)?.message || "Network error",
       });
+    } finally {
+      if (colorwayEnhanceAbortRefs.current[colorwayId] === controller) {
+        delete colorwayEnhanceAbortRefs.current[colorwayId];
+      }
     }
   };
 
@@ -1950,11 +2077,11 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     const unsubscribers = processing.map((cw) =>
       subscribeToJob(cw.enhanceJobId, (update) => {
         if (update.status === "failed") {
-          applyColorwayEnhancementFailure(cw.id, update.error || "Enhancement failed.");
+          applyColorwayEnhancementFailure(cw.id, update.error || "Enhancement failed.", cw.enhanceJobId);
           return;
         }
         if (update.status !== "completed") return;
-        void applyColorwayEnhancementCompletion(cw.id, update.images);
+        void applyColorwayEnhancementCompletion(cw.id, update.images, [], cw.enhanceJobId);
       })
     );
 
@@ -2026,17 +2153,26 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         }
       }
     }
+    let controller: AbortController | null = null;
     try {
+      colorwayGenerateAbortRefs.current[colorwayId]?.abort();
+      controller = new AbortController();
+      colorwayGenerateAbortRefs.current[colorwayId] = controller;
       const [frontSrc, backSrc] = await Promise.all([
         getColorwayViewInputFile(cw, "front"),
         getColorwayViewInputFile(cw, "back"),
       ]);
+      throwIfAborted(controller.signal);
       if (!frontSrc || !backSrc) {
+        if (colorwayGenerateAbortRefs.current[colorwayId] === controller) {
+          delete colorwayGenerateAbortRefs.current[colorwayId];
+        }
         updateColorway(colorwayId, { generateStatus: "failed", generateError: "Please select front and back pictures first." });
         return;
       }
       updateColorway(colorwayId, { generateStatus: "processing", generateError: "", generateJobId: "", altGenerateJobId: "" });
       const [frontFile, backFile] = await Promise.all([compressImageFile(frontSrc), compressImageFile(backSrc)]);
+      throwIfAborted(controller.signal);
       // A fresh FormData per call (File objects can be reused across bodies).
       const buildBody = (modelId: string) => {
         const body = new FormData();
@@ -2064,11 +2200,15 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         body.append("front", frontFile); body.append("back", backFile);
         return body;
       };
+      const activeController = controller;
       const startJob = async (modelId: string): Promise<string> => {
-        const res = await fetch("/api/products/generate", withAuthRequest({ method: "POST", body: buildBody(modelId) }));
+        throwIfAborted(activeController.signal);
+        const res = await fetch("/api/products/generate", withAuthRequest({ method: "POST", body: buildBody(modelId), signal: activeController.signal }));
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Unable to start generation.");
-        return String(data.job_id || "");
+        const jobId = String(data.job_id || "");
+        if (!jobId) throw new Error("Generation job did not start.");
+        return jobId;
       };
 
       if (isUnisex) {
@@ -2077,12 +2217,24 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           startJob(selectedModelId),
           startJob(selectedFemaleModelId),
         ]);
+        throwIfAborted(controller.signal);
         updateColorway(colorwayId, { generateJobId: menJob, altGenerateJobId: womenJob, generateStatus: "processing" });
       } else {
         const job = await startJob(selectedModelId);
+        throwIfAborted(controller.signal);
         updateColorway(colorwayId, { generateJobId: job, generateStatus: "processing" });
       }
     } catch (error) {
+      if (isAbortError(error)) {
+        if (controller && colorwayGenerateAbortRefs.current[colorwayId] === controller) {
+          delete colorwayGenerateAbortRefs.current[colorwayId];
+          updateColorway(colorwayId, { generateStatus: "idle", generateJobId: "", altGenerateJobId: "", generateError: "" });
+        }
+        return;
+      }
+      if (controller && colorwayGenerateAbortRefs.current[colorwayId] === controller) {
+        delete colorwayGenerateAbortRefs.current[colorwayId];
+      }
       updateColorway(colorwayId, { generateStatus: "failed", generateError: error instanceof Error ? error.message : "Network error" });
     }
   };
@@ -2121,7 +2273,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     const unsubscribers = jobs.map((job) =>
       subscribeToJob(job.jobId, (update) => {
         if (update.status === "failed") {
-          applyColorwayGenerationFailure(job.colorwayId, update.error || "Generation failed.");
+          applyColorwayGenerationFailure(job.colorwayId, update.error || "Generation failed.", job.jobId);
           return;
         }
         if (update.status !== "completed") return;
@@ -2130,6 +2282,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         void applyColorwayGenerationCompletion(job.colorwayId, viewList, update.images, {
           gender: job.gender,
           jobField: job.jobField,
+          jobId: job.jobId,
         });
       })
     );
@@ -3962,6 +4115,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                       onUpdate={(patch) => updateColorway(cw.id, patch)}
                       canGenerate={canGenerateColorway(cw)}
                       onGenerate={() => { void handleGenerateColorway(cw.id); }}
+                      onCancelGenerate={() => handleCancelGenerateColorway(cw.id)}
                     />
                   ))}
                 </div>
@@ -3991,7 +4145,9 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                   onRemove={() => removeColorway(cw.id)}
                   onUpdate={(patch) => updateColorway(cw.id, patch)}
                   onEnhance={(pictureIndexes) => void handleEnhanceColorway(cw.id, pictureIndexes)}
+                  onCancelEnhance={() => handleCancelEnhanceColorway(cw.id)}
                   onGenerate={() => { void handleGenerateColorway(cw.id); }}
+                  onCancelGenerate={() => handleCancelGenerateColorway(cw.id)}
                   onAddSize={() => addSizeRow(cw.id)}
                   onRemoveSize={(sizeId) => removeSizeRow(cw.id, sizeId)}
                   onUpdateSize={(sizeId, patch) => updateSizeRow(cw.id, sizeId, patch)}
