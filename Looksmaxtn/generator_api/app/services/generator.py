@@ -83,11 +83,57 @@ class ImageGenerator:
         if usage is None:
             return
         logger.info(
-            "[gemini usage] model=%s input=%s output=%s total=%s",
+            "[gemini usage] model=%s input=%s output=%s cached=%s total=%s",
             model,
             getattr(usage, "prompt_token_count", None),
             getattr(usage, "candidates_token_count", None),
+            getattr(usage, "cached_content_token_count", None),
             getattr(usage, "total_token_count", None),
+        )
+
+    @staticmethod
+    def _extract_image_b64(response, context: str) -> str:
+        """Return the first inline image as base64, or raise with diagnostics.
+
+        Logs finish_reason / block_reason / safety so empty responses (safety
+        blocks, refusals, max-token cutoffs) are debuggable instead of crashing
+        on ``candidate.content.parts``.
+        """
+        feedback = getattr(response, "prompt_feedback", None)
+        block_reason = getattr(feedback, "block_reason", None) if feedback else None
+
+        candidates = getattr(response, "candidates", None)
+        if not candidates:
+            logger.error("%s: no candidates returned (block_reason=%s)", context, block_reason)
+            raise HTTPException(
+                status_code=500,
+                detail=f"{context}: no candidates from Gemini (block_reason={block_reason})",
+            )
+
+        candidate = candidates[0]
+        finish_reason = getattr(candidate, "finish_reason", None)
+        content = getattr(candidate, "content", None)
+        parts = getattr(content, "parts", None) if content is not None else None
+
+        if not parts:
+            logger.error(
+                "%s: empty content (finish_reason=%s, block_reason=%s, safety_ratings=%s)",
+                context, finish_reason, block_reason, getattr(candidate, "safety_ratings", None),
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=f"{context}: Gemini returned no image "
+                       f"(finish_reason={finish_reason}, block_reason={block_reason})",
+            )
+
+        for part in parts:
+            if part.inline_data is not None:
+                return base64.b64encode(part.inline_data.data).decode("utf-8")
+
+        logger.error("%s: no image part (finish_reason=%s)", context, finish_reason)
+        raise HTTPException(
+            status_code=500,
+            detail=f"{context}: no image in Gemini response (finish_reason={finish_reason})",
         )
 
     async def generate_clothes_view(
@@ -235,16 +281,7 @@ class ImageGenerator:
             logger.error(f"generate_clothes_view({view_name}): Gemini API error: {e}")
             raise
 
-        if not response.candidates:
-            logger.error(f"generate_clothes_view({view_name}): No candidates returned")
-            raise HTTPException(status_code=500, detail=f"No response from Gemini for {view_name} view")
-
-        for part in response.candidates[0].content.parts:
-            if part.inline_data is not None:
-                image_bytes = part.inline_data.data
-                return base64.b64encode(image_bytes).decode("utf-8")
-
-        raise HTTPException(status_code=500, detail=f"Failed to generate {view_name} view")
+        return self._extract_image_b64(response, f"generate_clothes_view({view_name})")
 
     async def generate_clothes_auto_view(
         self,
@@ -321,16 +358,7 @@ class ImageGenerator:
             logger.error(f"generate_clothes_auto_view({view_name}): Gemini API error: {e}")
             raise
 
-        if not response.candidates:
-            logger.error(f"generate_clothes_auto_view({view_name}): No candidates returned")
-            raise HTTPException(status_code=500, detail=f"No response from Gemini for {view_name} view")
-
-        for part in response.candidates[0].content.parts:
-            if part.inline_data is not None:
-                image_bytes = part.inline_data.data
-                return base64.b64encode(image_bytes).decode("utf-8")
-
-        raise HTTPException(status_code=500, detail=f"Failed to generate {view_name} view")
+        return self._extract_image_b64(response, f"generate_clothes_auto_view({view_name})")
 
     async def generate_shoes_view(self, view_name: str, product_images: dict[str, str]) -> str:
         """Generate a single shoe view and return base64 image.
@@ -376,16 +404,7 @@ class ImageGenerator:
             logger.error(f"generate_shoes_view({view_name}): Gemini API error: {e}")
             raise
 
-        if not response.candidates:
-            logger.error(f"generate_shoes_view({view_name}): No candidates returned")
-            raise HTTPException(status_code=500, detail=f"No response from Gemini for {view_name} view")
-
-        for part in response.candidates[0].content.parts:
-            if part.inline_data is not None:
-                image_bytes = part.inline_data.data
-                return base64.b64encode(image_bytes).decode("utf-8")
-
-        raise HTTPException(status_code=500, detail=f"Failed to generate {view_name} view")
+        return self._extract_image_b64(response, f"generate_shoes_view({view_name})")
 
     async def enhance_garment_view(self, view_name: str, image_b64: str) -> str:
         """Enhance a single garment image (mannequin removal, flat lay).
@@ -415,14 +434,7 @@ class ImageGenerator:
             logger.error(f"enhance_garment_view({view_name}): Gemini API error: {e}")
             raise
 
-        if not response.candidates:
-            raise HTTPException(status_code=500, detail=f"No response from Gemini for {view_name} view")
-
-        for part in response.candidates[0].content.parts:
-            if part.inline_data is not None:
-                return base64.b64encode(part.inline_data.data).decode("utf-8")
-
-        raise HTTPException(status_code=500, detail=f"Failed to enhance {view_name} garment view")
+        return self._extract_image_b64(response, f"enhance_garment_view({view_name})")
 
     async def enhance_accessory_view(self, view_name: str, image_b64: str) -> str:
         """Enhance a single accessory image (background cleanup).
@@ -452,14 +464,7 @@ class ImageGenerator:
             logger.error(f"enhance_accessory_view({view_name}): Gemini API error: {e}")
             raise
 
-        if not response.candidates:
-            raise HTTPException(status_code=500, detail=f"No response from Gemini for {view_name} view")
-
-        for part in response.candidates[0].content.parts:
-            if part.inline_data is not None:
-                return base64.b64encode(part.inline_data.data).decode("utf-8")
-
-        raise HTTPException(status_code=500, detail=f"Failed to enhance {view_name} accessory view")
+        return self._extract_image_b64(response, f"enhance_accessory_view({view_name})")
 
     async def generate_front_view(
         self,
@@ -535,18 +540,7 @@ class ImageGenerator:
             f"generate_front_view: response received, candidates={len(response.candidates) if response.candidates else 0}"
         )
 
-        if not response.candidates:
-            logger.error(f"generate_front_view: no candidates in response")
-            raise HTTPException(status_code=500, detail="Failed to generate front view - no candidates")
-
-        for i, part in enumerate(response.candidates[0].content.parts):
-            logger.info(f"generate_front_view: response part {i}: has_inline_data={part.inline_data is not None}")
-            if part.inline_data is not None:
-                image_bytes = part.inline_data.data
-                logger.info(f"generate_front_view: got image {len(image_bytes)} bytes")
-                return base64.b64encode(image_bytes).decode("utf-8")
-
-        raise HTTPException(status_code=500, detail="Failed to generate front view - no image in response")
+        return self._extract_image_b64(response, "generate_front_view")
 
     async def generate_back_view(self, front_image: str, body_zones: BodyZones) -> str:
         """Generate back view using front image as reference.
@@ -588,18 +582,7 @@ class ImageGenerator:
             f"generate_back_view: response received, candidates={len(response.candidates) if response.candidates else 0}"
         )
 
-        if not response.candidates:
-            logger.error(f"generate_back_view: no candidates in response")
-            raise HTTPException(status_code=500, detail="Failed to generate back view - no candidates")
-
-        for i, part in enumerate(response.candidates[0].content.parts):
-            logger.info(f"generate_back_view: response part {i}: has_inline_data={part.inline_data is not None}")
-            if part.inline_data is not None:
-                image_bytes = part.inline_data.data
-                logger.info(f"generate_back_view: got image {len(image_bytes)} bytes")
-                return base64.b64encode(image_bytes).decode("utf-8")
-
-        raise HTTPException(status_code=500, detail="Failed to generate back view - no image in response")
+        return self._extract_image_b64(response, "generate_back_view")
 
     async def generate_from_prompt(self, prompt: str, images: list[str]) -> str:
         """Generate image from prompt and input images.
@@ -624,12 +607,7 @@ class ImageGenerator:
             config=self.profile_config
         )
 
-        for part in response.candidates[0].content.parts:
-            if part.inline_data is not None:
-                image_bytes = part.inline_data.data
-                return base64.b64encode(image_bytes).decode("utf-8")
-
-        raise HTTPException(status_code=500, detail="No image returned from Gemini")
+        return self._extract_image_b64(response, "generate_from_prompt")
 
 
 def _get_active_images(body_zones: BodyZones, view: str) -> list[str]:
