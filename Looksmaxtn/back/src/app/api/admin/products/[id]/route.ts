@@ -874,7 +874,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       modelId: String(formData.get("modelId") || ""),
       companionSettings: parseCompanionSettings(formData.get("companionSettings")),
       images,
-      approvalStatus: session.role === "store_owner" ? "pending" : existingProduct.approvalStatus || "approved",
+      approvalStatus: "pending",
       updatedBy: auditActor,
     };
 
