@@ -47,7 +47,15 @@ class ImageGenerator:
             api_key: Google API key for Gemini
         """
         self.client = genai.Client(api_key=api_key)
-        self.model = "gemini-3.1-flash-image-preview"
+
+        # Default image model + per-feature overrides (each falls back to the
+        # default). Set the env vars to route a feature to a different model.
+        default_model = os.getenv("GEMINI_IMAGE_MODEL", "gemini-3.1-flash-image-preview")
+        self.model = default_model
+        self.model_outfit_studio = os.getenv("GEMINI_OUTFIT_STUDIO_MODEL", default_model)
+        self.model_model_picture = os.getenv("GEMINI_MODEL_PICTURE_MODEL", default_model)
+        self.model_enhance_product = os.getenv("GEMINI_ENHANCE_PRODUCT_MODEL", default_model)
+        self.model_enhance_profile = os.getenv("GEMINI_ENHANCE_PROFILE_MODEL", default_model)
 
         def _make_config(env_var: str) -> types.GenerateContentConfig:
             size = os.getenv(env_var, "1K")
@@ -219,7 +227,7 @@ class ImageGenerator:
 
         try:
             response = await self._gemini_generate(
-                model=self.model,
+                model=self.model_model_picture,
                 contents=[types.Content(parts=parts)],
                 config=self.product_config
             )
@@ -305,7 +313,7 @@ class ImageGenerator:
 
         try:
             response = await self._gemini_generate(
-                model=self.model,
+                model=self.model_model_picture,
                 contents=[types.Content(parts=parts)],
                 config=self.product_config
             )
@@ -360,7 +368,7 @@ class ImageGenerator:
 
         try:
             response = await self._gemini_generate(
-                model=self.model,
+                model=self.model_model_picture,
                 contents=[types.Content(parts=parts)],
                 config=self.product_config
             )
@@ -399,7 +407,7 @@ class ImageGenerator:
 
         try:
             response = await self._gemini_generate(
-                model=self.model,
+                model=self.model_enhance_product,
                 contents=[types.Content(parts=parts)],
                 config=self.product_config,
             )
@@ -436,7 +444,7 @@ class ImageGenerator:
 
         try:
             response = await self._gemini_generate(
-                model=self.model,
+                model=self.model_enhance_product,
                 contents=[types.Content(parts=parts)],
                 config=self.product_config,
             )
@@ -515,7 +523,7 @@ class ImageGenerator:
 
         try:
             response = await self._gemini_generate(
-                model=self.model,
+                model=self.model_outfit_studio,
                 contents=[types.Content(parts=parts)],
                 config=self.outfit_config,
             )
@@ -568,7 +576,7 @@ class ImageGenerator:
 
         try:
             response = await self._gemini_generate(
-                model=self.model,
+                model=self.model_outfit_studio,
                 contents=[types.Content(parts=parts)],
                 config=self.outfit_config,
             )
@@ -611,7 +619,7 @@ class ImageGenerator:
         parts.extend(b64_to_part(img) for img in images)
 
         response = await self._gemini_generate(
-            model=self.model,
+            model=self.model_enhance_profile,
             contents=[types.Content(parts=parts)],
             config=self.profile_config
         )

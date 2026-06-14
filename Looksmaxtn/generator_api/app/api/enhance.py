@@ -42,7 +42,7 @@ async def process_garment_enhancement(job_id: str, webhook_url: str, request: Ga
         image_b64 = await _generator.enhance_garment_view(view, product_images[view])
         dataset.record(
             flow="garment_enhance",
-            model=_generator.model,
+            model=_generator.model_enhance_product,
             prompt_version=GARMENT_ENHANCE_PROMPT_VERSION,
             prompt_text=GARMENT_ENHANCE_PROMPT_TEMPLATE,
             inputs={view: product_images[view]},
@@ -72,7 +72,7 @@ async def process_accessory_enhancement(job_id: str, webhook_url: str, request: 
         image_b64 = await _generator.enhance_accessory_view(view, product_images[view])
         dataset.record(
             flow="accessory_enhance",
-            model=_generator.model,
+            model=_generator.model_enhance_product,
             prompt_version=ACCESSORY_ENHANCE_PROMPT_VERSION,
             prompt_text=ACCESSORY_ENHANCE_PROMPT_TEMPLATE,
             inputs={view: product_images[view]},
@@ -113,7 +113,7 @@ async def enhance_garment_images(request: GarmentEnhanceRequest, background_task
         for view, out_b64 in zip(GARMENT_VIEWS, outputs):
             dataset.record(
                 flow="garment_enhance",
-                model=_generator.model,
+                model=_generator.model_enhance_product,
                 prompt_version=GARMENT_ENHANCE_PROMPT_VERSION,
                 prompt_text=GARMENT_ENHANCE_PROMPT_TEMPLATE,
                 inputs={view: product_images[view]},
@@ -152,7 +152,7 @@ async def enhance_accessory_images(request: AccessoryEnhanceRequest, background_
         for view, out_b64 in zip(provided_views, outputs):
             dataset.record(
                 flow="accessory_enhance",
-                model=_generator.model,
+                model=_generator.model_enhance_product,
                 prompt_version=ACCESSORY_ENHANCE_PROMPT_VERSION,
                 prompt_text=ACCESSORY_ENHANCE_PROMPT_TEMPLATE,
                 inputs={view: product_images[view]},
