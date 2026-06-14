@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import dbConnect from "@/store/lib/mongodb";
 import Newsletter from "@/store/models/Newsletter";
-import { verifyTurnstileToken } from "@/store/lib/turnstile";
 
 const EMAIL_MAX_LENGTH = 254;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -32,13 +31,8 @@ function verifyUnsubscribeToken(email: string, token: unknown) {
 export async function POST(req: NextRequest) {
   try {
     await dbConnect();
-    const { email: rawEmail, turnstileToken } = await req.json();
+    const { email: rawEmail } = await req.json();
     const email = normalizeEmail(rawEmail);
-
-    const turnstile = await verifyTurnstileToken(req, turnstileToken, "newsletter");
-    if (!turnstile.ok) {
-      return NextResponse.json({ error: turnstile.error }, { status: 400 });
-    }
 
     if (!isValidEmail(email)) {
       return NextResponse.json({ error: "Valid email is required" }, { status: 400 });
