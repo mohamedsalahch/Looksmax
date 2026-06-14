@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import TurnstileWidget from "@/components/TurnstileWidget";
 
 export default function FooterNewsletter() {
   const [email, setEmail] = useState("");
@@ -8,11 +9,21 @@ export default function FooterNewsletter() {
   const [message, setMessage] = useState("");
   const [showUnsub, setShowUnsub] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileConfigured, setTurnstileConfigured] = useState(false);
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
   const fieldClass = "w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm transition-colors placeholder:text-text-secondary/70 focus:border-foreground focus:outline-none";
+  const handleTurnstileConfigured = useCallback((configured: boolean) => {
+    setTurnstileConfigured(configured);
+  }, []);
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
+    if (turnstileConfigured && !turnstileToken) {
+      setMessage("Please complete the security check.");
+      return;
+    }
     setLoading(true);
     setMessage("");
 
@@ -20,14 +31,18 @@ export default function FooterNewsletter() {
       const res = await fetch("/api/newsletter", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, turnstileToken }),
       });
       const data = await res.json();
       if (res.ok) {
         setMessage("✓ " + data.message);
         setEmail("");
+        setTurnstileToken("");
+        setTurnstileResetKey((value) => value + 1);
       } else {
         setMessage(data.error);
+        setTurnstileToken("");
+        setTurnstileResetKey((value) => value + 1);
       }
     } catch {
       setMessage("Network error. Please try again.");
@@ -38,27 +53,7 @@ export default function FooterNewsletter() {
   const handleUnsubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!unsubEmail) return;
-    setLoading(true);
-    setMessage("");
-
-    try {
-      const res = await fetch("/api/newsletter", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: unsubEmail }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setMessage("✓ " + data.message);
-        setUnsubEmail("");
-        setShowUnsub(false);
-      } else {
-        setMessage(data.error);
-      }
-    } catch {
-      setMessage("Network error. Please try again.");
-    }
-    setLoading(false);
+    setMessage("Use the unsubscribe link from a LOOKSMAX email to remove this address.");
   };
 
   return (
@@ -81,9 +76,15 @@ export default function FooterNewsletter() {
             required
             className={fieldClass}
           />
+          <TurnstileWidget
+            action="newsletter"
+            resetKey={turnstileResetKey}
+            onVerify={setTurnstileToken}
+            onConfiguredChange={handleTurnstileConfigured}
+          />
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || (turnstileConfigured && !turnstileToken)}
             className="w-full bg-foreground text-background py-3 text-sm font-medium tracking-wide uppercase hover:bg-accent transition-colors cursor-pointer disabled:opacity-50"
           >
             {loading ? "Submitting..." : "Subscribe"}

@@ -2,6 +2,7 @@
 
 import logging
 import os
+import secrets
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -19,7 +20,7 @@ def load_service_env() -> None:
 
 load_service_env()
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.api import clothes, clothes_auto, description, enhance, outfit, proxy, shoes, validation
@@ -43,6 +44,26 @@ app = FastAPI(
     description="AI-powered fashion image generation using Google Gemini",
     version="1.0.0"
 )
+
+
+@app.middleware("http")
+async def require_service_auth(request: Request, call_next):
+    """Require back-end service auth for all cost-bearing generator routes."""
+    if request.url.path.startswith("/api/"):
+        expected_key = os.getenv("GENERATOR_API_KEY", "").strip()
+        if not expected_key:
+            logger.error("GENERATOR_API_KEY is not configured; refusing generator API request.")
+            return JSONResponse(
+                status_code=503,
+                content={"detail": "Generator service authentication is not configured."},
+            )
+
+        authorization = request.headers.get("authorization", "")
+        scheme, _, token = authorization.partition(" ")
+        if scheme.lower() != "bearer" or not secrets.compare_digest(token, expected_key):
+            return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+
+    return await call_next(request)
 
 
 # Set generator instance in all route modules

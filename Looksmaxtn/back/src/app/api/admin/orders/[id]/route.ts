@@ -227,16 +227,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           { $set: { isActive: false } }
         );
       }
-
-      try {
-        await creditOrderEarnings({
-          orderId: existingOrder._id,
-          items: existingLeanOrder.items as unknown as IOrderItem[],
-          actor: auditActor,
-        });
-      } catch (earningsError) {
-        console.error("Failed to credit store-owner earnings:", earningsError);
-      }
     }
 
     const update: Record<string, unknown> = {};
@@ -251,6 +241,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       .populate("user", "name email")
       .lean();
     if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    if (orderStatus === "delivered") {
+      await creditOrderEarnings({
+        orderId: existingOrder._id,
+        items: existingLeanOrder.items as unknown as IOrderItem[],
+        actor: auditActor,
+      });
+    }
 
     broadcastAdminEvent({ type: "order:upsert", order: getAdminOrderEventPayload(order as unknown as Record<string, unknown>) });
 

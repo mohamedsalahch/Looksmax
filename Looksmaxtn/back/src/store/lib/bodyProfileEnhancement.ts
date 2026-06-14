@@ -8,6 +8,7 @@ import {
   saveBodyProfileImageBuffer,
 } from "@/store/lib/bodyProfileUploads";
 import { loadImageAsBase64 } from "@/lib/imageSource";
+import { getGeneratorAuthHeaders } from "@/lib/generatorAuth";
 import { publishStoreUserEvent } from "@/store/lib/storeUserEvents";
 
 const STUDIO_PORTRAIT_PROMPT = `Transform this image into a professional studio portrait.
@@ -81,7 +82,7 @@ export async function queueBodyProfileEnhancement(userId: string, imagePath: str
     try {
       const validateResponse = await fetch(`${baseUrl}api/validate-photo`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getGeneratorAuthHeaders(),
         body: JSON.stringify({ image: base64 }),
       });
 
@@ -117,7 +118,7 @@ export async function queueBodyProfileEnhancement(userId: string, imagePath: str
 
     const response = await fetch(`${baseUrl}api/proxy`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getGeneratorAuthHeaders(),
       body: JSON.stringify({
         job_id: jobId,
         webhook_url: webhookUrl,

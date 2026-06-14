@@ -5,6 +5,7 @@ import ProductMediaEnhancementJob from "@/admin/models/ProductMediaEnhancementJo
 import { saveProductMediaSourceImage } from "@/admin/lib/productMediaUploads";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
 import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
+import { getGeneratorAuthHeaders } from "@/lib/generatorAuth";
 
 async function fileToBase64(file: File) {
   const bytes = await file.arrayBuffer();
@@ -85,7 +86,7 @@ export async function POST(req: NextRequest) {
     try {
       generationResponse = await fetch(generateShoesUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getGeneratorAuthHeaders(),
         body: JSON.stringify({
           job_id: job._id.toString(),
           webhook_url: webhookUrl,

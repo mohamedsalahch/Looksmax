@@ -1,7 +1,10 @@
 """API endpoints for outfit generation with background tasks."""
 
 import logging
+import os
+import ipaddress
 import traceback
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
@@ -22,11 +25,44 @@ logger = logging.getLogger(__name__)
 # Global instance set by main app
 _generator: ImageGenerator | None = None
 
+DEFAULT_WEBHOOK_ALLOWED_HOSTS = {
+    "localhost",
+    "127.0.0.1",
+    "back",
+    "looksmaxtn.com",
+    "www.looksmaxtn.com",
+    "store.looksmaxtn.com",
+    "admin.looksmaxtn.com",
+}
+
 
 def set_generator(generator: ImageGenerator | None) -> None:
     """Set the global image generator instance."""
     global _generator
     _generator = generator
+
+
+def is_allowed_webhook_url(value: str) -> bool:
+    """Allow callbacks only to configured Looksmax hosts or local/private dev hosts."""
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return False
+
+    configured_hosts = {
+        host.strip().lower()
+        for host in os.getenv("GENERATOR_WEBHOOK_ALLOWED_HOSTS", "").split(",")
+        if host.strip()
+    }
+    allowed_hosts = DEFAULT_WEBHOOK_ALLOWED_HOSTS | configured_hosts
+    hostname = parsed.hostname.lower()
+    if hostname in allowed_hosts:
+        return True
+
+    try:
+        ip = ipaddress.ip_address(hostname)
+        return ip.is_loopback or ip.is_private
+    except ValueError:
+        return False
 
 
 async def process_outfit_generation(
@@ -187,6 +223,9 @@ async def generate_outfit_image(request: OutfitRequest, background_tasks: Backgr
         logger.info(f"  Zone '{zone_name}': status={zone.status}, size={zone.size}, front={len(zone.front) if zone.front else 0} chars, back={len(zone.back) if zone.back else 0} chars")
 
     # Validate required images
+    if not is_allowed_webhook_url(request.webhook_url):
+        raise HTTPException(status_code=400, detail="webhook_url is not allowed")
+
     if not request.profile_picture or not request.profile_picture.strip():
         raise HTTPException(status_code=400, detail="profile_picture is required and cannot be empty")
 

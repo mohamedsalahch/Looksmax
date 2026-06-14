@@ -17,6 +17,7 @@ function buildTargetUrl(req: NextRequest, path: string[]) {
 
 function buildHeaders(req: NextRequest) {
   const headers = new Headers(req.headers);
+  const trustedClientIp = req.headers.get("x-real-ip") || "";
 
   for (const headerName of [
     "host",
@@ -33,8 +34,16 @@ function buildHeaders(req: NextRequest) {
     "x-invoke-query",
     "x-invoke-output",
     "x-invoke-status",
+    "x-forwarded-for",
+    "x-real-ip",
+    "cf-connecting-ip",
   ]) {
     headers.delete(headerName);
+  }
+
+  if (trustedClientIp) {
+    headers.set("x-forwarded-for", trustedClientIp);
+    headers.set("x-real-ip", trustedClientIp);
   }
 
   return headers;

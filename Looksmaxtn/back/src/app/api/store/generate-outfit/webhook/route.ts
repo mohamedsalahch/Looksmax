@@ -4,6 +4,7 @@ import OutfitGenerationJob from "@/store/models/OutfitGenerationJob";
 import { requireWebhookSecret } from "@/lib/webhookAuth";
 import { publishStoreUserEvent } from "@/store/lib/storeUserEvents";
 import { persistOutfitImage } from "@/store/lib/outfitImageStorage";
+import { refundOutfitTryForJob } from "@/store/lib/outfitTryAccounting";
 
 function normalizeWebhookImage(data: Record<string, unknown>) {
   const imageCandidates = [
@@ -56,6 +57,7 @@ export async function POST(req: NextRequest) {
         { status: "failed", errorMessage: "Outfit generation failed." },
         { new: true }
       );
+      await refundOutfitTryForJob(jobId);
       if (failed?.user) {
         publishStoreUserEvent(String(failed.user), {
           type: "outfit:update",

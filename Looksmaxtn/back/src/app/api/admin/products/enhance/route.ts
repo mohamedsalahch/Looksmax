@@ -7,6 +7,7 @@ import {
 } from "@/admin/lib/productMediaUploads";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
 import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
+import { getGeneratorAuthHeaders } from "@/lib/generatorAuth";
 
 const ALL_VIEWS = ["front", "back", "left", "right"] as const;
 type EnhancementView = typeof ALL_VIEWS[number];
@@ -94,7 +95,7 @@ export async function POST(req: NextRequest) {
       try {
         generationResponse = await fetch(buildGeneratorEndpoint(baseUrl, "enhance-accessory"), {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: getGeneratorAuthHeaders(),
           body: JSON.stringify({
             job_id: job._id.toString(),
             webhook_url: webhookUrl,
@@ -161,7 +162,7 @@ export async function POST(req: NextRequest) {
     try {
       generationResponse = await fetch(buildGeneratorEndpoint(baseUrl, "enhance-garment"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getGeneratorAuthHeaders(),
         body: JSON.stringify({
           job_id: job._id.toString(),
           webhook_url: webhookUrl,

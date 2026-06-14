@@ -5,6 +5,7 @@ import ModelAsset from "@/admin/models/ModelAsset";
 import ProductGenerationJob from "@/admin/models/ProductGenerationJob";
 import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
 import { readModelImageAsBase64 } from "@/admin/lib/modelUploads";
+import { getGeneratorAuthHeaders } from "@/lib/generatorAuth";
 
 async function fileToBase64(file: File) {
   const bytes = await file.arrayBuffer();
@@ -166,7 +167,7 @@ export async function POST(req: NextRequest) {
     // 2. Trigger Python (Async)
     const triggerResponse = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getGeneratorAuthHeaders(),
       body: JSON.stringify(payload),
     });
 

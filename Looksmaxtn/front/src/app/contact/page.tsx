@@ -1,15 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import TurnstileWidget from "@/components/TurnstileWidget";
 
 export default function ContactPage() {
   const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" });
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileConfigured, setTurnstileConfigured] = useState(false);
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
   const fieldClass = "w-full border-0 border-b border-border-color bg-transparent px-1 py-2 text-sm transition-colors placeholder:text-text-secondary/70 focus:border-foreground focus:outline-none";
+  const handleTurnstileConfigured = useCallback((configured: boolean) => {
+    setTurnstileConfigured(configured);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (turnstileConfigured && !turnstileToken) {
+      setStatus({ type: "error", text: "Please complete the security check." });
+      return;
+    }
     setLoading(true);
     setStatus(null);
 
@@ -17,14 +28,18 @@ export default function ContactPage() {
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, turnstileToken }),
       });
       const data = await res.json();
       if (res.ok) {
         setStatus({ type: "success", text: data.message });
         setForm({ name: "", email: "", subject: "", message: "" });
+        setTurnstileToken("");
+        setTurnstileResetKey((value) => value + 1);
       } else {
         setStatus({ type: "error", text: data.error });
+        setTurnstileToken("");
+        setTurnstileResetKey((value) => value + 1);
       }
     } catch {
       setStatus({ type: "error", text: "Network error. Please try again." });
@@ -125,9 +140,16 @@ export default function ContactPage() {
                 />
               </div>
 
+              <TurnstileWidget
+                action="contact"
+                resetKey={turnstileResetKey}
+                onVerify={setTurnstileToken}
+                onConfiguredChange={handleTurnstileConfigured}
+              />
+
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || (turnstileConfigured && !turnstileToken)}
                 className="w-full bg-foreground text-background py-3.5 text-sm font-medium tracking-wide uppercase hover:bg-accent transition-colors cursor-pointer disabled:opacity-50"
               >
                 {loading ? "Sending..." : "Send Message"}

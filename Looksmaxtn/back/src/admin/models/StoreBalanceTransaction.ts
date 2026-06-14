@@ -49,6 +49,16 @@ const schema = new Schema<IStoreBalanceTransaction>(
 );
 
 schema.index({ storeOwner: 1, createdAt: -1 });
+schema.index(
+  { order: 1, storeOwner: 1, type: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      order: { $type: "objectId" },
+      type: "earning",
+    },
+  }
+);
 
 if (process.env.NODE_ENV !== "production" && mongoose.models.StoreBalanceTransaction) {
   delete mongoose.models.StoreBalanceTransaction;

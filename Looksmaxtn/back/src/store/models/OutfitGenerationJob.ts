@@ -10,6 +10,8 @@ export interface IOutfitGenerationJob extends Document {
   status: "pending" | "processing" | "completed" | "failed";
   images: IOutfitGenerationImages;
   errorMessage?: string;
+  tryCharged?: boolean;
+  tryRefundedAt?: Date | null;
   requestPayload?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
@@ -34,6 +36,8 @@ const outfitGenerationJobSchema = new Schema<IOutfitGenerationJob>(
     },
     images: { type: outfitGenerationImagesSchema, default: () => ({}) },
     errorMessage: { type: String, default: "" },
+    tryCharged: { type: Boolean, default: false },
+    tryRefundedAt: { type: Date, default: null },
     requestPayload: { type: Schema.Types.Mixed, default: null },
   },
   { timestamps: true }

@@ -5,6 +5,7 @@ import {
   getSharedLeaves,
   rootOf,
 } from "@/admin/lib/categoryTaxonomy";
+import { getGeneratorAuthHeaders } from "@/lib/generatorAuth";
 
 const ALLOWED_GENDERS = new Set(["men", "women", "children", "unisex"]);
 const DESCRIBE_TIMEOUT_MS = 45_000;
@@ -74,7 +75,7 @@ export async function inferNameAndCategory(params: {
   try {
     const response = await fetch(`${baseUrl}/api/describe-product`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getGeneratorAuthHeaders(),
       body: JSON.stringify({
         images: [params.imageB64],
         gender: describeGender,

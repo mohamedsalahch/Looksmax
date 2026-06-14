@@ -6,6 +6,7 @@ import { canAccessAdminResource, getSession } from "@/admin/lib/auth";
 import { getAuditActorFromSession } from "@/admin/lib/auditRoute";
 import { saveGeneratedSourceImage } from "@/admin/lib/generatedImageUploads";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
+import { getGeneratorAuthHeaders } from "@/lib/generatorAuth";
 
 async function fileToBase64(file: File) {
   const bytes = await file.arrayBuffer();
@@ -106,7 +107,7 @@ export async function POST(req: NextRequest) {
     // 3. Trigger Python (Asynchronous)
     const triggerResponse = await fetch(`${baseUrl.replace(/\/$/, "")}/api/proxy`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getGeneratorAuthHeaders(),
       body: JSON.stringify(payload),
     });
 

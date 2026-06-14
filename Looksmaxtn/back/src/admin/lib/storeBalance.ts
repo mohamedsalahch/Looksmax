@@ -13,6 +13,35 @@ function round2(value: number) {
   return Math.round(value * 100) / 100;
 }
 
+function isDuplicateKeyError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === 11000
+  );
+}
+
+export function calculateOrderEarningsByOwner(
+  items: IOrderItem[],
+  productOwnerMap: Map<string, string>
+) {
+  const earningsByOwner = new Map<string, number>();
+  for (const item of items) {
+    const ownerId = productOwnerMap.get(item.product.toString());
+    if (!ownerId) continue;
+    const gross = Number(item.price || 0) * Number(item.quantity || 0);
+    const net = gross * (1 - COMMISSION_RATE);
+    earningsByOwner.set(ownerId, (earningsByOwner.get(ownerId) || 0) + net);
+  }
+
+  return new Map(
+    [...earningsByOwner.entries()]
+      .map(([ownerId, amount]) => [ownerId, round2(amount)] as const)
+      .filter(([, amount]) => amount > 0)
+  );
+}
+
 export function serializeBalanceTransaction(transaction: {
   _id: unknown;
   type: string;
@@ -197,38 +226,48 @@ export async function creditOrderEarnings({
     if (ownerId) productOwnerMap.set(product._id.toString(), ownerId);
   }
 
-  const earningsByOwner = new Map<string, number>();
-  for (const item of items) {
-    const ownerId = productOwnerMap.get(item.product.toString());
-    if (!ownerId) continue;
-    const gross = Number(item.price || 0) * Number(item.quantity || 0);
-    const net = gross * (1 - COMMISSION_RATE);
-    earningsByOwner.set(ownerId, (earningsByOwner.get(ownerId) || 0) + net);
-  }
+  const earningsByOwner = calculateOrderEarningsByOwner(items, productOwnerMap);
 
   const results: Array<{ ownerId: string; amount: number }> = [];
-  for (const [ownerId, rawAmount] of earningsByOwner.entries()) {
-    const amount = round2(rawAmount);
-    if (amount <= 0) continue;
-
-    const user = await User.findById(ownerId).select("balance role");
+  for (const [ownerId, amount] of earningsByOwner.entries()) {
+    const user = await User.findById(ownerId).select("balance role").lean();
     if (!user || user.role !== "store_owner") continue;
+
+    const existingTransaction = await StoreBalanceTransaction.findOne({
+      storeOwner: user._id,
+      type: "earning",
+      order: orderId,
+    })
+      .select("_id")
+      .lean();
+    if (existingTransaction) continue;
 
     const before = round2(Number(user.balance || 0));
     const after = round2(before + amount);
-    user.balance = after;
-    await user.save();
 
-    await StoreBalanceTransaction.create({
-      storeOwner: user._id,
-      type: "earning",
-      amount,
-      balanceBefore: before,
-      balanceAfter: after,
-      reason: `Order #${String(orderId).slice(-8).toUpperCase()} delivered`,
-      order: orderId,
-      createdBy: actor || null,
-    });
+    try {
+      await StoreBalanceTransaction.create({
+        storeOwner: user._id,
+        type: "earning",
+        amount,
+        balanceBefore: before,
+        balanceAfter: after,
+        reason: `Order #${String(orderId).slice(-8).toUpperCase()} delivered`,
+        order: orderId,
+        createdBy: actor || null,
+      });
+    } catch (error) {
+      if (isDuplicateKeyError(error)) continue;
+      throw error;
+    }
+
+    const updateResult = await User.updateOne(
+      { _id: user._id, role: "store_owner" },
+      { $inc: { balance: amount } }
+    );
+    if (updateResult.matchedCount !== 1) {
+      throw new Error(`Store owner ${ownerId} disappeared before earnings credit`);
+    }
 
     results.push({ ownerId, amount });
   }

@@ -9,6 +9,8 @@ import OutfitGenerationJob from "@/store/models/OutfitGenerationJob";
 import { loadImageAsBase64 } from "@/lib/imageSource";
 import { calculateUserOutfitStudioTries, normalizeInitialOutfitStudioTries } from "@/store/lib/outfitStudioUtils";
 import { persistOutfitImage } from "@/store/lib/outfitImageStorage";
+import { getGeneratorAuthHeaders } from "@/lib/generatorAuth";
+import { refundOutfitTryForJob, refundOutfitTryForUser } from "@/store/lib/outfitTryAccounting";
 
 type ZonePayload = {
   status?: boolean;
@@ -124,6 +126,7 @@ function getPreferredIpv4Host() {
 
 export async function POST(req: NextRequest) {
   let job: InstanceType<typeof OutfitGenerationJob> | null = null;
+  let reservedTryUserId: mongoose.Types.ObjectId | null = null;
   try {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -275,23 +278,39 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Increment tries used for non-admin users
+    const baseUrl = (process.env.PRODUCT_GENERATION_URL_BASE || "").replace(/\/?$/, "/");
+    if (!baseUrl) {
+      return NextResponse.json({ error: "PRODUCT_GENERATION_URL_BASE is not configured." }, { status: 500 });
+    }
+
+    let tryCharged = false;
+
+    // Reserve one try atomically for non-admin users.
     if (requestingUser.role !== "admin") {
       const initialTries = normalizeInitialOutfitStudioTries(requestingUser.outfitStudioStats?.initialTries);
-      const triesUsed = requestingUser.outfitStudioStats?.triesUsed || 0;
       const { total: totalAvailableTries } = await calculateUserOutfitStudioTries(userId, initialTries);
+      const reservedUser = await User.findOneAndUpdate(
+        {
+          _id: userId,
+          $or: [
+            { "outfitStudioStats.triesUsed": { $lt: totalAvailableTries } },
+            { "outfitStudioStats.triesUsed": { $exists: false } },
+          ],
+        },
+        { $inc: { "outfitStudioStats.triesUsed": 1 } },
+        { new: true }
+      )
+        .select("_id")
+        .lean();
 
-      if (triesUsed >= totalAvailableTries) {
+      if (!reservedUser) {
         return NextResponse.json(
           { error: "No outfit studio tries remaining. Spend 100 TND to earn 5 more tries." },
           { status: 403 }
         );
       }
-
-      await User.updateOne(
-        { _id: userId },
-        { $inc: { "outfitStudioStats.triesUsed": 1 } }
-      );
+      reservedTryUserId = userId;
+      tryCharged = true;
     }
 
     const summarizedBodyZones = Object.fromEntries(
@@ -332,14 +351,11 @@ export async function POST(req: NextRequest) {
       user: new mongoose.Types.ObjectId(session.userId),
       status: "processing",
       images: { front: "", back: "" },
+      tryCharged,
       requestPayload: requestPayloadSummary,
     });
     await job.save();
 
-    const baseUrl = (process.env.PRODUCT_GENERATION_URL_BASE || "").replace(/\/?$/, "/");
-    if (!baseUrl) {
-      return NextResponse.json({ error: "PRODUCT_GENERATION_URL_BASE is not configured." }, { status: 500 });
-    }
     const preferredWebhookBase = getPreferredIpv4Host();
     const webhookBase = preferredWebhookBase || req.nextUrl.origin;
     const webhookUrl = `${webhookBase}/api/store/generate-outfit/webhook`;
@@ -347,7 +363,7 @@ export async function POST(req: NextRequest) {
 
     const generatorResponse = await fetch(generatorUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getGeneratorAuthHeaders(),
       body: JSON.stringify({
         ...payload,
         job_id: job._id.toString(),
@@ -368,6 +384,7 @@ export async function POST(req: NextRequest) {
         errorMessage:
           (generatorData as { error?: string } | null)?.error || "Outfit generation failed.",
       });
+      await refundOutfitTryForJob(job._id);
 
       return NextResponse.json(
         {
@@ -403,6 +420,9 @@ export async function POST(req: NextRequest) {
         status: "failed",
         errorMessage: "Generation request failed.",
       });
+      await refundOutfitTryForJob(job._id);
+    } else if (reservedTryUserId) {
+      await refundOutfitTryForUser(reservedTryUserId);
     }
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
