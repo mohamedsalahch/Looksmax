@@ -24,7 +24,6 @@ router = APIRouter(prefix="/api", tags=["validation"])
 logger = logging.getLogger(__name__)
 
 _generator: ImageGenerator | None = None
-_VALIDATION_MODEL = "gemini-3-flash-preview"
 
 VALIDATION_PROMPT = """Analyze the image to determine if the primary subject is suitable for a virtual clothing overlay.
 
@@ -76,7 +75,7 @@ async def _classify_product_view(image_base64: str, label: str) -> dict:
     ]
 
     response = await _generator.client.aio.models.generate_content(
-        model=_VALIDATION_MODEL,
+        model=_generator.text_model,
         contents=[types.Content(parts=parts)],
     )
 
@@ -93,7 +92,7 @@ async def _classify_product_view(image_base64: str, label: str) -> dict:
 
     dataset.record(
         flow="compare_front_back",
-        model=_VALIDATION_MODEL,
+        model=_generator.text_model,
         prompt_version=COMPARE_FRONT_BACK_PROMPT_VERSION,
         prompt_text=COMPARE_FRONT_BACK_PROMPT,
         inputs={"photo": image_base64},
@@ -156,7 +155,7 @@ async def validate_photo(request: ValidatePhotoRequest):
 
     try:
         response = await _generator.client.aio.models.generate_content(
-            model=_VALIDATION_MODEL,
+            model=_generator.text_model,
             contents=[types.Content(parts=parts)],
         )
     except Exception as e:
@@ -180,7 +179,7 @@ async def validate_photo(request: ValidatePhotoRequest):
 
     dataset.record(
         flow="photo_validation",
-        model=_VALIDATION_MODEL,
+        model=_generator.text_model,
         prompt_version=PHOTO_VALIDATION_PROMPT_VERSION,
         prompt_text=VALIDATION_PROMPT,
         inputs={"photo": request.image},

@@ -16,7 +16,6 @@ router = APIRouter(prefix="/api", tags=["description"])
 logger = logging.getLogger(__name__)
 
 _generator: ImageGenerator | None = None
-_DESCRIBE_MODEL = "gemini-3-flash-preview"
 DESCRIBE_PRODUCT_PROMPT_VERSION = "describe_product/v2"
 
 DESCRIBE_PRODUCT_PROMPT = """You are a product cataloging assistant for a Tunisian fashion & perfume marketplace.
@@ -95,7 +94,7 @@ async def _call_describe(
 
     try:
         response = await _generator.client.aio.models.generate_content(
-            model=_DESCRIBE_MODEL,
+            model=_generator.text_model,
             contents=[types.Content(parts=parts)],
         )
     except Exception as e:
@@ -150,7 +149,7 @@ async def describe_product(request: DescribeProductRequest):
 
     dataset.record(
         flow="describe_product",
-        model=_DESCRIBE_MODEL,
+        model=_generator.text_model,
         prompt_version=DESCRIBE_PRODUCT_PROMPT_VERSION,
         prompt_text=DESCRIBE_PRODUCT_PROMPT,
         inputs={f"photo_{i}": img for i, img in enumerate(request.images)},

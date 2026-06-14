@@ -23,19 +23,14 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 from app.api import clothes, clothes_auto, description, enhance, outfit, proxy, shoes, validation
-from app.services.generator import ImageGenerator
+from app.services.generator import create_generator
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# API Key
-API_KEY = os.getenv("GOOGLE_API_KEY", "").strip()
-
-# Initialize image generator only when credentials are configured.
-generator = ImageGenerator(api_key=API_KEY) if API_KEY else None
-if generator is None:
-    logger.warning("GOOGLE_API_KEY is not configured. Generation endpoints will return an initialization error.")
+# Initialize the image generator for the configured backend (gemini | openrouter).
+generator = create_generator()
 
 # Create FastAPI app
 app = FastAPI(

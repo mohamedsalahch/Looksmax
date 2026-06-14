@@ -119,7 +119,7 @@ async def process_outfit_generation(
                 front_inputs[f"{zone_name}_front"] = zone.front
         dataset.record(
             flow="outfit",
-            model=_generator.model,
+            model=_generator.model_outfit_studio,
             prompt_version=FRONT_VIEW_PROMPT_VERSION,
             prompt_text=front_prompt,
             inputs=front_inputs,

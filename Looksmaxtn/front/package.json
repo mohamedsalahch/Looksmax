@@ -29,5 +29,13 @@
   },
   "overrides": {
     "postcss": "8.5.10"
-  }
+  },
+  "browserslist": [
+    "chrome >= 90",
+    "firefox >= 90",
+    "safari >= 15",
+    "edge >= 90",
+    "not dead",
+    "> 0.5%"
+  ]
 }

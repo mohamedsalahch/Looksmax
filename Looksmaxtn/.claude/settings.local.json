@@ -26,7 +26,14 @@
       "PowerShell($f = 'admin\\\\src\\\\app\\\\dashboard\\\\models\\\\[id]\\\\page.tsx'; $text = [System.IO.File]::ReadAllText\\($f, [System.Text.Encoding]::UTF8\\); $line = $text.Split\\(\"`n\"\\)[96]; \\($line.ToCharArray\\(\\) | ForEach-Object { '{0:X4}' -f [int][char]$_ }\\) -join ' ')",
       "PowerShell($f = 'admin\\\\src\\\\app\\\\dashboard\\\\categories\\\\page.tsx'; $text = [System.IO.File]::ReadAllText\\($f, [System.Text.Encoding]::UTF8\\); 290..291 | ForEach-Object { $line = $text.Split\\(\"`n\"\\)[$_]; \"Line $\\($_+1\\): \" + \\(\\($line.ToCharArray\\(\\) | Where-Object { [int][char]$_ -gt 127 } | ForEach-Object { '{0:X4}' -f [int][char]$_ }\\) -join ' '\\) })",
       "Bash(python -m py_compile generator_api/app/api/enhance.py generator_api/app/api/clothes.py generator_api/app/api/shoes.py generator_api/app/services/generator.py)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "Bash(node -e \"try{const r=require\\('./lighthouse report.json'\\); const c=r.categories||{}; for\\(const k in c\\){console.log\\(k, Math.round\\(\\(c[k].score||0\\)*100\\)\\)}; const a=r.audits||{}; ['largest-contentful-paint','cumulative-layout-shift','total-blocking-time','first-contentful-paint','speed-index','interactive','server-response-time','total-byte-weight','unused-javascript'].forEach\\(m=>{if\\(a[m]\\)console.log\\(m,'=>',a[m].displayValue\\)}\\)}catch\\(e\\){console.log\\('ERR',e.message\\)}\")",
+      "Bash(node -e \"try{const r=require\\('./reportv2.json'\\); const c=r.categories||{}; for\\(const k in c\\){console.log\\(k, Math.round\\(\\(c[k].score||0\\)*100\\)\\)}; const a=r.audits||{}; ['largest-contentful-paint','cumulative-layout-shift','total-blocking-time','total-byte-weight'].forEach\\(m=>{if\\(a[m]\\)console.log\\(m,'=>',a[m].displayValue\\)}\\)}catch\\(e\\){console.log\\('ERR',e.message\\)}\")",
+      "PowerShell(npx tsc --noEmit)",
+      "Bash(python -c \"import openai; print\\('openai', openai.__version__\\)\")",
+      "Bash(python -c \"import google.genai; print\\('google-genai ok'\\)\")",
+      "Bash(python -m py_compile app/services/openrouter_client.py app/services/generator.py app/main.py app/api/description.py app/api/validation.py)",
+      "Bash(GENERATOR_BACKEND=openrouter OPENROUTER_API_KEY=sk-test python -c \"from app.services.generator import create_generator; g=create_generator\\(\\); print\\('backend', g.backend, '| image', g.model, '| text', g.text_model\\)\")"
     ]
   }
 }

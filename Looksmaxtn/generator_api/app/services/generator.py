@@ -1,4 +1,10 @@
-"""Image generation service using Google Gemini AI."""
+"""Image generation service supporting Google Gemini and OpenRouter backends.
+
+The active backend is selected via the ``GENERATOR_BACKEND`` env var
+(``gemini`` by default, or ``openrouter``). Both backends expose the same
+``client.aio.models.generate_content(...)`` surface, so the generation logic
+below is backend-agnostic.
+"""
 
 import asyncio
 import base64
@@ -10,6 +16,7 @@ from google import genai
 from google.genai import types
 
 from app.models.requests import BodyZones, SecondaryColors
+from app.services.openrouter_client import OpenRouterClient
 from app.prompts.templates import (
     CLOTHES_TOP_PROMPT_TEMPLATE,
     CLOTHES_BOTTOM_PROMPT_TEMPLATE,
@@ -23,6 +30,12 @@ from app.prompts.templates import (
 from app.utils.image import b64_to_part
 
 logger = logging.getLogger(__name__)
+
+# Feature identifiers for per-feature image model selection.
+FEATURE_OUTFIT_STUDIO = "outfit_studio"      # generate_front_view / generate_back_view
+FEATURE_MODEL_PICTURE = "model_picture"      # clothes / clothes_auto / shoes on a model
+FEATURE_ENHANCE_PRODUCT = "enhance_product"  # garment / accessory enhancement
+FEATURE_ENHANCE_PROFILE = "enhance_profile"  # generate_from_prompt (proxy)
 
 _FOOTWEAR_SECTION_TEMPLATE = """--------------------------------
 FOOTWEAR (FIXED):
@@ -38,16 +51,38 @@ STRICT RULES:
 
 
 class ImageGenerator:
-    """Service for generating images using Google Gemini AI."""
+    """Service for generating images via Gemini or OpenRouter."""
 
-    def __init__(self, api_key: str):
+    def __init__(
+        self,
+        client,
+        *,
+        backend: str = "gemini",
+        image_model: str = "gemini-3.1-flash-image-preview",
+        text_model: str = "gemini-3-flash-preview",
+        feature_models: dict[str, str] | None = None,
+    ):
         """Initialize the image generator.
 
         Args:
-            api_key: Google API key for Gemini
+            client: A genai ``Client`` or compatible adapter (e.g. ``OpenRouterClient``).
+            backend: Active backend label ("gemini" or "openrouter"), for logging.
+            image_model: Default image model; per-feature fallback.
+            text_model: Model id used for text/JSON calls (describe, validate).
+            feature_models: Optional per-feature model overrides, keyed by the
+                FEATURE_* constants. Missing features fall back to ``image_model``.
         """
-        self.client = genai.Client(api_key=api_key)
-        self.model = "gemini-3.1-flash-image-preview"
+        self.client = client
+        self.backend = backend
+        self.model = image_model
+        self.text_model = text_model
+
+        # Per-feature image models (each defaults to the base image_model).
+        fm = feature_models or {}
+        self.model_outfit_studio = fm.get(FEATURE_OUTFIT_STUDIO, image_model)
+        self.model_model_picture = fm.get(FEATURE_MODEL_PICTURE, image_model)
+        self.model_enhance_product = fm.get(FEATURE_ENHANCE_PRODUCT, image_model)
+        self.model_enhance_profile = fm.get(FEATURE_ENHANCE_PROFILE, image_model)
 
         def _make_config(env_var: str) -> types.GenerateContentConfig:
             size = os.getenv(env_var, "1K")
@@ -70,7 +105,7 @@ class ImageGenerator:
 
     @staticmethod
     def _log_usage(response, model: str):
-        """Log Gemini token usage for a single generate_content call."""
+        """Log token usage for a single generate_content call."""
         usage = getattr(response, "usage_metadata", None)
         if usage is None:
             return
@@ -219,7 +254,7 @@ class ImageGenerator:
 
         try:
             response = await self._gemini_generate(
-                model=self.model,
+                model=self.model_model_picture,
                 contents=[types.Content(parts=parts)],
                 config=self.product_config
             )
@@ -305,7 +340,7 @@ class ImageGenerator:
 
         try:
             response = await self._gemini_generate(
-                model=self.model,
+                model=self.model_model_picture,
                 contents=[types.Content(parts=parts)],
                 config=self.product_config
             )
@@ -360,7 +395,7 @@ class ImageGenerator:
 
         try:
             response = await self._gemini_generate(
-                model=self.model,
+                model=self.model_model_picture,
                 contents=[types.Content(parts=parts)],
                 config=self.product_config
             )
@@ -399,7 +434,7 @@ class ImageGenerator:
 
         try:
             response = await self._gemini_generate(
-                model=self.model,
+                model=self.model_enhance_product,
                 contents=[types.Content(parts=parts)],
                 config=self.product_config,
             )
@@ -436,7 +471,7 @@ class ImageGenerator:
 
         try:
             response = await self._gemini_generate(
-                model=self.model,
+                model=self.model_enhance_product,
                 contents=[types.Content(parts=parts)],
                 config=self.product_config,
             )
@@ -515,7 +550,7 @@ class ImageGenerator:
 
         try:
             response = await self._gemini_generate(
-                model=self.model,
+                model=self.model_outfit_studio,
                 contents=[types.Content(parts=parts)],
                 config=self.outfit_config,
             )
@@ -568,7 +603,7 @@ class ImageGenerator:
 
         try:
             response = await self._gemini_generate(
-                model=self.model,
+                model=self.model_outfit_studio,
                 contents=[types.Content(parts=parts)],
                 config=self.outfit_config,
             )
@@ -611,7 +646,7 @@ class ImageGenerator:
         parts.extend(b64_to_part(img) for img in images)
 
         response = await self._gemini_generate(
-            model=self.model,
+            model=self.model_enhance_profile,
             contents=[types.Content(parts=parts)],
             config=self.profile_config
         )
@@ -622,6 +657,108 @@ class ImageGenerator:
                 return base64.b64encode(image_bytes).decode("utf-8")
 
         raise HTTPException(status_code=500, detail="No image returned from Gemini")
+
+
+def _read_feature_models(prefix: str) -> dict[str, str]:
+    """Read per-feature model overrides from ``{PREFIX}_<FEATURE>_MODEL`` env vars.
+
+    Only set vars are returned; unset features fall back to the base image model.
+    """
+    env_map = {
+        FEATURE_OUTFIT_STUDIO: f"{prefix}_OUTFIT_STUDIO_MODEL",
+        FEATURE_MODEL_PICTURE: f"{prefix}_MODEL_PICTURE_MODEL",
+        FEATURE_ENHANCE_PRODUCT: f"{prefix}_ENHANCE_PRODUCT_MODEL",
+        FEATURE_ENHANCE_PROFILE: f"{prefix}_ENHANCE_PROFILE_MODEL",
+    }
+    return {
+        feature: value
+        for feature, env_var in env_map.items()
+        if (value := os.getenv(env_var, "").strip())
+    }
+
+
+def _log_feature_models(generator: "ImageGenerator") -> None:
+    logger.info(
+        "  per-feature image models: outfit_studio=%s | model_picture=%s | "
+        "enhance_product=%s | enhance_profile=%s",
+        generator.model_outfit_studio,
+        generator.model_model_picture,
+        generator.model_enhance_product,
+        generator.model_enhance_profile,
+    )
+
+
+def create_generator() -> "ImageGenerator | None":
+    """Build the image generator for the configured backend.
+
+    Returns ``None`` (with a warning) when the required credentials for the
+    selected backend are missing, so generation endpoints surface a clean
+    initialization error instead of crashing on startup.
+    """
+    backend = os.getenv("GENERATOR_BACKEND", "gemini").strip().lower()
+
+    if backend == "openrouter":
+        api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+        if not api_key:
+            logger.warning(
+                "GENERATOR_BACKEND=openrouter but OPENROUTER_API_KEY is not set. "
+                "Generation endpoints will return an initialization error."
+            )
+            return None
+        modalities_raw = os.getenv("OPENROUTER_IMAGE_MODALITIES", "image,text")
+        image_modalities = [m.strip() for m in modalities_raw.split(",") if m.strip()]
+        max_tokens_raw = os.getenv("OPENROUTER_MAX_TOKENS", "").strip()
+        max_tokens = int(max_tokens_raw) if max_tokens_raw else None
+        client = OpenRouterClient(
+            api_key=api_key,
+            base_url=os.getenv("OPENROUTER_BASE_URL") or None,
+            site_url=os.getenv("OPENROUTER_SITE_URL") or None,
+            app_name=os.getenv("OPENROUTER_APP_NAME") or None,
+            image_modalities=image_modalities or None,
+            max_tokens=max_tokens,
+        )
+        generator = ImageGenerator(
+            client,
+            backend="openrouter",
+            image_model=os.getenv(
+                "OPENROUTER_IMAGE_MODEL", "google/gemini-2.5-flash-image-preview"
+            ),
+            text_model=os.getenv("OPENROUTER_TEXT_MODEL", "google/gemini-2.5-flash"),
+            feature_models=_read_feature_models("OPENROUTER"),
+        )
+        logger.info(
+            "Image generator initialized with OpenRouter backend "
+            "(default image_model=%s, text_model=%s)",
+            generator.model,
+            generator.text_model,
+        )
+        _log_feature_models(generator)
+        return generator
+
+    # Default: Gemini.
+    api_key = os.getenv("GOOGLE_API_KEY", "").strip()
+    if not api_key:
+        logger.warning(
+            "GOOGLE_API_KEY is not configured. Generation endpoints will return "
+            "an initialization error."
+        )
+        return None
+    client = genai.Client(api_key=api_key)
+    generator = ImageGenerator(
+        client,
+        backend="gemini",
+        image_model=os.getenv("GEMINI_IMAGE_MODEL", "gemini-3.1-flash-image-preview"),
+        text_model=os.getenv("GEMINI_TEXT_MODEL", "gemini-3-flash-preview"),
+        feature_models=_read_feature_models("GEMINI"),
+    )
+    logger.info(
+        "Image generator initialized with Gemini backend "
+        "(default image_model=%s, text_model=%s)",
+        generator.model,
+        generator.text_model,
+    )
+    _log_feature_models(generator)
+    return generator
 
 
 def _get_active_images(body_zones: BodyZones, view: str) -> list[str]:
