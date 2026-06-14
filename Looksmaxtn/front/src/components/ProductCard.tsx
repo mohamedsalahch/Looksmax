@@ -497,7 +497,7 @@ export default function ProductCard({
         </div>
       )}
       <div
-        className="relative overflow-hidden product-image-wrapper bg-surface"
+        className="relative aspect-[3/4] overflow-hidden product-image-wrapper bg-surface"
         onMouseEnter={(e) => {
           if (!isPerfume || !cloneSourceImage) return;
           showClonePreviewAtPointer(e.clientX, e.clientY);
@@ -512,9 +512,9 @@ export default function ProductCard({
           <MediaRenderer
             src={displayImage}
             alt={name}
-            className="block w-full h-auto object-contain"
-            imageClassName="block w-full h-auto object-contain"
-            videoClassName="block w-full h-auto object-contain"
+            className="block h-full w-full object-contain"
+            imageClassName="block h-full w-full object-contain"
+            videoClassName="block h-full w-full object-contain"
             audioClassName="block w-full px-3 py-6"
             priority={imagePriority}
             sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"

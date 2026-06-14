@@ -221,7 +221,12 @@ export default function ProductGrid({
     anchorViewportTop?: number;
     productCount: number;
   } | null>(null);
-  const scrollRetryRef = useRef<{ frames: number[]; timeouts: number[] } | null>(null);
+  const scrollRetryRef = useRef<{
+    frames: number[];
+    timeouts: number[];
+    resizeObserver?: ResizeObserver;
+  } | null>(null);
+  const scrollRestoreActiveRef = useRef(false);
 
   const [queryInput, setQueryInput] = useState("");
   const [draftCategory, setDraftCategory] = useState("");
@@ -293,15 +298,19 @@ export default function ProductGrid({
     }
   }, [category, storeName]);
 
+  const cancelScrollRetries = useCallback(() => {
+    if (!scrollRetryRef.current) return;
+    scrollRetryRef.current.frames.forEach((id) => window.cancelAnimationFrame(id));
+    scrollRetryRef.current.timeouts.forEach((id) => window.clearTimeout(id));
+    scrollRetryRef.current.resizeObserver?.disconnect();
+    scrollRetryRef.current = null;
+    scrollRestoreActiveRef.current = false;
+  }, []);
+
   // Cancel scroll retries on unmount only — not on every products change.
   useEffect(() => {
-    return () => {
-      if (scrollRetryRef.current) {
-        scrollRetryRef.current.frames.forEach((id) => window.cancelAnimationFrame(id));
-        scrollRetryRef.current.timeouts.forEach((id) => window.clearTimeout(id));
-      }
-    };
-  }, []);
+    return cancelScrollRetries;
+  }, [cancelScrollRetries]);
 
   useLayoutEffect(() => {
     const pending = pendingRestoreRef.current;
@@ -312,10 +321,8 @@ export default function ProductGrid({
     pendingRestoreRef.current = null;
 
     // Cancel any previous retry attempt before starting a new one.
-    if (scrollRetryRef.current) {
-      scrollRetryRef.current.frames.forEach((id) => window.cancelAnimationFrame(id));
-      scrollRetryRef.current.timeouts.forEach((id) => window.clearTimeout(id));
-    }
+    cancelScrollRetries();
+    scrollRestoreActiveRef.current = true;
 
     const restoreScroll = () => {
       if (pending.anchorProductId) {
@@ -345,11 +352,25 @@ export default function ProductGrid({
       window.requestAnimationFrame(restoreScroll),
       window.requestAnimationFrame(() => window.requestAnimationFrame(restoreScroll)),
     ];
-    const timeouts = [120, 360, 800].map((delay) => window.setTimeout(restoreScroll, delay));
+    const retryDelays = [120, 360, 800, 1400, 2200, 3400];
+    const timeouts = retryDelays.map((delay) => window.setTimeout(restoreScroll, delay));
+    let resizeObserver: ResizeObserver | undefined;
+
+    if ("ResizeObserver" in window) {
+      resizeObserver = new ResizeObserver(() => {
+        window.requestAnimationFrame(restoreScroll);
+      });
+      resizeObserver.observe(document.body);
+    }
+
+    timeouts.push(window.setTimeout(() => {
+      scrollRestoreActiveRef.current = false;
+      resizeObserver?.disconnect();
+    }, retryDelays[retryDelays.length - 1] + 100));
 
     // Store IDs in a ref so they survive loadMore firing and are only cancelled on unmount.
-    scrollRetryRef.current = { frames, timeouts };
-  }, [products]);
+    scrollRetryRef.current = { frames, timeouts, resizeObserver };
+  }, [cancelScrollRetries, products]);
 
   const saveBrowsePosition = useCallback((anchorProductId?: string) => {
     if (typeof window === "undefined") return;
@@ -574,6 +595,7 @@ export default function ProductGrid({
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) {
+          if (scrollRestoreActiveRef.current) return;
           loadMoreRef.current();
         }
       },
