@@ -26,6 +26,6 @@ export async function refundOutfitTryForJob(jobId: string | mongoose.Types.Objec
     .lean();
 
   if (!job?.user) return false;
-  await refundOutfitTryForUser(job.user as mongoose.Types.ObjectId);
+  await refundOutfitTryForUser(String(job.user));
   return true;
 }
