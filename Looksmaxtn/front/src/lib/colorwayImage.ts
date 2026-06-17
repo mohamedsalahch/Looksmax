@@ -107,12 +107,18 @@ export function getColorwayMainImage(
   fallback = "",
   viewGender: ViewGender = null
 ) {
-  if (!hex || !source.images || source.images.length === 0) {
+  if (!source.images || source.images.length === 0) {
     return fallback;
   }
 
-  const rawIndices = getIndicesForHex(hex, source);
+  const rawIndices = hex ? getIndicesForHex(hex, source) : [];
   if (rawIndices.length === 0) {
+    // No colorway selected. For unisex products (images carry a gender tag) pick
+    // the browse gender's front model so the card matches the chosen category;
+    // otherwise keep the caller's fallback, which already honors the main image.
+    if (viewGender && source.images.some((image) => image.gender === viewGender)) {
+      return getColorwayEnhancedFrontImage(null, source, fallback, viewGender);
+    }
     return fallback;
   }
 
