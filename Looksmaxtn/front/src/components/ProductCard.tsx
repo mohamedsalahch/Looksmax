@@ -497,7 +497,7 @@ export default function ProductCard({
         </div>
       )}
       <div
-        className="relative aspect-[3/4] overflow-hidden product-image-wrapper bg-surface"
+        className="relative aspect-[9/16] overflow-hidden product-image-wrapper bg-surface"
         onMouseEnter={(e) => {
           if (!isPerfume || !cloneSourceImage) return;
           showClonePreviewAtPointer(e.clientX, e.clientY);
@@ -521,7 +521,7 @@ export default function ProductCard({
           />
         ) : (
           <>
-            <div className="placeholder-img aspect-[3/4] w-full" />
+            <div className="placeholder-img aspect-[9/16] w-full" />
             <span className="absolute inset-0 flex items-center justify-center text-[10px] tracking-widest opacity-50">
               PRODUCT
             </span>

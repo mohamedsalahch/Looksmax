@@ -647,7 +647,7 @@ export default function ProductGrid({
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-8">
           {Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="animate-pulse">
-              <div className="aspect-[3/4] bg-border-color rounded" />
+              <div className="aspect-[9/16] bg-border-color rounded" />
               <div className="mt-2 h-3 bg-border-color rounded w-3/4" />
               <div className="mt-1 h-3 bg-border-color rounded w-1/4" />
             </div>
@@ -949,7 +949,7 @@ export default function ProductGrid({
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-8">
                   {Array.from({ length: 4 }).map((_, i) => (
                     <div key={i} className="animate-pulse">
-                      <div className="aspect-[3/4] bg-border-color rounded" />
+                      <div className="aspect-[9/16] bg-border-color rounded" />
                       <div className="mt-2 h-3 bg-border-color rounded w-3/4" />
                       <div className="mt-1 h-3 bg-border-color rounded w-1/4" />
                     </div>

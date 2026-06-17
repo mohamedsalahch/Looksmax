@@ -26,7 +26,7 @@ export default function Loading() {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-5">
           {Array.from({ length: 12 }).map((_, i) => (
             <div key={i} className="space-y-2">
-              <div className="aspect-[3/4] w-full animate-pulse bg-hover/60 border border-border-color" />
+              <div className="aspect-[9/16] w-full animate-pulse bg-hover/60 border border-border-color" />
               <div className="h-2.5 w-3/4 animate-pulse bg-border-color/50" />
               <div className="h-2.5 w-1/2 animate-pulse bg-border-color/40" />
               <div className="mt-1 h-1 w-full animate-pulse bg-border-color/30" />
