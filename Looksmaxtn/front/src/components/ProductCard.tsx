@@ -512,9 +512,9 @@ export default function ProductCard({
           <MediaRenderer
             src={displayImage}
             alt={name}
-            className="block h-full w-full object-contain"
-            imageClassName="block h-full w-full object-contain"
-            videoClassName="block h-full w-full object-contain"
+            className={`block h-full w-full ${isPerfume ? "object-contain" : "object-cover"}`}
+            imageClassName={`block h-full w-full ${isPerfume ? "object-contain" : "object-cover"}`}
+            videoClassName={`block h-full w-full ${isPerfume ? "object-contain" : "object-cover"}`}
             audioClassName="block w-full px-3 py-6"
             priority={imagePriority}
             sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
