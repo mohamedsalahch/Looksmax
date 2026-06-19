@@ -13,6 +13,7 @@ import {
 } from "@/lib/generationPalette";
 import ColorPicker, { type InspectorSource } from "@/components/ColorPicker";
 import ImageColorSampler, { type SamplerSource } from "@/components/ImageColorSampler";
+import ImageCropModal from "@/components/ImageCropModal";
 import {
   getCategoryAncestors,
   getCategoryGender,
@@ -729,6 +730,29 @@ function ColorwayCard({
   const [zoomedPreview, setZoomedPreview] = useState<string | null>(null);
   const [samplerOpen, setSamplerOpen] = useState(false);
   const [selectedPictureKeys, setSelectedPictureKeys] = useState<string[]>([]);
+  const [cropState, setCropState] = useState<{
+    src: string;
+    group: "product" | "enhanced" | "generated";
+    gender?: "men" | "women" | null;
+  } | null>(null);
+
+  // Cropping never overwrites the source — it appends a brand-new picture to the
+  // matching group so the original frame stays available. For model pictures we
+  // carry over the source gender so the cropped copy can claim the same
+  // front/back model slot (otherwise it can only be "main", which is outranked
+  // by the original model-front and never shows as the storefront hero).
+  const handleCropConfirm = (file: File) => {
+    if (!cropState) return;
+    const url = URL.createObjectURL(file);
+    if (cropState.group === "generated") {
+      onUpdate({ generatedImages: [...colorway.generatedImages, { url, file, gender: cropState.gender ?? null }] });
+    } else if (cropState.group === "enhanced") {
+      onUpdate({ enhancedOtherImages: [...colorway.enhancedOtherImages, { url, file }] });
+    } else {
+      onUpdate({ otherImages: [...colorway.otherImages, { url, file }] });
+    }
+    setCropState(null);
+  };
   const hasColor = Boolean(colorway.hex.trim());
   const generationMode = colorway.generationMode === "manual" ? "manual" : "auto";
 
@@ -1291,7 +1315,12 @@ function ColorwayCard({
                 ) : <span className="text-[8px] uppercase tracking-wider text-text-secondary/60">Upload</span>}
               </div>
               {preview && renderPublicOrderSelect(publicKey)}
-              {preview && <button type="button" onClick={() => handleViewFile(slot, null)} className="w-full border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-danger transition-colors hover:bg-danger/5">Clear</button>}
+              {preview && (
+                <div className="flex gap-1">
+                  <button type="button" onClick={() => setCropState({ src: preview, group: "product" })} className="flex-1 border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-text-secondary transition-colors hover:border-accent hover:text-accent">Crop</button>
+                  <button type="button" onClick={() => handleViewFile(slot, null)} className="flex-1 border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-danger transition-colors hover:bg-danger/5">Clear</button>
+                </div>
+              )}
             </div>
           );
         })}
@@ -1342,9 +1371,14 @@ function ColorwayCard({
                     </span>
                   </button>
                   {renderPublicOrderSelect(publicKey)}
-                  <button type="button" onClick={() => removeOtherPicture(imageIndex)} className="w-full border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-danger transition-colors hover:bg-danger/5">
-                    Clear
-                  </button>
+                  <div className="flex gap-1">
+                    <button type="button" onClick={() => setCropState({ src: image.url, group: "product" })} className="flex-1 border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-text-secondary transition-colors hover:border-accent hover:text-accent">
+                      Crop
+                    </button>
+                    <button type="button" onClick={() => removeOtherPicture(imageIndex)} className="flex-1 border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-danger transition-colors hover:bg-danger/5">
+                      Clear
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -1406,16 +1440,25 @@ function ColorwayCard({
                     ? `enhanced:${(enhancedPictureSlots[image.index] as { kind: "enhancedView"; view: ColorwayView }).view}`
                     : `enhancedOther:${(enhancedPictureSlots[image.index] as { kind: "enhancedOther"; index: number }).index}`
                 )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const slot = enhancedPictureSlots[image.index];
-                    if (slot) removeEnhancedPicture(slot);
-                  }}
-                  className="w-full border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-danger transition-colors hover:bg-danger/5"
-                >
-                  Clear
-                </button>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setCropState({ src: image.url, group: "enhanced" })}
+                    className="flex-1 border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-text-secondary transition-colors hover:border-accent hover:text-accent"
+                  >
+                    Crop
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const slot = enhancedPictureSlots[image.index];
+                      if (slot) removeEnhancedPicture(slot);
+                    }}
+                    className="flex-1 border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-danger transition-colors hover:bg-danger/5"
+                  >
+                    Clear
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -1464,13 +1507,22 @@ function ColorwayCard({
                   )}
                 </button>
                 {renderGeneratedOrderSelect(`generated:${imageIndex}`, img.gender)}
-                <button
-                  type="button"
-                  onClick={() => removeGeneratedPicture(imageIndex)}
-                  className="w-full border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-danger transition-colors hover:bg-danger/5"
-                >
-                  Clear
-                </button>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setCropState({ src: img.url, group: "generated", gender: img.gender ?? null })}
+                    className="flex-1 border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-text-secondary transition-colors hover:border-accent hover:text-accent"
+                  >
+                    Crop
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeGeneratedPicture(imageIndex)}
+                    className="flex-1 border border-border px-2 py-1.5 text-[8px] uppercase tracking-wider text-danger transition-colors hover:bg-danger/5"
+                  >
+                    Clear
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -1485,6 +1537,13 @@ function ColorwayCard({
             </div>
           </div>
         </div>
+      )}
+      {cropState && (
+        <ImageCropModal
+          src={cropState.src}
+          onCancel={() => setCropState(null)}
+          onConfirm={handleCropConfirm}
+        />
       )}
       <div className="space-y-1.5">
         <p className="text-[9px] uppercase tracking-wider text-text-secondary">{hideSizeInput ? "Stock" : "Sizes"}</p>
