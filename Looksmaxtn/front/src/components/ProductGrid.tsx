@@ -225,6 +225,7 @@ export default function ProductGrid({
     frames: number[];
     timeouts: number[];
     resizeObserver?: ResizeObserver;
+    removeInterrupt?: () => void;
   } | null>(null);
   const scrollRestoreActiveRef = useRef(false);
 
@@ -303,6 +304,7 @@ export default function ProductGrid({
     scrollRetryRef.current.frames.forEach((id) => window.cancelAnimationFrame(id));
     scrollRetryRef.current.timeouts.forEach((id) => window.clearTimeout(id));
     scrollRetryRef.current.resizeObserver?.disconnect();
+    scrollRetryRef.current.removeInterrupt?.();
     scrollRetryRef.current = null;
     scrollRestoreActiveRef.current = false;
   }, []);
@@ -368,8 +370,26 @@ export default function ProductGrid({
       resizeObserver?.disconnect();
     }, retryDelays[retryDelays.length - 1] + 100));
 
+    // The moment the user actually touches/scrolls, stop chasing the anchor —
+    // otherwise the retries keep yanking the page back and it reads as a
+    // flicker/jump. On mobile this matters most: the address bar collapsing on
+    // scroll resizes the viewport and re-fires the ResizeObserver, so we cancel
+    // on touchstart (before any momentum scroll) as well. Programmatic scrollTo
+    // emits none of these events, so they only fire on genuine user intent.
+    const handleUserInterrupt = () => cancelScrollRetries();
+    window.addEventListener("wheel", handleUserInterrupt, { passive: true });
+    window.addEventListener("touchstart", handleUserInterrupt, { passive: true });
+    window.addEventListener("touchmove", handleUserInterrupt, { passive: true });
+    window.addEventListener("keydown", handleUserInterrupt);
+    const removeInterrupt = () => {
+      window.removeEventListener("wheel", handleUserInterrupt);
+      window.removeEventListener("touchstart", handleUserInterrupt);
+      window.removeEventListener("touchmove", handleUserInterrupt);
+      window.removeEventListener("keydown", handleUserInterrupt);
+    };
+
     // Store IDs in a ref so they survive loadMore firing and are only cancelled on unmount.
-    scrollRetryRef.current = { frames, timeouts, resizeObserver };
+    scrollRetryRef.current = { frames, timeouts, resizeObserver, removeInterrupt };
   }, [cancelScrollRetries, products]);
 
   const saveBrowsePosition = useCallback((anchorProductId?: string) => {
