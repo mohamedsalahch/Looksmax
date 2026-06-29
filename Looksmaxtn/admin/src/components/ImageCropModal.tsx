@@ -44,11 +44,25 @@ function isDirectlyFetchable(src: string) {
 export default function ImageCropModal({
   src,
   title = "Crop picture",
+  aspectRatio,
+  focalY = 0.5,
+  lockedFrame = false,
+  outputWidth,
+  initialZoom = 1,
+  fixedZoom,
+  lockHorizontalPan = false,
   onCancel,
   onConfirm,
 }: {
   src: string;
   title?: string;
+  aspectRatio?: number;
+  focalY?: number;
+  lockedFrame?: boolean;
+  outputWidth?: number;
+  initialZoom?: number;
+  fixedZoom?: number;
+  lockHorizontalPan?: boolean;
   onCancel: () => void;
   onConfirm: (file: File) => void;
 }) {
@@ -90,6 +104,34 @@ export default function ImageCropModal({
   // Latest geometry for listeners attached once.
   const geomRef = useRef({ view, baseW, baseH, containerW: containerSize.w, containerH: containerSize.h });
   geomRef.current = { view, baseW, baseH, containerW: containerSize.w, containerH: containerSize.h };
+  const normalizedFocalY = clamp(focalY, 0.15, 0.9);
+
+  const getCoverZoom = useCallback((frameValue: Rect) => {
+    const { baseW: bw, baseH: bh } = geomRef.current;
+    if (bw === 0 || bh === 0 || frameValue.w === 0 || frameValue.h === 0) return MIN_ZOOM;
+    return Math.max(MIN_ZOOM, frameValue.w / bw, frameValue.h / bh);
+  }, []);
+
+  const clampViewToFrame = useCallback((next: ViewState, frameValue = frame) => {
+    const { baseW: bw, baseH: bh } = geomRef.current;
+    if (bw === 0 || bh === 0 || frameValue.w === 0 || frameValue.h === 0) return next;
+    const z = fixedZoom
+      ? clamp(fixedZoom, MIN_ZOOM, MAX_ZOOM)
+      : clamp(next.z, getCoverZoom(frameValue), MAX_ZOOM);
+    const w = bw * z;
+    const h = bh * z;
+    const minX = frameValue.x + frameValue.w - w;
+    const maxX = frameValue.x;
+    const minY = frameValue.y + frameValue.h - h;
+    const maxY = frameValue.y;
+    return {
+      z,
+      panX: lockHorizontalPan
+        ? frameValue.x + frameValue.w / 2 - w / 2
+        : minX > maxX ? frameValue.x + (frameValue.w - w) / 2 : clamp(next.panX, minX, maxX),
+      panY: minY > maxY ? frameValue.y + (frameValue.h - h) / 2 : clamp(next.panY, minY, maxY),
+    };
+  }, [fixedZoom, frame, getCoverZoom, lockHorizontalPan]);
 
   useEffect(() => {
     let active = true;
@@ -139,41 +181,64 @@ export default function ImageCropModal({
     return () => observer.disconnect();
   }, [resolvedUrl]);
 
-  // Default crop frame: centered, 70% of the container.
+  // Default crop frame: product crops can be locked to the storefront 4:5 card.
   useEffect(() => {
     if (frameInitRef.current || containerSize.w === 0 || containerSize.h === 0) return;
     frameInitRef.current = true;
+    if (aspectRatio && aspectRatio > 0) {
+      let w = containerSize.w * 0.78;
+      let h = w / aspectRatio;
+      const maxH = containerSize.h * 0.84;
+      if (h > maxH) {
+        h = maxH;
+        w = h * aspectRatio;
+      }
+      const x = (containerSize.w - w) / 2;
+      const y = clamp(containerSize.h * normalizedFocalY - h / 2, 0, containerSize.h - h);
+      setFrame({ x, y, w, h });
+      return;
+    }
     const w = containerSize.w * 0.7;
     const h = containerSize.h * 0.7;
     setFrame({ x: (containerSize.w - w) / 2, y: (containerSize.h - h) / 2, w, h });
-  }, [containerSize]);
+  }, [aspectRatio, containerSize, normalizedFocalY]);
 
   // Center the image at fit-zoom once both the image and container are measured.
   useEffect(() => {
-    if (viewInitRef.current || !natural || containerSize.w === 0 || baseW === 0) return;
+    if (viewInitRef.current || !natural || containerSize.w === 0 || baseW === 0 || frame.w === 0) return;
     viewInitRef.current = true;
-    setView({ z: 1, panX: (containerSize.w - baseW) / 2, panY: (containerSize.h - baseH) / 2 });
-  }, [natural, containerSize, baseW, baseH]);
+    const z = fixedZoom
+      ? clamp(fixedZoom, MIN_ZOOM, MAX_ZOOM)
+      : clamp(getCoverZoom(frame) * Math.max(initialZoom, 1), MIN_ZOOM, MAX_ZOOM);
+    const imgW = baseW * z;
+    const imgH = baseH * z;
+    setView(clampViewToFrame({
+      z,
+      panX: frame.x + frame.w / 2 - imgW / 2,
+      panY: frame.y + frame.h / 2 - imgH * normalizedFocalY,
+    }));
+  }, [natural, containerSize, baseW, baseH, frame, fixedZoom, getCoverZoom, clampViewToFrame, normalizedFocalY, initialZoom]);
 
   const applyZoom = useCallback((cx: number, cy: number, factor: number) => {
+    if (fixedZoom) return;
     const { view: current, baseW: bw, baseH: bh } = geomRef.current;
     if (bw === 0) return;
     const imgW = bw * current.z;
     const imgH = bh * current.z;
-    const nextZ = clamp(current.z * factor, MIN_ZOOM, MAX_ZOOM);
+    const nextZ = clamp(current.z * factor, getCoverZoom(frame), MAX_ZOOM);
     if (nextZ === current.z) return;
     // Keep the image point under (cx, cy) fixed while the image scales.
     const fx = (cx - current.panX) / imgW;
     const fy = (cy - current.panY) / imgH;
     const nextImgW = bw * nextZ;
     const nextImgH = bh * nextZ;
-    setView({ z: nextZ, panX: cx - fx * nextImgW, panY: cy - fy * nextImgH });
-  }, []);
+    setView(clampViewToFrame({ z: nextZ, panX: cx - fx * nextImgW, panY: cy - fy * nextImgH }));
+  }, [clampViewToFrame, fixedZoom, frame, getCoverZoom]);
 
   // Native non-passive wheel listener so we can preventDefault and zoom.
   useEffect(() => {
     const el = containerRef.current;
-    if (!el) return;
+    if (!el || fixedZoom) return;
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
       const rectBox = el.getBoundingClientRect();
@@ -182,7 +247,7 @@ export default function ImageCropModal({
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, [applyZoom, resolvedUrl]);
+  }, [applyZoom, fixedZoom, resolvedUrl]);
 
   const zoomByButton = (factor: number) => {
     const { containerW, containerH } = geomRef.current;
@@ -191,7 +256,14 @@ export default function ImageCropModal({
 
   const resetView = () => {
     const { baseW: bw, baseH: bh, containerW, containerH } = geomRef.current;
-    setView({ z: 1, panX: (containerW - bw) / 2, panY: (containerH - bh) / 2 });
+    const z = fixedZoom ? clamp(fixedZoom, MIN_ZOOM, MAX_ZOOM) : getCoverZoom(frame);
+    const w = bw * z;
+    const h = bh * z;
+    setView(clampViewToFrame({
+      z,
+      panX: frame.w > 0 ? frame.x + frame.w / 2 - w / 2 : (containerW - w) / 2,
+      panY: frame.h > 0 ? frame.y + frame.h / 2 - h * normalizedFocalY : (containerH - h) / 2,
+    }));
   };
 
   // --- Crop frame move / resize (screen px) ---
@@ -249,8 +321,8 @@ export default function ImageCropModal({
   const handlePanPointerMove = useCallback((event: globalThis.PointerEvent) => {
     const pan = panRef.current;
     if (!pan) return;
-    setView({ z: pan.z, panX: pan.panX + (event.clientX - pan.startX), panY: pan.panY + (event.clientY - pan.startY) });
-  }, []);
+    setView(clampViewToFrame({ z: pan.z, panX: pan.panX + (event.clientX - pan.startX), panY: pan.panY + (event.clientY - pan.startY) }));
+  }, [clampViewToFrame]);
 
   const endPan = useCallback(() => {
     panRef.current = null;
@@ -283,8 +355,8 @@ export default function ImageCropModal({
 
     // Output resolution: the crop box mapped to native px at fit. This stays
     // constant as you zoom — zooming magnifies the content instead.
-    const dw = Math.max(1, Math.round(frame.w / fit));
-    const dh = Math.max(1, Math.round(frame.h / fit));
+    const dw = outputWidth && outputWidth > 0 ? Math.round(outputWidth) : Math.max(1, Math.round(frame.w / fit));
+    const dh = aspectRatio && aspectRatio > 0 ? Math.round(dw / aspectRatio) : Math.max(1, Math.round(frame.h / fit));
 
     const canvas = document.createElement("canvas");
     canvas.width = dw;
@@ -347,7 +419,7 @@ export default function ImageCropModal({
             <button
               type="button"
               onClick={() => zoomByButton(1 / 1.2)}
-              disabled={!ready}
+              disabled={!ready || Boolean(fixedZoom)}
               aria-label="Zoom out"
               className="h-7 w-7 border border-white/30 bg-black/60 text-sm leading-none text-white transition-colors hover:bg-black disabled:opacity-40"
             >
@@ -359,7 +431,7 @@ export default function ImageCropModal({
             <button
               type="button"
               onClick={() => zoomByButton(1.2)}
-              disabled={!ready}
+              disabled={!ready || Boolean(fixedZoom)}
               aria-label="Zoom in"
               className="h-7 w-7 border border-white/30 bg-black/60 text-sm leading-none text-white transition-colors hover:bg-black disabled:opacity-40"
             >
@@ -429,9 +501,11 @@ export default function ImageCropModal({
                   height: frame.h,
                   boxShadow: "0 0 0 9999px rgba(0,0,0,0.55)",
                 }}
-                onPointerDown={(event) => startCropDrag(event, "move")}
+                onPointerDown={(event) => {
+                  if (!lockedFrame) startCropDrag(event, "move");
+                }}
               >
-                {HANDLES.map((handle) => (
+                {!lockedFrame && HANDLES.map((handle) => (
                   <span
                     key={handle.mode}
                     onPointerDown={(event) => startCropDrag(event, handle.mode)}
@@ -446,7 +520,11 @@ export default function ImageCropModal({
 
       <div className="mt-3 flex w-full max-w-3xl items-center justify-between gap-3">
         <p className="text-[10px] uppercase tracking-wider text-white/60">
-          Scroll/± to zoom the image (crop box stays fixed) · drag image to pan · drag box/handles to set crop
+          {lockedFrame
+            ? fixedZoom && lockHorizontalPan
+              ? "Fixed 130% zoom · drag image up/down inside the locked storefront crop"
+              : "Scroll/± to zoom · drag image to position inside the locked storefront crop"
+            : "Scroll/± to zoom the image (crop box stays fixed) · drag image to pan · drag box/handles to set crop"}
         </p>
         <div className="flex items-center gap-2">
           <button

@@ -378,7 +378,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ id: stri
                   <img
                     src={image.url}
                     alt={`${product.name} ${index + 1}`}
-                    className="h-16 w-full object-cover bg-bg-secondary"
+                    className="h-16 w-full object-contain bg-bg-secondary"
                   />
                 </button>
               ))}

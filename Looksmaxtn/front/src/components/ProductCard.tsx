@@ -71,6 +71,43 @@ const PRODUCT_DETAIL_IMAGE_PRELOAD_LIMIT = 8;
 const VIDEO_EXTENSIONS = [".mp4", ".webm", ".ogg", ".mov", ".m4v"];
 const preloadedProductImageGroups = new Set<string>();
 
+function getProductCardHoverImage({
+  displayImage,
+  activeColorHex,
+  images,
+  variants,
+  viewGender,
+}: {
+  displayImage: string;
+  activeColorHex: string | null;
+  images: { url: string; isMain: boolean; gender?: "men" | "women" | null }[];
+  variants: ProductVariant[];
+  viewGender?: "men" | "women" | null;
+}) {
+  if (images.length < 2) return "";
+
+  const variantImageIndices = activeColorHex
+    ? variants.find((variant) => variant.color?.toLowerCase() === activeColorHex.toLowerCase())?.images || []
+    : [];
+  const baseCandidates = variantImageIndices.length > 0
+    ? variantImageIndices.map((index) => images[index]).filter(Boolean)
+    : [
+        ...images.filter((productImage) => productImage.isMain),
+        ...images.filter((productImage) => !productImage.isMain),
+      ];
+  const genderCandidates =
+    viewGender && baseCandidates.some((productImage) => productImage.gender === viewGender)
+      ? baseCandidates.filter((productImage) => productImage.gender === viewGender)
+      : baseCandidates;
+  const urls = genderCandidates
+    .map((productImage) => productImage.url)
+    .filter((url): url is string => Boolean(url));
+
+  if (urls.length < 2) return "";
+  if (urls[0] === displayImage) return urls.find((url) => url !== displayImage) || "";
+  return urls[1] || "";
+}
+
 function isVideoUrl(url: string) {
   const normalized = url.split("?")[0].toLowerCase();
   return VIDEO_EXTENSIONS.some((extension) => normalized.endsWith(extension));
@@ -166,7 +203,8 @@ export default function ProductCard({
   const selectedCollectionImage = preferCollectionLeftImage && fashionSubtype === "shoes"
     ? getColorwayEnhancedLeftImage(activeColorHex, { image, images, variants }, image, viewGender)
     : "";
-  const displayImage = selectedCollectionImage || selectedCartImage || image;
+  const displayImage = selectedCollectionImage || selectedCartImage || image || "";
+  const hoverImage = getProductCardHoverImage({ displayImage, activeColorHex, images, variants, viewGender });
   const normalizedConditionScore = conditionScore ?? 0;
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -230,6 +268,7 @@ export default function ProductCard({
     const result: string[] = [];
     const candidates = [
       displayImage,
+      hoverImage,
       ...images.map((productImage) => productImage.url),
     ];
 
@@ -241,7 +280,7 @@ export default function ProductCard({
     }
 
     return result;
-  }, [displayImage, images]);
+  }, [displayImage, hoverImage, images]);
   const detailImagePreloadKey = `${id}:${detailImagePreloadUrls.join("|")}`;
 
   useEffect(() => {
@@ -497,7 +536,7 @@ export default function ProductCard({
         </div>
       )}
       <div
-        className="relative aspect-[9/16] overflow-hidden product-image-wrapper bg-surface"
+        className="relative aspect-[4/5] overflow-hidden product-image-wrapper bg-surface"
         onMouseEnter={(e) => {
           if (!isPerfume || !cloneSourceImage) return;
           showClonePreviewAtPointer(e.clientX, e.clientY);
@@ -509,19 +548,32 @@ export default function ProductCard({
         onMouseLeave={() => setClonePreview({ visible: false, x: 0, y: 0 })}
       >
         {displayImage ? (
-          <MediaRenderer
-            src={displayImage}
-            alt={name}
-            className={`block h-full w-full ${isPerfume ? "object-contain" : "object-cover"}`}
-            imageClassName={`block h-full w-full ${isPerfume ? "object-contain" : "object-cover"}`}
-            videoClassName={`block h-full w-full ${isPerfume ? "object-contain" : "object-cover"}`}
-            audioClassName="block w-full px-3 py-6"
-            priority={imagePriority}
-            sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
-          />
+          <>
+            <MediaRenderer
+              src={displayImage}
+              alt={name}
+              className="block h-full w-full object-contain"
+              imageClassName="block h-full w-full object-contain"
+              videoClassName="block h-full w-full object-contain"
+              audioClassName="block w-full px-3 py-6"
+              priority={imagePriority}
+              sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
+            />
+            {hoverImage && hoverImage !== displayImage && (
+              <MediaRenderer
+                src={hoverImage}
+                alt={`${name} alternate view`}
+                className="absolute inset-0 block h-full w-full object-contain opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                imageClassName="absolute inset-0 block h-full w-full object-contain opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                videoClassName="absolute inset-0 block h-full w-full object-contain opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                audioClassName="hidden"
+                sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
+              />
+            )}
+          </>
         ) : (
           <>
-            <div className="placeholder-img aspect-[9/16] w-full" />
+            <div className="placeholder-img aspect-[4/5] w-full" />
             <span className="absolute inset-0 flex items-center justify-center text-[10px] tracking-widest opacity-50">
               PRODUCT
             </span>

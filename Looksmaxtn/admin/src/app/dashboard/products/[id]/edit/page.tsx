@@ -709,7 +709,7 @@ function ColorwayGenerationCard({
 type ColorwayView = "front" | "back" | "left" | "right";
 
 function ColorwayCard({
-  colorway, index, canRemove, isThrift, showGenerationPanel, companionZones, companionTypeOptions, canGenerate, requiredViews, viewLabels, enhanceRequiresAllViews = true, hideSizeInput = false, onRemove, onUpdate, onEnhance, onCancelEnhance, onGenerate, onCancelGenerate, onAddSize, onRemoveSize, onUpdateSize,
+  colorway, index, canRemove, isThrift, showGenerationPanel, companionZones, companionTypeOptions, canGenerate, requiredViews, viewLabels, enhanceRequiresAllViews = true, hideSizeInput = false, cropFocalY = 0.5, onRemove, onUpdate, onEnhance, onCancelEnhance, onGenerate, onCancelGenerate, onAddSize, onRemoveSize, onUpdateSize,
 }: {
   colorway: Colorway; index: number; canRemove: boolean; isThrift: boolean;
   showGenerationPanel?: boolean;
@@ -720,6 +720,7 @@ function ColorwayCard({
   viewLabels?: Partial<Record<ColorwayView, string>>;
   enhanceRequiresAllViews?: boolean;
   hideSizeInput?: boolean;
+  cropFocalY?: number;
   onRemove: () => void; onUpdate: (patch: Partial<Colorway>) => void; onEnhance: (pictureKeys?: string[]) => void;
   onCancelEnhance: () => void;
   onGenerate?: () => void;
@@ -1541,6 +1542,13 @@ function ColorwayCard({
       {cropState && (
         <ImageCropModal
           src={cropState.src}
+          title="Crop storefront picture"
+          aspectRatio={4 / 5}
+          focalY={cropFocalY}
+          lockedFrame
+          outputWidth={1600}
+          fixedZoom={1.3}
+          lockHorizontalPan
           onCancel={() => setCropState(null)}
           onConfirm={handleCropConfirm}
         />
@@ -3047,6 +3055,14 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     () => getZoneRequirements(selectedCategoryZone),
     [selectedCategoryZone]
   );
+  const productCropFocalY =
+    selectedCategoryZone === "footwear"
+      ? 0.78
+      : generationRequirements.generationTarget === "bottom"
+        ? 0.68
+        : generationRequirements.generationTarget === "top"
+          ? 0.36
+          : 0.5;
   const usesAccessoryImageWorkflow = useMemo(
     () => hasAccessoryWorkflowCategory(categories, selectedCategorySlug, selectedCategoryZone),
     [categories, selectedCategorySlug, selectedCategoryZone]
@@ -4393,6 +4409,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                   viewLabels={usesAccessoryImageWorkflow ? ACCESSORY_VIEW_LABELS : undefined}
                   enhanceRequiresAllViews={!usesAccessoryImageWorkflow}
                   hideSizeInput={isSizelessCategory}
+                  cropFocalY={productCropFocalY}
                   onRemove={() => removeColorway(cw.id)}
                   onUpdate={(patch) => updateColorway(cw.id, patch)}
                   onEnhance={(pictureIndexes) => void handleEnhanceColorway(cw.id, pictureIndexes)}

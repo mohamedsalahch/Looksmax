@@ -238,8 +238,8 @@ function ProductLightbox({
                   <MediaPreview
                     url={img.url}
                     alt={`Thumb ${i + 1}`}
-                    className="w-full h-full object-cover"
-                    videoClassName="w-full h-full object-cover"
+                    className="w-full h-full object-contain"
+                    videoClassName="w-full h-full object-contain"
                     sizes="48px"
                   />
                 ) : (
