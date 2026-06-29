@@ -229,7 +229,7 @@ const ACCESSORY_VIEW_LABELS: Record<OriginPictureKey, string> = {
   right: "Image 4",
 };
 const FOOTWEAR_VIEW_VERIFICATION_COPY =
-  "Footwear verification: upload four different shoe angles: front, back, left side, and right side. Each slot is sent separately to the generator.";
+  "Optional for saving. For footwear generation, use four different shoe angles: front, back, left side, and right side. Each slot is sent separately to the generator.";
 
 const isAbortError = (error: unknown) =>
   error instanceof DOMException
@@ -3801,32 +3801,14 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       return;
     }
     for (const cw of colorways) {
-      if (usesAccessoryImageWorkflow) {
-        if (!FOUR_IMAGE_VIEWS.some((view) => Boolean(cw[`${view}File` as keyof Colorway] || cw[`${view}Preview` as keyof Colorway]))) {
-          setError("Please upload at least one image for each product.", "colorways");
-          scrollToColorwayCard(cw.id);
-          setLoading(false);
-          return;
-        }
-      } else {
-        if (!cw.frontFile && !cw.frontPreview) {
-          setError("Please upload a front image for each colorway.", "colorways");
-          scrollToColorwayCard(cw.id);
-          setLoading(false);
-          return;
-        }
-        if (!cw.backFile && !cw.backPreview) {
-          setError("Please upload a back image for each colorway.", "colorways");
-          scrollToColorwayCard(cw.id);
-          setLoading(false);
-          return;
-        }
-        if (selectedCategoryZone === "footwear" && (!(cw.leftFile || cw.leftPreview) || !(cw.rightFile || cw.rightPreview))) {
-          setError("Please upload front, back, left, and right images for each colorway.", "colorways");
-          scrollToColorwayCard(cw.id);
-          setLoading(false);
-          return;
-        }
+      if (
+        usesAccessoryImageWorkflow &&
+        !FOUR_IMAGE_VIEWS.some((view) => Boolean(cw[`${view}File` as keyof Colorway] || cw[`${view}Preview` as keyof Colorway]))
+      ) {
+        setError("Please upload at least one image for each product.", "colorways");
+        scrollToColorwayCard(cw.id);
+        setLoading(false);
+        return;
       }
       if (cw.sizes.filter((s) => (isSizelessCategory ? s.stock.trim() : s.size.trim() && s.stock.trim())).length === 0) {
         setError(isSizelessCategory ? "Please add stock for each product." : "Please add at least one size and stock for each colorway.", "colorways");
