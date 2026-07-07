@@ -85,6 +85,60 @@ function normalizeOriginPictures(
   };
 }
 
+// The same R2 object can be referenced from several places (a colorway
+// preview reused as an origin picture, clones, etc.), so deleting a URL the
+// moment one field stops using it breaks the remaining references and the
+// storefront starts serving 404s. Only delete a URL once neither the updated
+// product nor any other product still points at it.
+async function deleteUnreferencedProductImages(params: {
+  productId: string;
+  candidateUrls: string[];
+  keptUrls: Iterable<string>;
+}) {
+  const kept = new Set(Array.from(params.keptUrls).filter(Boolean));
+  const candidates = [
+    ...new Set(params.candidateUrls.filter((url) => Boolean(url) && !kept.has(url))),
+  ];
+  if (candidates.length === 0) return;
+
+  const referencingDocs = await Product.find(
+    {
+      _id: { $ne: params.productId },
+      $or: [
+        { "images.url": { $in: candidates } },
+        { "originPictures.front": { $in: candidates } },
+        { "originPictures.back": { $in: candidates } },
+        { "originPictures.left": { $in: candidates } },
+        { "originPictures.right": { $in: candidates } },
+        { cloneSourceImage: { $in: candidates } },
+      ],
+    },
+    { "images.url": 1, originPictures: 1, cloneSourceImage: 1 }
+  ).lean<Array<{
+    images?: Array<{ url?: string }>;
+    originPictures?: Partial<Record<"front" | "back" | "left" | "right", string>>;
+    cloneSourceImage?: string;
+  }>>();
+
+  const externallyReferenced = new Set<string>();
+  for (const doc of referencingDocs) {
+    for (const image of doc.images || []) {
+      if (image?.url) externallyReferenced.add(image.url);
+    }
+    for (const side of ["front", "back", "left", "right"] as const) {
+      const value = doc.originPictures?.[side];
+      if (value) externallyReferenced.add(value);
+    }
+    if (doc.cloneSourceImage) externallyReferenced.add(doc.cloneSourceImage);
+  }
+
+  await Promise.all(
+    candidates
+      .filter((url) => !externallyReferenced.has(url))
+      .map((url) => deleteProductImage(url))
+  );
+}
+
 function parseCompanionSettings(raw: FormDataEntryValue | null) {
   const str = String(raw || "").trim();
   if (!str || str === "{}") return null;
@@ -885,35 +939,33 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const product = await Product.findByIdAndUpdate(id, body, { new: true }).lean();
     if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    await Promise.all(removedImages.map((imagePath) => deleteProductImage(imagePath)));
+    const deleteCandidates: string[] = [...removedImages];
     if (
       newCloneSourceImagePath &&
       existingProduct.cloneSourceImage &&
       existingProduct.cloneSourceImage !== newCloneSourceImagePath
     ) {
-      await deleteProductImage(existingProduct.cloneSourceImage);
+      deleteCandidates.push(existingProduct.cloneSourceImage);
     }
-    const previousOriginPictures: Record<"front" | "back" | "left" | "right", string> = {
-      front: existingProduct.originPictures?.front || "",
-      back: existingProduct.originPictures?.back || "",
-      left: existingProduct.originPictures?.left || "",
-      right: existingProduct.originPictures?.right || "",
-    };
-    const nextOriginPicturesMap: Record<"front" | "back" | "left" | "right", string> = {
-      front: body.originPictures?.front || "",
-      back: body.originPictures?.back || "",
-      left: body.originPictures?.left || "",
-      right: body.originPictures?.right || "",
-    };
-    await Promise.all(
-      (["front", "back", "left", "right"] as const).map(async (key) => {
-        const previous = previousOriginPictures[key];
-        const next = nextOriginPicturesMap[key];
-        if (previous && previous !== next) {
-          await deleteProductImage(previous);
-        }
-      })
-    );
+    for (const side of ["front", "back", "left", "right"] as const) {
+      const previous = existingProduct.originPictures?.[side] || "";
+      const next = body.originPictures?.[side] || "";
+      if (previous && previous !== next) {
+        deleteCandidates.push(previous);
+      }
+    }
+    await deleteUnreferencedProductImages({
+      productId: id,
+      candidateUrls: deleteCandidates,
+      keptUrls: [
+        ...images.map((image) => image.url),
+        body.originPictures.front,
+        body.originPictures.back,
+        body.originPictures.left,
+        body.originPictures.right,
+        body.cloneSourceImage,
+      ],
+    });
 
     const variants = getStoredVariants(product);
     const finalSoldByVariantMap = await getSoldQuantityByProductAndVariant([id]);
