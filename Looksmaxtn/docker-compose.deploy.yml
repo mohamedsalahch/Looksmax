@@ -1,0 +1,69 @@
+# Production compose using prebuilt images from GHCR (pushed by the GitHub
+# Actions pipeline in .github/workflows/deploy.yml). Set TAG to a commit SHA
+# to deploy or roll back to that exact build; defaults to latest.
+#
+#   TAG=<sha> docker compose -f docker-compose.deploy.yml pull
+#   TAG=<sha> docker compose -f docker-compose.deploy.yml up -d
+
+services:
+  mongodb:
+    image: mongo:4.4
+    container_name: looksmax-mongodb
+    restart: always
+    volumes:
+      - mongodb_data:/data/db
+
+  generator_api:
+    image: ghcr.io/mohamedsalahch/looksmax-generator-api:${TAG:-latest}
+    container_name: looksmax-generator
+    env_file:
+      - ./generator_api/.env.production
+    ports:
+      - "127.0.0.1:12003:3003"
+    depends_on:
+      - mongodb
+    restart: always
+
+  back:
+    image: ghcr.io/mohamedsalahch/looksmax-back:${TAG:-latest}
+    container_name: looksmax-back
+    env_file:
+      - ./back/.env.production
+    volumes:
+      - shared_uploads:/shared-uploads
+    ports:
+      - "127.0.0.1:12002:3002"
+    depends_on:
+      - mongodb
+      - generator_api
+    restart: always
+
+  admin:
+    image: ghcr.io/mohamedsalahch/looksmax-admin:${TAG:-latest}
+    container_name: looksmax-admin
+    env_file:
+      - ./admin/.env.production
+    volumes:
+      - shared_uploads:/shared-uploads
+    ports:
+      - "127.0.0.1:12001:3001"
+    depends_on:
+      - back
+    restart: always
+
+  front:
+    image: ghcr.io/mohamedsalahch/looksmax-front:${TAG:-latest}
+    container_name: looksmax-front
+    env_file:
+      - ./front/.env.production
+    volumes:
+      - shared_uploads:/shared-uploads
+    ports:
+      - "127.0.0.1:12000:3000"
+    depends_on:
+      - back
+    restart: always
+
+volumes:
+  mongodb_data:
+  shared_uploads:
