@@ -12,6 +12,8 @@ interface ProductImage {
 }
 
 const VIDEO_EXTENSIONS = [".mp4", ".webm", ".ogg", ".mov", ".m4v"];
+const PRODUCT_IMAGE_WIDTH = 1280;
+const PRODUCT_IMAGE_HEIGHT = 1600;
 
 function isVideoUrl(url: string) {
   const normalized = url.split("?")[0].toLowerCase();
@@ -40,6 +42,8 @@ function MediaPreview({
       <video
         src={url}
         aria-label={alt}
+        width={PRODUCT_IMAGE_WIDTH}
+        height={PRODUCT_IMAGE_HEIGHT}
         className={videoClassName || className}
         autoPlay
         loop
@@ -55,8 +59,8 @@ function MediaPreview({
     <NextImage
       src={url}
       alt={alt}
-      width={0}
-      height={0}
+      width={PRODUCT_IMAGE_WIDTH}
+      height={PRODUCT_IMAGE_HEIGHT}
       sizes={sizes}
       className={className}
       priority={priority}
@@ -87,8 +91,8 @@ function GalleryImagePreloader({ images }: { images: ProductImage[] }) {
           key={url}
           src={url}
           alt=""
-          width={0}
-          height={0}
+          width={PRODUCT_IMAGE_WIDTH}
+          height={PRODUCT_IMAGE_HEIGHT}
           sizes="(min-width: 768px) 50vw, 100vw"
           className="h-px w-px object-contain"
           loading="eager"
@@ -200,16 +204,18 @@ function ProductLightbox({
             className="w-full bg-background flex justify-center"
           >
             {img.url ? (
-              <MediaPreview
-                url={img.url}
-                alt={`Photo ${i + 1}`}
-                className="w-3/5 h-auto object-cover block"
-                videoClassName="w-3/5 h-auto object-cover block"
-                showControls={isVideoUrl(img.url)}
-                sizes="60vw"
-              />
+              <div className="relative w-3/5 aspect-[4/5]">
+                <MediaPreview
+                  url={img.url}
+                  alt={`Photo ${i + 1}`}
+                  className="w-full h-full object-contain block"
+                  videoClassName="w-full h-full object-contain block"
+                  showControls={isVideoUrl(img.url)}
+                  sizes="60vw"
+                />
+              </div>
             ) : (
-              <div className="w-3/5 aspect-[3/4] bg-surface" />
+              <div className="w-3/5 aspect-[4/5] bg-surface" />
             )}
           </div>
         ))}
@@ -228,7 +234,7 @@ function ProductLightbox({
                 key={i}
                 type="button"
                 onClick={() => scrollToImage(i)}
-                className={`shrink-0 w-12 h-16 overflow-hidden border-2 transition-all duration-200 cursor-pointer ${
+                className={`shrink-0 w-12 aspect-[4/5] overflow-hidden border-2 transition-all duration-200 cursor-pointer ${
                   activeIndex === i
                     ? "border-foreground opacity-100"
                     : "border-transparent opacity-40 hover:opacity-70"
@@ -490,7 +496,7 @@ export default function ProductImageGallery({
               <button
                 key={index}
                 onClick={() => setActiveIndex(index)}
-                className={`relative shrink-0 w-16 h-20 md:w-20 md:h-24 overflow-hidden cursor-pointer transition-all duration-200 ${
+                className={`relative shrink-0 w-16 md:w-20 aspect-[4/5] overflow-hidden cursor-pointer transition-all duration-200 ${
                   activeIndex === index
                     ? "ring-2 ring-foreground ring-offset-2 ring-offset-background"
                     : "opacity-60 hover:opacity-100"
@@ -517,7 +523,7 @@ export default function ProductImageGallery({
           {visibleImages[activeIndex]?.url ? (
             <div
               ref={imageShellRef}
-              className={`relative mx-auto w-fit max-w-full bg-transparent overflow-visible touch-pan-y cursor-pointer`}
+              className="relative mx-auto w-full aspect-[4/5] bg-transparent overflow-visible touch-pan-y cursor-pointer"
               onMouseEnter={handleMouseEnter}
               onMouseMove={updateZoomState}
               onMouseLeave={handleMouseLeave}
@@ -528,8 +534,8 @@ export default function ProductImageGallery({
               <MediaPreview
                 url={visibleImages[activeIndex].url}
                 alt="Main product"
-                className="block max-w-full max-h-[600px] w-auto h-auto object-contain"
-                videoClassName="block max-w-full max-h-[600px] w-auto h-auto object-contain"
+                className="block w-full h-full object-contain"
+                videoClassName="block w-full h-full object-contain"
                 showControls
                 priority={activeIndex === 0}
                 sizes="(min-width: 768px) 50vw, 100vw"
@@ -560,7 +566,7 @@ export default function ProductImageGallery({
           ) : (
             <div
               ref={imageShellRef}
-              className="relative mx-auto w-full aspect-[3/4] md:min-h-[600px] placeholder-img flex items-center justify-center"
+              className="relative mx-auto w-full aspect-[4/5] placeholder-img flex items-center justify-center"
               onMouseEnter={handleMouseEnter}
               onMouseMove={updateZoomState}
               onMouseLeave={handleMouseLeave}

@@ -18,11 +18,11 @@ export default function Loading() {
             {/* Thumbnails column */}
             <div className="hidden md:flex flex-col gap-2 w-16 shrink-0">
               {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="aspect-square w-full animate-pulse bg-hover/60 border border-border-color" />
+                <div key={i} className="aspect-[4/5] w-full animate-pulse bg-hover/60 border border-border-color" />
               ))}
             </div>
             {/* Main image */}
-            <div className="flex-1 aspect-[3/4] animate-pulse bg-hover/60 border border-border-color" />
+            <div className="flex-1 aspect-[4/5] animate-pulse bg-hover/60 border border-border-color" />
           </div>
 
           {/* Right — product info */}
@@ -69,7 +69,7 @@ export default function Loading() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-8">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="space-y-2">
-                <div className="aspect-[3/4] w-full animate-pulse bg-hover/60 border border-border-color" />
+                <div className="aspect-[4/5] w-full animate-pulse bg-hover/60 border border-border-color" />
                 <div className="h-2.5 w-3/4 animate-pulse bg-border-color/50" />
                 <div className="h-2.5 w-1/2 animate-pulse bg-border-color/40" />
                 <div className="mt-1 h-1 w-full animate-pulse bg-border-color/30" />
