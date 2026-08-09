@@ -12,6 +12,11 @@ import { broadcastAdminEvent } from "@/admin/lib/adminEvents";
 import { logRequestError, logRequestStart } from "@/lib/requestLogging";
 import { sendProductApprovalStatusEmail } from "@/store/lib/mailer";
 import {
+  isWhatsAppConfigured,
+  getStoreOwnerWhatsAppPhone,
+  sendProductApprovalWhatsApp,
+} from "@/store/lib/whatsapp";
+import {
   getSoldQuantityByProductAndVariant,
   getSoldQuantityByProductIds,
 } from "@/lib/productInventory";
@@ -652,6 +657,22 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
             });
           } catch (emailError) {
             console.error("Product approval status email error:", emailError);
+          }
+          try {
+            if (isWhatsAppConfigured()) {
+              const phone = await getStoreOwnerWhatsAppPhone(recipientEmail);
+              if (phone) {
+                await sendProductApprovalWhatsApp({
+                  phone,
+                  productName: String(product.name || existingProduct.name || "Product"),
+                  status: body.approvalStatus,
+                  reason: body.approvalStatus === "rejected" ? rejectionReason : "",
+                  productUrl: `${(process.env.ADMIN_BASE_URL || "http://localhost:3001").replace(/\/$/, "")}/dashboard/products/${id}`,
+                });
+              }
+            }
+          } catch (whatsAppError) {
+            console.error("Product approval WhatsApp error:", whatsAppError);
           }
         }
       }

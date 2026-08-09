@@ -10,6 +10,12 @@ import { getSession } from "@/store/lib/auth";
 import { getAuditActorFromSession } from "@/store/lib/auditRoute";
 import { broadcastAdminEvent } from "@/admin/lib/adminEvents";
 import { sendOrderStatusEmail, sendStoreOwnerOrderCreatedEmail } from "@/store/lib/mailer";
+import {
+  isWhatsAppConfigured,
+  getStoreOwnerWhatsAppPhone,
+  sendStoreOwnerNewOrderWhatsApp,
+  sendAdminNewOrderWhatsApp,
+} from "@/store/lib/whatsapp";
 import { isStoreOwnerApproved } from "@/store/lib/storeApproval";
 import {
   buildCouponValidationResult,
@@ -377,6 +383,50 @@ export async function POST(req: NextRequest) {
       }
     } catch (storeOwnerEmailError) {
       console.error("Store owner order email error:", storeOwnerEmailError);
+    }
+
+    try {
+      if (isWhatsAppConfigured()) {
+        const adminBaseUrl = (process.env.ADMIN_BASE_URL || "http://localhost:3001").replace(/\/$/, "");
+        const orderNumber = order._id.toString().slice(-8).toUpperCase();
+        const orderUrl = `${adminBaseUrl}/dashboard/orders/${order._id.toString()}`;
+        const ownerEntries = Array.from(storeOwnerOrderItems.values()).filter(
+          (entry) => entry.items.length > 0
+        );
+
+        await Promise.all(
+          ownerEntries.map(async (entry) => {
+            const phone = await getStoreOwnerWhatsAppPhone(entry.owner.email);
+            if (!phone) return;
+            await sendStoreOwnerNewOrderWhatsApp({
+              phone,
+              storeName: entry.owner.storeName || entry.owner.name,
+              orderNumber,
+              customerName: shippingAddress.fullName || "Customer",
+              customerPhone: shippingAddress.phone || "",
+              shippingCity: shippingAddress.city || "",
+              items: entry.items,
+              totalPrice: entry.totalPrice,
+              orderUrl,
+            });
+          })
+        );
+
+        await sendAdminNewOrderWhatsApp({
+          orderNumber,
+          customerName: shippingAddress.fullName || "Customer",
+          customerPhone: shippingAddress.phone || "",
+          shippingCity: shippingAddress.city || "",
+          totalPrice,
+          storeSummaries: ownerEntries.map((entry) => ({
+            storeName: entry.owner.storeName || entry.owner.name,
+            itemCount: entry.items.reduce((sum, item) => sum + item.quantity, 0),
+          })),
+          orderUrl,
+        });
+      }
+    } catch (whatsAppError) {
+      console.error("Order WhatsApp notification error:", whatsAppError);
     }
 
     try {
