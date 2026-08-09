@@ -59,7 +59,9 @@ function parseSetCookieHeader(rawSetCookie: string) {
   const [name, ...valueParts] = nameValue.split("=");
   const value = valueParts.join("=");
 
-  if (!name || !value) return null;
+  // An empty value is valid — it is how the backend clears a cookie on
+  // logout (`token=; Max-Age=0`). Dropping it would keep users logged in.
+  if (!name) return null;
 
   const cookieOptions: {
     path?: string;

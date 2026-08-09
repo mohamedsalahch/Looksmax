@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import Script from "next/script";
 import { useRouter } from "next/navigation";
-import { storeAuthToken } from "@/lib/authClient";
+import { storeAuthToken, withAuthRequest } from "@/lib/authClient";
 
 declare global {
   interface Window {
@@ -38,6 +38,19 @@ export default function AdminLoginPage() {
   const widgetRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/admin/auth/me?ts=${Date.now()}`, withAuthRequest({ cache: "no-store" }))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.user) router.replace("/dashboard");
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   useEffect(() => {
     let cancelled = false;

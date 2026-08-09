@@ -53,6 +53,19 @@ export default function LoginPage() {
   const googleConfigured = Boolean(googleClientId);
 
   useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/auth/me?ts=${Date.now()}`, { credentials: "include", cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.user) router.replace(getNextPath());
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  useEffect(() => {
     if (resendCooldown <= 0) return;
 
     const timer = window.setInterval(() => {
