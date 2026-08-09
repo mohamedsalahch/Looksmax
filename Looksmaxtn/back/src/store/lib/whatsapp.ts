@@ -69,6 +69,13 @@ export async function sendWhatsAppText(toRaw: string, body: string): Promise<boo
     return false;
   }
 
+  // Template parameters may not contain newlines, tabs, or 4+ consecutive
+  // spaces (Meta rejects them), so template mode flattens the message.
+  const templateSafeBody = body
+    .replace(/\s*\n+\s*/g, " • ")
+    .replace(/\s{4,}/g, " ")
+    .trim();
+
   const payload = config.templateName
     ? {
         messaging_product: "whatsapp",
@@ -78,7 +85,7 @@ export async function sendWhatsAppText(toRaw: string, body: string): Promise<boo
           name: config.templateName,
           language: { code: config.templateLang },
           components: [
-            { type: "body", parameters: [{ type: "text", text: body }] },
+            { type: "body", parameters: [{ type: "text", text: templateSafeBody }] },
           ],
         },
       }
