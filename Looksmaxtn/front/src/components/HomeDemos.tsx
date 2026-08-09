@@ -2,16 +2,16 @@ import Link from "next/link";
 
 const DEMOS = [
   {
-    desktopSrc: "/demos/outfit-studio.html",
-    mobileSrc: "/demos/outfit-studio-mobile.html",
+    desktopSrc: "/demos/outfit-studio-desktop.mp4",
+    mobileSrc: "/demos/outfit-studio-mobile.mp4",
     title: "Outfit Studio",
     description: "Add pieces to your cart and see the full outfit generated on your own photo.",
     ctaLabel: "Open Studio",
     ctaHref: "/studio",
   },
   {
-    desktopSrc: "/demos/open-store.html",
-    mobileSrc: "/demos/open-store-mobile.html",
+    desktopSrc: "/demos/open-store-desktop.mp4",
+    mobileSrc: "/demos/open-store-mobile.mp4",
     title: "Open Your Store",
     description: "One form, admin approval by email, then sell your products to all of Tunisia.",
     ctaLabel: "Become a Seller",
@@ -32,22 +32,26 @@ export default function HomeDemos() {
         <div className="grid md:grid-cols-2 gap-10 md:gap-8">
           {DEMOS.map((demo) => (
             <figure key={demo.desktopSrc} className="m-0">
-              <div className="relative aspect-video border border-border-color bg-[#181410] hidden md:block">
-                <iframe
+              <div className="relative aspect-video border border-border-color bg-surface hidden md:block">
+                <video
                   src={demo.desktopSrc}
-                  title={`${demo.title} demo`}
-                  loading="lazy"
-                  scrolling="no"
-                  className="absolute inset-0 h-full w-full border-0"
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  preload="metadata"
+                  className="absolute inset-0 h-full w-full object-cover"
                 />
               </div>
-              <div className="relative aspect-[9/16] border border-border-color bg-[#181410] max-w-[300px] mx-auto md:hidden">
-                <iframe
+              <div className="relative aspect-[9/16] border border-border-color bg-surface max-w-[300px] mx-auto md:hidden">
+                <video
                   src={demo.mobileSrc}
-                  title={`${demo.title} demo`}
-                  loading="lazy"
-                  scrolling="no"
-                  className="absolute inset-0 h-full w-full border-0"
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  preload="metadata"
+                  className="absolute inset-0 h-full w-full object-cover"
                 />
               </div>
               <figcaption className="mt-5 text-center">
