@@ -3,6 +3,7 @@ import LookbookGrid from "@/components/LookbookGrid";
 import EditorialFeature from "@/components/EditorialFeature";
 import ProductCardRow, { type ProductCardRowItem } from "@/components/ProductCardRow";
 import BrandStory from "@/components/BrandStory";
+import HomeDemos from "@/components/HomeDemos";
 import { DEFAULT_HOME_PAGE } from "@/lib/homePageDefaults";
 import { buildPageMetadata } from "@/lib/seo";
 
@@ -101,6 +102,7 @@ export default async function Home() {
         label={content.editorial.label}
         eyebrow={content.editorial.eyebrow}
       />
+      <HomeDemos />
       <ProductCardRow title={content.featured.title} products={featuredProducts} />
     </>
   );

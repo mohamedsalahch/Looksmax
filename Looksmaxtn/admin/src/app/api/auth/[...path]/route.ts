@@ -67,8 +67,14 @@ async function proxyAuth(req: NextRequest, context: { params: Promise<{ path: st
   });
 
   response.headers.forEach((value, key) => {
+    if (key.toLowerCase() === "set-cookie") return;
     nextResponse.headers.set(key, value);
   });
+  // Set-Cookie must be appended per cookie — forEach would comma-join
+  // multiple cookies into one invalid header.
+  for (const cookie of response.headers.getSetCookie()) {
+    nextResponse.headers.append("set-cookie", cookie);
+  }
 
   return nextResponse;
 }

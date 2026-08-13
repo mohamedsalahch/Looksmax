@@ -304,6 +304,31 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     window.localStorage.setItem(seenStoreIdsStorageKey, JSON.stringify(Array.from(ids)));
   };
 
+  const dismissedOrderIdsKey = "looksmax-admin-dismissed-orders";
+  const dismissedMessageIdsKey = "looksmax-admin-dismissed-messages";
+  const dismissedProductIdsKey = "looksmax-admin-dismissed-products";
+
+  const loadDismissedIds = (storageKey: string) => {
+    if (typeof window === "undefined") return new Set<string>();
+
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (!raw) return new Set<string>();
+
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return new Set<string>();
+
+      return new Set(parsed.filter((value): value is string => typeof value === "string"));
+    } catch {
+      return new Set<string>();
+    }
+  };
+
+  const saveDismissedIds = (storageKey: string, ids: Set<string>) => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(storageKey, JSON.stringify(Array.from(ids)));
+  };
+
   const markMessageRead = async (notice: MessageNotice) => {
     setMessageNotifications((current) =>
       current.map((messageNotice) =>
@@ -467,12 +492,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
         const processingOrders = (data.orders || []).filter((order) => order.orderStatus === "processing");
 
+        const dismissedOrderIds = loadDismissedIds(dismissedOrderIdsKey);
+
         setOrderNotifications((current) => {
           const currentById = new Map(current.map((notice) => [notice.orderId, notice]));
           const readOrderIds = loadReadOrderIds();
           readOrderIdsRef.current = readOrderIds;
 
-          return processingOrders.map((order) => {
+          return processingOrders.filter((order) => !dismissedOrderIds.has(order._id)).map((order) => {
             const existing = currentById.get(order._id);
             const createdAt = order.createdAt;
 
@@ -501,7 +528,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         const data = (await response.json()) as { messages?: Array<{ _id: string; name: string; email: string; subject: string; message: string; isRead?: boolean; createdAt: string }> };
         if (!active || !data) return;
 
-        const unreadMessages = (data.messages || []).filter((message) => !message.isRead);
+        const dismissedMessageIds = loadDismissedIds(dismissedMessageIdsKey);
+        const unreadMessages = (data.messages || []).filter(
+          (message) => !message.isRead && !dismissedMessageIds.has(message._id)
+        );
 
         setMessageNotifications((current) => {
           const currentById = new Map(current.map((notice) => [notice.messageId, notice]));
@@ -595,7 +625,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         };
         if (!active || !data) return;
 
-        const pendingProducts = (data.products || []).filter((product) => product.approvalStatus === "pending");
+        const dismissedProductIds = loadDismissedIds(dismissedProductIdsKey);
+        const pendingProducts = (data.products || []).filter(
+          (product) => product.approvalStatus === "pending" && !dismissedProductIds.has(product._id)
+        );
 
         setProductNotifications((current) => {
           const currentById = new Map(current.map((notice) => [notice.productId, notice]));
@@ -641,6 +674,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         setOrderNotifications((current) =>
           current.filter((notice) => notice.orderId !== payload.orderId)
         );
+        const dismissedOrderIds = loadDismissedIds(dismissedOrderIdsKey);
+        if (dismissedOrderIds.delete(payload.orderId)) {
+          saveDismissedIds(dismissedOrderIdsKey, dismissedOrderIds);
+        }
         window.dispatchEvent(new CustomEvent("looksmax-admin-order-event", { detail: payload }));
         return;
       }
@@ -653,8 +690,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           setOrderNotifications((current) =>
             current.filter((notice) => notice.orderId !== order._id)
           );
+          const staleDismissed = loadDismissedIds(dismissedOrderIdsKey);
+          if (staleDismissed.delete(order._id)) {
+            saveDismissedIds(dismissedOrderIdsKey, staleDismissed);
+          }
           return;
         }
+
+        if (loadDismissedIds(dismissedOrderIdsKey).has(order._id)) return;
 
         playNotificationSound();
         setOrderNotifications((current) => {
@@ -685,6 +728,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         setMessageNotifications((current) =>
           current.filter((notice) => notice.messageId !== payload.messageId)
         );
+        const dismissedMessageIds = loadDismissedIds(dismissedMessageIdsKey);
+        if (dismissedMessageIds.delete(payload.messageId)) {
+          saveDismissedIds(dismissedMessageIdsKey, dismissedMessageIds);
+        }
         window.dispatchEvent(new CustomEvent("looksmax-admin-message-event", { detail: payload }));
         return;
       }
@@ -697,8 +744,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           setMessageNotifications((current) =>
             current.filter((notice) => notice.messageId !== message._id)
           );
+          const staleDismissed = loadDismissedIds(dismissedMessageIdsKey);
+          if (staleDismissed.delete(message._id)) {
+            saveDismissedIds(dismissedMessageIdsKey, staleDismissed);
+          }
           return;
         }
+
+        if (loadDismissedIds(dismissedMessageIdsKey).has(message._id)) return;
 
         playNotificationSound();
         setMessageNotifications((current) => {
@@ -779,6 +832,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         setProductNotifications((current) =>
           current.filter((notice) => notice.productId !== payload.productId)
         );
+        const dismissedProductIds = loadDismissedIds(dismissedProductIdsKey);
+        if (dismissedProductIds.delete(payload.productId)) {
+          saveDismissedIds(dismissedProductIdsKey, dismissedProductIds);
+        }
         return;
       }
 
@@ -796,6 +853,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           approvalStatus: product.approvalStatus || "pending",
           createdAt: product.createdAt,
         });
+
+        const dismissedProductIds = loadDismissedIds(dismissedProductIdsKey);
+        if ((product.approvalStatus || "pending") === "pending") {
+          if (dismissedProductIds.has(product._id)) return;
+        } else if (dismissedProductIds.delete(product._id)) {
+          saveDismissedIds(dismissedProductIdsKey, dismissedProductIds);
+        }
 
         playNotificationSound();
         setProductNotifications((current) => {
@@ -1038,9 +1102,12 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                           <button
                             type="button"
                             onClick={() => {
-                              setProductNotifications((current) =>
-                                current.map((notice) => ({ ...notice, read: true }))
-                              );
+                              const dismissedProductIds = loadDismissedIds(dismissedProductIdsKey);
+                              for (const notice of productNotifications) {
+                                dismissedProductIds.add(notice.productId);
+                              }
+                              saveDismissedIds(dismissedProductIdsKey, dismissedProductIds);
+                              setProductNotifications([]);
                             }}
                             className="text-[10px] uppercase tracking-[0.18em] text-text-secondary hover:text-text-primary cursor-pointer"
                           >
@@ -1081,9 +1148,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                               }
                               seenStoreIdsRef.current = seenStoreIds;
                               saveSeenStoreIds(seenStoreIds);
-                              setStoreNotifications((current) =>
-                                current.map((notice) => ({ ...notice, read: true }))
-                              );
+                              setStoreNotifications([]);
                             }}
                             className="text-[10px] uppercase tracking-[0.18em] text-text-secondary hover:text-text-primary cursor-pointer"
                           >
@@ -1115,7 +1180,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">Processing Orders</p>
                           <button
                             type="button"
-                            onClick={() => setOrderNotifications([])}
+                            onClick={() => {
+                              const dismissedOrderIds = loadDismissedIds(dismissedOrderIdsKey);
+                              for (const notice of orderNotifications) {
+                                dismissedOrderIds.add(notice.orderId);
+                              }
+                              saveDismissedIds(dismissedOrderIdsKey, dismissedOrderIds);
+                              setOrderNotifications([]);
+                            }}
                             className="text-[10px] uppercase tracking-[0.18em] text-text-secondary hover:text-text-primary cursor-pointer"
                           >
                             Clear
@@ -1146,7 +1218,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">Unread Messages</p>
                           <button
                             type="button"
-                            onClick={() => setMessageNotifications([])}
+                            onClick={() => {
+                              const dismissedMessageIds = loadDismissedIds(dismissedMessageIdsKey);
+                              for (const notice of messageNotifications) {
+                                dismissedMessageIds.add(notice.messageId);
+                              }
+                              saveDismissedIds(dismissedMessageIdsKey, dismissedMessageIds);
+                              setMessageNotifications([]);
+                            }}
                             className="text-[10px] uppercase tracking-[0.18em] text-text-secondary hover:text-text-primary cursor-pointer"
                           >
                             Clear
